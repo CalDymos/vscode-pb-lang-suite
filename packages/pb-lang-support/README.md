@@ -7,12 +7,14 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 ## Features
 
 ### Basic Language Support
+
 - ✅ **Syntax Highlighting**: Support for PureBasic keywords, strings, comments, numbers, etc.
 - ✅ **Code Folding**: Support for folding procedures, functions, loops, and conditional statements
 - ✅ **Bracket Matching**: Automatic matching of brackets and quotes
 - ✅ **Comment Support**: Line comment (;) support
 
 ### Intelligent Language Features
+
 - ✅ **Auto Completion**: Keywords, built-in functions, user-defined procedures, variables, and constants
 - ✅ **Module Completion**: Support for `Module::Function` syntax completion
 - ✅ **Go to Definition**: Jump to function/procedure definitions (including module functions)
@@ -25,6 +27,7 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 - ✅ **Code Formatting**: Automatic code formatting and indentation
 
 ### Advanced Features
+
 - ✅ **Symbol Caching**: Intelligent caching for improved performance with large projects
 - ✅ **Workspace Symbols**: Cross-file symbol search and navigation
 - ✅ **Code Actions**: Quick fixes and refactorings
@@ -32,6 +35,7 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 - ✅ **Configuration Options**: Extensive customization options for all features
 
 ### Supported PureBasic Features
+
 - ✅ **Keywords**: All major PureBasic keywords (Procedure, EndProcedure, If, EndIf, For, Next, etc.)
 - ✅ **Data Types**: Built-in types (Integer, String, Float, etc.) and custom types
 - ✅ **Built-in Functions**: Common functions (Debug, OpenWindow, MessageRequester, etc.)
@@ -47,17 +51,20 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 ## Installation
 
 ### Development Version
+
 1. Clone this repository
 2. Run `npm install` to install dependencies
 3. Run `npm run compile` to compile TypeScript
 4. Press F5 in VSCode to start debugging
 
 ### Release Version
-Search for "PureBasic Language Support" in the VSCode Extension Marketplace and install
+
+Search for "PureBasic Language" in the VSCode Extension Marketplace and install
 
 ## Configuration
 
 The extension provides extensive configuration options. Access these via:
+
 - VSCode Settings (Ctrl+,)
 - Search for "PureBasic" to see all available options
 
@@ -71,7 +78,6 @@ The extension provides extensive configuration options. Access these via:
   "purebasic.validationDelay": 500
 }
 ```
-
 
 ### Formatting Configuration
 
@@ -126,6 +132,7 @@ The extension provides extensive configuration options. Access these via:
 ### Commands
 
 The extension provides several commands accessible via:
+
 - Command Palette (Ctrl+Shift+P)
 - Right-click context menu
 - Keyboard shortcuts
@@ -209,8 +216,9 @@ EndIf
 ## Development
 
 ### Project Structure
-```
-vscode-purebasic/
+
+``` text
+pb-lang-support/
 ├── package.json                 # Extension configuration file
 ├── syntaxes/purebasic.tmLanguage.json  # TextMate syntax definition
 ├── language-configuration.json  # Language configuration
@@ -240,6 +248,7 @@ vscode-purebasic/
 The extension follows a modular architecture with clear separation of concerns:
 
 #### Language Server
+
 - **Main Server**: Handles LSP protocol communication
 - **Configuration**: Manages settings and configuration updates
 - **Providers**: Implement individual language features (completion, hover, etc.)
@@ -247,15 +256,16 @@ The extension follows a modular architecture with clear separation of concerns:
 - **Validation**: Provides syntax and semantic validation
 
 #### Type System
+
 - **Core Types**: Document, symbol, diagnostic, and error types
 - **Provider Types**: Specialized types for each language feature
 - **Utility Types**: Generic helpers and caching types
 - **Server Types**: Language server specific types
 
-
 ### Build and Test
 
 #### Development Commands
+
 - `npm install`: Install dependencies
 - `npm run compile`: Compile TypeScript
 - `npm run watch`: Watch for file changes and auto-compile
@@ -264,11 +274,13 @@ The extension follows a modular architecture with clear separation of concerns:
 - `npm run test:coverage`: Run tests with coverage report
 
 #### Build Commands
+
 - `npm run webpack`: Build with webpack (development)
 - `npm run webpack:prod`: Build with webpack (production)
 - `npm run webpack:watch`: Build with webpack in watch mode
 
 #### Extension Commands
+
 - `F5`: Start extension debugging in VSCode
 - `Ctrl+Shift+B`: Build task
 
@@ -277,11 +289,13 @@ The extension follows a modular architecture with clear separation of concerns:
 The extension includes a comprehensive test suite:
 
 #### Unit Tests
+
 - Language feature providers
 - Symbol management
 - Configuration handling
 
 #### Integration Tests
+
 - Language server communication
 - Extension lifecycle
 
@@ -295,9 +309,10 @@ The extension includes a comprehensive test suite:
    - PureBasic compiler (for testing)
 
 2. **Setup Development Environment**
+
    ```bash
    # Clone repository
-   git clone https://github.com/meimingqi222/vscode-pb-lang-support.git
+   git clone https://github.com/meimingqi222/vscode-pb-lang-suite.git
    cd vscode-purebasic
 
    # Install dependencies
@@ -311,6 +326,7 @@ The extension includes a comprehensive test suite:
    ```
 
 3. **Development Workflow**
+
    ```bash
    # Watch mode for development
    npm run watch
@@ -361,10 +377,10 @@ The extension follows a modular architecture:
    - Type-safe interfaces
    - Generic utilities
 
-
-### Testing
+### Testing Code
 
 #### Running Tests
+
 ```bash
 # Run all tests
 npm run test
@@ -377,7 +393,8 @@ npm run test:coverage
 ```
 
 #### Test Structure
-```
+
+```text
 test/
 ├── unit/              # Unit tests
 │   ├── providers/     # Provider tests
@@ -414,6 +431,7 @@ test/
 ### Extension API
 
 #### Configuration Interface
+
 ```typescript
 interface PureBasicSettings {
     maxNumberOfProblems: number;
@@ -428,10 +446,10 @@ interface PureBasicSettings {
 }
 ```
 
-
 ### Language Server API
 
 #### Symbol Management
+
 ```typescript
 interface PureBasicSymbol {
     name: string;
@@ -455,6 +473,7 @@ interface PureBasicSymbol {
 ```
 
 #### Diagnostic System
+
 ```typescript
 interface ExtendedDiagnostic extends Diagnostic {
     id?: string;
@@ -470,10 +489,10 @@ interface ExtendedDiagnostic extends Diagnostic {
 }
 ```
 
-
 ### Provider APIs
 
 #### Completion Provider
+
 ```typescript
 interface ExtendedCompletionItem extends CompletionItem {
     metadata?: CompletionItemMetadata;
@@ -493,6 +512,7 @@ interface ExtendedCompletionItem extends CompletionItem {
 ```
 
 #### Symbol Cache
+
 ```typescript
 class SymbolCache {
     constructor(config: CacheConfig);
@@ -513,6 +533,7 @@ class SymbolCache {
 ### Utility APIs
 
 #### Error Handling
+
 ```typescript
 interface ErrorContext {
     operation: string;
@@ -530,6 +551,7 @@ class ErrorHandler {
 ```
 
 #### Performance Utilities
+
 ```typescript
 class PerformanceMonitor {
     measure<T>(operation: string, fn: () => T): T;
@@ -542,6 +564,7 @@ class PerformanceMonitor {
 ### Event System
 
 #### Symbol Events
+
 ```typescript
 type SymbolEventType =
     | 'symbolAdded'
@@ -557,7 +580,6 @@ interface SymbolEvent {
     timestamp: number;
 }
 ```
-
 
 ## License
 

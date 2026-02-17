@@ -4,10 +4,10 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "0.1.2",
+  "version": "0.2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CalDymos/vscode-pb-lang-support.git"
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
   },
   "scripts": {
     "compile:lang": "npm -w packages/pb-lang-support run compile",

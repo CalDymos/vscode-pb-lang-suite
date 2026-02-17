@@ -1,4 +1,4 @@
-# PureBasic for VS Code (Monorepo)
+# PureBasic for VS Code Language Suite (Monorepo)
 
 [![suite](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=suite-v*&label=suite)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
@@ -17,15 +17,18 @@ This repository contains multiple VS Code extensions related to PureBasic.
 ## Development
 
 ### Prerequisites
+
 - Node.js (LTS)
 - npm
 
 ### Install
+
 ```bash
 npm install
 ```
 
 ### Build
+
 ```bash
 npm -w packages/pb-lang-support run compile
 # (Once available)
@@ -33,15 +36,31 @@ npm -w packages/pb-forms-editor run compile
 ```
 
 ### Run (Debug)
+
 Open this repo in VS Code and use the provided launch configurations.
 
 ## Repository Structure
 
 ```text
-packages/
-  pb-lang-support/
-  pb-forms-editor/
+├── .github
+│   ├── workflows
+│   │   ├── build-vsix.yml
+│   │   └── pr-check.yml
+│   └── WORKFLOWS.md
+├── .vscode
+│   ├── launch.json
+│   └── tasks.json
+├── package.json                 # configuration file
+├── packages/
+│   ├── pb-lang-support/        # purebasic language support
+│   └── pb-forms-editor/        # purebasic forms editor
+├── test/                       # Test files
+├── README.md
+├── LICENSE
+├── .gitignore
+└── .vscodeignore
 ```
 
 ## License
+
 See `LICENSE`.
