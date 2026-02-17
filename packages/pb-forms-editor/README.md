@@ -1,4 +1,6 @@
-# PureBasic Forms Editor v0.5
+# PureBasic Forms Editor
+
+[![pb-forms-editor](https://img.shields.io/github/v/tag/<owner>/<repo>?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/<owner>/<repo>/tags)
 
 - Supports PureBasic Form Designer style assignments:
   - `Button_0 = ButtonGadget(#PB_Any, ...)`
