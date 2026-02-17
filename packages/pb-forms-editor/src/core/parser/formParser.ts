@@ -70,7 +70,18 @@ export function parseFormDocument(text: string): FormDocument {
   for (const c of calls) {
     if (c.name === "OpenWindow") {
       const win = parseOpenWindow(c.assignedVar, c.args);
-      if (win) doc.window = win;
+      if (win) {
+        doc.window = win;
+
+        // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = OpenWindow(#PB_Any, ...))
+        if (win.pbAny && !c.assignedVar) {
+          issues.push({
+            severity: "error",
+            message: "Found OpenWindow(#PB_Any, ...) without a stable assignment (expected: Var = OpenWindow(#PB_Any, ...)). Patching may be ambiguous.",
+            line: c.range.line
+          });
+        }
+      }
       continue;
     }
 
@@ -78,7 +89,19 @@ export function parseFormDocument(text: string): FormDocument {
     if (!kind) continue;
 
     const gadget = parseGadgetCall(kind, c.assignedVar, c.args, c.range);
-    if (gadget) doc.gadgets.push(gadget);
+    if (gadget) {
+      // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = Gadget(#PB_Any, ...))
+      if (gadget.pbAny && !c.assignedVar) {
+        issues.push({
+          severity: "error",
+          message: "Found Gadget(#PB_Any, ...) without a stable assignment (expected: Var = Gadget(#PB_Any, ...)). Patching may be ambiguous.",
+          line: c.range.line
+        });
+      }
+
+      doc.gadgets.push(gadget);
+    }
+
   }
 
   return doc;
