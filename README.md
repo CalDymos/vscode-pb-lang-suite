@@ -1,8 +1,8 @@
 # PureBasic for VS Code (Monorepo)
 
-[![suite](https://img.shields.io/github/v/tag/CalDymos/pb-lang-suite?sort=semver&filter=suite-v*&label=suite)](https://github.com/CalDymos/pb-lang-suite/tags)
-[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/pb-lang-suite/tags)
-[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/pb-lang-suite/tags)
+[![suite](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=suite-v*&label=suite)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
 This repository contains multiple VS Code extensions related to PureBasic.
 
