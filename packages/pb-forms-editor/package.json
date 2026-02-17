@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -84,7 +84,6 @@
           "group": "navigation@51"
         }
       ],
-
       "editor/context": [
         {
           "command": "purebasic.formDesigner.openAsText",
@@ -97,7 +96,6 @@
           "group": "navigation@51"
         }
       ],
-
       "editor/title": [
         {
           "command": "purebasic.formDesigner.openAsText",
@@ -121,7 +119,10 @@
         },
         "purebasicFormsDesigner.gridMode": {
           "type": "string",
-          "enum": ["dots", "lines"],
+          "enum": [
+            "dots",
+            "lines"
+          ],
           "default": "dots",
           "description": "%purebasicFormsDesigner.gridMode.description%"
         },
@@ -158,7 +159,10 @@
         },
         "purebasicFormsDesigner.snapMode": {
           "type": "string",
-          "enum": ["live", "drop"],
+          "enum": [
+            "live",
+            "drop"
+          ],
           "default": "drop",
           "description": "%purebasicFormsDesigner.snapMode.description%"
         },
