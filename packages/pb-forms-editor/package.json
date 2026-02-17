@@ -8,10 +8,38 @@
     "name": "CalDymos"
   },
   "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
+  },
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "license": "MIT",
+  "keywords": [
+    "purebasic",
+    "pbf",
+    "forms",
+    "form designer",
+    "forms editor",
+    "gui",
+    "gui designer",
+    "ui designer",
+    "visual designer",
+    "custom editor",
+    "webview",
+    "rad",
+    "dialog",
+    "window",
+    "gadgets"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
+    "Visualization",
     "Other"
   ],
   "activationEvents": [
