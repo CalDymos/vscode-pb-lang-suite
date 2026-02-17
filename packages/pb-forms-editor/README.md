@@ -1,6 +1,6 @@
 # PureBasic Forms Editor
 
-[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/pb-lang-suite/tags)
+[![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
 - Supports PureBasic Form Designer style assignments:
   - `Button_0 = ButtonGadget(#PB_Any, ...)`
