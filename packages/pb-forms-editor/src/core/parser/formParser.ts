@@ -1,4 +1,4 @@
-import { FormDocument, FormIssue, FormMeta, Gadget, GadgetKind, ScanRange } from "../model";
+import { FormDocument, FormEnumerations, FormIssue, FormMeta, Gadget, GadgetColumn, GadgetItem, GadgetKind, ScanRange } from "../model";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { scanCalls } from "./callScanner";
 
@@ -58,16 +58,129 @@ export function parseFormDocument(text: string): FormDocument {
 
   const scanRange = detectFormScanRange(text, header?.line);
 
+  const enums = parseFormEnumerations(text, scanRange);
+
   const meta: FormMeta = {
     header: header ?? undefined,
     scanRange,
-    issues
+    issues,
+    enums
   };
 
   const doc: FormDocument = { gadgets: [], meta };
 
+  const gadgetById = new Map<string, Gadget>();
+  const panelCurrentItem = new Map<string, number>();
+
+  type ParentCtx = { id: string; kind: GadgetKind; currentPanelItem?: number };
+  const parentStack: ParentCtx[] = [];
+
+  const pushImplicitParent = (g: Gadget) => {
+    if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget") {
+      parentStack.push({
+        id: g.id,
+        kind: g.kind,
+        currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
+      });
+    }
+  };
+
+  const setPanelItem = (panelId: string, itemIndex: number | undefined) => {
+    if (typeof itemIndex === "number" && Number.isFinite(itemIndex)) {
+      panelCurrentItem.set(panelId, itemIndex);
+    }
+    // Update the nearest matching PanelGadget context on the stack.
+    for (let i = parentStack.length - 1; i >= 0; i--) {
+      const ctx = parentStack[i];
+      if (ctx.kind === "PanelGadget" && ctx.id === panelId) {
+        ctx.currentPanelItem = itemIndex;
+        break;
+      }
+    }
+  };
+
   const calls = scanCalls(text, scanRange);
   for (const c of calls) {
+    if (c.name === "CloseGadgetList") {
+      if (parentStack.length > 0) parentStack.pop();
+      continue;
+    }
+
+    if (c.name === "OpenGadgetList") {
+      const p = splitParams(c.args);
+      const target = (p[0] ?? "").trim();
+      const g = gadgetById.get(target);
+      if (g) {
+        parentStack.push({
+          id: g.id,
+          kind: g.kind,
+          currentPanelItem: g.kind === "PanelGadget" ? panelCurrentItem.get(g.id) : undefined
+        });
+      }
+      continue;
+    }
+
+    if (c.name === "AddGadgetItem") {
+      const p = splitParams(c.args);
+      if (p.length >= 3) {
+        const targetId = (p[0] ?? "").trim();
+        const g = gadgetById.get(targetId);
+        if (g) {
+          const beforeLen = g.items?.length ?? 0;
+          const posRaw = (p[1] ?? "").trim();
+          const textRaw = (p[2] ?? "").trim();
+          const item: GadgetItem = {
+            posRaw,
+            textRaw,
+            text: unquoteString(textRaw),
+            imageRaw: p[3]?.trim(),
+            flagsRaw: p[4]?.trim(),
+            source: c.range
+          };
+
+          const posNum = asNumber(posRaw);
+          if (typeof posNum === "number" && posNum >= 0) item.index = posNum;
+          else item.index = beforeLen; // append / unknown
+
+          if (!g.items) g.items = [];
+          g.items.push(item);
+
+          if (g.kind === "PanelGadget") {
+            setPanelItem(g.id, item.index);
+          }
+        }
+      }
+      continue;
+    }
+
+    if (c.name === "AddGadgetColumn") {
+      const p = splitParams(c.args);
+      if (p.length >= 4) {
+        const targetId = (p[0] ?? "").trim();
+        const g = gadgetById.get(targetId);
+        if (g) {
+          const beforeLen = g.columns?.length ?? 0;
+          const colRaw = (p[1] ?? "").trim();
+          const titleRaw = (p[2] ?? "").trim();
+          const col: GadgetColumn = {
+            colRaw,
+            titleRaw,
+            title: unquoteString(titleRaw),
+            widthRaw: p[3]?.trim(),
+            source: c.range
+          };
+
+          const colNum = asNumber(colRaw);
+          if (typeof colNum === "number" && colNum >= 0) col.index = colNum;
+          else col.index = beforeLen;
+
+          if (!g.columns) g.columns = [];
+          g.columns.push(col);
+        }
+      }
+      continue;
+    }
+
     if (c.name === "OpenWindow") {
       const win = parseOpenWindow(c.assignedVar, c.args);
       if (win) {
@@ -90,6 +203,14 @@ export function parseFormDocument(text: string): FormDocument {
 
     const gadget = parseGadgetCall(kind, c.assignedVar, c.args, c.range);
     if (gadget) {
+      const parent = parentStack[parentStack.length - 1];
+      if (parent) {
+        gadget.parentId = parent.id;
+        if (parent.kind === "PanelGadget" && typeof parent.currentPanelItem === "number") {
+          gadget.parentItem = parent.currentPanelItem;
+        }
+      }
+
       // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = Gadget(#PB_Any, ...))
       if (gadget.pbAny && !c.assignedVar) {
         issues.push({
@@ -100,11 +221,41 @@ export function parseFormDocument(text: string): FormDocument {
       }
 
       doc.gadgets.push(gadget);
+      gadgetById.set(gadget.id, gadget);
+      pushImplicitParent(gadget);
     }
 
   }
 
   return doc;
+}
+
+function parseFormEnumerations(text: string, scanRange: ScanRange): FormEnumerations {
+  const slice = text.slice(scanRange.start, scanRange.end);
+  return {
+    windows: parseEnumerationBlock(slice, "FormWindow"),
+    gadgets: parseEnumerationBlock(slice, "FormGadget")
+  };
+}
+
+function parseEnumerationBlock(slice: string, enumName: string): string[] {
+  const out: string[] = [];
+  const lines = slice.split(/\r?\n/);
+  let inEnum = false;
+
+  const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+  for (const line of lines) {
+    if (!inEnum) {
+      if (startRe.test(line)) inEnum = true;
+      continue;
+    }
+
+    if (/^\s*EndEnumeration\b/i.test(line)) break;
+    const m = /^\s*(#\w+)\b/.exec(line);
+    if (m) out.push(m[1]);
+  }
+
+  return out;
 }
 
 function parseFormHeader(text: string): { version?: string; line: number; hasStrictSyntaxWarning: boolean } | null {

@@ -1,11 +1,15 @@
 type Gadget = {
   id: string;
   kind: string;
+  parentId?: string;
+  parentItem?: number;
   x: number;
   y: number;
   w: number;
   h: number;
   text?: string;
+  items?: Array<any>;
+  columns?: Array<any>;
 };
 
 type WindowModel = {
@@ -929,11 +933,33 @@ function renderList() {
     listEl.appendChild(div);
   }
 
+  const parentMap = new Map<string, string | undefined>();
+  for (const g of model.gadgets) parentMap.set(g.id, g.parentId);
+
+  const depthOf = (id: string): number => {
+    let depth = 0;
+    let cur = parentMap.get(id);
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur) && depth < 20) {
+      seen.add(cur);
+      depth++;
+      cur = parentMap.get(cur);
+    }
+    return depth;
+  };
+
   for (const g of model.gadgets) {
     const div = document.createElement("div");
     const sel = selection?.kind === "gadget" && g.id === selection.id;
     div.className = "item" + (sel ? " sel" : "");
-    div.textContent = `${g.kind}  ${g.id}`;
+
+    const itemsCnt = g.items?.length ?? 0;
+    const colsCnt = g.columns?.length ?? 0;
+    const tab = typeof g.parentItem === "number" ? `  tab:${g.parentItem}` : "";
+    const extra = `${itemsCnt ? `  items:${itemsCnt}` : ""}${colsCnt ? `  cols:${colsCnt}` : ""}${tab}`;
+
+    div.textContent = `${g.kind}  ${g.id}${extra}`;
+    div.style.paddingLeft = `${8 + depthOf(g.id) * 14}px`;
     div.onclick = () => {
       selection = { kind: "gadget", id: g.id };
       render();
@@ -989,6 +1015,10 @@ function renderProps() {
 
   propsEl.appendChild(row("Id", readonlyInput(g.id)));
   propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
+  propsEl.appendChild(row("Parent", readonlyInput((g.parentId ?? "").toString())));
+  propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
+  propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
+  propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));

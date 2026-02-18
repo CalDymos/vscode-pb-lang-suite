@@ -47,12 +47,35 @@ export interface Gadget {
   pbAny: boolean;
   assignedVar?: string;  // left side if any
   firstParam: string;    // raw first param token
+  parentId?: string;     // parent gadget id (Container/Panel/ScrollArea/OpenGadgetList)
+  parentItem?: number;   // for PanelGadget children: active tab index (best-effort)
   x: number;
   y: number;
   w: number;
   h: number;
   text?: string;
   flagsExpr?: string;
+  items?: GadgetItem[];
+  columns?: GadgetColumn[];
+  source?: SourceRange;
+}
+
+export interface GadgetItem {
+  index?: number;        // resolved index (best-effort)
+  posRaw: string;        // raw position expression
+  textRaw?: string;      // raw text expression
+  text?: string;         // unquoted text (when possible)
+  imageRaw?: string;     // optional image expression
+  flagsRaw?: string;     // optional flags expression
+  source?: SourceRange;
+}
+
+export interface GadgetColumn {
+  index?: number;        // resolved index (best-effort)
+  colRaw: string;        // raw column index expression
+  titleRaw?: string;     // raw title expression
+  title?: string;        // unquoted title (when possible)
+  widthRaw?: string;     // raw width expression
   source?: SourceRange;
 }
 
@@ -92,6 +115,12 @@ export interface FormMeta {
   header?: FormHeaderInfo;
   scanRange: ScanRange;
   issues: FormIssue[];
+  enums?: FormEnumerations;
+}
+
+export interface FormEnumerations {
+  windows: string[];
+  gadgets: string[];
 }
 
 export interface FormDocument {
