@@ -14,6 +14,60 @@ function stableKey(assignedVar: string | undefined, params: string[]): string | 
   return first;
 }
 
+function normalizeProcParamName(raw: string): string {
+  let name = raw.trim();
+  name = name.replace(/^\*+/, "");
+  const dot = name.indexOf(".");
+  if (dot >= 0) name = name.slice(0, dot);
+  return name.toLowerCase();
+}
+
+function tryPatchProcedureDefaults(
+  document: vscode.TextDocument,
+  fromLine: number,
+  updates: Record<string, string>
+): vscode.WorkspaceEdit | undefined {
+  for (let i = Math.min(fromLine, document.lineCount - 1); i >= 0; i--) {
+    const lineText = document.lineAt(i).text;
+
+    if (/^\s*EndProcedure\b/i.test(lineText)) break;
+
+    const m = /^(\s*Procedure(?:\.\w+)?\s+[\w:]+\s*)\((.*)\)\s*$/i.exec(lineText);
+    if (!m) continue;
+
+    const prefix = m[1];
+    const rawArgs = m[2];
+    const parts = splitParams(rawArgs);
+    if (parts.length === 0) return undefined;
+
+    let changed = false;
+    const rebuiltParts = parts.map(p => {
+      const eq = p.indexOf("=");
+      if (eq < 0) return p;
+
+      const left = p.slice(0, eq).trim();
+      const right = p.slice(eq + 1).trim();
+      const key = normalizeProcParamName(left);
+
+      const newVal = updates[key];
+      if (newVal === undefined) return p;
+      if (right === newVal) return p;
+
+      changed = true;
+      return `${left} = ${newVal}`;
+    });
+
+    if (!changed) return undefined;
+
+    const rebuiltLine = `${prefix}(${rebuiltParts.join(", ")})`;
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, document.lineAt(i).range, rebuiltLine);
+    return edit;
+  }
+
+  return undefined;
+}
+
 function getLineIndent(document: vscode.TextDocument, line: number): string {
   if (line < 0 || line >= document.lineCount) return "";
   const text = document.lineAt(line).text;
@@ -282,6 +336,25 @@ export function applyWindowRectPatch(
 
   const params = splitParams(call.args);
   if (params.length < 5) return undefined;
+
+  // PureBasic Form Designer pattern:
+  //   Procedure OpenX(x=..., y=..., width=..., height=...)
+  //     OpenWindow(..., x, y, width, height, ...)
+  // In this case, patch the procedure defaults instead of hardcoding literals into OpenWindow().
+  const p1 = (params[1] ?? "").trim().toLowerCase();
+  const p2 = (params[2] ?? "").trim().toLowerCase();
+  const p3 = (params[3] ?? "").trim().toLowerCase();
+  const p4 = (params[4] ?? "").trim().toLowerCase();
+  const usesProcDefaults = p1 === "x" && p2 === "y" && p3 === "width" && p4 === "height";
+  if (usesProcDefaults) {
+    const procEdit = tryPatchProcedureDefaults(document, call.range.line, {
+      x: String(Math.trunc(x)),
+      y: String(Math.trunc(y)),
+      width: String(Math.trunc(w)),
+      height: String(Math.trunc(h))
+    });
+    if (procEdit) return procEdit;
+  }
 
   params[1] = String(Math.trunc(x));
   params[2] = String(Math.trunc(y));
