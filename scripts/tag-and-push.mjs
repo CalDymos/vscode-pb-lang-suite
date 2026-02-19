@@ -10,7 +10,13 @@ function readJson(relPath) {
 
 function runGit(args) {
   const res = spawnSync("git", args, { stdio: "inherit", shell: false });
-  if (res.status !== 0) process.exit(res.status ?? 1);
+  // abort only if suite tagging fails
+  if (
+  res.status !== 0 &&
+  args.some(arg => arg.includes("suite"))
+  ) {
+    process.exit(res.status ?? 1);
+  }
 }
 
 function tagAndPush(tag, message) {

@@ -17,3 +17,5 @@ test/**
 webpack.config.js
 **/*.map
 packages/**
+scripts/**
+samples/**
