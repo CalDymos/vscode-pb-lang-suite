@@ -9,6 +9,7 @@ import {
   FormStatusBarField,
   FormToolBar,
   FormToolBarEntry,
+  FormWindow,
   Gadget,
   GadgetColumn,
   GadgetItem,
@@ -75,6 +76,7 @@ export function parseFormDocument(text: string): FormDocument {
   const scanRange = detectFormScanRange(text, header?.line);
 
   const enums = parseFormEnumerations(text, scanRange);
+  const winEnumValues = parseEnumerationValueMap(text, scanRange, "FormWindow");
 
   const meta: FormMeta = {
     header: header ?? undefined,
@@ -318,6 +320,9 @@ export function parseFormDocument(text: string): FormDocument {
       const procDefaults = findProcDefaultsAbove(lines, c.range.line);
       const win = parseOpenWindow(c.assignedVar, c.args, procDefaults);
       if (win) {
+        if (!win.pbAny && win.firstParam.startsWith("#")) {
+          win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
+        }
         doc.window = win;
 
         // Warn when #PB_Any has no stable assignment (strict Form Designer output uses: Var = OpenWindow(#PB_Any, ...))
@@ -370,6 +375,31 @@ function parseFormEnumerations(text: string, scanRange: ScanRange): FormEnumerat
     windows: parseEnumerationBlock(slice, "FormWindow"),
     gadgets: parseEnumerationBlock(slice, "FormGadget")
   };
+}
+
+function parseEnumerationValueMap(text: string, scanRange: ScanRange, enumName: string): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  const slice = text.slice(scanRange.start, scanRange.end);
+  const lines = slice.split(/\r?\n/);
+  let inEnum = false;
+
+  const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+  for (const line of lines) {
+    if (!inEnum) {
+      if (startRe.test(line)) inEnum = true;
+      continue;
+    }
+    if (/^\s*EndEnumeration\b/i.test(line)) break;
+
+    const noComment = line.split(";")[0] ?? "";
+    const m = /^\s*(#\w+)\b\s*(?:=\s*(.+?))?\s*$/.exec(noComment);
+    if (!m) continue;
+    const name = m[1];
+    const valueRaw = m[2]?.trim();
+    out[name] = valueRaw && valueRaw.length ? valueRaw : undefined;
+  }
+
+  return out;
 }
 
 function parseEnumerationBlock(slice: string, enumName: string): string[] {
@@ -513,7 +543,19 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const title = unquoteString(p[5] ?? "");
   const flagsExpr = p[6]?.trim();
 
-  return { id, pbAny, assignedVar, firstParam, x, y, w, h, title, flagsExpr };
+  return {
+    id,
+    pbAny,
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""),
+    enumValueRaw: undefined,
+    firstParam,
+    x,
+    y,
+    w,
+    h,
+    title,
+    flagsExpr
+  };
 }
 
 function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args: string, range: any): Gadget | undefined {
