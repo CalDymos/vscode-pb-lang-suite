@@ -109,40 +109,82 @@ type DesignerSettings = {
   canvasReadonlyBackground: string;
 };
 
+const EXT_TO_WEBVIEW_MSG_TYPE = {
+  init: "init",
+  settings: "settings",
+  error: "error"
+} as const;
+
+const WEBVIEW_TO_EXT_MSG_TYPE = {
+  ready: "ready",
+
+  moveGadget: "moveGadget",
+  setGadgetRect: "setGadgetRect",
+  setWindowRect: "setWindowRect",
+  toggleWindowPbAny: "toggleWindowPbAny",
+  setWindowEnumValue: "setWindowEnumValue",
+  setWindowVariableName: "setWindowVariableName",
+
+  insertGadgetItem: "insertGadgetItem",
+  updateGadgetItem: "updateGadgetItem",
+  deleteGadgetItem: "deleteGadgetItem",
+
+  insertGadgetColumn: "insertGadgetColumn",
+  updateGadgetColumn: "updateGadgetColumn",
+  deleteGadgetColumn: "deleteGadgetColumn",
+
+  insertMenuEntry: "insertMenuEntry",
+  updateMenuEntry: "updateMenuEntry",
+  deleteMenuEntry: "deleteMenuEntry",
+
+  insertToolBarEntry: "insertToolBarEntry",
+  updateToolBarEntry: "updateToolBarEntry",
+  deleteToolBarEntry: "deleteToolBarEntry",
+
+  insertStatusBarField: "insertStatusBarField",
+  updateStatusBarField: "updateStatusBarField",
+  deleteStatusBarField: "deleteStatusBarField"
+} as const;
+
 // Backwards compatible:
 // - init may come without settings
 type ExtensionToWebviewMessage =
-  | { type: "init"; model: Model; settings?: DesignerSettings }
-  | { type: "settings"; settings: DesignerSettings }
-  | { type: "error"; message: string };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: Model; settings?: DesignerSettings }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string };
 
 type WebviewToExtensionMessage =
-  | { type: "ready" }
-  | { type: "moveGadget"; id: string; x: number; y: number }
-  | { type: "setGadgetRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "setWindowRect"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "toggleWindowPbAny"; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
-  | { type: "setWindowEnumValue"; enumSymbol: string; enumValueRaw?: string }
-  | { type: "setWindowVariableName"; variableName?: string }
-  | { type: "insertGadgetItem"; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: "updateGadgetItem"; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
-  | { type: "deleteGadgetItem"; id: string; sourceLine: number }
-  | { type: "insertGadgetColumn"; id: string; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "updateGadgetColumn"; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
-  | { type: "deleteGadgetColumn"; id: string; sourceLine: number }
-  | { type: "insertMenuEntry"; menuId: string; kind: string; idRaw?: string; textRaw?: string }
-  | { type: "updateMenuEntry"; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
-  | { type: "deleteMenuEntry"; menuId: string; sourceLine: number; kind: string }
-  | { type: "insertToolBarEntry"; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: "updateToolBarEntry"; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: "deleteToolBarEntry"; toolBarId: string; sourceLine: number; kind: string }
-  | { type: "insertStatusBarField"; statusBarId: string; widthRaw: string }
-  | { type: "updateStatusBarField"; statusBarId: string; sourceLine: number; widthRaw: string }
-  | { type: "deleteStatusBarField"; statusBarId: string; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
 const vscode = acquireVsCodeApi();
+
+function post(msg: WebviewToExtensionMessage) {
+  vscode.postMessage(msg);
+}
+
 
 const canvas = document.getElementById("designer") as HTMLCanvasElement;
 const propsEl = document.getElementById("props") as HTMLDivElement;
@@ -206,7 +248,10 @@ function toolBarEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.toolBarEntryKinds.join("/")})`;
 }
 
-
+function toPbString(v: string): string {
+  const esc = (v ?? "").replace(/"/g, '""');
+  return `"${esc}"`;
+}
 
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
