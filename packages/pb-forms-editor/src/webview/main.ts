@@ -181,6 +181,33 @@ let settings: DesignerSettings = {
   canvasReadonlyBackground: ""
 };
 
+type PbfdSymbols = {
+  menuEntryKinds: readonly string[];
+  toolBarEntryKinds: readonly string[];
+  containerGadgetKinds: readonly string[];
+  enumNames?: { windows: string; gadgets: string };
+};
+
+interface Window {
+  __PBFD_SYMBOLS__?: PbfdSymbols;
+}
+
+if (!window.__PBFD_SYMBOLS__) {
+  throw new Error("__PBFD_SYMBOLS__ is not defined");
+}
+
+const PBFD_SYMBOLS: PbfdSymbols = window.__PBFD_SYMBOLS__;
+
+function menuEntryKindHint(): string {
+  return `Entry kind (${PBFD_SYMBOLS.menuEntryKinds.join("/")})`;
+}
+
+function toolBarEntryKindHint(): string {
+  return `Entry kind (${PBFD_SYMBOLS.toolBarEntryKinds.join("/")})`;
+}
+
+
+
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
 const HANDLE_SIZE = 6;
@@ -193,7 +220,7 @@ const MIN_GADGET_H = 8;
 const MIN_WIN_W = 40;
 const MIN_WIN_H = 40;
 
-const CONTAINER_KINDS = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
+const CONTAINER_KINDS = new Set(PBFD_SYMBOLS.containerGadgetKinds);
 
 type RectLike = { x: number; y: number; w: number; h: number };
 
@@ -1513,7 +1540,7 @@ function renderProps() {
     addBtn.textContent = "Add Entry";
     addBtn.onclick = () => {
       const kind = prompt(
-        "Entry kind (MenuTitle/MenuItem/MenuBar/OpenSubMenu/CloseSubMenu)",
+        menuEntryKindHint(),
         "MenuItem"
       );
       if (kind === null) return;
@@ -1644,7 +1671,7 @@ function renderProps() {
     addBtn.textContent = "Add Entry";
     addBtn.onclick = () => {
       const kind = prompt(
-        "Entry kind (ToolBarButton/ToolBarStandardButton/ToolBarSeparator/ToolBarToolTip)",
+        toolBarEntryKindHint(),
         "ToolBarButton"
       );
       if (kind === null) return;

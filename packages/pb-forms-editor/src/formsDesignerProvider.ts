@@ -24,7 +24,7 @@ import {
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./settings";
-import { FormDocument } from "./core/model";
+import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 
 type WebviewToExtensionMessage =
   | { type: "ready" }
@@ -478,6 +478,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       vscode.Uri.joinPath(this.context.extensionUri, "out", "webview", "main.js")
     );
     const nonce = getNonce();
+    const symbolsJson = JSON.stringify(PBFD_SYMBOLS);
 
     return `<!doctype html>
 <html>
@@ -675,6 +676,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       </div>
     </div>
 
+    <script nonce="${nonce}">window.__PBFD_SYMBOLS__ = ${symbolsJson};</script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>
 </html>`;

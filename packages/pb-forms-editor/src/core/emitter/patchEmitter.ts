@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { splitParams } from "../parser/tokenizer";
-import { ScanRange } from "../model";
+import { ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -157,15 +157,11 @@ export interface GadgetColumnArgs {
   widthRaw: string;
 }
 
-export type MenuEntryKind = "MenuTitle" | "MenuItem" | "MenuBar" | "OpenSubMenu" | "CloseSubMenu";
-
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
   textRaw?: string;
 }
-
-export type ToolBarEntryKind = "ToolBarStandardButton" | "ToolBarButton" | "ToolBarSeparator" | "ToolBarToolTip";
 
 export interface ToolBarEntryArgs {
   kind: ToolBarEntryKind;
