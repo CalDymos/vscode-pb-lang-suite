@@ -48,6 +48,12 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 - ✅ **Arrays and Lists**: Enhanced IntelliSense for arrays, lists, and maps with specialized functions
 - ✅ **API Calls**: Comprehensive support including Windows API, graphics, networking, database, and threading functions
 
+## Related Extensions
+
+- **PureBasic Forms Editor** – Visual designer and `.pbf` tooling for PureBasic Forms  
+  [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+  **Repo:** [PureBasic Forms Editor Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
+
 ## Installation
 
 ### Development Version

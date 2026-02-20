@@ -8,10 +8,10 @@ This repository contains multiple VS Code extensions related to PureBasic.
 
 ## Packages
 
-- `packages/pb-lang-support`  
+- [packages/pb-lang-support](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
   PureBasic language support (syntax highlighting, snippets, basic tooling).
 
-- `packages/pb-forms-editor`  
+- [packages/pb-forms-editor](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
   PureBasic Forms editor (custom editor for `.pbf` files). *(Work in progress)*
 
 ## Development

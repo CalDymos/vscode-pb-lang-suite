@@ -24,6 +24,12 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 
 > ⚠️ Still in development: currently only **x/y** are patched when dragging.
 
+## Related Extensions
+
+- **PureBasic Language Support** – Syntax highlighting, snippets, and language tooling  
+  [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
+  **Repo:** [PureBasic Language Service Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
+
 ## Installation
 
 ### Development Version
