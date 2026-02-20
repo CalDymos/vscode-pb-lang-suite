@@ -193,6 +193,125 @@ const MIN_GADGET_H = 8;
 const MIN_WIN_W = 40;
 const MIN_WIN_H = 40;
 
+const CONTAINER_KINDS = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
+
+type RectLike = { x: number; y: number; w: number; h: number };
+
+function renderListAndParentSelector() {
+  renderList();
+  renderParentSelector();
+}
+
+function renderSelectionUiWithParentSelector() {
+  render();
+  renderList();
+  renderParentSelector();
+  renderProps();
+}
+
+function renderSelectionUiWithoutParentSelector() {
+  render();
+  renderList();
+  renderProps();
+}
+
+function renderAfterInit() {
+  render();
+  renderParentSelector();
+  renderList();
+  renderProps();
+  renderDiagnostics();
+}
+
+function sanitizeSelectionAfterModelUpdate() {
+  const sel = selection;
+  if (sel && sel.kind === "gadget") {
+    const selId = sel.id;
+    if (!model.gadgets.some(g => g.id === selId)) {
+      selection = null;
+    }
+    return;
+  }
+
+  if (sel && sel.kind === "window") {
+    if (!model.window) selection = null;
+    return;
+  }
+
+  if (sel && sel.kind === "menu") {
+    const menus = model.menus ?? [];
+    if (!menus.some(m => m.id === sel.id)) selection = null;
+    return;
+  }
+
+  if (sel && sel.kind === "toolbar") {
+    const toolbars = model.toolbars ?? [];
+    if (!toolbars.some(t => t.id === sel.id)) selection = null;
+    return;
+  }
+
+  if (sel && sel.kind === "statusbar") {
+    const statusbars = model.statusbars ?? [];
+    if (!statusbars.some(sb => sb.id === sel.id)) selection = null;
+    return;
+  }
+}
+
+function normalizeRectInPlace(r: RectLike, minW: number, minH: number) {
+  const c = clampRect(r.x, r.y, r.w, r.h, minW, minH);
+  r.x = c.x;
+  r.y = c.y;
+  r.w = c.w;
+  r.h = c.h;
+}
+
+function shouldSnapLive(): boolean {
+  return settings.snapToGrid && settings.snapMode === "live";
+}
+
+function shouldSnapDrop(): boolean {
+  return settings.snapToGrid && settings.snapMode === "drop";
+}
+
+function applyLiveSnapPoint(x: number, y: number): { x: number; y: number } {
+  if (!shouldSnapLive()) return { x, y };
+  const gs = settings.gridSize;
+  return { x: snapValue(x, gs), y: snapValue(y, gs) };
+}
+
+function applyLiveSnapRect(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  minW: number,
+  minH: number
+): { x: number; y: number; w: number; h: number } {
+  if (!shouldSnapLive()) return { x, y, w, h };
+  const gs = settings.gridSize;
+  const nx = snapValue(x, gs);
+  const ny = snapValue(y, gs);
+  const nw = snapValue(w, gs);
+  const nh = snapValue(h, gs);
+  return clampRect(nx, ny, nw, nh, minW, minH);
+}
+
+function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
+  if (!shouldSnapDrop()) return;
+
+  const gs = settings.gridSize;
+  r.x = snapValue(r.x, gs);
+  r.y = snapValue(r.y, gs);
+  r.w = snapValue(r.w, gs);
+  r.h = snapValue(r.h, gs);
+
+  const c = clampRect(r.x, r.y, r.w, r.h, minW, minH);
+  r.x = c.x;
+  r.y = c.y;
+  r.w = c.w;
+  r.h = c.h;
+}
+
 type DragState =
   | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number }
   | {
@@ -264,32 +383,9 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
       applySettings(msg.settings);
     }
     // Validate selection after model refresh
-    {
-      const sel = selection;
-      if (sel && sel.kind === "gadget") {
-        const selId = sel.id;
-        if (!model.gadgets.some(g => g.id === selId)) {
-          selection = null;
-        }
-      } else if (sel && sel.kind === "window") {
-        if (!model.window) selection = null;
-      } else if (sel && sel.kind === "menu") {
-        const menus = model.menus ?? [];
-        if (!menus.some(m => m.id === sel.id)) selection = null;
-      } else if (sel && sel.kind === "toolbar") {
-        const toolbars = model.toolbars ?? [];
-        if (!toolbars.some(t => t.id === sel.id)) selection = null;
-      } else if (sel && sel.kind === "statusbar") {
-        const statusbars = model.statusbars ?? [];
-        if (!statusbars.some(sb => sb.id === sel.id)) selection = null;
-      }
-    }
+    sanitizeSelectionAfterModelUpdate();
 
-    render();
-    renderParentSelector();
-    renderList();
-    renderProps();
-    renderDiagnostics();
+    renderAfterInit();
     return;
   }
 
@@ -533,25 +629,22 @@ function snapValue(v: number, gridSize: number): number {
 }
 
 function postGadgetRect(g: Gadget) {
-  const r = clampRect(g.x, g.y, g.w, g.h, MIN_GADGET_W, MIN_GADGET_H);
-  g.x = r.x;
-  g.y = r.y;
-  g.w = r.w;
-  g.h = r.h;
-
+  normalizeRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
   vscode.postMessage({ type: "setGadgetRect", id: g.id, x: g.x, y: g.y, w: g.w, h: g.h });
 }
 
 function postWindowRect() {
   if (!model.window) return;
 
-  const r = clampRect(model.window.x, model.window.y, model.window.w, model.window.h, MIN_WIN_W, MIN_WIN_H);
-  model.window.x = r.x;
-  model.window.y = r.y;
-  model.window.w = r.w;
-  model.window.h = r.h;
-
-  vscode.postMessage({ type: "setWindowRect", id: model.window.id, x: r.x, y: r.y, w: r.w, h: r.h });
+  normalizeRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
+  vscode.postMessage({
+    type: "setWindowRect",
+    id: model.window.id,
+    x: model.window.x,
+    y: model.window.y,
+    w: model.window.w,
+    h: model.window.h
+  });
 }
 
 canvas.addEventListener("mousedown", (e) => {
@@ -591,9 +684,7 @@ canvas.addEventListener("mousedown", (e) => {
       canvas.style.cursor = "move";
     }
 
-    render();
-    renderList();
-    renderProps();
+    renderSelectionUiWithoutParentSelector();
     return;
   }
 
@@ -631,9 +722,7 @@ canvas.addEventListener("mousedown", (e) => {
       canvas.style.cursor = "default";
     }
 
-    render();
-    renderList();
-    renderProps();
+    renderSelectionUiWithoutParentSelector();
     return;
   }
 
@@ -641,9 +730,7 @@ canvas.addEventListener("mousedown", (e) => {
   drag = null;
   canvas.style.cursor = "default";
 
-  render();
-  renderList();
-  renderProps();
+  renderSelectionUiWithoutParentSelector();
 });
 
 window.addEventListener("mousemove", (e) => {
@@ -697,11 +784,9 @@ window.addEventListener("mousemove", (e) => {
       let nx = asInt(d.startX + dx);
       let ny = asInt(d.startY + dy);
 
-      if (settings.snapToGrid && settings.snapMode === "live") {
-        const gs = settings.gridSize;
-        nx = snapValue(nx, gs);
-        ny = snapValue(ny, gs);
-      }
+      const p = applyLiveSnapPoint(nx, ny);
+      nx = p.x;
+      ny = p.y;
 
       g.x = nx;
       g.y = ny;
@@ -713,20 +798,11 @@ window.addEventListener("mousemove", (e) => {
       let ny = r0.y;
       let nw = r0.w;
       let nh = r0.h;
-
-      if (settings.snapToGrid && settings.snapMode === "live") {
-        const gs = settings.gridSize;
-        nx = snapValue(nx, gs);
-        ny = snapValue(ny, gs);
-        nw = snapValue(nw, gs);
-        nh = snapValue(nh, gs);
-
-        const r1 = clampRect(nx, ny, nw, nh, MIN_GADGET_W, MIN_GADGET_H);
-        nx = r1.x;
-        ny = r1.y;
-        nw = r1.w;
-        nh = r1.h;
-      }
+      const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_GADGET_W, MIN_GADGET_H);
+      nx = r1.x;
+      ny = r1.y;
+      nw = r1.w;
+      nh = r1.h;
 
       g.x = nx;
       g.y = ny;
@@ -748,11 +824,9 @@ window.addEventListener("mousemove", (e) => {
     let nx = asInt(d.startX + dx);
     let ny = asInt(d.startY + dy);
 
-    if (settings.snapToGrid && settings.snapMode === "live") {
-      const gs = settings.gridSize;
-      nx = snapValue(nx, gs);
-      ny = snapValue(ny, gs);
-    }
+    const p = applyLiveSnapPoint(nx, ny);
+    nx = p.x;
+    ny = p.y;
 
     model.window.x = nx;
     model.window.y = ny;
@@ -765,20 +839,11 @@ window.addEventListener("mousemove", (e) => {
     let ny = r0.y;
     let nw = r0.w;
     let nh = r0.h;
-
-    if (settings.snapToGrid && settings.snapMode === "live") {
-      const gs = settings.gridSize;
-      nx = snapValue(nx, gs);
-      ny = snapValue(ny, gs);
-      nw = snapValue(nw, gs);
-      nh = snapValue(nh, gs);
-
-      const r1 = clampRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
-      nx = r1.x;
-      ny = r1.y;
-      nw = r1.w;
-      nh = r1.h;
-    }
+    const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
+    nx = r1.x;
+    ny = r1.y;
+    nw = r1.w;
+    nh = r1.h;
 
     model.window.x = nx;
     model.window.y = ny;
@@ -799,38 +864,12 @@ window.addEventListener("mouseup", () => {
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (g) {
-      if (settings.snapToGrid && settings.snapMode === "drop") {
-        const gs = settings.gridSize;
-        g.x = snapValue(g.x, gs);
-        g.y = snapValue(g.y, gs);
-        g.w = snapValue(g.w, gs);
-        g.h = snapValue(g.h, gs);
-
-        const r = clampRect(g.x, g.y, g.w, g.h, MIN_GADGET_W, MIN_GADGET_H);
-        g.x = r.x;
-        g.y = r.y;
-        g.w = r.w;
-        g.h = r.h;
-      }
-
+      applyDropSnapRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
       postGadgetRect(g);
     }
   } else {
     if (model.window) {
-      if (settings.snapToGrid && settings.snapMode === "drop") {
-        const gs = settings.gridSize;
-        model.window.x = snapValue(model.window.x, gs);
-        model.window.y = snapValue(model.window.y, gs);
-        model.window.w = snapValue(model.window.w, gs);
-        model.window.h = snapValue(model.window.h, gs);
-
-        const r = clampRect(model.window.x, model.window.y, model.window.w, model.window.h, MIN_WIN_W, MIN_WIN_H);
-        model.window.x = r.x;
-        model.window.y = r.y;
-        model.window.w = r.w;
-        model.window.h = r.h;
-      }
-
+      applyDropSnapRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
       postWindowRect();
     }
   }
@@ -1050,8 +1089,6 @@ function renderList() {
     return false;
   };
 
-  const containerKinds = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
-
   const gadgetMap = new Map<string, Gadget>();
   const childrenMap = new Map<string, string[]>();
   for (const g of model.gadgets) {
@@ -1162,7 +1199,7 @@ function renderList() {
     const k = keyOf(n);
     if (!expanded.has(k)) {
       // Expand container gadgets and the window by default.
-      const defaultExpanded = n.kind === "window" || (n.kind === "gadget" && containerKinds.has(gadgetMap.get(n.id)?.kind ?? ""));
+      const defaultExpanded = n.kind === "window" || (n.kind === "gadget" && CONTAINER_KINDS.has(gadgetMap.get(n.id)?.kind ?? ""));
       expanded.set(k, defaultExpanded);
     }
     return expanded.get(k)!;
@@ -1184,8 +1221,7 @@ function renderList() {
       ev.stopPropagation();
       if (!hasKids) return;
       expanded.set(keyOf(n), !isOpen);
-      renderList();
-      renderParentSelector();
+      renderListAndParentSelector();
     };
 
     const label = document.createElement("div");
@@ -1202,8 +1238,7 @@ function renderList() {
       else if (n.kind === "toolbar") selection = { kind: "toolbar", id: n.id };
       else if (n.kind === "statusbar") selection = { kind: "statusbar", id: n.id };
       render();
-      renderList();
-      renderParentSelector();
+      renderListAndParentSelector();
       renderProps();
     };
 
@@ -1223,8 +1258,6 @@ function renderList() {
 
 function renderParentSelector() {
   if (!parentSelEl) return;
-
-  const containerKinds = new Set(["ContainerGadget", "PanelGadget", "ScrollAreaGadget"]);
 
   const parentMap = new Map<string, string | undefined>();
   for (const g of model.gadgets) parentMap.set(g.id, g.parentId);
@@ -1247,7 +1280,7 @@ function renderParentSelector() {
   }
 
   const containers = model.gadgets
-    .filter(g => containerKinds.has(g.kind))
+    .filter(g => CONTAINER_KINDS.has(g.kind))
     .sort((a, b) => depthOf(a.id) - depthOf(b.id));
 
   for (const g of containers) {
@@ -1278,10 +1311,7 @@ function renderParentSelector() {
       const id = v.slice("gadget:".length);
       selection = { kind: "gadget", id };
     }
-    render();
-    renderList();
-    renderParentSelector();
-    renderProps();
+    renderSelectionUiWithParentSelector();
   };
 
   parentSelEl.innerHTML = "";
@@ -1745,8 +1775,7 @@ function renderProps() {
     btn.onclick = () => {
       selection = { kind: "gadget", id: g.parentId! };
       render();
-      renderList();
-      renderParentSelector();
+      renderListAndParentSelector();
       renderProps();
     };
     propsEl.appendChild(row("", btn));
@@ -1803,13 +1832,13 @@ function renderProps() {
   addItemBtn.textContent = "Add Item";
   addItemBtn.onclick = () => {
     const txt = prompt("Item text", "");
-              if (txt === null) return;
+    if (txt === null) return;
     const pos = prompt("Position (-1 append)", "-1");
-              if (pos === null) return;
+    if (pos === null) return;
     const img = prompt("Image raw (optional)", "");
-              if (img === null) return;
+    if (img === null) return;
     const flags = prompt("Flags raw (optional)", "");
-              if (flags === null) return;
+    if (flags === null) return;
 
     vscode.postMessage({
       type: "insertGadgetItem",
@@ -1871,11 +1900,11 @@ function renderProps() {
   addColBtn.textContent = "Add Column";
   addColBtn.onclick = () => {
     const title = prompt("Column title", "");
-              if (title === null) return;
+    if (title === null) return;
     const col = prompt("Column index", String(g.columns?.length ?? 0));
     if (col === null) return;
     const width = prompt("Width", "80");
-              if (width === null) return;
+    if (width === null) return;
 
     vscode.postMessage({
       type: "insertGadgetColumn",
