@@ -31,6 +31,7 @@
     "t:all": "node scripts/tag-and-push.mjs all",
     "t:suite": "node scripts/tag-and-push.mjs suite",
     "t:forms": "node scripts/tag-and-push.mjs forms",
-    "t:lang": "node scripts/tag-and-push.mjs lang"
+    "t:lang": "node scripts/tag-and-push.mjs lang",
+    "backmerge": "node scripts/backmerge-main-into-devel.mjs"
   }
 }
