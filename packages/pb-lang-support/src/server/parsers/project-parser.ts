@@ -16,6 +16,7 @@ import {
     getProjectIncludeDirectories as getPbpIncludeDirs,
     getProjectIncludeFiles as getPbpIncludeFiles,
     getProjectSourceFiles as getPbpSourceFiles,
+    PbpConfig,
 } from '../../shared/parsers/pbp-parser';
 
 export interface ProjectFile {
@@ -75,6 +76,27 @@ export function parseProjectFile(document: TextDocument): ParsedProject | null {
     }
 }
 
+
+function guessTargetOs(pbp: PbpProject, defaultTargetCompilerVersion?: string, outputPath?: string): string {
+    const v = (defaultTargetCompilerVersion ?? '').toLowerCase();
+
+    if (v.includes('windows')) return 'Windows';
+    if (v.includes('linux')) return 'Linux';
+    if (v.includes('mac')) return 'MacOS';
+
+    const out = (outputPath ?? '').toLowerCase();
+    if (out.endsWith('.exe') || out.endsWith('.dll')) return 'Windows';
+    if (out.endsWith('.so')) return 'Linux';
+    if (out.endsWith('.app') || out.endsWith('.dylib')) return 'MacOS';
+
+    // Fallback to current process platform
+    switch (process.platform) {
+        case 'win32': return 'Windows';
+        case 'darwin': return 'MacOS';
+        default: return 'Linux';
+    }
+}
+
 function mapToServerProjectFile(documentUri: string, pbp: PbpProject): ProjectFile {
     const defaultTarget = selectDefaultTarget(pbp);
 
@@ -83,29 +105,44 @@ function mapToServerProjectFile(documentUri: string, pbp: PbpProject): ProjectFi
     const enableThreads = defaultTarget?.options['thread'] ?? false;
     const enableOnError = defaultTarget?.options['onerror'] ?? false;
 
+    const name = pbp.config?.name ?? '';
+
     // The existing server types expect some fields which are not explicit in .pbp.
     // Keep them empty/default for now.
     return {
-        name: pbp.name,
+        name: name,
         version: '1.0.0',
         author: '',
         sourceFiles: getPbpSourceFiles(pbp),
         includeFiles: getPbpIncludeFiles(pbp),
-        libraries: [],
+        libraries: pbp.libraries ?? [],
         buildSettings: {
             executable: defaultTarget?.executable.fsPath ?? defaultTarget?.outputFile.fsPath ?? '',
-            target: process.platform,
+            target: guessTargetOs(pbp, defaultTarget?.compilerVersion, defaultTarget?.outputFile.rawPath ?? defaultTarget?.executable.rawPath),
             enableDebugger,
             enableUnicode,
             enableThreads,
             enableOnError,
-            enablePurifier: false,
-            enableConstantFolding: false,
-            enableInlineASM: false,
-            enableExplicit: false,
-            enableOptimizer: false,
-            subsystem: defaultTarget?.format?.['exe'] ?? '',
-            commandLine: '',
+            enablePurifier: defaultTarget?.purifier?.enabled ?? defaultTarget?.options['purifier'] ?? false,
+            enableConstantFolding:
+                defaultTarget?.options['constantfolding'] ??
+                defaultTarget?.options['constant_folding'] ??
+                defaultTarget?.options['constantfold'] ??
+                false,
+            enableInlineASM:
+                defaultTarget?.options['asm'] ??
+                defaultTarget?.options['inlineasm'] ??
+                defaultTarget?.options['inlineassembly'] ??
+                false,
+            enableExplicit:
+                defaultTarget?.options['explicit'] ??
+                defaultTarget?.options['enableexplicit'] ??
+                defaultTarget?.options['enable_explicit'] ??
+                false,
+            enableOptimizer: defaultTarget?.options['optimizer'] ?? false,
+            // Prefer the explicit subsystem (<subsystem value="..."/>) and fall back to the executable format (<format exe="..."/>)
+            subsystem: defaultTarget?.subsystem ?? defaultTarget?.format?.['exe'] ?? '',
+            commandLine: defaultTarget?.commandLine ?? '',
         },
         filePath: documentUri,
         directory: ensureTrailingSep(pbp.projectDir),
@@ -135,16 +172,23 @@ export function extractProjectFiles(project: ProjectFile): string[] {
  * Get all include directories that should be searched for includes.
  */
 export function getProjectIncludeDirectories(project: ProjectFile): string[] {
+    
     // Rebuild a minimal PbpProject view to reuse the shared include dir logic.
     const pbp: PbpProject = {
         projectFile: '',
         projectDir: project.directory,
-        name: project.name,
-        comment: '',
+        config: {
+            name: project.name,
+            comment: '',
+            closefiles: false,
+            openmode: 0,
+        },
+        data: {},
         files: [
             ...project.sourceFiles.map(p => ({ rawPath: p, fsPath: p })),
             ...project.includeFiles.map(p => ({ rawPath: p, fsPath: p })),
         ],
+        libraries: [],
         targets: [],
     };
 

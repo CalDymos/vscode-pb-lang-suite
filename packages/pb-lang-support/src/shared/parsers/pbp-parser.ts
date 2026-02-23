@@ -8,18 +8,43 @@
  */
 
 import * as path from 'path';
+type integer = number;
 
 export interface PbpProject {
     /** Absolute filesystem path to the .pbp file */
     projectFile: string;
     /** Absolute filesystem path to the project directory */
     projectDir: string;
+    config: PbpConfig;
+    data: PbpData;
+    files: PbpFileEntry[];
+    /** Project libraries (best-effort; may be empty if not specified in the .pbp) */
+    libraries: string[];
+    targets: PbpTarget[];
+}
+
+export interface PbpConfig {
+    closefiles: boolean;
+    openmode: integer;
     /** Project name (from <section name="config"><options name="..."/>) */
     name: string;
     /** Project comment (from <section name="config"><comment>...</comment>) */
     comment: string;
-    files: PbpFileEntry[];
-    targets: PbpTarget[];
+}
+
+export interface PbpData {
+    explorer?: {
+        view?: string;
+        pattern?: integer;
+    };
+    log?: {
+        show?: boolean;
+    };
+    lastopen?: {
+        date?: string;
+        user?: string;
+        host?: string;
+    };
 }
 
 export interface PbpFileEntry {
@@ -43,7 +68,18 @@ export interface PbpTarget {
     inputFile: PbpTargetValue;
     outputFile: PbpTargetValue;
     executable: PbpTargetValue;
+    directory: string;
     options: Record<string, boolean>;
+    /** Compiler version string as stored in <compiler version="..."/> */
+    compilerVersion?: string;
+    /** Optional additional command line args as stored in the project file (best-effort). */
+    commandLine?: string;
+    /** Subsystem name as stored in <subsystem value="..."/> */
+    subsystem?: string;
+    purifier?: {
+        enabled: boolean;
+        granularity?: string;
+    };
     format?: Record<string, string>;
     icon?: {
         enabled: boolean;
@@ -63,12 +99,9 @@ export interface PbpTargetValue {
 
 export interface ParsePbpOptions {
     /** If true, attempt to parse legacy INI format as fallback. Default: true */
-    allowIniFallback?: boolean;
+    isSpiderBasic?: boolean;
 }
 
-const DEFAULT_PARSE_OPTIONS: Required<ParsePbpOptions> = {
-    allowIniFallback: true,
-};
 
 /**
  * Parse a PureBasic project file (.pbp).
@@ -77,17 +110,12 @@ const DEFAULT_PARSE_OPTIONS: Required<ParsePbpOptions> = {
  * All paths inside the project are stored relative to the project file.
  */
 export function parsePbpProjectText(content: string, projectFileFsPath: string, options: ParsePbpOptions = {}): PbpProject | null {
-    const opt = { ...DEFAULT_PARSE_OPTIONS, ...options };
     const normalized = normalizeNewlines(content);
     const projectDir = path.dirname(projectFileFsPath);
 
     // Fast path: XML format
     if (/<\?xml\b[\s\S]*?<project\b/i.test(normalized)) {
         return parseXmlProject(normalized, projectFileFsPath, projectDir);
-    }
-
-    if (opt.allowIniFallback) {
-        return parseIniProject(normalized, projectFileFsPath, projectDir);
     }
 
     return null;
@@ -127,35 +155,76 @@ export function getProjectIncludeDirectories(project: PbpProject): string[] {
  * Parses .pbp project files (XML format)
  */
 function parseXmlProject(content: string, projectFileFsPath: string, projectDir: string): PbpProject | null {
-    const name = parseProjectName(content);
-    const comment = parseProjectComment(content);
+    const config = parseProjectConfig(content);
+    const data = parseProjectData(content);
     const files = parseProjectFiles(content, projectDir);
     const targets = parseProjectTargets(content, projectDir);
+    const libraries = parseProjectLibraries(content);
 
     return {
         projectFile: projectFileFsPath,
         projectDir,
-        name,
-        comment,
+        config,
+        data,
         files,
+        libraries,
         targets,
     };
 }
 
-function parseProjectName(content: string): string {
+function parseProjectConfig(content: string): PbpConfig {
     const configSection = extractSection(content, 'config');
-    if (!configSection) return '';
+        if (!configSection) {
+        return {
+            name: '',
+            comment: '',
+            closefiles: false,
+            openmode: 0,
+        };
+    }
 
-    const optTag = configSection.match(/<options\b[^>]*\bname="([^"]*)"[^>]*\/>/i);
-    return (optTag?.[1] ?? '').trim();
+    const name = configSection.match(/<options\b[^>]*\bname="([^"]*)"[^>]*\/>/i);
+    const comment = configSection.match(/<comment\b[^>]*>([\s\S]*?)<\/comment>/i);
+
+    return {
+        name: (name?.[1] ?? '').trim(),
+        comment: decodeXmlEntities((comment?.[1] ?? '').trim()),
+        closefiles: configSection.includes('closefiles="1"') || configSection.includes('closefiles="true"'),
+        openmode: (configSection.includes('openmode="1"') || configSection.includes('openmode="true"')) ? 1 : 0,
+    };
 }
 
-function parseProjectComment(content: string): string {
-    const configSection = extractSection(content, 'config');
-    if (!configSection) return '';
+function parseProjectData(content: string): PbpData {
+    const dataSection = extractSection(content, 'data');
+    if (!dataSection) return {};
 
-    const commentTag = configSection.match(/<comment\b[^>]*>([\s\S]*?)<\/comment>/i);
-    return decodeXmlEntities((commentTag?.[1] ?? '').trim());
+    const explorerMatch = dataSection.match(/<explorer\b([^>]*)\/?>/i);
+    const explorerAttrs = explorerMatch ? parseAttributes(explorerMatch[1] ?? '') : undefined;
+
+    const logMatch = dataSection.match(/<log\b([^>]*)\/?>/i);
+    const logAttrs = logMatch ? parseAttributes(logMatch[1] ?? '') : undefined;
+
+    const lastOpenMatch = dataSection.match(/<lastopen\b([^>]*)\/?>/i);
+    const lastopenAttrs = lastOpenMatch ? parseAttributes(lastOpenMatch[1] ?? '') : undefined;
+
+    const explorer = explorerAttrs ? {
+        view: explorerAttrs['view'] ?? undefined,
+        pattern: (explorerAttrs['pattern'] ?? '') !== ''
+            ? parseInt(explorerAttrs['pattern']!, 10)
+            : undefined,
+    } : undefined;
+
+    const log = logAttrs ? {
+        show: logAttrs['show'] !== undefined ? parseBool(logAttrs['show']) : undefined,
+    } : undefined;
+
+    const lastopen = lastopenAttrs ? {
+        date: (lastopenAttrs['date'] ?? '').trim() || undefined,
+        user: (lastopenAttrs['user'] ?? '').trim() || undefined,
+        host: (lastopenAttrs['host'] ?? '').trim() || undefined,
+    } : undefined;
+
+    return { explorer, log, lastopen };
 }
 
 function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] {
@@ -196,6 +265,41 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     return result;
 }
 
+function parseProjectLibraries(content: string): string[] {
+    // Best-effort parsing: PureBasic stores libraries inconsistently across versions.
+    // Common patterns observed:
+    //  - <section name="libraries"> ... <library value="..."/> ... </section>
+    //  - <section name="libraries"> ... <key name="Library0">...</key> ... </section>
+    const section = extractSection(content, 'libraries');
+    if (!section) return [];
+
+    const libs: string[] = [];
+
+    const valueRe = /<library\b[^>]*\bvalue="([^"]*)"[^>]*\/>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = valueRe.exec(section)) !== null) {
+        const v = decodeXmlEntities((m[1] ?? '').trim());
+        if (v) libs.push(v);
+    }
+
+    const keyRe = /<key\b[^>]*\bname="Library\d+"[^>]*>\s*([\s\S]*?)\s*<\/key>/gi;
+    while ((m = keyRe.exec(section)) !== null) {
+        const v = decodeXmlEntities((m[1] ?? '').trim());
+        if (v) libs.push(v);
+    }
+
+    // Deduplicate while keeping order
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const lib of libs) {
+        if (!lib) continue;
+        if (seen.has(lib)) continue;
+        seen.add(lib);
+        result.push(lib);
+    }
+    return result;
+}
+
 function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
     const targetsSection = extractSection(content, 'targets');
     if (!targetsSection) return [];
@@ -212,9 +316,27 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
         const enabled = parseBool(attrs['enabled']);
         const isDefault = parseBool(attrs['default']);
 
+        const directory = (attrs['directory'] ?? '').trim();
+
         const inputRaw = extractValueAttr(body, 'inputfile');
         const outputRaw = extractValueAttr(body, 'outputfile');
         const exeRaw = extractValueAttr(body, 'executable');
+
+        const compilerMatch = body.match(/<compiler\b([^>]*)\/>/i);
+        const compilerAttrs = compilerMatch ? parseAttributes(compilerMatch[1] ?? '') : undefined;
+        const compilerVersion = (compilerAttrs?.['version'] ?? '').trim() || undefined;
+
+        const commandLineRaw = extractValueAttr(body, 'commandline');
+        const commandLineTextMatch = !commandLineRaw ? body.match(/<commandline\b[^>]*>([\s\S]*?)<\/commandline>/i) : null;
+        const commandLine = (commandLineRaw || decodeXmlEntities((commandLineTextMatch?.[1] ?? '').trim())) || undefined;
+
+        const subsystemRaw = extractValueAttr(body, 'subsystem');
+        const subsystem = subsystemRaw ? subsystemRaw : undefined;
+
+        const purifierMatch = body.match(/<purifier\b([^>]*)\/>/i);
+        const purifierAttrs = purifierMatch ? parseAttributes(purifierMatch[1] ?? '') : undefined;
+        const purifierEnabled = purifierAttrs ? parseBool(purifierAttrs['enable']) : false;
+        const purifierGranularity = purifierAttrs?.['granularity'];
 
         const optMatch = body.match(/<options\b([^>]*)\/>/i);
         const options = optMatch ? parseBooleanAttributes(optMatch[1] ?? '') : {};
@@ -232,6 +354,7 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
             name,
             enabled,
             isDefault,
+            directory,
             inputFile: {
                 rawPath: inputRaw,
                 fsPath: resolveProjectPath(projectDir, inputRaw),
@@ -245,6 +368,10 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
                 fsPath: resolveProjectPath(projectDir, exeRaw),
             },
             options,
+            compilerVersion,
+            commandLine,
+            subsystem,
+            purifier: purifierMatch ? { enabled: purifierEnabled, granularity: purifierGranularity } : undefined,
             format,
             icon: iconText
                 ? {
@@ -291,53 +418,6 @@ function extractSection(content: string, sectionName: string): string | null {
     const re = new RegExp(`<section\\b[^>]*\\bname="${escapeRegExp(sectionName)}"[^>]*>([\\s\\S]*?)<\\/section>`, 'i');
     const m = content.match(re);
     return m ? (m[1] ?? '') : null;
-}
-
-function parseIniProject(content: string, projectFileFsPath: string, projectDir: string): PbpProject | null {
-    // Minimal fallback for very old projects; keeps behavior compatible with the existing implementation.
-    const lines = content.split('\n');
-    let currentSection = '';
-    let name = '';
-    let comment = '';
-    const files: PbpFileEntry[] = [];
-    const targets: PbpTarget[] = [];
-
-    for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line || line.startsWith(';')) continue;
-
-        if (line.startsWith('[') && line.endsWith(']')) {
-            currentSection = line.slice(1, -1);
-            continue;
-        }
-
-        const eq = line.indexOf('=');
-        if (eq < 0) continue;
-        const key = line.slice(0, eq).trim();
-        const value = line.slice(eq + 1).trim();
-
-        if (currentSection === 'Project') {
-            if (key === 'Name') name = value;
-            if (key === 'Comment') comment = value;
-        }
-
-        if (currentSection === 'Files') {
-            // Legacy: Source0=Main.pb
-            if (key.toLowerCase().startsWith('source')) {
-                files.push({ rawPath: value, fsPath: resolveProjectPath(projectDir, value) });
-            }
-        }
-    }
-
-    // INI projects do not define targets in the legacy format in a consistent way.
-    return {
-        projectFile: projectFileFsPath,
-        projectDir,
-        name,
-        comment,
-        files,
-        targets,
-    };
 }
 
 function normalizeNewlines(content: string): string {
