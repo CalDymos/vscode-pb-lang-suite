@@ -1,7 +1,7 @@
 /**
  * PureBasic Project Parser (server wrapper)
  *
- * NOTE: The actual .pbp parsing logic is centralized in src/shared/parsers/pbp-parser.ts
+ * NOTE: The actual .pbp parsing logic is centralized in shared lib @caldymos/pb-project-core
  * so it can be reused by the language server and the extension host.
  */
 
@@ -12,7 +12,7 @@ import { URI } from 'vscode-uri';
 import {
     PbpProject,
     parsePbpProjectText,
-    selectDefaultTarget,
+    pickTarget,
     getProjectIncludeDirectories as getPbpIncludeDirs,
     getProjectIncludeFiles as getPbpIncludeFiles,
     getProjectSourceFiles as getPbpSourceFiles,
@@ -98,7 +98,7 @@ function guessTargetOs(pbp: PbpProject, defaultTargetCompilerVersion?: string, o
 }
 
 function mapToServerProjectFile(documentUri: string, pbp: PbpProject): ProjectFile {
-    const defaultTarget = selectDefaultTarget(pbp);
+    const defaultTarget = pickTarget(pbp);
 
     const enableDebugger = defaultTarget?.options['debug'] ?? false;
     const enableUnicode = defaultTarget?.options['unicode'] ?? false;
