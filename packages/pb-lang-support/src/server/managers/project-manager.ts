@@ -1,6 +1,6 @@
 /**
  * PureBasic Project Manager
- * 管理项目文件和跨文件符号解析
+ * Manage project files and cross-file symbol parsing
  */
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -35,14 +35,14 @@ export class ProjectManager {
     }
 
     /**
-     * 设置工作区根目录
+     * Set workspace root directory
      */
     public setWorkspaceRoot(root: string): void {
         this.workspaceRoot = root;
     }
 
     /**
-     * 处理文档打开事件
+     * Handle document open event
      */
     public onDocumentOpen(document: TextDocument): void {
         if (isProjectFile(document)) {
@@ -53,35 +53,35 @@ export class ProjectManager {
     }
 
     /**
-     * 处理文档关闭事件
+     * Handle document close event
      */
     public onDocumentClose(document: TextDocument): void {
         const uri = document.uri;
 
-        // 如果是项目文件，卸载项目
+        // If it's a project file, unload the project
         if (isProjectFile(document)) {
             this.unloadProject(uri);
         } else {
-            // 从项目的包含文件中移除
+            // Remove from the project's included files
             this.removeFileFromProjects(uri);
         }
     }
 
     /**
-     * 处理文档内容变更
+     * Handle document content changes
      */
     public onDocumentChange(document: TextDocument): void {
         if (isProjectFile(document)) {
-            // 项目文件变更，重新加载
+            // Project file changed, reload
             this.reloadProject(document);
         } else {
-            // 普通文件变更，更新相关项目的符号
+            // Regular file changed, update related project symbols
             this.updateProjectSymbols(document);
         }
     }
 
     /**
-     * 加载项目文件
+     * Load project file
      */
     private loadProject(document: TextDocument): void {
         const uri = document.uri;
@@ -102,14 +102,14 @@ export class ProjectManager {
 
         this.projects.set(uri, projectContext);
 
-        // 解析项目中的包含文件
+        // Parse included files in the project
         this.parseProjectIncludes(projectContext);
 
         this.connection.console.log(`Loaded project: ${parsedProject.project.name} (${uri})`);
     }
 
     /**
-     * 重新加载项目文件
+     * Reload project file
      */
     private reloadProject(document: TextDocument): void {
         const uri = document.uri;
@@ -123,12 +123,12 @@ export class ProjectManager {
     }
 
     /**
-     * 卸载项目
+     * Unload project
      */
     private unloadProject(uri: string): void {
         const project = this.projects.get(uri);
         if (project) {
-            // 清理文件到项目的映射
+            // Clean up file-to-project mapping
             for (const [fileUri, projectUri] of this.fileToProject) {
                 if (projectUri === uri) {
                     this.fileToProject.delete(fileUri);
@@ -141,13 +141,13 @@ export class ProjectManager {
     }
 
     /**
-     * 将文件关联到项目
+     * Associate file with project
      */
     private associateFileWithProject(document: TextDocument): void {
         const uri = document.uri;
         const filePath = URI.parse(uri).fsPath;
 
-        // 查找包含此文件的项目
+        // Find projects that contain this file
         for (const [projectUri, project] of this.projects) {
             const projectFiles = extractProjectFiles(project.project);
 
@@ -155,7 +155,7 @@ export class ProjectManager {
                 this.fileToProject.set(uri, projectUri);
                 project.includedFiles.set(uri, document);
 
-                // 解析文件符号并添加到项目全局符号表
+                // Parse file symbols and add to project global symbol table
                 this.parseFileSymbols(document, project.globalSymbols);
                 break;
             }
@@ -163,7 +163,7 @@ export class ProjectManager {
     }
 
     /**
-     * 从项目中移除文件
+     * Remove file from project
      */
     private removeFileFromProjects(uri: string): void {
         const projectUri = this.fileToProject.get(uri);
@@ -173,25 +173,25 @@ export class ProjectManager {
                 project.includedFiles.delete(uri);
                 this.fileToProject.delete(uri);
 
-                // 从全局符号中移除该文件的符号
+                // Remove this file's symbols from global symbols
                 this.removeFileSymbols(uri, project.globalSymbols);
             }
         }
     }
 
     /**
-     * 解析项目包含文件
+     * Parse project included files
      */
     private async parseProjectIncludes(project: ProjectContext): Promise<void> {
         const includeDirectories = getProjectIncludeDirectories(project.project);
 
-        // 这里应该实现异步文件读取，但由于在language server中，
-        // 我们需要通过workspace功能来读取文件
-        // 暂时留空，等待具体的文件读取实现
+        // Here should implement asynchronous file reading, but since in language server,
+        // we need to read files through workspace functions
+        // temporarily leave empty, waiting for specific file reading implementation
     }
 
     /**
-     * 解析文件符号
+     * Parse file symbols
      */
     private parseFileSymbols(document: TextDocument, globalSymbols: Map<string, any>): void {
         const content = document.getText();
@@ -200,7 +200,7 @@ export class ProjectManager {
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // 解析过程定义
+            // Parse procedure definition
             if (line.startsWith('Procedure') || line.startsWith('Procedure.')) {
                 const match = line.match(/(?:Procedure|Procedure\.\w+)\s+(\w+)\s*\(/);
                 if (match) {
@@ -214,7 +214,7 @@ export class ProjectManager {
                 }
             }
 
-            // 解析变量声明
+            // Parse variable declaration
             if (line.startsWith('Global') || line.startsWith('Define')) {
                 const match = line.match(/(?:Global|Define)\s+(\w+)/);
                 if (match) {
@@ -228,7 +228,7 @@ export class ProjectManager {
                 }
             }
 
-            // 解析常量定义
+            // Parse constant definition
             if (line.startsWith('#')) {
                 const match = line.match(/#\s*(\w+)\s*=/);
                 if (match) {
@@ -242,7 +242,7 @@ export class ProjectManager {
                 }
             }
 
-            // 解析结构定义
+            // Parse structure definition
             if (line.startsWith('Structure')) {
                 const match = line.match(/Structure\s+(\w+)/);
                 if (match) {
@@ -256,7 +256,7 @@ export class ProjectManager {
                 }
             }
 
-            // 解析接口定义
+            // Parse interface definition
             if (line.startsWith('Interface')) {
                 const match = line.match(/Interface\s+(\w+)/);
                 if (match) {
@@ -270,7 +270,7 @@ export class ProjectManager {
                 }
             }
 
-            // 解析枚举定义
+            // Parse enumeration definition
             if (line.startsWith('Enumeration')) {
                 const match = line.match(/Enumeration\s+(\w+)/);
                 if (match) {
@@ -287,7 +287,7 @@ export class ProjectManager {
     }
 
     /**
-     * 从全局符号中移除文件符号
+     * Remove file symbols from global symbols
      */
     private removeFileSymbols(uri: string, globalSymbols: Map<string, any>): void {
         for (const [symbolName, symbol] of globalSymbols) {
@@ -298,17 +298,17 @@ export class ProjectManager {
     }
 
     /**
-     * 更新项目符号
+     * Update project symbols
      */
     private updateProjectSymbols(document: TextDocument): void {
         const projectUri = this.fileToProject.get(document.uri);
         if (projectUri) {
             const project = this.projects.get(projectUri);
             if (project) {
-                // 移除旧的符号
+                // Remove old symbols
                 this.removeFileSymbols(document.uri, project.globalSymbols);
 
-                // 添加新的符号
+                // Add new symbols
                 this.parseFileSymbols(document, project.globalSymbols);
 
                 project.lastModified = Date.now();
@@ -317,7 +317,7 @@ export class ProjectManager {
     }
 
     /**
-     * 获取文件所属项目
+     * Get the project that the file belongs to
      */
     public getFileProject(uri: string): ProjectContext | null {
         const projectUri = this.fileToProject.get(uri);
@@ -325,7 +325,7 @@ export class ProjectManager {
     }
 
     /**
-     * 获取项目的全局符号
+     * Get the project's global symbols
      */
     public getProjectSymbols(uri: string): Map<string, any> | null {
         const project = this.getFileProject(uri);
@@ -333,7 +333,7 @@ export class ProjectManager {
     }
 
     /**
-     * 查找符号定义
+     * Find symbol definition
      */
     public findSymbolDefinition(symbolName: string, uri: string): any | null {
         const symbols = this.getProjectSymbols(uri);
@@ -344,21 +344,21 @@ export class ProjectManager {
     }
 
     /**
-     * 获取所有项目
+     * Get all projects
      */
     public getAllProjects(): ProjectContext[] {
         return Array.from(this.projects.values());
     }
 
     /**
-     * 获取项目文件路径列表
+     * Get project file path list
      */
     public getProjectFiles(): string[] {
         return Array.from(this.projects.keys());
     }
 
     /**
-     * 检查文件是否属于某个项目
+     * Check if file belongs to a project
      */
     public isFileInProject(uri: string): boolean {
         return this.fileToProject.has(uri);
