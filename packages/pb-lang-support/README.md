@@ -54,21 +54,11 @@
 
 ## Related Extensions
 
-- **Optional: Project Mode**
+`pb-lang-support` works independently, but there are several related extensions that expand its scope.
 
-- **PureBasic Project Files** – Visual designer and `.pbf` tooling for PureBasic Forms  
-  [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
-  **Repo:** [PureBasic Forms Editor Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
-
-`pb-lang-support` works standalone.
-
-If you also install **PureBasic Project Files** (`pb-project-files`), `pb-lang-support` can consume additional workspace context derived from `.pbp` projects:
-
-- Active project (`.pbp`) and active target
-- Include directories
-- Project file lists (source/include files)
-
-This is used to scope certain workspace operations to the active project.
+- **PureBasic Project File Support**
+  [![pb-project-files](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pbp-v*&label=pbp)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+  **Repo:** [PureBasic Project File Support Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-project-files)
 
 - **PureBasic Forms Editor** – Visual designer and `.pbf` tooling for PureBasic Forms  
   [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
