@@ -1,8 +1,8 @@
-# PureBasic Language Support for VSCode
+# PureBasic Language Services (VS Code)
 
-[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-lang-support-v*&label=pb-lang-support)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+[![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
-A Visual Studio Code extension that provides comprehensive PureBasic language support.
+`pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar and a Language Server.
 
 ## Features
 
@@ -54,8 +54,24 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 
 ## Related Extensions
 
+- **Optional: Project Mode**
+
+- **PureBasic Project Files** – Visual designer and `.pbf` tooling for PureBasic Forms  
+  [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+  **Repo:** [PureBasic Forms Editor Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
+
+`pb-lang-support` works standalone.
+
+If you also install **PureBasic Project Files** (`pb-project-files`), `pb-lang-support` can consume additional workspace context derived from `.pbp` projects:
+
+- Active project (`.pbp`) and active target
+- Include directories
+- Project file lists (source/include files)
+
+This is used to scope certain workspace operations to the active project.
+
 - **PureBasic Forms Editor** – Visual designer and `.pbf` tooling for PureBasic Forms  
-  [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pb-forms-editor-v*&label=pb-forms-editor)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
+  [![pb-forms-editor](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=forms-v*&label=forms)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
   **Repo:** [PureBasic Forms Editor Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-forms-editor)
 
 ## Installation
@@ -63,7 +79,7 @@ A Visual Studio Code extension that provides comprehensive PureBasic language su
 ### Development Version
 
 1. Clone this repository
-2. Run `npm install` to install dependencies
+2. Run `npm ci` to install dependencies
 3. Run `npm run compile` to compile TypeScript
 4. Press F5 in VSCode to start debugging
 
@@ -322,14 +338,14 @@ The extension includes a comprehensive test suite:
 
    ```bash
    # Clone repository
-   git clone https://github.com/meimingqi222/vscode-pb-lang-suite.git
+   git clone https://github.com/CalDymos/vscode-pb-lang-suite.git vscode-purebasic
    cd vscode-purebasic
 
    # Install dependencies
-   npm install
+   npm ci
 
    # Compile TypeScript
-   npm run compile
+   npm run c:lang
 
    # Run tests
    npm run test
