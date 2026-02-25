@@ -19,8 +19,34 @@ interface PbProjectFilesApi {
     onDidChangeActiveContext: vscode.Event<any>;
 }
 
+function formatInternalError(err: unknown): string {
+    if (err instanceof Error) {
+        return err.stack ?? err.message;
+    }
+    if (typeof err === 'string') {
+        return err;
+    }
+    try {
+        return JSON.stringify(err);
+    } catch {
+        return String(err);
+    }
+}
+
+function logInternalError(label: string, err: unknown): void {
+    console.error(label, err);
+    if (debugChannel) {
+        debugChannel.appendLine(`[${new Date().toISOString()}] ${label}`);
+        debugChannel.appendLine(formatInternalError(err));
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('PureBasic extension is now active!');
+
+    debugChannel = vscode.window.createOutputChannel('PureBasic (Language Server)');
+    context.subscriptions.push(debugChannel);
+    debugChannel.appendLine('Activating PureBasic Language Server...');
 
     try {
         const serverPath = context.asAbsolutePath(path.join('out', 'server', 'server.js'));
@@ -73,9 +99,10 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             client.start();
         } catch (error) {
-            console.error('Language Server failed to start:', error);
-            const msg = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage('PureBasic Language Server failed to start: ' + msg);
+            logInternalError('Language Server failed to start', error);
+            vscode.window.showErrorMessage(
+                'PureBasic Language Server failed to start. See Output: PureBasic (Language Server) for details.'
+            );
             return;
         }
 
@@ -89,23 +116,22 @@ export function activate(context: vscode.ExtensionContext) {
                 console.log('PureBasic Language Server is ready!');
                 vscode.window.showInformationMessage('PureBasic Language Server is ready!');
 
-                // Setup debug output channel
-                debugChannel = vscode.window.createOutputChannel('PureBasic (Debug)');
-                debugChannel.appendLine('PureBasic debug channel initialized.');
+                debugChannel.appendLine('PureBasic Language Server is ready.');
 
                 // Setup pb-project-files bridge (optional extension).
                 void setupProjectFilesBridge(context);
             })
             .catch((error: any) => {
-                console.error('Language Server failed to become ready:', error);
+                logInternalError('Language Server failed to become ready', error);
                 vscode.window.showErrorMessage(
-                    'PureBasic Language Server failed to start: ' + (error?.message ?? String(error))
+                    'PureBasic Language Server failed to start. See Output: PureBasic (Language Server) for details.'
                 );
             });
     } catch (error) {
-        console.error('Error activating extension:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage('Failed to activate PureBasic extension: ' + errorMessage);
+        logInternalError('Error activating extension', error);
+        vscode.window.showErrorMessage(
+            'Failed to activate PureBasic extension. See Output: PureBasic (Language Server) for details.'
+        );
     }
 }
 
@@ -151,7 +177,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             version: 1,
             documentUri: doc.uri.toString(),
             projectFileUri: proj?.projectFile ? vscode.Uri.file(proj.projectFile).toString() : undefined,
-            scope: proj?.projectDir ? computeScope(proj.projectDir, doc.uri.fsPath) : undefined,
+            scope: proj?.projectDir ? computeScope(proj.projectDir, doc.uri.fsPath) : 'external',
         });
     };
 
@@ -193,9 +219,9 @@ function registerCommands(context: vscode.ExtensionContext) {
                 await client.start();
                 vscode.window.showInformationMessage('PureBasic Language Server restarted successfully!');
             } catch (error) {
+                logInternalError('Failed to restart PureBasic Language Server', error);
                 vscode.window.showErrorMessage(
-                    'Failed to restart PureBasic Language Server: ' +
-                        (error instanceof Error ? error.message : String(error))
+                    'Failed to restart PureBasic Language Server. See Output: PureBasic (Language Server) for details.'
                 );
             }
         }
@@ -209,8 +235,9 @@ function registerCommands(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage('Symbol cache cleared successfully!');
             }
         } catch (error) {
+            logInternalError('Failed to clear symbol cache', error);
             vscode.window.showErrorMessage(
-                'Failed to clear symbol cache: ' + (error instanceof Error ? error.message : String(error))
+                'Failed to clear symbol cache. See Output: PureBasic (Language Server) for details.'
             );
         }
     });
@@ -222,8 +249,9 @@ function registerCommands(context: vscode.ExtensionContext) {
             try {
                 await vscode.commands.executeCommand('editor.action.formatDocument');
             } catch (error) {
+                logInternalError('Failed to format document', error);
                 vscode.window.showErrorMessage(
-                    'Failed to format document: ' + (error instanceof Error ? error.message : String(error))
+                    'Failed to format document. See Output: PureBasic (Language Server) for details.'
                 );
             }
         } else {
@@ -236,8 +264,9 @@ function registerCommands(context: vscode.ExtensionContext) {
         try {
             await vscode.commands.executeCommand('workbench.action.showAllSymbols');
         } catch (error) {
+            logInternalError('Failed to show symbols', error);
             vscode.window.showErrorMessage(
-                'Failed to show symbols: ' + (error instanceof Error ? error.message : String(error))
+                'Failed to show symbols. See Output: PureBasic (Language Server) for details.'
             );
         }
     });
