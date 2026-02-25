@@ -83,13 +83,27 @@ export function resolveBuildEntry(project: PbpProject, target: PbpTarget): Resol
 
 export function resolveProjectPath(projectDir: string, rawPath: string): string {
     const p = normalizeRawProjectPath(rawPath);
-    if (!p) return '';
+    if (!p || !projectDir) return '';
 
-    if (isAbsoluteCrossPlatform(p)) {
-        return p;
+    const projectRoot = path.resolve(projectDir);
+    const candidate = isAbsoluteCrossPlatform(p)
+        ? path.normalize(path.resolve(p))
+        : path.normalize(path.resolve(projectRoot, p));
+
+    // Reject paths that escape the project root (including absolute external paths).
+    const relBase = path.sep === '\\' ? projectRoot.toLowerCase() : projectRoot;
+    const relTarget = path.sep === '\\' ? candidate.toLowerCase() : candidate;
+    const rel = path.relative(relBase, relTarget);
+
+    if (!rel) {
+        return candidate;
     }
 
-    return path.normalize(path.join(projectDir, p));
+    if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) {
+        return '';
+    }
+
+    return candidate;
 }
 
 function normalizeRawProjectPath(rawPath: string): string {
