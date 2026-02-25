@@ -24,6 +24,13 @@ function normalizeFsPath(fsPath: string): string {
     return process.platform === 'win32' ? p.toLowerCase() : p;
 }
 
+function formatInternalError(err: unknown): string {
+    if (err instanceof Error) {
+        return err.message;
+    }
+    return String(err);
+}
+
 function classifyScope(projectDir: string, filePath: string): ProjectScope {
     const proj = normalizeFsPath(projectDir);
     const file = normalizeFsPath(filePath);
@@ -400,7 +407,10 @@ export class ProjectService implements vscode.Disposable {
             const bytes = await vscode.workspace.fs.readFile(uri);
             const content = Buffer.from(bytes).toString('utf8');
             return parsePbpProjectText(content, uri.fsPath);
-        } catch {
+        } catch (err) {
+            console.warn(
+                `[pb-project-files] Failed to parse project: ${uri.fsPath} (${formatInternalError(err)})`
+            );
             return null;
         }
     }
