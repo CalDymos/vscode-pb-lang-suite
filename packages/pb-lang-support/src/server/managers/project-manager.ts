@@ -49,6 +49,7 @@ export interface ProjectContext {
 export class ProjectManager {
     private readonly projects = new Map<string, ProjectContext>();
     private readonly fileToProject = new Map<string, string>();
+    private readonly fileScope = new Map<string, 'internal' | 'external'>();
 
     private activeProjectFileUri?: string;
     private activeTargetName?: string;
@@ -82,6 +83,12 @@ export class ProjectManager {
     public setFileProjectMapping(payload: FileProjectLspPayload): void {
         if (!payload || payload.version !== 1) return;
 
+        if (payload.scope === 'internal' || payload.scope === 'external') {
+            this.fileScope.set(payload.documentUri, payload.scope);
+        } else {
+            this.fileScope.delete(payload.documentUri);
+        }
+
         if (!payload.projectFileUri) {
             this.fileToProject.delete(payload.documentUri);
             return;
@@ -90,7 +97,6 @@ export class ProjectManager {
         this.fileToProject.set(payload.documentUri, payload.projectFileUri);
         this.getOrCreateProject(payload.projectFileUri).lastModified = Date.now();
     }
-
     public onDocumentOpen(document: TextDocument): void {
         this.updateProjectSymbols(document);
     }
@@ -101,6 +107,10 @@ export class ProjectManager {
 
     public onDocumentClose(document: TextDocument): void {
         const projectKey = this.getProjectKeyForDocument(document.uri);
+
+        // Keep the maps bounded to currently open documents.
+        this.fileToProject.delete(document.uri);
+        this.fileScope.delete(document.uri);
         if (!projectKey) return;
 
         const ctx = this.projects.get(projectKey);
@@ -142,7 +152,14 @@ export class ProjectManager {
     }
 
     private getProjectKeyForDocument(documentUri: string): string | undefined {
-        return this.fileToProject.get(documentUri) ?? this.activeProjectFileUri;
+        const mapped = this.fileToProject.get(documentUri);
+        if (mapped) return mapped;
+
+        if (this.fileScope.get(documentUri) === 'external') {
+            return undefined;
+        }
+
+        return this.activeProjectFileUri;
     }
 
     private getOrCreateProject(projectFileUri: string): ProjectContext {

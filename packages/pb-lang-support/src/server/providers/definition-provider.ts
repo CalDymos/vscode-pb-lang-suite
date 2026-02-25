@@ -662,10 +662,14 @@ function collectSearchDocuments(
     // 增加工作区文件（限制数量），避免遗漏未打开文件
     try {
         // Prefer project file list (pbp-derived) over a full workspace scan.
-        const files: string[] = typeof projectManager?.getProjectFilesForDocument === 'function'
-            ? (projectManager.getProjectFilesForDocument(rootDocUri) ?? [])
-            : getWorkspaceFiles();
-        for (const fsPath of files) {
+        let files: string[] | undefined;
+        if (typeof projectManager?.getProjectFilesForDocument === 'function') {
+            const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
+            files = Array.isArray(projectFiles) && projectFiles.length > 0 ? projectFiles : undefined;
+        }
+
+        const filesToScan = files ?? getWorkspaceFiles();
+        for (const fsPath of filesToScan) {
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) continue;
             const content = readFileIfExistsSync(fsPath);
