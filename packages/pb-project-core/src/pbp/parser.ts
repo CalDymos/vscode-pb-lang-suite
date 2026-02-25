@@ -75,6 +75,18 @@ const RX_VALUE_ATTR_FLAGS = 'i';
 const RX_SECTION_TEMPLATE = `<section\\b[^>]*\\bname="__NAME__"[^>]*>([\\s\\S]*?)<\\/section>`; // Usage: new RegExp(RX_SECTION_TEMPLATE.replace('__NAME__', escapeRegExp(sectionName)), 'i');
 const RX_SECTION_FLAGS = 'i';
 
+function cloneGlobalRegex(re: RegExp): RegExp {
+    return new RegExp(re.source, re.flags);
+}
+
+function parseOptionalInt(v: string | undefined): number | undefined {
+    if (!v) return undefined;
+    const t = v.trim();
+    if (!t) return undefined;
+    const n = parseInt(t, 10);
+    return Number.isFinite(n) ? n : undefined;
+}
+
 /**
  * Parse a PureBasic project file (.pbp).
  *
@@ -151,9 +163,7 @@ function parseProjectData(content: string): PbpData {
 
     const explorer = explorerAttrs ? {
         view: explorerAttrs['view'] ?? undefined,
-        pattern: (explorerAttrs['pattern'] ?? '') !== ''
-            ? parseInt(explorerAttrs['pattern']!, 10)
-            : undefined,
+        pattern: parseOptionalInt(explorerAttrs['pattern']),
     } : undefined;
 
     const log = logAttrs ? {
@@ -176,7 +186,7 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     const result: PbpFileEntry[] = [];
 
     // Normal <file name="..."><...></file>
-    const fileRe = RX_FILE_ENTRY;
+    const fileRe = cloneGlobalRegex(RX_FILE_ENTRY);
     let m: RegExpExecArray | null;
     while ((m = fileRe.exec(filesSection)) !== null) {
         const rawPath = (m[1] ?? '').trim();
@@ -193,7 +203,7 @@ function parseProjectFiles(content: string, projectDir: string): PbpFileEntry[] 
     }
 
     // Self-closed <file name="..."/>
-    const fileSelfRe = RX_FILE_ENTRY_SELF_CLOSED;
+    const fileSelfRe = cloneGlobalRegex(RX_FILE_ENTRY_SELF_CLOSED);
     while ((m = fileSelfRe.exec(filesSection)) !== null) {
         const rawPath = (m[1] ?? '').trim();
         // Avoid duplicates when both regex hit the same entry (shouldn't happen, but be defensive)
@@ -217,14 +227,14 @@ function parseProjectLibraries(content: string): string[] {
 
     const libs: string[] = [];
 
-    const valueRe = RX_LIB_VALUE;
+    const valueRe = cloneGlobalRegex(RX_LIB_VALUE);
     let m: RegExpExecArray | null;
     while ((m = valueRe.exec(section)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
     }
 
-    const keyRe = RX_LIB_KEY;
+    const keyRe = cloneGlobalRegex(RX_LIB_KEY);
     while ((m = keyRe.exec(section)) !== null) {
         const v = decodeXmlEntities((m[1] ?? '').trim());
         if (v) libs.push(v);
@@ -248,7 +258,7 @@ function parseProjectTargets(content: string, projectDir: string): PbpTarget[] {
 
     const result: PbpTarget[] = [];
 
-    const targetRe = RX_TARGET;
+    const targetRe = cloneGlobalRegex(RX_TARGET);
     let m: RegExpExecArray | null;
     while ((m = targetRe.exec(targetsSection)) !== null) {
         const attrs = parseAttributes(m[1] ?? '');
@@ -336,7 +346,7 @@ function parseTargetConstants(targetBody: string): Array<{ enabled: boolean; val
     const constantsBody = constantsSectionMatch[1] ?? '';
     const result: Array<{ enabled: boolean; value: string }> = [];
 
-    const constRe = RX_TARGET_CONSTANT;
+    const constRe = cloneGlobalRegex(RX_TARGET_CONSTANT);
     let m: RegExpExecArray | null;
     while ((m = constRe.exec(constantsBody)) !== null) {
         const attrs = parseAttributes(m[1] ?? '');
