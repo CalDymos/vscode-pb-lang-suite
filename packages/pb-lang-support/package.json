@@ -241,8 +241,7 @@
         ],
         "extensions": [
           ".pb",
-          ".pbi",
-          ".pbp"
+          ".pbi"
         ],
         "configuration": "./language-configuration.json",
         "icon": {
