@@ -4,7 +4,6 @@
   "description": "Workspace project/target management for PureBasic (.pbp) projects",
   "version": "0.2.0",
   "publisher": "CalDymos",
-  "private": true,
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -12,8 +11,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onLanguage:purebasic",
     "workspaceContains:**/*.pbp"
   ],
   "main": "./out/extension.js",
@@ -48,5 +45,20 @@
     "@types/vscode": "^1.85.0",
     "typescript": "^5.9.2"
   },
-  "extensionDependencies": []
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CalDymos/vscode-pb-lang-suite/issues"
+  },
+  "homepage": "https://github.com/CalDymos/vscode-pb-lang-suite#readme",
+  "keywords": [
+    "purebasic",
+    "pbp",
+    "project",
+    "targets"
+  ]
 }
