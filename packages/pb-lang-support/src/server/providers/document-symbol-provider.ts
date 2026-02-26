@@ -21,6 +21,7 @@ export function handleDocumentSymbol(
     const text = document.getText();
     const lines = text.split('\n');
     const symbols: DocumentSymbol[] = [];
+    const nonExpandableSymbols = new WeakSet<DocumentSymbol>(); // Track symbols that should not be expanded (e.g., Declare)
 
     let currentModule: DocumentSymbol | null = null;
     let currentStructure: DocumentSymbol | null = null;
@@ -223,6 +224,7 @@ export function handleDocumentSymbol(
                 selectionRange,
                 detail: 'Declare'
             };
+            nonExpandableSymbols.add(declareSymbol);
 
             if (currentModule) {
                 currentModule.children!.push(declareSymbol);
@@ -345,7 +347,7 @@ export function handleDocumentSymbol(
     }
 
     // Update the scope to include the entire definition
-    updateSymbolRanges(symbols, lines);
+    updateSymbolRanges(symbols, lines, nonExpandableSymbols);
     sortSymbolsStable(symbols);
 
     if (process.env.NODE_ENV === 'development') {
@@ -378,7 +380,7 @@ function createLineRange(line: number, lineLength: number): Range {
 /**
  * Updates symbol ranges to include the full definition block
  */
-function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[]) {
+function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[], nonExpandableSymbols: WeakSet<DocumentSymbol>) {
     for (const symbol of symbols) {
         if (symbol.kind === SymbolKind.Module) {
             updateSymbolEnd(symbol, lines, /^EndModule\b/i);
@@ -388,13 +390,13 @@ function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[]) {
             updateSymbolEnd(symbol, lines, /^EndInterface\b/i);
         } else if (symbol.kind === SymbolKind.Enum) {
             updateSymbolEnd(symbol, lines, /^EndEnumeration\b/i);
-        } else if (symbol.kind === SymbolKind.Function && symbol.detail !== 'Declare') {
+        } else if (symbol.kind === SymbolKind.Function && !nonExpandableSymbols.has(symbol)) {
             updateSymbolEnd(symbol, lines, /^EndProcedure\b/i);
         }
 
         // Recursively update sub-symbols
         if (symbol.children && symbol.children.length > 0) {
-            updateSymbolRanges(symbol.children, lines);
+            updateSymbolRanges(symbol.children, lines, nonExpandableSymbols);
         }
     }
 }
