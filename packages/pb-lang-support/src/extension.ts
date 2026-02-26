@@ -49,14 +49,15 @@ export function activate(context: vscode.ExtensionContext) {
     debugChannel.appendLine('Activating PureBasic Language Server...');
 
     try {
-        const serverPath = context.asAbsolutePath(path.join('out', 'server', 'server.js'));
-        console.log('Server path:', serverPath);
+        const serverRelPath = path.join('out', 'server', 'server.js');
+        const serverPath = context.asAbsolutePath(serverRelPath);
+        console.log('Server path (relative):', serverRelPath);
 
         // Check if server file exists
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const fs = require('fs');
         if (!fs.existsSync(serverPath)) {
-            console.error('Server file does not exist:', serverPath);
+            console.error('Server file does not exist at expected relative path:', serverRelPath);
             vscode.window.showErrorMessage('PureBasic Language Server file not found!');
             return;
         }
@@ -121,7 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
                 // Setup pb-project-files bridge (optional extension).
                 void setupProjectFilesBridge(context);
             })
-            .catch((error: any) => {
+            .catch((error: unknown) => {
                 logInternalError('Language Server failed to become ready', error);
                 vscode.window.showErrorMessage(
                     'PureBasic Language Server failed to start. See Output: PureBasic (Language Server) for details.'
