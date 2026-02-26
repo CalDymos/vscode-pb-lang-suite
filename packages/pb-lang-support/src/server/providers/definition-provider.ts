@@ -1,6 +1,6 @@
 /**
- * 定义提供者
- * 为PureBasic提供转到定义功能
+ * Definition provider
+ * Provides go-to-definition functionality for PureBasic
  */
 
 import {
@@ -15,7 +15,7 @@ import { getWorkspaceFiles } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 
 /**
- * 处理定义请求
+ * Handle definition requests
  */
 export function handleDefinition(
     params: DefinitionParams,
@@ -26,19 +26,19 @@ export function handleDefinition(
     const text = document.getText();
     const position = params.position;
 
-    // 获取当前位置的单词
+    // Get the word at the current position
     const word = getWordAtPosition(text, position);
     if (!word) {
         return [];
     }
 
-    // 收集可搜索文档：当前 + 已打开 + 递归包含
+    // Collect searchable documents: current + opened + recursively included
     const searchDocs = collectSearchDocuments(document, allDocuments, projectManager);
 
     // 查找定义
     const definitions: Location[] = [];
 
-    // 结构体成员访问：var\\member → 跳到 Structure 成员定义
+    // Struct member access: var\\member → jump to structure member definition
     const structAccess = getStructAccessFromPosition(text, position);
     if (structAccess) {
         const scopeInfo = analyzeScopesAndVariables(text, position.line);
@@ -55,7 +55,7 @@ export function handleDefinition(
         }
     }
 
-    // 先检查模块常量/结构等符号：Module::#CONST / Module::Type
+    // First check module constants/structures etc: Module::#CONST / Module::Type
     const moduleSymbol = getModuleSymbolFromPosition(document.getText(), position);
     if (moduleSymbol) {
         const moduleSymbolDefs = findModuleSymbolDefinition(
@@ -67,17 +67,17 @@ export function handleDefinition(
         if (definitions.length > 0) return definitions;
     }
 
-    // 处理模块函数调用语法
+    // Handle module function call syntax
     const moduleMatch = getModuleFunctionFromPosition(document.getText(), position);
     if (moduleMatch) {
-        // 查找模块中的函数定义
+        // Look for function definition inside module
         const moduleDefinitions = findModuleFunctionDefinition(
             moduleMatch.moduleName,
             moduleMatch.functionName,
             searchDocs
         );
         definitions.push(...moduleDefinitions);
-        // 查找模块常量/结构等定义
+        // Look for module constants/structures definitions
         const moduleSymbolDefs = findModuleSymbolDefinition(
             moduleMatch.moduleName,
             moduleMatch.functionName,
@@ -104,7 +104,7 @@ export function handleDefinition(
                         });
                     }
                 } catch (error) {
-                    // 忽略转换错误
+                    // Ignore conversion errors
                 }
             }
         }
@@ -120,7 +120,7 @@ export function handleDefinition(
 }
 
 /**
- * 获取模块函数调用信息
+ * Get module function call information at a position
  */
 function getModuleFunctionFromPosition(text: string, position: Position): {
     moduleName: string;
@@ -134,7 +134,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
     const line = lines[position.line];
     const char = position.character;
 
-    // 查找模块调用语法 Module::Function
+    // Find module call syntax Module::Function
     const beforeCursor = line.substring(0, char);
     const afterCursor = line.substring(char);
 
@@ -158,7 +158,7 @@ function getModuleFunctionFromPosition(text: string, position: Position): {
 }
 
 /**
- * 查找模块中的函数定义
+ * Find function definition inside a module
  */
 function findModuleFunctionDefinition(
     moduleName: string,
@@ -211,7 +211,7 @@ function findModuleFunctionDefinition(
 }
 
 /**
- * 查找包含文件中的定义
+ * Find definitions in included files
  */
 function findDefinitionsInIncludes(
     document: any,
@@ -243,7 +243,7 @@ function findDefinitionsInIncludes(
 }
 
 /**
- * 获取位置处的单词（支持模块语法 Module::Function）
+ * Get the word at a position (supports module syntax Module::Function)
  */
 function getWordAtPosition(text: string, position: Position): string | null {
     const lines = text.split('\n');
@@ -292,7 +292,7 @@ function getWordAtPosition(text: string, position: Position): string | null {
 }
 
 /**
- * 在文档中查找定义
+ * Search for definitions within a document
  */
 function findDefinitionsInDocument(document: TextDocument, word: string): Location[] {
     const text = document.getText();
@@ -409,7 +409,7 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
 }
 
 /**
- * 获取模块符号（函数或常量/结构）调用位置：支持 Module::Name 与 Module::#CONST
+ * Get module symbol (function or constant/structure) call location: supports Module::Name and Module::#CONST
  */
 function getModuleSymbolFromPosition(text: string, position: Position): { moduleName: string; ident: string } | null {
     const lines = text.split('\n');
@@ -436,7 +436,7 @@ function getModuleSymbolFromPosition(text: string, position: Position): { module
 }
 
 /**
- * 查找模块中非函数符号（常量/结构/接口/枚举）定义
+ * Find non-function symbols (constant/structure/interface/enumeration) in a module
  */
 function findModuleSymbolDefinition(
     moduleName: string,
@@ -490,7 +490,7 @@ function findModuleSymbolDefinition(
                 }
             }
 
-            // Constants/structures are also permitted in modules (less common, but error-tolerant)
+            // Constants/structures are also permitted in modules (less common, but for error tolerance)
             if (inModule) {
                 const constMatch = line.match(new RegExp(`^#(${ident}\\$?)\\b`, 'i'));
                 if (constMatch) {
@@ -516,7 +516,7 @@ function findModuleSymbolDefinition(
 }
 
 /**
- * 结构体成员访问匹配：var\\member（光标位于该片段上）
+ * Struct member access match: var\\member (cursor on that segment)
  */
 function getStructAccessFromPosition(text: string, position: Position): { varName: string; memberName: string } | null {
     const lines = text.split('\n');
@@ -549,7 +549,7 @@ function getBaseType(typeStr: string): string {
 }
 
 /**
- * 在 Structure typeName 内查找成员 memberName 定义位置
+ * Find definition position of member memberName inside Structure typeName
  */
 function findStructureMemberDefinition(
     typeName: string,
@@ -585,7 +585,7 @@ function findStructureMemberDefinition(
 }
 
 /**
- * 收集搜索文档：当前 + 打开 + 递归包含
+ * Collect search documents: current + open + recursively included
  */
 function collectSearchDocuments(
     document: TextDocument,
@@ -618,14 +618,14 @@ function collectSearchDocuments(
         const text = baseDoc.getText();
         const lines = text.split('\n');
 
-        // 维护当前IncludePath搜索目录（最新优先）
+        // Maintain current IncludePath search directories (newest first)
         // Seed with project include directories from pb-project-files if available.
         const includeDirs: string[] = typeof projectManager?.getIncludeDirsForDocument === 'function'
             ? (projectManager.getIncludeDirsForDocument(uri) ?? []).slice()
             : [];
 
         for (const line of lines) {
-            // IncludePath 指令
+            // IncludePath directive
             const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
             if (ip) {
                 const dir = normalizeDirPath(uri, ip[1]);
@@ -634,7 +634,7 @@ function collectSearchDocuments(
                 continue;
             }
 
-            // IncludeFile / XIncludeFile 指令
+            // IncludeFile / XIncludeFile directives
             const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
             if (!m) continue;
             const inc = m[1];
@@ -659,7 +659,7 @@ function collectSearchDocuments(
             }
         }
     }
-    // 增加工作区文件（限制数量），避免遗漏未打开文件
+    // Add workspace files (with limit) to avoid missing unopened files
     try {
         // Prefer project file list (pbp-derived) over a full workspace scan.
         let files: string[] | undefined;
