@@ -142,18 +142,23 @@ export function handleRename(
 }
 
 /**
- * 获取位置处的单词
+ * Get the word at the specified position
  */
 function getWordAtPosition(line: string, character: number): string | null {
     let start = character;
     let end = character;
 
-    // 向前查找单词开始
-    while (start > 0 && /[a-zA-Z0-9_]/.test(line[start - 1])) {
+    // Search forward to find word start
+    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
         start--;
     }
 
-    // 向后查找单词结束
+    // Include leading '#' if present (PureBasic constant prefix)
+    if (start > 0 && line[start - 1] === '#') {
+        start--;
+    }
+
+    // Search backward to find word end
     while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
         end++;
     }
