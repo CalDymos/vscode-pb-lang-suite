@@ -145,8 +145,8 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     let api: PbProjectFilesApi | undefined;
     try {
         api = (await ext.activate()) as PbProjectFilesApi | undefined;
-    } catch {
-        // Optional integration: ignore activation failures to keep pb-lang-support fully functional.
+    } catch (err) {
+        logInternalError('pb-project-files activation failed (optional integration, continuing without it)', err);
         return;
     }
     if (!api || api.version !== 1) {
