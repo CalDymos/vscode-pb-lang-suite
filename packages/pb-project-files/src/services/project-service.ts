@@ -293,6 +293,8 @@ export class ProjectService implements vscode.Disposable {
     }
 
     private rebuildFileToProjectMap(): void {
+        this.fileToProject.clear(); // Clear before rebuilding to remove stale entries.
+        
         for (const proj of this.projects.values()) {
             const projKey = normalizeFsPath(proj.projectFile);
 
@@ -409,7 +411,7 @@ export class ProjectService implements vscode.Disposable {
             return parsePbpProjectText(content, uri.fsPath);
         } catch (err) {
             console.warn(
-                `[pb-project-files] Failed to parse project: ${uri.fsPath} (${formatInternalError(err)})`
+                `[pb-project-files] Failed to parse project: ${path.basename(uri.fsPath)} (${formatInternalError(err)})`
             );
             return null;
         }
