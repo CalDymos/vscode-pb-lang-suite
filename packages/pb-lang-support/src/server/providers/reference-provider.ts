@@ -268,10 +268,7 @@ function findReferencesInDocument(
         }
 
         // Find usages (non-constants)
-        const usageRef = findUsageReference(line, i, word, document.uri);
-        if (usageRef) {
-            references.push(usageRef);
-        }
+        references.push(...findUsageReference(line, i, word, document.uri));
     }
 
     return references;
@@ -350,6 +347,20 @@ function findDefinitionReference(
 }
 
 /**
+ * Returns the index of the first ';' that is not inside a string literal,
+ * or -1 if the line has no effective comment.
+ */
+function getCommentStart(line: string): number {
+    let inString = false;
+    for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') { inString = !inString; }
+        if (!inString && line[i] === ';') { return i; }
+    }
+    return -1;
+}
+
+
+/**
  * Find a word usage in a line, skipping comments and strings.
  */
 function findUsageReference(
@@ -357,26 +368,30 @@ function findUsageReference(
     lineIndex: number,
     word: string,
     uri: string
-): Location | null {
+): Location [] {
+    const results: Location[] = [];
     const safeWord = escapeRegExp(word);
     const wordRegex = new RegExp(`\\b${safeWord}\\b`, 'gi');
-    const match = wordRegex.exec(line);
-    if (!match) { return null; }
+    const commentStart = getCommentStart(line);
 
-    // Skip if inside a comment
-    if (line.substring(0, match.index).includes(';')) { return null; }
+    let match: RegExpExecArray | null;
+    while ((match = wordRegex.exec(line)) !== null) {
+        // Skip if inside or after a comment
+        if (commentStart !== -1 && match.index >= commentStart) { break; }
 
-    // Skip if inside a string
-    const quoteCount = (line.substring(0, match.index).match(/"/g) || []).length;
-    if (quoteCount % 2 === 1) { return null; }
+        // Skip if inside a string literal
+        const quoteCount = (line.substring(0, match.index).match(/"/g) || []).length;
+        if (quoteCount % 2 === 1) { continue; }
 
-    return {
-        uri,
-        range: {
-            start: { line: lineIndex, character: match.index },
-            end: { line: lineIndex, character: match.index + word.length }
-        }
-    };
+        results.push({
+            uri,
+            range: {
+                start: { line: lineIndex, character: match.index },
+                end: { line: lineIndex, character: match.index + word.length }
+            }
+        });
+    }
+    return results;
 }
 
 /**
