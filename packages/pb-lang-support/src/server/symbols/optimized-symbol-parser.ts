@@ -6,7 +6,7 @@
 import { PureBasicSymbol, SymbolKind } from './types';
 import { symbolCache } from './symbol-cache';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { stripInlineComment } from '@utils/string-utils';
+import { stripInlineComment } from '../utils/string-utils';
 
 export interface ParsedDocument {
     symbols: PureBasicSymbol[];
