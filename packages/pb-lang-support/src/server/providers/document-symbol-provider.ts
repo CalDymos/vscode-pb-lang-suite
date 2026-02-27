@@ -10,6 +10,7 @@ import {
     Range
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { parsePureBasicConstantDefinition } from '../utils/constants';
 
 /**
  * Handle document symbol requests
@@ -235,9 +236,11 @@ export function handleDocumentSymbol(
         }
 
         // Constant definitions
-        const constMatch = trimmedLine.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/); // only NAME / NAME$ allowed as constant names
+        // Constant definitions (#NAME = value or #NAME$ = value)
+        const constMatch = parsePureBasicConstantDefinition(trimmedLine);
         if (constMatch) {
-            const name = constMatch[1];
+            const name = constMatch.name;
+            //const value = stripInlineComment(constMatch.value?.trim() ?? '').trim();
             const hashStart = safeIndexOf(line, `#${name}`);
             const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); 
             const declarationRange = createLineRange(i, line.length);

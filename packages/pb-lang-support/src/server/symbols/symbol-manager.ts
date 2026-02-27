@@ -140,7 +140,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
         // Parsing constant definitions
         const constMatch = parsePureBasicConstantDefinition(line);
         if (constMatch) {
-            const value = stripInlineComment(constMatch?.value ?? '').trimEnd();
+            const value = stripInlineComment(constMatch?.value ?? '').trim();
             symbols.push({
                 name: constMatch.name,
                 kind: SymbolKind.Constant,
@@ -149,7 +149,7 @@ function parseDocumentSymbolsFallback(uri: string, text: string): void {
                     end: { line: i, character: lines[i].length }
                 },
                 detail: 'Constant',
-                documentation: `Constant definition: #${constMatch.name} = ${(value || '').trim()}`
+                documentation: `Constant definition: #${constMatch.name} = ${value}`
             });
         }
 
@@ -263,7 +263,7 @@ function parseSingleSymbol(line: string, lineIndex: number): PureBasicSymbol | n
     // Parsing constant definitions
     const constMatch = parsePureBasicConstantDefinition(line);
     if (constMatch) {
-        const value = stripInlineComment(constMatch?.value ?? '').trimEnd();
+        const value = stripInlineComment(constMatch?.value ?? '').trim();
         return {
             name: constMatch.name,
             kind: SymbolKind.Constant,
@@ -272,7 +272,7 @@ function parseSingleSymbol(line: string, lineIndex: number): PureBasicSymbol | n
                 end: { line: lineIndex, character: line.length }
             },
             detail: 'Constant',
-            documentation: `Constant definition: #${constMatch.name} = ${value.trim()}`
+            documentation: `Constant definition: #${constMatch.name} = ${value}`
         };
     }
 
