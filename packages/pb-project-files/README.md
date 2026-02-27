@@ -4,7 +4,7 @@
 
 Workspace project/target management for PureBasic **.pbp** projects.
 
-This extension is designed as an **optional companion** for **PureBasic Language Services (pb-lang-support)**.
+This extension is designed as an **optional companion** for [**PureBasic Language Services (pb-lang-support)**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-lang-support)  .
 If installed, it provides project context (active project/target, include directories, project file lists) to pb-lang-support via LSP notifications.
 
 ## Features
@@ -23,5 +23,5 @@ If installed, it provides project context (active project/target, include direct
 
 ## Notes
 
-- This extension works standalone, but its main benefit is improved project-aware behavior in **pb-lang-support**.
-- If pb-lang-support is not installed, the extension still provides project/target selection and Status Bar display.
+- This extension works standalone, but its main benefit is improved project-aware behavior in [**PureBasic Language Services (pb-lang-support)**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-lang-support).
+- If pb-lang-support is not installed, the extension still provides project file infos.

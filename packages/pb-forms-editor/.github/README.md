@@ -28,16 +28,22 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 
 - **PureBasic Language Support** – Syntax highlighting, snippets, and language tooling  
   [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
-  [**View in Marketplace**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-lang-support)  
-  [**View Repo**](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
-  
-- **PureBasic Project Files**  
+  **Repo:** [PureBasic Language Service Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-lang-support)
+
+- **PureBasic Project File Support**
   [![pb-project-files](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=pbp-v*&label=pbp)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)  
-  Adds workspace-level `.pbp` project discovery, active target selection, and project context.  
-  [**View in Marketplace**](https://marketplace.visualstudio.com/items?itemName=CalDymos.pb-project-files)  
-  [**View Repo**](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-project-files)
+  **Repo:** [PureBasic Project File Support Extension](https://github.com/CalDymos/vscode-pb-lang-suite/tree/main/packages/pb-project-files)
   
 ## Installation
+
+### Development Version
+
+1. Clone this repository
+2. Run `npm install` to install dependencies
+3. Run `npm -w packages/pb-forms-editor run compile` to compile TypeScript
+4. Press **F5** in VSCode to start debugging (launch config: *Run pb-forms-editor*)
+
+### Release Version
 
 Install **pb-forms-editor** from the VSCode Extension Marketplace (once published).
 
@@ -45,8 +51,41 @@ Install **pb-forms-editor** from the VSCode Extension Marketplace (once publishe
 
 You can configure the Forms Editor via:
 
-- VSCode Settings (`Ctrl`+`,`)
+- VSCode Settings (**Ctrl+,**)
 - Search for **"PureBasic Forms"** / **"Forms Designer"**
+
+### Grid & Snapping
+
+```json
+{
+  "purebasicFormsDesigner.showGrid": true,
+  "purebasicFormsDesigner.gridMode": "dots",
+  "purebasicFormsDesigner.gridSize": 10,
+  "purebasicFormsDesigner.gridOpacity": 0.14,
+  "purebasicFormsDesigner.snapToGrid": false,
+  "purebasicFormsDesigner.snapMode": "drop"
+}
+```
+
+**Settings**
+
+- `purebasicFormsDesigner.showGrid` *(boolean)*: Show/hide the canvas grid.
+- `purebasicFormsDesigner.gridMode` *(string: "dots" | "lines")*: Grid rendering style.
+- `purebasicFormsDesigner.gridSize` *(number, 2..100)*: Grid spacing.
+- `purebasicFormsDesigner.gridOpacity` *(number, 0.02..0.5)*: Grid opacity.
+- `purebasicFormsDesigner.snapToGrid` *(boolean)*: Snap controls/windows to the grid.
+- `purebasicFormsDesigner.snapMode` *(string: "live" | "drop")*: Apply snapping while dragging (`live`) or only after releasing the mouse (`drop`).
+
+### Canvas Appearance
+
+```json
+{
+  "purebasicFormsDesigner.canvasBackground": "",
+  "purebasicFormsDesigner.windowFillOpacity": 0.05,
+  "purebasicFormsDesigner.outsideDimOpacity": 0.12,
+  "purebasicFormsDesigner.titleBarHeight": 26
+}
+```
 
 **Settings**
 
