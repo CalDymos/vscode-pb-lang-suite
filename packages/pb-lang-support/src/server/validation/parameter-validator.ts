@@ -77,8 +77,14 @@ export function validateParameters(
                 isValid = false;
             }
         }
-        // 3. Other obvious erroneous character patterns (relaxed for default values: allows - + $ # % @ & )
-        if (/[^a-zA-Z0-9_\s\.\*:=\(\),;"'\-\+\$#%@&]/.test(param)) {
+        // 3. Other obvious erroneous character patterns (relaxed for default values: allows - + $ # % @ & :)
+        // Colon : used for module prefixes Module::Name
+        if (/[^a-zA-Z0-9_\s\.\*:=\(\),;"'\-\+\$#%@&:]/.test(param)) {
+            isValid = false;
+        }
+
+        // 4. Check for consecutive colons (module prefix should be ::, not ::: or more)
+        if (/:::/.test(param)) {
             isValid = false;
         }
 

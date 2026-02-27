@@ -2,9 +2,10 @@
 
 [![pb-lang-support](https://img.shields.io/github/v/tag/CalDymos/vscode-pb-lang-suite?sort=semver&filter=lang-v*&label=lang)](https://github.com/CalDymos/vscode-pb-lang-suite/tags)
 
-`pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar and a Language Server.
+**PureBasic Language Services** is a Visual Studio Code extension that provides PureBasic language support,
+including `IntelliSense`, `Debugging`, and `Code Navigation`. (For project management and form creation, see [Related Extensions](#related-extensions))
 
-> Developer/Contributor docs (build, architecture, API reference): see `.github/README.md` in the repository.
+> Developer/Contributor docs (build, architecture, API reference): see [.github/README.md](https://github.com/CalDymos/vscode-pb-lang-suite/blob/main/packages/pb-lang-support/.github/README.md) in the repository.
 
 ## Features
 
@@ -45,7 +46,10 @@
 
 ### Compiler / Build / Run Integration (Toolchain) 🐞
 
-upcoming feature is **VS Code debugger integration** for PureBasic:
+- Breakpoints: Set breakpoints in your PureBasic code
+- Step Debugging: Step Over, Step Into, Step Out
+- Variable Inspection: View local and global variables
+- Call Stack: Navigate through the call stack
 
 ## Related Extensions
 
@@ -83,10 +87,20 @@ The extension provides some configuration options. Access these via:
 3. Hover over functions to see documentation
 4. Press `F12` to jump to definitions
 
+### Quick Debug Setup
+
+1. Open your `.pb` file in VSCode
+2. Press `F5` or go to Run → Start Debugging
+3. The debugger will automatically compile and run your program
+
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
+| `F5` | Start Debugging |
+| `F10` | Step Over |
+| `F11` | Step Into |
+| `Shift+F11` | Step Out |
 | `F12` | Go to Definition |
 | `Shift+F12` | Find All References |
 | `F2` | Rename Symbol |

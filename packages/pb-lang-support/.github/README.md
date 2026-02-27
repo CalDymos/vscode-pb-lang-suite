@@ -214,19 +214,23 @@ pb-lang-support/
 ├── syntaxes/purebasic.tmLanguage.json  # TextMate syntax definition
 ├── language-configuration.json  # Language configuration
 ├── src/
-│   ├── extension.ts            # Extension entry point
-│   ├── server/                 # Language server implementation
-│   │   ├── server.ts          # Main language server
-│   │   ├── config/            # Configuration management
-│   │   ├── providers/        # Language feature providers
-│   │   ├── symbols/          # Symbol management
-│   │   ├── validation/       # Code validation
-│   │   └── utils/            # Utility functions
-│   └── types/                 # TypeScript type definitions
-│       ├── core/             # Core types
-│       ├── providers/        # Provider types
-│       ├── utils/            # Utility types
-│       └── server/           # Server types
+│   ├── extension.ts             # Extension entry point
+│   ├── server/                  # Language server implementation
+│   │   ├── server.ts            # Main language server
+│   │   ├── config/              # Configuration management
+│   │   ├── providers/           # Language feature providers
+│   │   ├── symbols/             # Symbol management
+│   │   ├── validation/          # Code validation
+│   │   └── utils/               # Utility functions
+│   ├──── debug/                 # Debug Adapter Protocol (DAP) implementation
+│   │     ├── transport/         # Transport layer (Pipe, FIFO, Network)
+│   │     ├── compiler/          # Compiler integration
+│   │     └── session/           # Debug session management
+│   └── types/                   # TypeScript type definitions
+│       ├── core/               # Core types
+│       ├── providers/          # Provider types
+│       ├── utils/              # Utility types
+│       └── server/             # Server types
 ├── test/                       # Test files
 ├── snippets/                   # Code snippets
 ├── icons/                      # Extension icons
@@ -252,6 +256,13 @@ The extension follows a modular architecture with clear separation of concerns:
 - **Provider Types**: Specialized types for each language feature
 - **Utility Types**: Generic helpers and caching types
 - **Server Types**: Language server specific types
+
+#### Debug Adaptor
+
+- **Transport Layer**: Abstracted communication (Named Pipes, FIFO, TCP)
+- **Session Manager**:
+- **Compiler**:
+
 
 ### Build and Test
 
