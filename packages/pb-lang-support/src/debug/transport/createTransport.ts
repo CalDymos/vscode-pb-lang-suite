@@ -19,6 +19,9 @@ export function createTransport(options: CreateTransportOptions): IDebugTranspor
 
   // Explicit transport selection
   if (requested === 'fifo') {
+    if (platform === 'win32') {
+      throw new Error('transport "fifo" is not supported on Windows. Use "pipe" or "network" instead.');
+    }
     return new FifoTransport();
   }
 
