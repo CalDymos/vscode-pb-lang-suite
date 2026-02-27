@@ -1,6 +1,6 @@
 /**
- * 代码格式化提供者
- * 为PureBasic提供代码格式化功能
+ * Code formatting provider
+ * Provides code formatting functionality for PureBasic
  */
 
 import {
@@ -13,32 +13,32 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
 /**
- * 格式化设置
+ * Formatting options
  */
 export interface FormattingOptions {
-    /** 缩进大小 */
+    /** Indentation size */
     tabSize: number;
-    /** 是否使用空格而不是制表符 */
+    /** Whether to use spaces instead of tabs */
     insertSpaces: boolean;
-    /** 在关键字后添加空格（当前未启用） */
+    /** Add space after keywords (currently disabled) */
     spaceAfterKeywords: boolean;
-    /** 在操作符周围添加空格（当前未启用） */
+    /** Add space around operators (currently disabled) */
     spaceAroundOperators: boolean;
-    /** 自动格式化过程体（当前未启用具体逻辑） */
+    /** Automatically format procedure bodies (logic not currently implemented) */
     formatProcedureBody: boolean;
 }
 
 const DEFAULT_OPTIONS: FormattingOptions = {
     tabSize: 4,
     insertSpaces: true,
-    // 为避免破坏指针语法、比较运算符等，默认关闭以下两项，保守只做缩进
+    // To avoid breaking pointer syntax, comparison operators, etc., these are off by default; conservative indentation only
     spaceAfterKeywords: false,
     spaceAroundOperators: false,
     formatProcedureBody: true
 };
 
 /**
- * 处理文档格式化
+ * Handle document formatting
  */
 export function handleDocumentFormatting(
     params: DocumentFormattingParams,
@@ -61,7 +61,7 @@ export function handleDocumentFormatting(
 }
 
 /**
- * 处理范围格式化
+ * Handle range formatting
  */
 export function handleDocumentRangeFormatting(
     params: DocumentRangeFormattingParams,
@@ -72,11 +72,11 @@ export function handleDocumentRangeFormatting(
 
     const options = mergeOptions(params.options);
 
-    // 扩展范围到完整行
+    // Expand range to full lines
     const expandedRange = expandToFullLines(document, range);
     const expandedText = document.getText(expandedRange);
 
-    // 计算起始缩进上下文：从文档开头扫描到选区起始行之前
+    // Compute initial indentation context: scan from document start up to line before range start
     const linesBefore = text.split('\n').slice(0, expandedRange.start.line);
     const initialState = computeInitialFormatterState(linesBefore);
 
@@ -90,13 +90,13 @@ export function handleDocumentRangeFormatting(
 }
 
 /**
- * 格式化PureBasic代码（只做缩进调整，不动行内代码）
+ * Format PureBasic code (indentation only, do not modify inline code)
  */
 function formatPureBasicCode(text: string, options: FormattingOptions, initialState?: FormatterState): string {
     const lines = text.split('\n');
     const out: string[] = [];
 
-    // 块级缩进状态
+    // Block-level indentation state
     let indentLevel = initialState?.indentLevel ?? 0;
     let inSelect = initialState?.inSelect ?? false;
     let selectBaseIndent = initialState?.selectBaseIndent ?? 0;
@@ -109,7 +109,7 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
     const isCase = (l: string): boolean => /^(Case\b|Default\b)/i.test(l);
     const isMiddle = (l: string): boolean => /^(Else\b|ElseIf\b|CompilerElse\b|CompilerElseIf\b)/i.test(l);
 
-    // 行内起止净零判定（在剥离字符串与注释后进行）
+    // Determine inline start/end net-zero (after stripping strings and comments)
     const hasInlineNetZero = (code: string): boolean => {
         const contains = (re: RegExp) => re.test(code);
         return (
@@ -137,10 +137,10 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
         const trimmed = raw.trim();
         const code = stripStringsAndComments(raw).trim();
 
-        // 空行：保持为空
+        // Blank line: keep empty
         if (trimmed === '') { out.push(''); continue; }
 
-        // 注释行：按当前缩进输出
+        // Comment line: output with current indent
         if (trimmed.startsWith(';')) {
             const indent = createIndent(Math.max(0, indentLevel), options);
             out.push(indent + trimmed);
@@ -149,11 +149,11 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
 
         let lineIndent = indentLevel;
 
-        // 单行 If ... : ... : EndIf 模式：不改变缩进层级
+        // Single-line If ... : ... : EndIf mode: do not change indent level
         const inlineIf = /^If\b/i.test(code) && /\bEndIf\b/i.test(code);
         const inlineAny = hasInlineNetZero(code);
 
-        // 专门处理 EndSelect（在 Select 基础缩进处渲染）
+        // Special handling for EndSelect (render at Select base indent)
         if (!inlineAny && isEndSelect(code)) {
             lineIndent = Math.max(0, indentLevel);
             if (inSelect) {
@@ -162,25 +162,25 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
                 inSelect = false;
                 caseActive = false;
             } else {
-                // 非法情况下，按一般收尾处理
+                // In illegal case, treat as a normal closing
                 lineIndent = Math.max(0, indentLevel - 1);
                 indentLevel = lineIndent;
             }
         } else if (!inlineAny && isSelect(code)) {
-            // Select 行本身使用当前缩进，随后进入选择块
+            // Select line itself uses current indent, then enter select block
             lineIndent = indentLevel;
         } else if (!inlineAny && inSelect && isCase(code)) {
-            // Case/Default 行：位于 Select 内 +1 级
+            // Case/Default line: inside Select at +1 level
             lineIndent = selectBaseIndent + 1;
         } else {
-            // 关闭语句在当前行生效：先减缩进
+            // Closing statements take effect on current line: decrease indent first
             if (!inlineAny && isClosing(code)) {
                 lineIndent = Math.max(0, indentLevel - 1);
-                indentLevel = lineIndent; // 后续行同级
+                indentLevel = lineIndent; // following lines at same level
             }
         }
 
-        // 中间语句（Else/ElseIf）：回退一级再保持层级（先减后加，净零变化）
+        // Middle statements (Else/ElseIf): decrease then restore level (net-zero)
         let restoreAfter = false;
         if (!inlineAny && !isSelect(code) && !isEndSelect(code) && isMiddle(code)) {
             lineIndent = Math.max(0, lineIndent - 1);
@@ -188,21 +188,21 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
             restoreAfter = true;
         }
 
-        // 仅做缩进，不改动行内内容（避免破坏 *ptr、<=、<> 等）
+        // Only adjust indentation, do not alter inline content (avoid breaking *ptr, <=, <>, etc.)
         const indent = createIndent(Math.max(0, lineIndent), options);
         out.push(indent + trimmed);
 
-        // 行后处理
+        // Post-line processing
         if (inlineAny) {
-            // 同行净零：不改变缩进状态，不进入/退出任何块
+            // Net-zero on same line: do not change indent state or enter/exit blocks
         } else if (isSelect(code)) {
-            // 进入 Select 块：Case 行期望在 +1，Case 内容在 +2
+            // Enter Select block: Case lines expect +1, case content +2
             inSelect = true;
             selectBaseIndent = lineIndent;
             caseActive = false;
-            indentLevel = selectBaseIndent + 1; // 以便 Case 出现时对齐
+            indentLevel = selectBaseIndent + 1; // to align when Case appears
         } else if (!inlineIf && inSelect && isCase(code)) {
-            // 选中某个 Case：其后的内容进入 +2
+            // A specific Case selected: following content enters +2
             caseActive = true;
             indentLevel = selectBaseIndent + 2;
         } else if (!inlineAny && isOpening(code)) {
@@ -212,7 +212,7 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
             indentLevel++;
         }
 
-        // 若在 Select 块内、尚未遇到 Case，则保持期待下一个 Case 的缩进级别
+        // If inside Select block and haven't seen a Case yet, maintain indentation level expecting next Case
         if (!inlineAny && inSelect && !caseActive && !isEndSelect(code) && !isCase(code) && !isSelect(code)) {
             indentLevel = Math.max(indentLevel, selectBaseIndent + 1);
         }
@@ -222,7 +222,7 @@ function formatPureBasicCode(text: string, options: FormattingOptions, initialSt
 }
 
 /**
- * 缩进状态（用于范围格式化）
+ * Indentation state (used for range formatting)
  */
 interface FormatterState {
     indentLevel: number;
@@ -232,10 +232,10 @@ interface FormatterState {
 }
 
 /**
- * 计算某行之前的缩进上下文（用于范围格式化的起始状态）
+ * Compute indentation context before a line (initial state for range formatting)
  */
 function computeInitialFormatterState(linesBefore: string[]): FormatterState {
-    // 复用与 formatPureBasicCode 相同的判断逻辑
+    // Reuse the same predicate logic from formatPureBasicCode
     const isClosing = (l: string): boolean => /^(EndProcedure|EndModule|EndStructure|EndIf|Next|Wend|Until|ForEver|EndWith|EndDeclareModule|EndInterface|EndEnumeration)\b/i.test(l);
     const isOpening = (l: string): boolean => /^(Procedure(?:C|DLL|CDLL)?\b|Module\b|Structure\b|If\b|For\b|ForEach\b|While\b|Repeat\b|With\b|DeclareModule\b|Interface\b|Enumeration\b)/i.test(l);
     const isEndSelect = (l: string): boolean => /^EndSelect\b/i.test(l);
@@ -283,24 +283,24 @@ function computeInitialFormatterState(linesBefore: string[]): FormatterState {
                 indentLevel = Math.max(0, indentLevel - 1);
             }
         } else if (!inlineAny && isSelect(code)) {
-            // 进入 Select 块
+            // Enter Select block
             selectBaseIndent = indentLevel;
             inSelect = true;
             caseActive = false;
-            indentLevel = selectBaseIndent + 1;
+            indentLevel = selectBaseIndent + 1; // enter Select block
         } else {
             if (!inlineAny && isClosing(code)) {
                 indentLevel = Math.max(0, indentLevel - 1);
             }
         }
 
-        // 处理中间语句 Else/ElseIf：净零，不改变最终 indentLevel
+        // Handle middle statements Else/ElseIf: net-zero, do not change final indentLevel
         if (inlineAny) {
-            // 不改变状态
+            // do not change state
         } else if (isSelect(code)) {
-            // 已处理
+            // already handled
         } else if (!inlineAny && inSelect && isCase(code)) {
-            // 选中某 Case：其后进入 +2 级
+            // a specific Case selected: following content enters +2
             indentLevel = selectBaseIndent + 2;
         } else if (!inlineAny && isOpening(code)) {
             indentLevel++;
@@ -315,7 +315,7 @@ function computeInitialFormatterState(linesBefore: string[]): FormatterState {
 }
 
 /**
- * 去除字符串与行尾注释，返回用于匹配关键字的纯代码部分
+ * Strip strings and trailing comments, returning pure code for keyword matching
  */
 function stripStringsAndComments(line: string): string {
     let out = '';
@@ -324,16 +324,16 @@ function stripStringsAndComments(line: string): string {
     for (let i = 0; i < line.length; i++) {
         const ch = line[i];
         if (!inDq && !inSq && ch === ';') {
-            // 行注释开始
+            // start of line comment
             break;
         }
         if (!inSq && ch === '"') {
             inDq = !inDq;
-            continue; // 跳过字符串内容
+            continue; // Skip string content
         }
         if (!inDq && ch === '\'') {
             inSq = !inSq;
-            continue; // 跳过字符串内容
+            continue; // Skip string content
         }
         if (!inDq && !inSq) {
             out += ch;
@@ -343,7 +343,7 @@ function stripStringsAndComments(line: string): string {
 }
 
 /**
- * 计算缩进级别（保留，暂未使用）
+ * Calculate indent level (reserved, not yet used)
  */
 function calculateIndentLevel(
     line: string,
@@ -361,7 +361,7 @@ function calculateIndentLevel(
 }
 
 /**
- * 更新格式化状态（保留，暂未使用）
+ * Update formatting state (reserved, not yet used)
  */
 function updateFormattingState(
     line: string,
@@ -378,7 +378,7 @@ function updateFormattingState(
     const lower = line.toLowerCase();
     let newIndent = currentIndent;
 
-    // 检查结构结束
+    // Structure check complete
     if (lower.match(/^endprocedure\b/)) {
         return {
             newInProcedure: false,
@@ -406,12 +406,12 @@ function updateFormattingState(
         };
     }
 
-    // 检查控制结构结束
+    // Check control structure end
     if (lower.match(/^(endif|next|wend|until|forever|endselect|endwith)\b/)) {
         newIndent = Math.max(0, currentIndent - 1);
     }
 
-    // 检查结构开始
+    // Check structure start
     let newInProcedure = inProcedure;
     let newInModule = inModule;
     let newInStructure = inStructure;
@@ -427,7 +427,7 @@ function updateFormattingState(
         newIndent = currentIndent;
     }
 
-    // 检查控制结构开始
+    // Check control structure start
     else if (lower.match(/^(if|for|foreach|while|repeat|select|with)\b/)) {
         newIndent = currentIndent;
     }
@@ -441,7 +441,7 @@ function updateFormattingState(
 }
 
 /**
- * 创建缩进字符串
+ * Create indent string
  */
 function createIndent(level: number, options: FormattingOptions): string {
     const indentChar = options.insertSpaces ? ' ' : '\t';
@@ -450,7 +450,7 @@ function createIndent(level: number, options: FormattingOptions): string {
 }
 
 /**
- * 扩展范围到完整行
+ * Expand range to full lines
  */
 function expandToFullLines(document: TextDocument, range: Range): Range {
     const startLine = range.start.line;
@@ -465,7 +465,7 @@ function expandToFullLines(document: TextDocument, range: Range): Range {
 }
 
 /**
- * 合并格式化选项
+ * Merge formatting options
  */
 function mergeOptions(options: any): FormattingOptions {
     return {

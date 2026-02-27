@@ -1,6 +1,6 @@
 /**
- * 悬停信息提供者
- * 为PureBasic提供代码悬停时的信息显示
+ * Hover information provider
+ * Provides informational display when hovering over code in PureBasic
  */
 
 import {
@@ -12,9 +12,10 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
+import { parsePureBasicConstantDefinition} from '../utils/constants';
 
 /**
- * 处理悬停请求
+ * Handle hover requests
  */
 export function handleHover(
     params: HoverParams,
@@ -36,7 +37,7 @@ export function handleHover(
         return null;
     }
 
-    // 检查是否是模块调用
+    // Check if it's a module call
     const moduleMatch = getModuleCallFromPosition(line, position.character);
     if (moduleMatch) {
         const moduleHover = getModuleFunctionHover(
@@ -59,7 +60,7 @@ export function handleHover(
         }
     }
 
-    // 结构体成员悬停：var\\member
+    // Struct member hover: var\\member
     const structAccess = getStructAccessFromPosition(line, position.character);
     if (structAccess) {
         const scope = analyzeScopesAndVariables(text, position.line);
@@ -72,13 +73,13 @@ export function handleHover(
         }
     }
 
-    // 查找符号信息
+    // Look up symbol information
     const symbolInfo = findSymbolInfo(word, document, documentCache);
     if (symbolInfo) {
         return createHoverFromSymbol(symbolInfo);
     }
 
-    // 检查内置函数
+    // Check built-in functions
     const builtinInfo = getBuiltinFunctionInfo(word);
     if (builtinInfo) {
         return builtinInfo;
@@ -107,6 +108,11 @@ function getModuleExportHover(
     return null;
 }
 
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
+}
+
+
 function getStructAccessFromPosition(line: string, character: number): { varName: string; memberName: string } | null {
     const re = /(\w+)\\(\w+)/g;
     let m: RegExpExecArray | null;
@@ -129,18 +135,18 @@ function getBaseType(typeStr: string): string {
 }
 
 /**
- * 获取位置处的单词
+ * Get word at a given position
  */
 function getWordAtPosition(line: string, character: number): string | null {
     let start = character;
     let end = character;
 
-    // 向前查找单词开始
+    // Search backward for word start
     while (start > 0 && /[a-zA-Z0-9_]/.test(line[start - 1])) {
         start--;
     }
 
-    // 向后查找单词结束
+    // Search forward for word end
     while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
         end++;
     }
@@ -153,7 +159,7 @@ function getWordAtPosition(line: string, character: number): string | null {
 }
 
 /**
- * 获取模块调用信息
+ * Get module call information
  */
 function getModuleCallFromPosition(line: string, character: number): {
     moduleName: string;
@@ -163,7 +169,7 @@ function getModuleCallFromPosition(line: string, character: number): {
     const afterCursor = line.substring(character);
     const fullContext = beforeCursor + afterCursor;
 
-    // 优先匹配常量（#）
+    // Prefer matching constants (#) first
     let moduleMatch = fullContext.match(/(\w+)::#(\w+)/);
     if (!moduleMatch) {
         moduleMatch = fullContext.match(/(\w+)::(\w+)/);
@@ -184,7 +190,7 @@ function getModuleCallFromPosition(line: string, character: number): {
 }
 
 /**
- * 获取模块函数的悬停信息
+ * Get hover information for a module function
  */
 function getModuleFunctionHover(
     moduleName: string,
@@ -202,27 +208,27 @@ function getModuleFunctionHover(
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // 检查模块开始
+            // Check module start
             const moduleStartMatch = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
             if (moduleStartMatch) {
                 inModule = true;
                 continue;
             }
 
-            // 检查模块结束
+            // Check module end
             if (line.match(/^EndModule\b/i)) {
                 inModule = false;
                 continue;
             }
 
-            // 在模块内查找函数定义
+            // Look for function definition inside module
             if (inModule) {
                 const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${functionName})\\s*\\(([^)]*)\\)`, 'i'));
                 if (procMatch) {
                     const returnType = procMatch[1] || 'void';
                     const params = procMatch[3] || '';
 
-                    // 查找函数的注释文档
+                    // Look up documentation comments for the function
                     let documentation = '';
                     for (let j = i - 1; j >= 0; j--) {
                         const prevLine = lines[j].trim();
@@ -258,7 +264,7 @@ function getModuleFunctionHover(
 }
 
 /**
- * 查找符号信息
+ * Find symbol information
  */
 function findSymbolInfo(
     word: string,
@@ -274,13 +280,13 @@ function findSymbolInfo(
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // 查找过程定义
+            // Look for procedure definition
             const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${word})\\s*\\(([^)]*)\\)`, 'i'));
             if (procMatch) {
                 const returnType = procMatch[1] || 'void';
                 const params = procMatch[3] || '';
 
-                // 查找注释
+                // Look for comments
                 let documentation = '';
                 for (let j = i - 1; j >= 0; j--) {
                     const prevLine = lines[j].trim();
@@ -302,7 +308,7 @@ function findSymbolInfo(
                 };
             }
 
-            // 查找变量定义
+            // Look for variable definition
             const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${word})(?:\\.(\\w+))?`, 'i'));
             if (varMatch) {
                 const scope = varMatch[1];
@@ -318,25 +324,16 @@ function findSymbolInfo(
                 };
             }
 
-            // Look up constant definitions (#NAME = ... or #NAME$ = ...)
-            function escapeRegExp(text: string): string {
-                return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
-
-            // Normalize: allow looking up NAME -> matches NAME$
-            const baseWord = word.endsWith('$') ? word.slice(0, -1) : word;
-            const safeWord = escapeRegExp(baseWord);
-            
-            const constMatch = line.match(new RegExp(`^#(${safeWord}\\$?)\\s*=\\s*(.+)`, 'i'));
-            if (constMatch) {
-                const matchedName = constMatch[1];
-                const value = constMatch[2];
+            // Look up only constant definitions (#NAME = ... or #NAME$ = ...)
+            const constMatch = parsePureBasicConstantDefinition(line);
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
+                const value = constMatch.value ?? '';
 
                 return {
                     type: 'constant',
-                    name: matchedName,
+                    name: constMatch.name,
                     value,
-                    documentation: `Constant with value: ${value}`
+                    documentation: value ? `Constant with value: ${value}` : 'Constant definition'
                 };
             }
 
@@ -350,7 +347,7 @@ function findSymbolInfo(
                 };
             }
 
-            // 查找接口定义
+            // Look for interface definition
             const ifaceMatch = line.match(new RegExp(`^Interface\\s+(${word})\\b`, 'i'));
             if (ifaceMatch) {
                 return {
@@ -360,7 +357,7 @@ function findSymbolInfo(
                 };
             }
 
-            // 查找枚举定义
+            // Look for enumeration definition
             const enumMatch = line.match(new RegExp(`^Enumeration\\s+(${word})\\b`, 'i'));
             if (enumMatch) {
                 return {
@@ -376,7 +373,7 @@ function findSymbolInfo(
 }
 
 /**
- * 从符号信息创建悬停内容
+ * Create hover content from symbol information
  */
 function createHoverFromSymbol(symbolInfo: any): Hover {
     let content = '';
@@ -422,7 +419,7 @@ function createHoverFromSymbol(symbolInfo: any): Hover {
 }
 
 /**
- * 获取内置函数信息
+ * Get built-in function information
  */
 function getBuiltinFunctionInfo(functionName: string): Hover | null {
     const builtinFunctions: { [key: string]: any } = {

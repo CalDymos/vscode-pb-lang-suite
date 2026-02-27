@@ -21,6 +21,7 @@ export function handleDocumentSymbol(
     const text = document.getText();
     const lines = text.split('\n');
     const symbols: DocumentSymbol[] = [];
+    const nonExpandableSymbols = new WeakSet<DocumentSymbol>(); // Track symbols that should not be expanded (e.g., Declare)
 
     let currentModule: DocumentSymbol | null = null;
     let currentStructure: DocumentSymbol | null = null;
@@ -39,8 +40,8 @@ export function handleDocumentSymbol(
         const moduleMatch = trimmedLine.match(/^Module\s+(\w+)\b/i);
         if (moduleMatch) {
             const name = moduleMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -83,8 +84,8 @@ export function handleDocumentSymbol(
         const structMatch = trimmedLine.match(/^Structure\s+(\w+)\b/i);
         if (structMatch) {
             const name = structMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -117,8 +118,8 @@ export function handleDocumentSymbol(
         const interfaceMatch = trimmedLine.match(/^Interface\s+(\w+)\b/i);
         if (interfaceMatch) {
             const name = interfaceMatch[1];
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -144,8 +145,8 @@ export function handleDocumentSymbol(
         const enumMatch = trimmedLine.match(/^Enumeration\s+(\w+)?\b/i);
         if (enumMatch) {
             const name = enumMatch[1] || 'Anonymous';
-            const nameStart = enumMatch[1] ? Math.max(0, line.indexOf(enumMatch[1])) : 0;
-            const selectionRange = createRange(i, nameStart, (enumMatch[1] || '').length || line.trim().length);
+            const nameStart = enumMatch[1] ? safeIndexOf(line, enumMatch[1]) : 0;
+            const selectionRange = createSafeRange(i, nameStart, (enumMatch[1] || '').length || line.trim().length, line.length);
             const blockRange: Range = {
                 start: { line: i, character: 0 },
                 end: { line: i, character: line.length }
@@ -179,19 +180,17 @@ export function handleDocumentSymbol(
             const returnType = procMatch[1];
             const name = procMatch[2];
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
-            const nameStart = Math.max(0, line.indexOf(name));
-            const selectionRange = createRange(i, nameStart, name.length);
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const nameStart = safeIndexOf(line, name);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+            const blockRange = createLineRange(i, line.length);
 
             currentProcedure = {
                 name: displayName,
                 kind: SymbolKind.Function,
                 range: blockRange,
                 selectionRange,
-                children: []
+                children: [],
+                detail: 'Procedure'
             };
 
             if (currentModule) {
@@ -215,18 +214,17 @@ export function handleDocumentSymbol(
             const name = declareMatch[2];
             const displayName = returnType ? `${name}() : ${returnType}` : `${name}()`;
             const nameStart = safeIndexOf(line, name);
-            const selectionRange = createRange(i, nameStart, name.length);
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
+            const declarationRange = createLineRange(i, line.length);
 
             const declareSymbol: DocumentSymbol = {
                 name: displayName,
                 kind: SymbolKind.Function,
-                range: blockRange,
-                selectionRange
+                range: declarationRange,
+                selectionRange,
+                detail: 'Declare'
             };
+            nonExpandableSymbols.add(declareSymbol);
 
             if (currentModule) {
                 currentModule.children!.push(declareSymbol);
@@ -237,21 +235,19 @@ export function handleDocumentSymbol(
         }
 
         // Constant definitions
-        const constMatch = trimmedLine.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/);
+        const constMatch = trimmedLine.match(/^#([a-zA-Z_][a-zA-Z0-9_]*\$?)\s*=/); // only NAME / NAME$ allowed as constant names
         if (constMatch) {
             const name = constMatch[1];
             const hashStart = safeIndexOf(line, `#${name}`);
-            const selectionRange = createRange(i, hashStart + 1, name.length); // only NAME / NAME$
-            const blockRange: Range = {
-                start: { line: i, character: 0 },
-                end: { line: i, character: line.length }
-            };
+            const selectionRange = createSafeRange(i, hashStart + 1, name.length, line.length); 
+            const declarationRange = createLineRange(i, line.length);
 
             const constSymbol: DocumentSymbol = {
                 name: `#${name}`,
                 kind: SymbolKind.Constant,
-                range: blockRange,
-                selectionRange
+                range: declarationRange,
+                selectionRange,
+                detail: 'Constant'
             };
 
             if (currentEnumeration) {
@@ -272,7 +268,7 @@ export function handleDocumentSymbol(
             const type = globalMatch[3] || 'unknown';
             const displayName = `${name} : ${type}`;
             const nameStart = safeIndexOf(line, name);
-            const selectionRange = createRange(i, nameStart, name.length);
+            const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
             const blockRange: Range = {
                 start: { line: i, character: 0 },
@@ -303,7 +299,7 @@ export function handleDocumentSymbol(
                 const type = memberMatch[2] || 'unknown';
                 const displayName = `${name} : ${type}`;
                 const nameStart = safeIndexOf(line, name);
-                const selectionRange = createRange(i, nameStart, name.length);
+                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
                 const blockRange: Range = {
                     start: { line: i, character: 0 },
@@ -330,7 +326,7 @@ export function handleDocumentSymbol(
                 const type = localVarMatch[3] || 'unknown';
                 const displayName = `${name} : ${type}`;
                 const nameStart = safeIndexOf(line, name);
-                const selectionRange = createRange(i, nameStart, name.length);
+                const selectionRange = createSafeRange(i, nameStart, name.length, line.length);
 
                 const blockRange: Range = {
                     start: { line: i, character: 0 },
@@ -351,14 +347,8 @@ export function handleDocumentSymbol(
     }
 
     // Update the scope to include the entire definition
-    updateSymbolRanges(symbols, lines);
+    updateSymbolRanges(symbols, lines, nonExpandableSymbols);
     sortSymbolsStable(symbols);
-
-    /* for Debug output only
-    console.log('symbols.length', symbols.length);
-    if (symbols.length > 0) {
-        console.log('first symbol', symbols[0].name, symbols[0].range, symbols[0].selectionRange);
-    }*/
     
     return symbols;
 }
@@ -366,50 +356,53 @@ export function handleDocumentSymbol(
 /**
  * Creates a range object
  */
-function createRange(line: number, startChar: number, length: number): Range {
+function createSafeRange(line: number, startChar: number, length: number, lineLength: number): Range {
+    const safeStart = Math.max(0, Math.min(startChar, lineLength));
+    const safeEnd = Math.max(safeStart, Math.min(safeStart + Math.max(0, length), lineLength));
+
     return {
-        start: { line, character: startChar },
-        end: { line, character: startChar + length }
+        start: { line, character: safeStart },
+        end: { line, character: safeEnd }
+    };
+}
+
+function createLineRange(line: number, lineLength: number): Range {
+    return {
+        start: { line, character: 0 },
+        end: { line, character: Math.max(0, lineLength) }
     };
 }
 
 /**
  * Updates symbol ranges to include the full definition block
  */
-function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[]) {
+function updateSymbolRanges(symbols: DocumentSymbol[], lines: string[], nonExpandableSymbols: WeakSet<DocumentSymbol>) {
     for (const symbol of symbols) {
         if (symbol.kind === SymbolKind.Module) {
-            // Find the corresponding EndModule
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndModule\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
-        } else if (symbol.kind === SymbolKind.Function) {
-            // Find the corresponding EndProcedure
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndProcedure\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
+            updateSymbolEnd(symbol, lines, /^EndModule\b/i);
         } else if (symbol.kind === SymbolKind.Struct) {
-            // Find the corresponding EndStructure
-            const startLine = symbol.range.start.line;
-            for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().match(/^EndStructure\b/i)) {
-                    symbol.range.end = { line: i, character: lines[i].length };
-                    break;
-                }
-            }
+            updateSymbolEnd(symbol, lines, /^EndStructure\b/i);
+        } else if (symbol.kind === SymbolKind.Interface) {
+            updateSymbolEnd(symbol, lines, /^EndInterface\b/i);
+        } else if (symbol.kind === SymbolKind.Enum) {
+            updateSymbolEnd(symbol, lines, /^EndEnumeration\b/i);
+        } else if (symbol.kind === SymbolKind.Function && !nonExpandableSymbols.has(symbol)) {
+            updateSymbolEnd(symbol, lines, /^EndProcedure\b/i);
         }
 
         // Recursively update sub-symbols
         if (symbol.children && symbol.children.length > 0) {
-            updateSymbolRanges(symbol.children, lines);
+            updateSymbolRanges(symbol.children, lines, nonExpandableSymbols);
+        }
+    }
+}
+
+function updateSymbolEnd(symbol: DocumentSymbol, lines: string[], endPattern: RegExp) {
+    const startLine = symbol.range.start.line;
+    for (let i = startLine + 1; i < lines.length; i++) {
+        if (lines[i].trim().match(endPattern)) {
+            symbol.range.end = { line: i, character: lines[i].length };
+            return;
         }
     }
 }
