@@ -147,6 +147,8 @@ export const typeSuffixes = [
 ];
 
 const pureBasicConstantNamePattern = '[a-zA-Z_][a-zA-Z0-9_]*\\$?';
+// NOTE: This regex captures the full value including inline comments e.g. (42 ; comment).
+// Use stripInlineComment() from utils/string-utils.ts to strip comments from the returned value.
 const pureBasicConstantDefinitionRegex = new RegExp(`^#(${pureBasicConstantNamePattern})\\s*=\\s*(.*)$`, 'i');
 const pureBasicConstantDeclarationRegex = new RegExp(`^#(${pureBasicConstantNamePattern})(?:\\s*=\\s*(.*))?$`, 'i');
 
@@ -163,7 +165,7 @@ export function parsePureBasicConstantDefinition(line: string): ParsedPureBasicC
 
     return {
         name: match[1],
-        value: match[2]
+        value: match[2]?.trim()
     };
 }
 
