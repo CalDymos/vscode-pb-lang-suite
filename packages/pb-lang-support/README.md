@@ -71,7 +71,7 @@ Search for [PureBasic Language Services](https://marketplace.visualstudio.com/it
 
 The extension provides some configuration options. Access these via:
 
-- VSCode Settings (`Ctrl+,)
+- VSCode Settings (`Ctrl`+`,`)
 - Search for "PureBasic" to see all available options
 
 ## Usage

@@ -4,8 +4,6 @@
 
 `pb-lang-support` is a Visual Studio Code extension that provides comprehensive PureBasic language support via a TextMate grammar and a Language Server.
 
-> Developer/Contributor docs (build, architecture, API reference): see `.github/README.md` in the repository.
-
 ## Features
 
 > Keyboard shortcuts follow VS Code defaults.
@@ -65,22 +63,16 @@ upcoming feature is **VS Code debugger integration** for PureBasic:
 
 ## Installation
 
-### Development Version
-
 1. Clone this repository
 2. Run `npm ci` to install dependencies
 3. Run `npm run compile` to compile TypeScript
 4. Press F5 in VSCode to start debugging
 
-### Release Version
-
-Search for "PureBasic Language" in the VSCode Extension Marketplace and install
-
 ## Configuration
 
-The extension provides extensive configuration options. Access these via:
+The extension provides some configuration options. Access these via:
 
-- VSCode Settings (Ctrl+,)
+- VSCode Settings (`Ctrl`+`,`)
 - Search for "PureBasic" to see all available options
 
 ### Basic Configuration
@@ -138,17 +130,11 @@ The extension provides extensive configuration options. Access these via:
 }
 ```
 
-## Usage
-
-1. Create or open a `.pb` or `.pbi` file
-2. Start writing PureBasic code
-3. Enjoy intelligent code completion, syntax highlighting, and other features
-
 ### Commands
 
 The extension provides several commands accessible via:
 
-- Command Palette (Ctrl+Shift+P)
+- Command Palette (`Ctrl`+`Shift`+`P`)
 - Right-click context menu
 - Keyboard shortcuts
 
@@ -316,8 +302,8 @@ The extension includes a comprehensive test suite:
 2. **Setup Development Environment**
 
    ```bash
-   # Clone repository
-   git clone https://github.com/CalDymos/vscode-pb-lang-suite.git vscode-purebasic
+   # Clone repository (Monorepo)
+   git clone https://github.com/CalDymos/vscode-pb-lang-suite.git
    cd vscode-purebasic
 
    # Install dependencies
