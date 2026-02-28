@@ -10,6 +10,7 @@ import {
     Range
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { ProjectManager } from '../managers/project-manager';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceFiles } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
@@ -22,7 +23,7 @@ export function handleDefinition(
     params: DefinitionParams,
     document: TextDocument,
     allDocuments: Map<string, TextDocument>,
-    projectManager: any
+    projectManager: ProjectManager
 ): Location[] {
     const text = document.getText();
     const position = params.position;
@@ -574,7 +575,7 @@ function findStructureMemberDefinition(
 function collectSearchDocuments(
     document: TextDocument,
     allDocuments: Map<string, TextDocument>,
-    projectManager?: any,
+    projectManager?: ProjectManager,
     maxDepth = 3
 ): Map<string, TextDocument> {
     const result = new Map<string, TextDocument>();

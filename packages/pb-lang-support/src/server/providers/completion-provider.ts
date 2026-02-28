@@ -10,6 +10,7 @@ import {
     CompletionList,
     InsertTextFormat
 } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
     keywords, types, allBuiltInFunctions, arrayFunctions, listFunctions, mapFunctions,
     windowsApiFunctions, graphicsFunctions, networkFunctions, databaseFunctions, threadFunctions,
@@ -40,8 +41,8 @@ export function initCompletionProvider(logFn: LogFn): void {
  */
 export function handleCompletion(
     params: CompletionParams,
-    document: any,
-    documentCache: Map<string, any>
+    document: TextDocument,
+    documentCache: Map<string, TextDocument>
 ): CompletionList {
     try {
         return handleCompletionInternal(params, document, documentCache);
@@ -53,8 +54,8 @@ export function handleCompletion(
 
 function handleCompletionInternal(
     params: CompletionParams,
-    document: any,
-    documentCache: Map<string, any>
+    document: TextDocument,
+    documentCache: Map<string, TextDocument>
 ): CompletionList {
     const completionItems: CompletionItem[] = [];
     const position = params.position;
@@ -688,9 +689,18 @@ function buildStructureIndex(document: any, documentCache: Map<string, any>): Ma
     try {
         const includes = parseIncludeFiles(document, documentCache);
         for (const file of includes) {
-            try { const content = fs.readFileSync(file, 'utf8'); addFromText(content); } catch {}
+            try {
+                const content = fs.readFileSync(file, 'utf8');
+                addFromText(content);
+            } catch (error) {
+                console.error(`Failed to read include file(s)`);
+                internalLog(`Failed to read include file ${file}:`, error);
+            }
         }
-    } catch {}
+    } catch (error) {
+        console.error('Failed to parse include files:', error);
+        internalLog('Failed to parse include files:', error);
+    }
 
     return map;
 }
@@ -699,7 +709,7 @@ function buildStructureIndex(document: any, documentCache: Map<string, any>): Ma
 /**
  * Extract symbol information from document
  */
-function extractDocumentSymbols(document: any, documentCache: Map<string, any>) {
+function extractDocumentSymbols(document: TextDocument, documentCache: Map<string, TextDocument>) {
     const symbols = {
         procedures: [] as Array<{name: string, signature: string, insertText: string}>,
         constants: [] as Array<{name: string, value?: string}>,
@@ -721,10 +731,18 @@ function extractDocumentSymbols(document: any, documentCache: Map<string, any>) 
     return symbols;
 }
 
+interface SymbolCollection {
+    procedures: Array<{name: string, signature: string, insertText: string}>;
+    constants: Array<{name: string, value?: string}>;
+    structures: Array<{name: string}>;
+    interfaces: Array<{name: string}>;
+    enumerations: Array<{name: string}>;
+}
+
 /**
  * Analyze symbols in document
  */
-function analyzeDocumentSymbols(document: any, symbols: any) {
+function analyzeDocumentSymbols(document: TextDocument, symbols: SymbolCollection) {
     const text = document.getText();
     const lines = text.split('\n');
 

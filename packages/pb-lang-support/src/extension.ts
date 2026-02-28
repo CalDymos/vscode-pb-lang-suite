@@ -6,6 +6,7 @@ import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDesc
 
 let client: LanguageClient;
 let debugChannel: vscode.OutputChannel;
+let fileWatcher: vscode.FileSystemWatcher;
 
 interface PbProjectFilesApi {
     version: 1;
@@ -83,9 +84,13 @@ export function activate(context: vscode.ExtensionContext) {
             synchronize: {
                 configurationSection: 'purebasic',
                 // Only PureBasic source files are relevant for the language server.
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{pb,pbi}')
+                fileEvents: fileWatcher
             }
         };
+
+        // Create file watcher and store reference for cleanup
+        fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{pb,pbi}');
+        context.subscriptions.push(fileWatcher);
 
         client = new LanguageClient(
             'purebasic',
@@ -324,6 +329,12 @@ function registerCommands(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): Thenable<void> | undefined {
+    // Dispose file watcher
+    if (fileWatcher) {
+        fileWatcher.dispose();
+        fileWatcher = undefined as any;
+    }
+
     if (!client) {
         return undefined;
     }

@@ -207,13 +207,19 @@ connection.onInitialized(async () => {
                 const folders = await connection.workspace.getWorkspaceFolders();
                 const uris = (folders || []).map(f => f.uri);
                 setWorkspaceRoots(uris);
-            } catch {}
+            } catch (error) {
+                connection.console.error('Failed to update workspace folders');
+                logLspError(`Failed to update workspace folders`, error); // secure internal log
+            }
         });
         // Initialize workspace root
         connection.workspace.getWorkspaceFolders().then(folders => {
             const uris = (folders || []).map(f => f.uri);
             setWorkspaceRoots(uris);
-        }).catch(() => {});
+        }).catch(error => {
+            connection.console.error('Failed to update workspace folders');
+            logLspError(`Failed to update workspace folders`, error); // secure internal log
+        });
     }
 });
 
