@@ -76,8 +76,9 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
             }
         }
 
-        // 解析变量定义
+        // Parsing variable definitions 
         const currentScope = scopeStack[scopeStack.length - 1];
+        if (!currentScope) continue; // skip processing if no scope is available
         const variablesInLine = parseVariablesInLine(line, i, currentScope);
         variables.push(...variablesInLine);
 

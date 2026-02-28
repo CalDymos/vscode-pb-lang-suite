@@ -438,14 +438,14 @@ function findModuleSymbolReferences(
         const lines = text.split('\n');
 
         for (let i = 0; i < lines.length; i++) {
-            const raw = lines[i];
+            const line = lines[i];
 
             // Find usages: Module::ident or Module::#ident
             const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'gi');
             let m: RegExpExecArray | null;
-            while ((m = re.exec(raw)) !== null) {
+            while ((m = re.exec(line)) !== null) {
                 // Skip comments
-                const before = raw.substring(0, m.index);
+                const before = line.substring(0, m.index);
                 if (before.includes(';')) { continue; }
                 // Skip strings
                 const quoteCount = (before.match(/"/g) || []).length;
@@ -453,7 +453,7 @@ function findModuleSymbolReferences(
 
                 // startChar points to the ident, skipping 'Module::' and optional '#'
                 const prefixLen = moduleName.length + 2; // 'Module::'
-                const hasHash = raw[m.index + prefixLen] === '#';
+                const hasHash = line[m.index + prefixLen] === '#';
                 const startChar = m.index + prefixLen + (hasHash ? 1 : 0);
 
                 refs.push({
@@ -468,12 +468,14 @@ function findModuleSymbolReferences(
             if (!includeDeclaration) { continue; }
 
             // Find definitions (within DeclareModule / Module block)
-            const trimmed = raw.trim();
+            const trimmed = line.trim();
 
             // Constant definition
             const constMatch = parsePureBasicConstantDefinition(trimmed);
             if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
-                const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                const constIndex = line.indexOf('#' + constMatch.name);
+                if (constIndex === -1) continue;
+                const startChar = constIndex + 1
                 refs.push({
                     uri: doc.uri,
                     range: {
@@ -493,7 +495,7 @@ function findModuleSymbolReferences(
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
                 if (mm) {
-                    const startChar = raw.indexOf(mm[1]);
+                    const startChar = line.indexOf(mm[1]);
                     refs.push({
                         uri: doc.uri,
                         range: {

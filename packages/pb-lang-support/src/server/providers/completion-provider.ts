@@ -22,6 +22,19 @@ import { parseIncludeFiles } from '../utils/module-resolver';
 import * as fs from 'fs';
 import { withErrorHandling, withAsyncErrorHandling, getErrorHandler } from '../utils/error-handler';
 
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initCompletionProvider() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initCompletionProvider(logFn: LogFn): void {
+    internalLog = logFn;
+}
+
 /**
  * Handle code completion requests
  */
@@ -33,7 +46,7 @@ export function handleCompletion(
     try {
         return handleCompletionInternal(params, document, documentCache);
     } catch (error) {
-        console.error('Completion provider error:', error);
+        internalLog('Completion provider error:', error);
         return { isIncomplete: false, items: [] };
     }
 }
@@ -47,7 +60,13 @@ function handleCompletionInternal(
     const position = params.position;
     const text = document.getText();
     const lines = text.split('\n');
-    const currentLine = lines[position.line] || '';
+
+    // Ensure the requested line is within document bounds to prevent out-of-range access
+    if (position.line < 0 || position.line >= lines.length) {
+        return { isIncomplete: false, items: [] };
+    }
+
+    const currentLine = lines[position.line];
     const linePrefix = currentLine.substring(0, position.character);
 
     // Get the context that triggers completion

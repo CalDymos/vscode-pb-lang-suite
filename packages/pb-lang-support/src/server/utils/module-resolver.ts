@@ -11,6 +11,19 @@ import { generateHash } from './hash-utils';
 import { withErrorHandling, getErrorHandler } from './error-handler';
 import { parsePureBasicConstantDeclaration } from './constants';
 
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initModuleResolver() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initModuleResolver(logFn: LogFn): void {
+    internalLog = logFn;
+}
+
 export interface ModuleFunction {
     name: string;
     returnType: string;
@@ -95,7 +108,7 @@ function readDocumentFromPath(filePath: string): string | null {
         if (cached != null) return cached;
         return readFileIfExistsSync(filePath);
     } catch (error) {
-        console.error(`Error reading file ${filePath}:`, error);
+        internalLog(`Error reading file ${filePath}:`, error);
         return null;
     }
 }

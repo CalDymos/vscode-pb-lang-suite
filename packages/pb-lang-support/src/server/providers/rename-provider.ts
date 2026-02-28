@@ -16,7 +16,31 @@ import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 
 /**
- * 准备重命名 - 检查是否可以重命名
+ * Escape special characters in regular expressions
+ */
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Normalizes a constant name.
+ *
+ * Removes an optional trailing `$` character
+ * and converts the entire string to lowercase.
+ *
+ * @param name - The constant name to normalize.
+ * @returns The cleaned and lowercased name.
+ *
+ * @example
+ * normalizeConstantName("VALUE$") // "value"
+ * normalizeConstantName("TEST")   // "test"
+ */
+function normalizeConstantName(name: string): string {
+    return name.replace(/\$$/, '').toLowerCase();
+}
+
+/**
+ * Preparing to rename - Checking if renaming is possible
  */
 export function handlePrepareRename(
     params: PrepareRenameParams,
@@ -38,16 +62,16 @@ export function handlePrepareRename(
         return null;
     }
 
-    // 检查是否是可重命名的符号
+    // Check if it is a renameable symbol
     if (isRenameableSymbol(word, document, documentCache, position)) {
-        const range = getWordRange(line, position.character);
+        const range = getWordRange(line, position.line, position.character);
         return {
             range,
             placeholder: word
         };
     }
 
-    // 结构体成员：var\\member 的成员名重命名
+    // Structure member: Renaming the member name of var\\member
     const structLoc = getStructAccessFromLine(line, position.character);
     if (structLoc) {
         const structName = getVariableStructureAt(document, position.line, structLoc.varName);
@@ -171,9 +195,21 @@ function getWordAtPosition(line: string, character: number): string | null {
 }
 
 /**
- * 获取单词的范围
+ * Determines the word range at a given character position within a line.
+ *
+ * @param line - The full text content of the line.
+ * @param lineNum - The zero-based line number.
+ * @param character - The zero-based character index within the line.
+ * @returns A {@link Range} object representing the start and end
+ *          positions of the detected word.
+ *
+ * @example
+ * // line = "const myVariable = 1;"
+ * // character at index inside "myVariable"
+ * getWordRange(line, 0, 8)
+ * // returns range covering "myVariable"
  */
-function getWordRange(line: string, character: number): Range {
+function getWordRange(line: string, lineNum: number, character: number): Range {
     let start = character;
     let end = character;
 
@@ -186,8 +222,8 @@ function getWordRange(line: string, character: number): Range {
     }
 
     return {
-        start: { line: 0, character: start },
-        end: { line: 0, character: end }
+        start: { line: lineNum, character: start },
+        end: { line: lineNum, character: end }
     };
 }
 
@@ -407,7 +443,7 @@ function findAllOccurrences(
             const line = lines[i];
 
             // 使用单词边界匹配
-            const regex = new RegExp(`\\b${word}\\b`, 'gi');
+            const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi');
             let match;
             while ((match = regex.exec(line)) !== null) {
                 // 跳过注释中的匹配
@@ -534,14 +570,6 @@ function getStructAccessFromLine(line: string, character: number): { varName: st
         }
     }
     return null;
-}
-
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function normalizeConstantName(name: string): string {
-    return name.replace(/\$$/, '').toLowerCase();
 }
 
 function getVariableStructureAt(document: TextDocument, lineNumber: number, varName: string): string | null {

@@ -371,7 +371,9 @@ function findDefinitionsInDocument(document: TextDocument, word: string): Locati
         // Look up only constant definitions (#NAME = ... or #NAME$ = ...)
         const constMatch = parsePureBasicConstantDefinition(line);
         if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
-            const startChar = lines[i].indexOf('#') + 1;
+            const hashIndex = lines[i].indexOf('#');
+            if (hashIndex === -1) continue;
+            const startChar = hashIndex + 1;
             definitions.push({
                 uri: document.uri,
                 range: {

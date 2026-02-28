@@ -11,6 +11,19 @@ import { ParsedDocument } from './optimized-symbol-parser';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
 import { stripInlineComment } from '../utils/string-utils';
 
+type LogFn = (message: string, err?: unknown) => void;
+
+/** No-op until initSymbolManager() is called. */
+let internalLog: LogFn = () => { /* uninitialized */ };
+
+/**
+ * Must be called once during server startup to wire up LSP logging.
+ * Until called, errors are silently swallowed.
+ */
+export function initSymbolManager(logFn: LogFn): void {
+    internalLog = logFn;
+}
+
 /**
  * Parse symbols in a document (performance-optimized version)
  * @deprecated Use optimizedSymbolParser.parseDocumentSymbols instead
@@ -31,7 +44,7 @@ export function parseDocumentSymbols(uri: string, text: string): void {
 
     // Using an optimized parser
     optimizedSymbolParser.parseDocumentSymbols(uri, text).catch(error => {
-        console.error('Symbol parsing error:', error);
+        internalLog('Symbol parsing error:', error);
         // 降级到基本解析
         parseDocumentSymbolsFallback(uri, text);
     });
@@ -213,7 +226,7 @@ export async function updateDocumentSymbolsIncrementally(uri: string, text: stri
     try {
         await optimizedSymbolParser.updateDocumentSymbolsIncrementally(uri, text, oldText);
     } catch (error) {
-        console.error('Incremental symbol update error:', error);
+        internalLog('Incremental symbol update error:', error);
         // 降级到完整重新解析
         parseDocumentSymbols(uri, text);
     }
