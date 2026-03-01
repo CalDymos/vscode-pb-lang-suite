@@ -92,3 +92,10 @@ export function safeIndexOf(haystack: string, needle: string): number {
     const idx = haystack.indexOf(needle);
     return idx >= 0 ? idx : 0;
 }
+
+/**
+ * Escape special characters in regular expressions
+ */
+export function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

@@ -14,13 +14,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-
-/**
- * Escape special characters in regular expressions
- */
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+import { escapeRegExp} from '../utils/string-utils';
 
 /**
  * Normalizes a constant name.
@@ -271,6 +265,7 @@ function isUserDefinedSymbol(
     position: Position
 ): boolean {
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeWord = escapeRegExp(word);
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
@@ -280,13 +275,13 @@ function isUserDefinedSymbol(
             const line = lines[i].trim();
 
             // 检查过程定义
-            const procMatch = line.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${word})\\s*\\(`, 'i'));
+            const procMatch = line.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
             if (procMatch) {
                 return true;
             }
 
             // Check variable definitions
-            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${word})(?:\\.\\w+)?`, 'i'));
+            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.\\w+)?`, 'i'));
             if (varMatch) {
                 return true;
             }
@@ -298,13 +293,13 @@ function isUserDefinedSymbol(
             }
 
             // Check the structure definition
-            const structMatch = line.match(new RegExp(`^Structure\\s+(${word})\\b`, 'i'));
+            const structMatch = line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'));
             if (structMatch) {
                 return true;
             }
 
             // 检查模块定义
-            const moduleMatch = line.match(new RegExp(`^Module\\s+(${word})\\b`, 'i'));
+            const moduleMatch = line.match(new RegExp(`^Module\\s+(${safeWord})\\b`, 'i'));
             if (moduleMatch) {
                 return true;
             }
@@ -368,6 +363,18 @@ function handleModuleFunctionRename(
             const moduleCallRegex = new RegExp(`\\b${safeModule}::${safeFn}\\b`, 'gi');
             let match;
             while ((match = moduleCallRegex.exec(line)) !== null) {
+                // Skip matches within comments
+                if (line.substring(0, match.index).includes(';')) {
+                    continue;
+                }
+
+                // Skip matches within the string
+                const beforeMatch = line.substring(0, match.index);
+                const quoteCount = (beforeMatch.match(/"/g) || []).length;
+                if (quoteCount % 2 === 1) {
+                    continue;
+                }
+
                 const functionStart = match.index + moduleName.length + 2; // +2 for '::'
                 edits.push({
                     uri: doc.uri,
@@ -382,10 +389,12 @@ function handleModuleFunctionRename(
             const moduleStartMatch = line.match(new RegExp(`^\\s*Module\\s+${safeModule}\\b`, 'i'));
             if (moduleStartMatch) {
                 inModule = true;
+                continue;
             }
 
             if (line.match(/^\s*EndModule\b/i)) {
                 inModule = false;
+                continue;
             }
 
             // Find Procedure definition inside module
@@ -500,6 +509,18 @@ function handleModuleSymbolRename(
             const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'g');
             let m: RegExpExecArray | null;
             while ((m = re.exec(raw)) !== null) {
+                // Skip matches within comments
+                if (raw.substring(0, m.index).includes(';')) {
+                    continue;
+                }
+
+                // Skip matches within the string
+                const beforeMatch = raw.substring(0, m.index);
+                const quoteCount = (beforeMatch.match(/"/g) || []).length;
+                if (quoteCount % 2 === 1) {
+                    continue;
+                }
+
                 const identStart = m.index + moduleName.length + 2 + (raw[m.index + moduleName.length + 2] === '#' ? 1 : 0);
                 edits.push({ range: { start: { line: i, character: identStart }, end: { line: i, character: identStart + ident.length } }, newText: newName });
             }
@@ -507,7 +528,9 @@ function handleModuleSymbolRename(
             // 声明：Structure/Interface/Enumeration/常量名
             const constMatch = parsePureBasicConstantDefinition(trimmed) || parsePureBasicConstantDeclaration(trimmed);
             if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
-                const startChar = raw.indexOf('#' + constMatch.name) + 1;
+                const constIndex = raw.indexOf('#' + constMatch.name);
+                if (constIndex === -1) continue;
+                const startChar = constIndex + 1;
                 edits.push({ range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + constMatch.name.length } }, newText: newName });
                 continue;
             }
@@ -586,7 +609,8 @@ function getVariableStructureAt(document: TextDocument, lineNumber: number, varN
 }
 
 function getMemberRange(line: string, character: number, memberName: string, lineNo: number): Range | null {
-    const re = new RegExp(`\\\\(${memberName})\\b`, 'g');
+    const safeMemberName = escapeRegExp(memberName);
+    const re = new RegExp(`\\\\(${safeMemberName})\\b`, 'g');
     let m: RegExpExecArray | null;
     while ((m = re.exec(line)) !== null) {
         const start = m.index + 1; // skip '\\'
@@ -613,6 +637,8 @@ function handleStructMemberRename(
 ): WorkspaceEdit | null {
     const changes: { [uri: string]: TextEdit[] } = {};
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safeStructName = escapeRegExp(structName);
+    const safeMemberName = escapeRegExp(memberName);
 
     // 收集各文档内属于该结构体的变量名
     const structVarsPerDoc = new Map<string, string[]>();
@@ -641,11 +667,23 @@ function handleStructMemberRename(
         for (let i = 0; i < lines.length; i++) {
             const raw = lines[i];
             const line = raw.trim();
-            if (line.match(new RegExp(`^Structure\\s+${structName}\\b`, 'i'))) { inStruct = true; continue; }
+            if (line.match(new RegExp(`^Structure\\s+${safeStructName}\\b`, 'i'))) { inStruct = true; continue; }
             if (inStruct && line.match(/^EndStructure\b/i)) { inStruct = false; continue; }
             if (inStruct) {
-                const mm = line.match(new RegExp(`^(?:\\*?)(${memberName})(?:\\.|\\s|$)`));
+                const mm = line.match(new RegExp(`^(?:\\*?)(${safeMemberName})(?:\\.|\\s|$)`));
                 if (mm) {
+                    // Skip matching in comments
+                    if (raw.substring(0, raw.indexOf(mm[1])).includes(';')) {
+                        continue;
+                    }
+
+                    // Skip matches within the string
+                    const beforeMatch = raw.substring(0, raw.indexOf(mm[1]));
+                    const quoteCount = (beforeMatch.match(/"/g) || []).length;
+                    if (quoteCount % 2 === 1) {
+                        continue;
+                    }
+
                     const startChar = raw.indexOf(mm[1]);
                     edits.push({ range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + memberName.length } }, newText: newName });
                 }
@@ -658,10 +696,22 @@ function handleStructMemberRename(
             for (let i = 0; i < lines.length; i++) {
                 const raw = lines[i];
                 for (const v of vars) {
-                    const re = new RegExp(`\\b\\*?${v}(?:\\([^)]*\\))?\\\\${memberName}\\b`, 'g');
+                    const re = new RegExp(`\\b\\*?${v}(?:\\([^)]*\\))?\\\\${safeMemberName}\\b`, 'g');
                     let m: RegExpExecArray | null;
                     while ((m = re.exec(raw)) !== null) {
-                        // 计算成员名起始：在匹配片段内找到第一个反斜杠位置
+                        // Skip matches within comments
+                        if (raw.substring(0, m.index).includes(';')) {
+                            continue;
+                        }
+
+                        // Skip matches within strings
+                        const beforeMatch = raw.substring(0, m.index);
+                        const quoteCount = (beforeMatch.match(/"/g) || []).length;
+                        if (quoteCount % 2 === 1) {
+                            continue;
+                        }
+
+                        // Calculate member name start: Find the first backslash position within the matched segment
                         const matchStart = m.index;
                         const matchedText = raw.substring(matchStart, matchStart + m[0].length);
                         const slashRel = matchedText.indexOf('\\');

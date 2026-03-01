@@ -4,13 +4,13 @@
  */
 
 import * as path from 'path';
-import * as fs from 'fs';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { resolveIncludePath, readFileIfExistsSync, normalizeDirPath } from './fs-utils';
+import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 import { readFileCached } from './file-cache';
 import { generateHash } from './hash-utils';
-import { getErrorHandler } from './error-handler';
 import { parsePureBasicConstantDeclaration } from './constants';
+import { escapeRegExp} from '../utils/string-utils';
 
 type LogFn = (message: string, err?: unknown) => void;
 
@@ -66,6 +66,7 @@ export function parseIncludeFiles(document: TextDocument, documentCache: Map<str
 
     // 当前的 IncludePath 列表（最新的优先）
     const includeDirs: string[] = [];
+    const workspaceRoot = getWorkspaceRootForUri(document.uri);
 
     for (const raw of lines) {
         const line = raw.trim();
@@ -84,10 +85,10 @@ export function parseIncludeFiles(document: TextDocument, documentCache: Map<str
 
         const inc = m[1];
         // (Parsed as-is for now)
-        let fullPath = resolveIncludePath(document.uri, inc, includeDirs);
+        let fullPath = resolveIncludePath(document.uri, inc, includeDirs, workspaceRoot);
         // 若未指定扩展名，尝试追加 .pbi
         if (!fullPath && !path.extname(inc)) {
-            fullPath = resolveIncludePath(document.uri, `${inc}.pbi`, includeDirs);
+            fullPath = resolveIncludePath(document.uri, `${inc}.pbi`, includeDirs, workspaceRoot);
         }
         if (fullPath) includeFiles.push(fullPath);
     }
@@ -225,6 +226,7 @@ export function getModuleExports(
 function extractModuleFunctions(text: string, moduleName: string): ModuleFunction[] {
     const functions: ModuleFunction[] = [];
     const lines = text.split('\n');
+    const safeModuleName = escapeRegExp(moduleName);
 
     let inDeclareModule = false;
     let inModule = false;
@@ -232,15 +234,20 @@ function extractModuleFunctions(text: string, moduleName: string): ModuleFunctio
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
         // 检查DeclareModule开始
-        const declareModuleMatch = line.match(new RegExp(`^DeclareModule\\s+${moduleName}\\b`, 'i'));
+        const declareModuleMatch = line.match(new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i'));
         if (declareModuleMatch) {
             inDeclareModule = true;
             continue;
         }
 
         // 检查Module开始
-        const moduleStartMatch = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
+        const moduleStartMatch = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
         if (moduleStartMatch) {
             inModule = true;
             continue;
@@ -326,6 +333,7 @@ function extractModuleExports(text: string, moduleName: string): {
     const structures: Array<{name: string}> = [];
     const interfaces: Array<{name: string}> = [];
     const enumerations: Array<{name: string}> = [];
+    const safeModuleName = escapeRegExp(moduleName);
 
     const lines = text.split('\n');
     let inDeclareModule = false;
@@ -335,12 +343,17 @@ function extractModuleExports(text: string, moduleName: string): {
         const raw = lines[i];
         const line = raw.trim();
 
+        // Skip comment lines
+        if (line.startsWith(';')) {
+            continue;
+        }
+
         // 声明和实现范围
-        const declStart = line.match(new RegExp(`^DeclareModule\\s+${moduleName}\\b`, 'i'));
+        const declStart = line.match(new RegExp(`^DeclareModule\\s+${safeModuleName}\\b`, 'i'));
         if (declStart) { inDeclareModule = true; continue; }
         if (line.match(/^EndDeclareModule\b/i)) { inDeclareModule = false; continue; }
 
-        const modStart = line.match(new RegExp(`^Module\\s+${moduleName}\\b`, 'i'));
+        const modStart = line.match(new RegExp(`^Module\\s+${safeModuleName}\\b`, 'i'));
         if (modStart) { inModule = true; continue; }
         if (line.match(/^EndModule\b/i)) { inModule = false; continue; }
 
@@ -467,6 +480,11 @@ function extractModuleNames(text: string): string[] {
 
     for (const line of lines) {
         const trimmedLine = line.trim();
+
+        // Skip comment lines
+        if (trimmedLine.startsWith(';')) {
+            continue;
+        }
 
         // 匹配 DeclareModule ModuleName
         const declareMatch = trimmedLine.match(/^DeclareModule\s+(\w+)/i);

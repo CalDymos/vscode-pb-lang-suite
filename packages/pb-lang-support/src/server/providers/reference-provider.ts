@@ -10,8 +10,9 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceFiles } from '../indexer/workspace-index';
+import { getWorkspaceFiles, getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
+import { escapeRegExp} from '../utils/string-utils';
 
 /**
  * Handle references request
@@ -198,9 +199,11 @@ function findModuleFunctionReferences(
             // Track module scope for definition search
             if (line.match(new RegExp(`^\\s*Module\\s+${safeModule}\\b`, 'i'))) {
                 inModule = true;
+                continue;
             }
             if (line.match(/^\s*EndModule\b/i)) {
                 inModule = false;
+                continue;
             }
 
             // Find Procedure definition inside module
@@ -515,10 +518,6 @@ function normalizeConstantName(name: string): string {
     return name.replace(/\$$/, '').toLowerCase();
 }
 
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Collect search documents: current + open + recursive includes
  */
@@ -527,6 +526,7 @@ function collectSearchDocuments(
     allDocuments: Map<string, TextDocument>,
     maxDepth = 3
 ): Map<string, TextDocument> {
+    const workspaceRoot = getWorkspaceRootForUri(document.uri);
     const result = new Map<string, TextDocument>();
     const visited = new Set<string>();
 
@@ -566,7 +566,7 @@ function collectSearchDocuments(
             const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
             if (!m) continue;
             const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs);
+            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
             if (!fsPath) continue;
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) {

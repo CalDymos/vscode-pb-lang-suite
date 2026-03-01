@@ -251,9 +251,10 @@ class EnhancedSymbolCache {
     private recordAccess(uri: string): void {
         this.accessTimes.push({ uri, time: Date.now() });
 
-        // Retain the latest 1000 access records - use shift to avoid creating a new array
-        while (this.accessTimes.length > 1000) {
-            this.accessTimes.shift();
+        // Retain the latest 1000 access records - perform a one-time trim to avoid multiple shift() operations
+        const overflow = this.accessTimes.length - 1000;
+        if (overflow > 0) {
+            this.accessTimes.splice(0, overflow);
         }
     }
 

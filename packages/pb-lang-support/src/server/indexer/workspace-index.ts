@@ -17,6 +17,27 @@ export function setWorkspaceRoots(uris: string[]) {
   lastBuild = 0;
 }
 
+/**
+ * Returns the workspace root that contains the given URI.
+ *
+ * @param uri - The URI to resolve to a workspace root.
+ * @returns The matching workspace root path, or `undefined` if no roots exist.
+ *
+ * @example
+ * getWorkspaceRootForUri("file:///home/user/project/src/file.ts")
+ * // returns "/home/user/project" if it exists in roots
+ */
+export function getWorkspaceRootForUri(uri: string): string | undefined {
+  const fsPath = path.normalize(uriToFsPath(uri));
+  for (const root of roots) {
+    const normalizedRoot = path.normalize(root);
+    if (fsPath === normalizedRoot || fsPath.startsWith(normalizedRoot + path.sep)) {
+      return root;
+    }
+  }
+  return undefined;
+}
+
 export function getWorkspaceFiles(): string[] {
   const now = Date.now();
   if (now - lastBuild > REBUILD_INTERVAL_MS) {

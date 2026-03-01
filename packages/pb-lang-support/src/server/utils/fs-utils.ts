@@ -50,7 +50,9 @@ function isPathAllowed(resolvedPath: string, allowedRoots: string[]): boolean {
   const normalizedPath = path.normalize(resolvedPath);
   for (const root of allowedRoots) {
     const normalizedRoot = path.normalize(root);
-    if (normalizedPath.startsWith(normalizedRoot)) {
+    // Ensure the path is exactly the root or a subdirectory,
+    // avoiding partial matches like '/project-malicious' when '/project' is allowed
+    if (normalizedPath === normalizedRoot || normalizedPath.startsWith(normalizedRoot + path.sep)) {
       return true;
     }
   }
@@ -94,8 +96,20 @@ export function resolveIncludePath(
     }
   }
 
-  // Relative to current document directory - always allowed
-  candList.push(path.resolve(fromDir, includeRelPath));
+  // Resolve path relative to the current document's directory
+  const relativeResolved = path.resolve(fromDir, includeRelPath);
+
+  // If a workspace root is defined, ensure the resolved path is within allowed roots
+  // to prevent path traversal. If no workspace is present (single-file mode),
+  // trust the document directory and allow normal relative resolution.
+  if (workspaceRoot) {
+    if (isPathAllowed(relativeResolved, allowedRoots)) {
+      candList.push(relativeResolved);
+    }
+  } else {
+    // Single-file mode: allow relative paths including '../' as expected in PureBasic
+    candList.push(relativeResolved);
+  }
 
   // As-is relative to CWD (rare in LSP), keep last - only if in allowed roots
   const cwdResolved = path.resolve(includeRelPath);
