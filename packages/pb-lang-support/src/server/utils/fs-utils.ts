@@ -36,23 +36,42 @@ export function readFileIfExistsSync(filePath: string): string | null {
 }
 
 /**
+ * Resolves a path to its real filesystem location by following symlinks.
+ * Falls back to the input path if it does not exist (nothing to read, no symlink
+ * to follow, so the lexical path is safe as a fallback).
+ */
+export function tryRealpath(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return p;
+  }
+}
+
+/**
  * Checks if a given path is within any of the allowed root directories.
+ * Resolves symlinks via realpathSync before the containment check so that
+ * a symlink inside an allowed root pointing outside cannot bypass the boundary.
+ * Non-existent paths fall back to their lexical form (they cannot be read on disk,
+ * so no real traversal is possible).
  *
- * @param resolvedPath - The absolute or relative path to check.
+ * @param resolvedPath - The absolute path to check.
  * @param allowedRoots - Array of root paths that are permitted.
- * @returns `true` if the path starts with any allowed root, otherwise `false`.
+ * @returns `true` if the real path is within any allowed root, otherwise `false`.
  *
  * @example
  * isPathAllowed("/usr/local/bin/file.txt", ["/usr/local", "/opt"]) // true
  * isPathAllowed("/etc/passwd", ["/usr/local", "/opt"])            // false
  */
 function isPathAllowed(resolvedPath: string, allowedRoots: string[]): boolean {
-  const normalizedPath = path.normalize(resolvedPath);
+  // Resolve symlinks so a link inside an allowed root pointing outside is caught.
+  const realPath = tryRealpath(resolvedPath);
   for (const root of allowedRoots) {
-    const normalizedRoot = path.normalize(root);
-    // Ensure the path is exactly the root or a subdirectory,
-    // avoiding partial matches like '/project-malicious' when '/project' is allowed
-    if (normalizedPath === normalizedRoot || normalizedPath.startsWith(normalizedRoot + path.sep)) {
+    const realRoot = tryRealpath(root);
+    const rel = path.relative(realRoot, realPath);
+    // rel === ''                    → exact match (path is the root itself)
+    // !isAbsolute && !startsWith .. → path is a descendant of root
+    if (rel === '' || (!path.isAbsolute(rel) && !rel.startsWith('..' + path.sep) && rel !== '..')) {
       return true;
     }
   }
@@ -121,7 +140,12 @@ export function resolveIncludePath(
 
   for (const cand of candList) {
     try {
-      if (fs.existsSync(cand)) return cand;
+      if (fs.existsSync(cand)) {
+        // Resolve symlinks on the confirmed-existing path so the returned value
+        // is always a real filesystem path. existsSync already confirmed the path
+        // exists, so realpathSync.native will not throw here.
+        return fs.realpathSync.native(cand);
+      }
     } catch {}
   }
   return null;
