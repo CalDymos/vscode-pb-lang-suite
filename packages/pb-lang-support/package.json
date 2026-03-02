@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.10.9",
+  "version": "0.11.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -72,6 +72,11 @@
           "default": 500,
           "minimum": 0,
           "description": "%config.purebasic.validationDelay.description%"
+        },
+        "purebasic.apiFunctionListingPath": {
+          "type": "string",
+          "default": "",
+          "description": "%config.purebasic.apiFunctionListingPath.description%"
         },
         "purebasic.formatting.enabled": {
           "type": "boolean",

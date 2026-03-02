@@ -67,6 +67,9 @@ import { SymbolKind as PBSymbolKind, PureBasicSymbol } from './symbols/types';
 import { debounce } from './utils/debounce-utils';
 import { generateHash } from './utils/hash-utils';
 
+// Import Api function listing
+import { ApiFunctionListing } from './utils/api-function-listing';
+
 // Import error handling
 import { initializeErrorHandler } from './utils/error-handler';
 
@@ -141,6 +144,9 @@ const documentHashes: Map<string, string> = new Map();
 
 // Document cache for defining jumps and reference lookups
 const documentCache: Map<string, TextDocument> = new Map();
+
+// API Function Listing (loaded lazily when the path is known from settings)
+const apiFunctionListing = new ApiFunctionListing();
 
 // Project manager for handling .pbp project files
 let projectManager: ProjectManager;
@@ -245,6 +251,7 @@ connection.onDidChangeConfiguration(change => {
         globalSettings.enableValidation = (change.settings.purebasic || defaultSettings).enableValidation;
         globalSettings.enableCompletion = (change.settings.purebasic || defaultSettings).enableCompletion;
         globalSettings.validationDelay = (change.settings.purebasic || defaultSettings).validationDelay;
+        globalSettings.apiFunctionListingPath = (change.settings.purebasic || defaultSettings).apiFunctionListingPath;
     }
 
     // Re-validate all open documents
@@ -271,7 +278,8 @@ function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
                 formatting: config?.formatting ?? defaultSettings.formatting,
                 completion: config?.completion ?? defaultSettings.completion,
                 linting: config?.linting ?? defaultSettings.linting,
-                symbols: config?.symbols ?? defaultSettings.symbols
+                symbols: config?.symbols ?? defaultSettings.symbols,
+                apiFunctionListingPath: config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath
             };
         });
         documentSettings.set(resource, result);
@@ -359,7 +367,8 @@ connection.onCompletion(async (params: TextDocumentPositionParams): Promise<Comp
             return null;
         }
 
-        const completionResult = handleCompletion(params, document, documentCache);
+        apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
+        const completionResult = handleCompletion(params, document, documentCache, apiFunctionListing);
         return completionResult.items;
     }, { fallbackValue: null });
 });
@@ -383,19 +392,22 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
     }
 });
 
-// Hover handling
-connection.onHover((params: HoverParams): Hover | null => {
-    const document = documents.get(params.textDocument.uri);
-    if (!document) {
-        return null;
-    }
+connection.onHover((params: HoverParams): Thenable<Hover | null> => {
+    return errorHandler.handleAsync<Hover | null>(
+        'Hover',
+        async () => {
+            const document = documents.get(params.textDocument.uri);
+            if (!document) {
+                return null;
+            }
 
-    try {
-        return handleHover(params, document, documentCache);
-    } catch (error) {
-        logLspError('Hover error', error, { uri: params.textDocument.uri });
-        return null;
-    }
+            const settings = await getDocumentSettings(params.textDocument.uri);
+            apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
+
+            return handleHover(params, document, documentCache, apiFunctionListing);
+        },
+        { fallbackValue: null }
+    );
 });
 
 // Definition handling
@@ -474,14 +486,17 @@ function mapSymbolKind(kind: PBSymbolKind): LSPSymbolKind {
 // findUriForSymbol is no longer needed; use the URI provided by symbolCache.findSymbolDetailed
 
 // Signature help handling
-connection.onSignatureHelp((params: TextDocumentPositionParams) => {
+connection.onSignatureHelp(async (params: TextDocumentPositionParams) => {
     const document = documents.get(params.textDocument.uri);
     if (!document) {
         return null;
     }
 
     try {
-        return handleSignatureHelp(params, document, documentCache);
+        const settings = await getDocumentSettings(params.textDocument.uri);
+        apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
+        return handleSignatureHelp(params, document, documentCache, apiFunctionListing);
+
     } catch (error) {
         logLspError('Signature help error', error, { uri: params.textDocument.uri });
         return null;

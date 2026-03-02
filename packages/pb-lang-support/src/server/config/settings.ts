@@ -12,6 +12,7 @@ export interface PureBasicSettings {
     linting?: LintingSettings;
     symbols?: SymbolsSettings;
     performance?: PerformanceSettings;
+    apiFunctionListingPath?: string; // Path to APIFunctionListing.txt for OS API signatures
 }
 
 export interface FormattingSettings {
@@ -73,6 +74,7 @@ export const defaultSettings: PureBasicSettings = {
     enableValidation: true,
     enableCompletion: true,
     validationDelay: 500,
+    apiFunctionListingPath: '',
     formatting: {
         enabled: true,
         indentSize: 4,
@@ -84,7 +86,7 @@ export const defaultSettings: PureBasicSettings = {
     completion: {
         triggerCharacters: ['.', '(', '['],
         autoClosingPairs: true,
-        suggestOnType: true
+        suggestOnType: true,
     },
     linting: {
         enableSemanticValidation: true,
