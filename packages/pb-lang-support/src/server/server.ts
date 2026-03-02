@@ -148,6 +148,22 @@ const documentCache: Map<string, TextDocument> = new Map();
 // API Function Listing (loaded lazily when the path is known from settings)
 const apiFunctionListing = new ApiFunctionListing();
 
+/**
+ * Fetches the current global `apiFunctionListingPath` from the client and
+ * (re)loads the listing.  Intended for non-hot paths: initialisation and
+ * configuration-change events only.
+ */
+async function reloadApiListing(): Promise<void> {
+    try {
+        const config = await connection.workspace.getConfiguration('purebasic');
+        const listingPath: string = config?.apiFunctionListingPath ?? '';
+        
+        apiFunctionListing.load(listingPath);
+    } catch (err) {
+        logLspError('Failed to reload API function listing', err);
+    }
+}
+
 // Project manager for handling .pbp project files
 let projectManager: ProjectManager;
 
@@ -227,6 +243,9 @@ connection.onInitialized(async () => {
             logLspError(`Failed to update workspace folders`, error); // secure internal log
         });
     }
+
+    // Initial load of the API function listing (non-hot path).
+    await reloadApiListing();
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
@@ -253,6 +272,9 @@ connection.onDidChangeConfiguration(change => {
         globalSettings.validationDelay = (change.settings.purebasic || defaultSettings).validationDelay;
         globalSettings.apiFunctionListingPath = (change.settings.purebasic || defaultSettings).apiFunctionListingPath;
     }
+
+    // Reload the API listing whenever configuration changes (non-hot path).
+    reloadApiListing().catch(err => logLspError('reloadApiListing failed', err));
 
     // Re-validate all open documents
     documents.all().forEach(safeValidateTextDocument);
@@ -367,7 +389,6 @@ connection.onCompletion(async (params: TextDocumentPositionParams): Promise<Comp
             return null;
         }
 
-        apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
         const completionResult = handleCompletion(params, document, documentCache, apiFunctionListing);
         return completionResult.items;
     }, { fallbackValue: null });
@@ -400,9 +421,6 @@ connection.onHover((params: HoverParams): Thenable<Hover | null> => {
             if (!document) {
                 return null;
             }
-
-            const settings = await getDocumentSettings(params.textDocument.uri);
-            apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
 
             return handleHover(params, document, documentCache, apiFunctionListing);
         },
@@ -494,7 +512,6 @@ connection.onSignatureHelp(async (params: TextDocumentPositionParams) => {
 
     try {
         const settings = await getDocumentSettings(params.textDocument.uri);
-        apiFunctionListing.load(settings.apiFunctionListingPath ?? '');
         return handleSignatureHelp(params, document, documentCache, apiFunctionListing);
 
     } catch (error) {
