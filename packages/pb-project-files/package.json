@@ -30,7 +30,7 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:**/*.pbp"
+    "workspaceContains:*.pbp"
   ],
   "main": "./out/extension.js",
   "contributes": {

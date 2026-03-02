@@ -13,8 +13,8 @@ import {
 
 import type { PbFileProjectPayload, PbProjectContext, PbProjectContextPayload, PbProjectFilesApi, ProjectScope } from '../api';
 
-const DEFAULT_PBP_GLOB = '**/*.pbp';
-const DEFAULT_EXCLUDE_GLOB = '**/{node_modules,.git}/**';
+// Root-only semantics (similar to the behavior of the PureBasic IDE): only .pbp files at the workspace-folder root.
+const DEFAULT_PBP_GLOB = '*.pbp';
 
 const WSKEY_ACTIVE_PROJECT = 'pbProjectFiles.activeProjectFile';
 const WSKEY_ACTIVE_TARGET = 'pbProjectFiles.activeTargetName';
@@ -161,7 +161,7 @@ export class ProjectService implements vscode.Disposable {
     }
 
     public async refresh(): Promise<void> {
-        const pbpUris = await vscode.workspace.findFiles(DEFAULT_PBP_GLOB, DEFAULT_EXCLUDE_GLOB);
+        const pbpUris = await this.findRootPbpFiles();
 
         this.projects.clear();
         this.fileToProject.clear();
@@ -197,6 +197,25 @@ export class ProjectService implements vscode.Disposable {
         this.updateStatusBar();
         this.emitActiveContextChanged();
     }
+
+    private async findRootPbpFiles(): Promise<vscode.Uri[]> {
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        const result = new Map<string, vscode.Uri>();
+
+        for (const folder of folders) {
+            const uris = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, DEFAULT_PBP_GLOB));
+
+            for (const uri of uris) {
+                // Enforce root-only behavior even if glob-matching rules change.
+                const rel = path.relative(folder.uri.fsPath, uri.fsPath);
+                if (!rel || rel.includes('/') || rel.includes('\\')) continue;
+                result.set(normalizeFsPath(uri.fsPath), uri);
+            }
+        }
+
+        return [...result.values()];
+    }
+
 
     public async pickActiveProject(): Promise<void> {
         const items = [...this.projects.values()].map(p => ({
@@ -294,7 +313,7 @@ export class ProjectService implements vscode.Disposable {
 
     private rebuildFileToProjectMap(): void {
         this.fileToProject.clear(); // Clear before rebuilding to remove stale entries.
-        
+
         for (const proj of this.projects.values()) {
             const projKey = normalizeFsPath(proj.projectFile);
 
