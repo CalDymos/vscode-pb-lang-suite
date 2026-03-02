@@ -1,19 +1,19 @@
 /**
- * 哈希工具函数
- * 用于生成文档内容的哈希值，便于缓存管理
+ * Hash utility functions
+ * Used to generate hash values of document content for convenient cache management
  */
 
 import * as crypto from 'crypto';
 
 /**
- * 生成字符串的MD5哈希值
+ * Generate MD5 hash value of a string
  */
 export function generateHash(content: string): string {
     return crypto.createHash('md5').update(content).digest('hex');
 }
 
 /**
- * 简单的字符串哈希函数（更快的替代方案）
+ * Simple string hash function (faster alternative solution)
  */
 export function simpleHash(str: string): number {
     let hash = 0;

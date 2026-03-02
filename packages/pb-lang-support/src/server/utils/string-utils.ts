@@ -1,9 +1,9 @@
 /**
- * 字符串处理工具函数
+ * String processing utility functions
  */
 
 /**
- * 检查整行是否在字符串字面值内
+ * Check if entire line is within string literal
  */
 export function isInStringLiteral(line: string): boolean {
     let inString = false;
@@ -19,7 +19,7 @@ export function isInStringLiteral(line: string): boolean {
             }
         } else {
             if (char === inStringChar) {
-                // 检查是否是转义字符
+                // Check if it is an escape character
                 if (i === 0 || line[i - 1] !== '\\') {
                     inString = false;
                     inStringChar = '';
@@ -32,7 +32,7 @@ export function isInStringLiteral(line: string): boolean {
 }
 
 /**
- * 检查指定位置是否在字符串字面值内
+ * Check if specified position is within string literal
  */
 export function isPositionInString(line: string, position: number): boolean {
     let inString = false;
@@ -49,7 +49,7 @@ export function isPositionInString(line: string, position: number): boolean {
             }
         } else {
             if (char === inStringChar) {
-                // 检查是否是转义字符
+                // Check if it is an escape character
                 if (i === 0 || line[i - 1] !== '\\') {
                     inString = false;
                     inStringChar = '';

@@ -17,11 +17,11 @@ import {
     zeroParamBuiltInFunctions, parsePureBasicConstantDefinition
 } from '../utils/constants';
 import { stripInlineComment } from '../utils/string-utils';
+import { ApiFunctionListing } from '../utils/api-function-listing';
 import { getModuleFunctionCompletions as getModuleFunctions, getAvailableModules, getModuleExports } from '../utils/module-resolver';
 import { analyzeScopesAndVariables, getActiveUsedModules } from '../utils/scope-manager';
 import { parseIncludeFiles } from '../utils/module-resolver';
 import * as fs from 'fs';
-import { withErrorHandling, withAsyncErrorHandling, getErrorHandler } from '../utils/error-handler';
 
 type LogFn = (message: string, err?: unknown) => void;
 
@@ -42,10 +42,11 @@ export function initCompletionProvider(logFn: LogFn): void {
 export function handleCompletion(
     params: CompletionParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    apiListing?: ApiFunctionListing
 ): CompletionList {
     try {
-        return handleCompletionInternal(params, document, documentCache);
+        return handleCompletionInternal(params, document, documentCache, apiListing);
     } catch (error) {
         internalLog('Completion provider error:', error);
         return { isIncomplete: false, items: [] };
@@ -55,7 +56,8 @@ export function handleCompletion(
 function handleCompletionInternal(
     params: CompletionParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    apiListing?: ApiFunctionListing
 ): CompletionList {
     const completionItems: CompletionItem[] = [];
     const position = params.position;
@@ -453,9 +455,6 @@ function handleCompletionInternal(
             } else if (mapFunctions.includes(func)) {
                 functionType = 'Map Function';
                 documentation = `Map function: ${func}() - Operations on associative arrays`;
-            } else if (windowsApiFunctions.includes(func)) {
-                functionType = 'Windows API Function';
-                documentation = `Windows API function: ${func}() - Direct system calls`;
             } else if (graphicsFunctions.includes(func)) {
                 functionType = 'Graphics/Game Function';
                 documentation = `Graphics function: ${func}() - 2D graphics, sprites, sounds`;
@@ -482,6 +481,61 @@ function handleCompletionInternal(
             });
         }
     });
+
+    // Add OS API function completion from PureBasic APIFunctionListing.txt (native API calls)
+    // Note: keep this separate from PureBasic built-ins because the listing is OS-specific.
+    if (apiListing && context.prefix.length >= 2) {
+        const apiMatches = apiListing.matchPrefix(context.prefix, 200);
+        apiMatches.forEach((entry, idx) => {
+            const label = entry.pbName;
+            if (pushedLabels.has(label)) return;
+            pushedLabels.add(label);
+
+            const hasZeroParams = entry.params.length === 0;
+            const insertText = hasZeroParams ? `${label}()` : `${label}(`;
+
+            let apiDoc = entry.signature;
+            if (entry.comment) {
+                apiDoc += `\n${entry.comment}`;
+            }
+
+            completionItems.push({
+                label,
+                kind: CompletionItemKind.Function,
+                data: `api_${idx}`,
+                detail: 'OS API Function',
+                documentation: apiDoc,
+                insertText,
+                insertTextFormat: InsertTextFormat.PlainText,
+                command: hasZeroParams ? undefined : { command: 'editor.action.triggerParameterHints', title: 'Trigger Parameter Hints' }
+            });
+        });
+    }
+
+    // Minimal Windows-only fallback: keep a few common API functions available even when
+    // APIFunctionListing.txt is not configured, only enabled on win32.
+    if ((!apiListing || apiListing.getEntryCount() === 0) && process.platform === 'win32' && context.prefix.length >= 2) {
+        const prefix = context.prefix.toLowerCase().replace(/_$/, '');
+        windowsApiFunctions.forEach((func, idx) => {
+            const baseName = func.toLowerCase().replace(/_$/, '');
+            if (!baseName.startsWith(prefix)) return;
+
+            if (pushedLabels.has(func)) return;
+            pushedLabels.add(func);
+
+            completionItems.push({
+                label: func,
+                kind: CompletionItemKind.Function,
+                data: `api_fallback_${idx}`,
+                detail: 'Windows API Function',
+                documentation: `Windows API function: ${func}() - Direct system calls (fallback listing)`,
+                insertText: `${func}(`,
+                insertTextFormat: InsertTextFormat.PlainText,
+                command: { command: 'editor.action.triggerParameterHints', title: 'Trigger Parameter Hints' }
+            });
+        });
+    }
+
 
     // Add code snippets
     const snippets = [

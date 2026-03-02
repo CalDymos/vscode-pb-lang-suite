@@ -1,6 +1,6 @@
 /**
- * 签名帮助提供者
- * 为PureBasic提供函数参数提示功能
+ * Signature help provider
+ * Provides function parameter hint functionality for PureBasic
  */
 
 import {
@@ -13,14 +13,16 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { getModuleFunctionCompletions as getModuleFunctions } from '../utils/module-resolver';
 import { getActiveUsedModules } from '../utils/scope-manager';
 import { escapeRegExp} from '../utils/string-utils';
+import { ApiFunctionListing } from '../utils/api-function-listing';
 
 /**
- * 处理签名帮助请求
+ * Handle signature help request
  */
 export function handleSignatureHelp(
     params: TextDocumentPositionParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    apiListing?: ApiFunctionListing
 ): SignatureHelp | null {
     const position = params.position;
     const text = document.getText();
@@ -28,29 +30,30 @@ export function handleSignatureHelp(
     const currentLine = lines[position.line] || '';
     const linePrefix = currentLine.substring(0, position.character);
 
-    // 查找函数调用（支持 Module::Func 与 Func）
+    // Find function call (supports Module::Func and Func)
     const functionCall = findFunctionCall(linePrefix);
     if (!functionCall) {
         return null;
     }
 
-    // 查找函数定义
+    // Find function definition
     let functionDefinition = findFunctionDefinition(
         functionCall.functionName,
         document,
         documentCache,
         functionCall.moduleName || null,
-        position.line
+        position.line,
+        apiListing
     );
 
     if (!functionDefinition) {
         return null;
     }
 
-    // 计算当前参数位置
+    // Calculate current parameter position
     const activeParameter = calculateActiveParameter(functionCall.parametersText);
 
-    // 创建签名信息
+    // Create signature information
     const signature: SignatureInformation = {
         label: functionDefinition.signature,
         documentation: functionDefinition.documentation,
@@ -65,14 +68,14 @@ export function handleSignatureHelp(
 }
 
 /**
- * 查找当前行中的函数调用
+ * Find function call in current line
  */
 function findFunctionCall(linePrefix: string): {
     moduleName?: string;
     functionName: string;
     parametersText: string;
 } | null {
-    // 1) 模块调用：Module::Func(
+    // 1) Module call: Module::Func(
     const modCall = linePrefix.match(/(\w+)::(\w+)\s*\(([^)]*)$/);
     if (modCall) {
         return {
@@ -82,7 +85,7 @@ function findFunctionCall(linePrefix: string): {
         };
     }
 
-    // 2) 普通调用：Func(
+    // 2) Regular call: Func(
     const call = linePrefix.match(/(\w+)\s*\(([^)]*)$/);
     if (call) {
         return {
@@ -95,20 +98,21 @@ function findFunctionCall(linePrefix: string): {
 }
 
 /**
- * 查找函数定义
+ * Find function definition
  */
 function findFunctionDefinition(
     functionName: string,
     document: TextDocument,
     documentCache: Map<string, TextDocument>,
     moduleName: string | null,
-    currentLine: number
+    currentLine: number,
+    apiListing?: ApiFunctionListing
 ): {
     signature: string;
     documentation: string;
     parameters: ParameterInformation[];
 } | null {
-    // 模块函数优先（若显式指定了模块名）
+    // Module functions first (if module name is explicitly specified)
     if (moduleName) {
         const funcs = getModuleFunctions(moduleName, document, documentCache);
         const item = funcs.find(f => f.name.toLowerCase() === functionName.toLowerCase());
@@ -120,14 +124,15 @@ function findFunctionDefinition(
                 parameters
             };
         }
+        // If not found in module, try user procedure/built-in later
         // 若模块内未找到，后续再尝试用户过程/内置
     }
 
-    // 在当前文档中查找用户过程
+    // Find user procedure in current document
     let definition = searchFunctionInDocument(functionName, document);
     if (definition) return definition;
 
-    // 在其他已打开文档中查找
+    // Search in other open documents
     for (const [uri, doc] of documentCache) {
         if (uri !== document.uri) {
             definition = searchFunctionInDocument(functionName, doc);
@@ -135,7 +140,7 @@ function findFunctionDefinition(
         }
     }
 
-    // UseModule 导入的模块里查找（未指定模块名时）
+    // Search in modules imported by UseModule (when module name is not specified)
     if (!moduleName) {
         const used = getActiveUsedModules(document.getText(), currentLine);
         for (const mod of used) {
@@ -152,12 +157,16 @@ function findFunctionDefinition(
         }
     }
 
-    // 检查是否是内置函数
+    // Check if this is an OS API function listed in APIFunctionListing.txt
+    const apiSig = getApiFunctionSignature(functionName, apiListing);
+    if (apiSig) return apiSig;
+
+    // Check if it is a built-in function
     return getBuiltInFunctionSignature(functionName);
 }
 
 /**
- * 在文档中搜索函数定义
+ * Search for function definition in document
  */
 function searchFunctionInDocument(
     functionName: string,
@@ -174,7 +183,7 @@ function searchFunctionInDocument(
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
 
-        // 匹配过程定义
+        // Match procedure definition
         const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeFunction})\\s*\\(([^)]*)\\)`, 'i'));
         if (procMatch) {
             const returnType = procMatch[1] || '';
@@ -199,7 +208,7 @@ function searchFunctionInDocument(
 }
 
 /**
- * 解析参数列表
+ * Parse parameter list
  */
 function parseParameters(paramsText: string): ParameterInformation[] {
     if (!paramsText.trim()) {
@@ -236,14 +245,41 @@ function parseParameters(paramsText: string): ParameterInformation[] {
 }
 
 /**
- * 获取内置函数的签名
+ * Build signature help from APIFunctionListing.txt entries.
+ */
+function getApiFunctionSignature(
+    functionName: string,
+    apiListing?: ApiFunctionListing
+): {
+    signature: string;
+    documentation: string;
+    parameters: ParameterInformation[];
+} | null {
+    if (!apiListing) return null;
+
+    const entry = apiListing.find(functionName);
+    if (!entry) return null;
+
+    const signature = entry.rawParams ? `${entry.pbName}(${entry.rawParams})` : `${entry.pbName}()`;
+    const documentation = entry.comment ? `${entry.signature}\n${entry.comment}` : entry.signature;
+
+    const parameters = (entry.params || []).map(p => ({
+        label: p,
+        documentation: ''
+    }));
+
+    return { signature, documentation, parameters };
+}
+
+/**
+ * Get built-in function signature
  */
 function getBuiltInFunctionSignature(functionName: string): {
     signature: string;
     documentation: string;
     parameters: ParameterInformation[];
 } | null {
-    // 常用内置函数的签名定义
+    // Common built-in function signature definitions
     const builtInSignatures: { [key: string]: any } = {
         'Debug': {
             signature: 'Debug(Text$)',
@@ -287,14 +323,14 @@ function getBuiltInFunctionSignature(functionName: string): {
 }
 
 /**
- * 计算当前活动参数的索引
+ * Calculate index of current active parameter
  */
 function calculateActiveParameter(parametersText: string): number {
     if (!parametersText.trim()) {
         return 0;
     }
 
-    // 计算逗号数量，但要考虑括号嵌套和字符串
+    // Calculate comma count, but consider parenthesis nesting and strings
     let commaCount = 0;
     let parenDepth = 0;
     let inString = false;
