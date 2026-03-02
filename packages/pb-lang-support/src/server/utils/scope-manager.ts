@@ -1,6 +1,6 @@
 /**
- * 作用域管理器
- * 处理PureBasic变量和符号的作用域分析
+ * Scope Manager
+ * Handle scope analysis of PureBasic variables and symbols
  */
 
 export enum ScopeType {
@@ -35,7 +35,7 @@ export interface VariableInfo {
 }
 
 /**
- * 解析文档中的作用域和变量
+ * Parse scopes and variables in document
  */
 export function analyzeScopesAndVariables(text: string, currentLine: number): {
     currentScope: ScopeInfo;
@@ -47,7 +47,7 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
     const variables: VariableInfo[] = [];
     const scopeStack: ScopeInfo[] = [];
 
-    // 全局作用域
+    // Global scope
     const globalScope: ScopeInfo = {
         type: ScopeType.Global,
         startLine: 0,
@@ -65,7 +65,7 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
             continue;
         }
 
-        // 检查作用域开始
+        // Check scope start
         const scopeStart = detectScopeStart(line, i);
         if (scopeStart) {
             scopeStart.parentScope = scopeStack[scopeStack.length - 1];
@@ -73,7 +73,7 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
             scopeStack.push(scopeStart);
         }
 
-        // 检查作用域结束
+        // Check scope end
         if (detectScopeEnd(line, scopeStack)) {
             const endedScope = scopeStack.pop();
             if (endedScope) {
@@ -87,7 +87,7 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
         const variablesInLine = parseVariablesInLine(line, i, currentScope);
         variables.push(...variablesInLine);
 
-        // 如果是过程定义，解析参数
+        // If it is a procedure definition, parse parameters
         const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)\s*\(([^)]*)\)/i);
         if (procMatch && currentScope.type === ScopeType.Procedure) {
             const params = procMatch[3] || '';
@@ -96,10 +96,10 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
         }
     }
 
-    // 找到当前行所在的作用域
+    // Find the scope at current line
     const currentScope = findScopeAtLine(scopes, currentLine);
 
-    // 获取在当前作用域中可见的变量
+    // Get available variables visible in current scope
     const availableVariables = getAvailableVariables(variables, currentScope, currentLine);
 
     return {
@@ -110,10 +110,10 @@ export function analyzeScopesAndVariables(text: string, currentLine: number): {
 }
 
 /**
- * 检测作用域开始
+ * Detect scope start
  */
 function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
-    // Procedure 开始
+    // Procedure start
     const procMatch = line.match(/^Procedure(?:\.(\w+))?\s+(\w+)/i);
     if (procMatch) {
         return {
@@ -123,7 +123,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // Module 开始
+    // Module start
     const moduleMatch = line.match(/^Module\s+(\w+)/i);
     if (moduleMatch) {
         return {
@@ -133,7 +133,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // Structure 开始
+    // Structure start
     const structMatch = line.match(/^Structure\s+(\w+)/i);
     if (structMatch) {
         return {
@@ -143,7 +143,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // If 开始
+    // If start
     if (line.match(/^If\b/i)) {
         return {
             type: ScopeType.If,
@@ -151,7 +151,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // For 开始
+    // For start
     const forMatch = line.match(/^For\s+/i);
     if (forMatch) {
         return {
@@ -160,7 +160,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // While 开始
+    // While start
     if (line.match(/^While\b/i)) {
         return {
             type: ScopeType.While,
@@ -168,7 +168,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // Repeat 开始
+    // Repeat start
     if (line.match(/^Repeat\b/i)) {
         return {
             type: ScopeType.Repeat,
@@ -176,7 +176,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
         };
     }
 
-    // Select 开始
+    // Select start
     if (line.match(/^Select\b/i)) {
         return {
             type: ScopeType.Select,
@@ -188,7 +188,7 @@ function detectScopeStart(line: string, lineNumber: number): ScopeInfo | null {
 }
 
 /**
- * 检测作用域结束
+ * Detect scope end
  */
 function detectScopeEnd(line: string, scopeStack: ScopeInfo[]): boolean {
     const currentScope = scopeStack[scopeStack.length - 1];
@@ -217,22 +217,22 @@ function detectScopeEnd(line: string, scopeStack: ScopeInfo[]): boolean {
 }
 
 /**
- * 解析一行中的变量定义
+ * Parse variable definitions in a line
  */
 function parseVariablesInLine(line: string, lineNumber: number, currentScope: ScopeInfo): VariableInfo[] {
     const variables: VariableInfo[] = [];
 
-    // 匹配变量定义模式
+    // Match variable definition patterns
     const patterns = [
-        // Global, Protected, Static, Define, Shared, Threaded 变量
+        // Global, Protected, Static, Define, Shared, Threaded variables
         /^(Global|Protected|Static|Define|Shared|Threaded)\s+(\*?)(\w+)(?:\.(\w+))?(?:\(([^)]*)\))?/i,
-        // Dim 数组
+        // Dim array
         /^Dim\s+(\w+)(?:\.(\w+))?(?:\(([^)]*)\))?/i,
-        // NewList 声明
+        // NewList declaration
         /^(Global|Protected|Static|Define)?\s*NewList\s+(\w+)(?:\.(\w+))?/i,
-        // NewMap 声明
+        // NewMap declaration
         /^(Global|Protected|Static|Define)?\s*NewMap\s+(\w+)(?:\.(\w+))?/i,
-        // 局部变量（在过程内的简单变量声明）
+        // Local variable (simple variable declaration in procedure)
         /^(\w+)(?:\.(\w+))?\s*=/i
     ];
 
@@ -310,7 +310,7 @@ function parseVariablesInLine(line: string, lineNumber: number, currentScope: Sc
 }
 
 /**
- * 解析过程参数
+ * Parse procedure parameters
  */
 function parseParameters(paramString: string, lineNumber: number, currentScope: ScopeInfo): VariableInfo[] {
     const parameters: VariableInfo[] = [];
@@ -351,15 +351,15 @@ function parseParameters(paramString: string, lineNumber: number, currentScope: 
 }
 
 /**
- * 找到指定行所在的作用域
+ * Find scope at specified line
  */
 function findScopeAtLine(scopes: ScopeInfo[], lineNumber: number): ScopeInfo {
-    let currentScope = scopes[0]; // 默认全局作用域
+    let currentScope = scopes[0]; // Default to global scope
 
     for (const scope of scopes) {
         if (scope.startLine <= lineNumber &&
             (scope.endLine === undefined || scope.endLine >= lineNumber)) {
-            // 选择最具体的作用域（嵌套最深的）
+            // Select the most specific scope (deepest nested)
             if (scope.startLine >= currentScope.startLine) {
                 currentScope = scope;
             }
@@ -370,24 +370,24 @@ function findScopeAtLine(scopes: ScopeInfo[], lineNumber: number): ScopeInfo {
 }
 
 /**
- * 获取在当前作用域中可见的变量
+ * Get available variables visible in current scope
  */
 function getAvailableVariables(allVariables: VariableInfo[], currentScope: ScopeInfo, currentLine: number): VariableInfo[] {
     const availableVariables: VariableInfo[] = [];
 
     for (const variable of allVariables) {
-        // 变量必须在当前行之前定义
+        // Variable must be defined before current line
         if (variable.definitionLine >= currentLine) {
             continue;
         }
 
-        // 全局变量总是可见
+        // Global variables are always visible
         if (variable.isGlobal) {
             availableVariables.push(variable);
             continue;
         }
 
-        // 检查变量是否在当前作用域或父作用域中可见
+        // Check if variable is visible in current scope or parent scope
         if (isVariableVisibleInScope(variable, currentScope)) {
             availableVariables.push(variable);
         }
@@ -397,17 +397,17 @@ function getAvailableVariables(allVariables: VariableInfo[], currentScope: Scope
 }
 
 /**
- * 检查变量是否在指定作用域中可见
+ * Check if variable is visible in specified scope
  */
 function isVariableVisibleInScope(variable: VariableInfo, targetScope: ScopeInfo): boolean {
-    // 全局变量总是可见
+    // Global variables are always visible
     if (variable.isGlobal) {
         return true;
     }
 
-    // Protected 变量在模块内可见
+    // Protected variables are visible within module
     if (variable.isProtected && variable.scope.type === ScopeType.Module) {
-        // 检查目标作用域是否在同一个模块内
+        // Check if target scope is within the same module
         let checkScope: ScopeInfo | undefined = targetScope;
         while (checkScope) {
             if (checkScope.type === ScopeType.Module &&
@@ -419,9 +419,9 @@ function isVariableVisibleInScope(variable: VariableInfo, targetScope: ScopeInfo
         return false;
     }
 
-    // Static 变量在声明的过程内可见
+    // Static variables are visible within the procedure they are declared
     if (variable.isStatic && variable.scope.type === ScopeType.Procedure) {
-        // 检查目标作用域是否是同一个过程或其子作用域
+        // Check if target scope is the same procedure or its sub-scope
         let checkScope: ScopeInfo | undefined = targetScope;
         while (checkScope) {
             if (checkScope.type === ScopeType.Procedure &&
@@ -433,7 +433,7 @@ function isVariableVisibleInScope(variable: VariableInfo, targetScope: ScopeInfo
         return false;
     }
 
-    // 普通局部变量只在声明的作用域或其子作用域中可见
+    // Regular local variables are only visible in their declared scope or sub-scopes
     let checkScope: ScopeInfo | undefined = targetScope;
     while (checkScope) {
         if (checkScope === variable.scope) {
@@ -446,9 +446,9 @@ function isVariableVisibleInScope(variable: VariableInfo, targetScope: ScopeInfo
 }
 
 /**
- * 扫描至当前行，返回当前有效的 UseModule 模块列表
- * - UseModule X 使 X 的导出在后续代码中可见，直到被 UnuseModule X 取消或文件结束
- * - 简化处理：不考虑条件编译与宏，仅按行顺序处理 UseModule/UnuseModule
+ * Scan to current line, return list of currently active UseModule modules
+ * - UseModule X makes X's exports visible in subsequent code until canceled by UnuseModule X or file end
+ * - Simplified processing: does not consider conditional compilation and macros, only processes UseModule/UnuseModule in line order
  */
 export function getActiveUsedModules(text: string, currentLine: number): string[] {
     const lines = text.split(/\r?\n/);

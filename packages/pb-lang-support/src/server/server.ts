@@ -67,6 +67,9 @@ import { SymbolKind as PBSymbolKind, PureBasicSymbol } from './symbols/types';
 import { debounce } from './utils/debounce-utils';
 import { generateHash } from './utils/hash-utils';
 
+// Import Api function listing
+import { ApiFunctionListing } from './utils/api-function-listing';
+
 // Import error handling
 import { initializeErrorHandler } from './utils/error-handler';
 
@@ -141,6 +144,25 @@ const documentHashes: Map<string, string> = new Map();
 
 // Document cache for defining jumps and reference lookups
 const documentCache: Map<string, TextDocument> = new Map();
+
+// API Function Listing (loaded lazily when the path is known from settings)
+const apiFunctionListing = new ApiFunctionListing();
+
+/**
+ * Fetches the current global `apiFunctionListingPath` from the client and
+ * (re)loads the listing.  Intended for non-hot paths: initialisation and
+ * configuration-change events only.
+ */
+async function reloadApiListing(): Promise<void> {
+    try {
+        const config = await connection.workspace.getConfiguration('purebasic');
+        const listingPath: string = config?.apiFunctionListingPath ?? '';
+        
+        apiFunctionListing.load(listingPath);
+    } catch (err) {
+        logLspError('Failed to reload API function listing', err);
+    }
+}
 
 // Project manager for handling .pbp project files
 let projectManager: ProjectManager;
@@ -221,6 +243,9 @@ connection.onInitialized(async () => {
             logLspError(`Failed to update workspace folders`, error); // secure internal log
         });
     }
+
+    // Initial load of the API function listing (non-hot path).
+    await reloadApiListing();
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
@@ -245,7 +270,11 @@ connection.onDidChangeConfiguration(change => {
         globalSettings.enableValidation = (change.settings.purebasic || defaultSettings).enableValidation;
         globalSettings.enableCompletion = (change.settings.purebasic || defaultSettings).enableCompletion;
         globalSettings.validationDelay = (change.settings.purebasic || defaultSettings).validationDelay;
+        globalSettings.apiFunctionListingPath = (change.settings.purebasic || defaultSettings).apiFunctionListingPath;
     }
+
+    // Reload the API listing whenever configuration changes (non-hot path).
+    reloadApiListing().catch(err => logLspError('reloadApiListing failed', err));
 
     // Re-validate all open documents
     documents.all().forEach(safeValidateTextDocument);
@@ -271,7 +300,8 @@ function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
                 formatting: config?.formatting ?? defaultSettings.formatting,
                 completion: config?.completion ?? defaultSettings.completion,
                 linting: config?.linting ?? defaultSettings.linting,
-                symbols: config?.symbols ?? defaultSettings.symbols
+                symbols: config?.symbols ?? defaultSettings.symbols,
+                apiFunctionListingPath: config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath
             };
         });
         documentSettings.set(resource, result);
@@ -359,7 +389,7 @@ connection.onCompletion(async (params: TextDocumentPositionParams): Promise<Comp
             return null;
         }
 
-        const completionResult = handleCompletion(params, document, documentCache);
+        const completionResult = handleCompletion(params, document, documentCache, apiFunctionListing);
         return completionResult.items;
     }, { fallbackValue: null });
 });
@@ -383,19 +413,19 @@ connection.onDocumentSymbol((params: DocumentSymbolParams) => {
     }
 });
 
-// Hover handling
-connection.onHover((params: HoverParams): Hover | null => {
-    const document = documents.get(params.textDocument.uri);
-    if (!document) {
-        return null;
-    }
+connection.onHover((params: HoverParams): Thenable<Hover | null> => {
+    return errorHandler.handleAsync<Hover | null>(
+        'Hover',
+        async () => {
+            const document = documents.get(params.textDocument.uri);
+            if (!document) {
+                return null;
+            }
 
-    try {
-        return handleHover(params, document, documentCache);
-    } catch (error) {
-        logLspError('Hover error', error, { uri: params.textDocument.uri });
-        return null;
-    }
+            return handleHover(params, document, documentCache, apiFunctionListing);
+        },
+        { fallbackValue: null }
+    );
 });
 
 // Definition handling
@@ -474,14 +504,16 @@ function mapSymbolKind(kind: PBSymbolKind): LSPSymbolKind {
 // findUriForSymbol is no longer needed; use the URI provided by symbolCache.findSymbolDetailed
 
 // Signature help handling
-connection.onSignatureHelp((params: TextDocumentPositionParams) => {
+connection.onSignatureHelp(async (params: TextDocumentPositionParams) => {
     const document = documents.get(params.textDocument.uri);
     if (!document) {
         return null;
     }
 
     try {
-        return handleSignatureHelp(params, document, documentCache);
+        const settings = await getDocumentSettings(params.textDocument.uri);
+        return handleSignatureHelp(params, document, documentCache, apiFunctionListing);
+
     } catch (error) {
         logLspError('Signature help error', error, { uri: params.textDocument.uri });
         return null;

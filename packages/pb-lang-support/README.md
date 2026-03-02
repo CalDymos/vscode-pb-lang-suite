@@ -42,7 +42,11 @@ including `IntelliSense`, `Debugging`, and `Code Navigation`. (For project manag
 - Structures: member access via `\`
 - Constants: `#CONSTANT`
 - Arrays / Lists / Maps IntelliSense
-- Windows API + common PB subsystems (Graphics/Game, etc.)
+- Native OS API IntelliSense (via PureBasic `APIFunctionListing.txt`)
+  - Loads OS-specific API functions from your PureBasic installation (`Compilers/APIFunctionListing.txt`)
+  - Provides Completion + Signature Help (including inline comments, if present in the listing)
+  - Windows-only minimal fallback suggestions if the listing is not configured/available
+- Common PB subsystems: Graphics/Game, Network, Database, Threading
 
 ### Compiler / Build / Run Integration (Toolchain) 🐞
 

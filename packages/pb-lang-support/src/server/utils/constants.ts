@@ -114,7 +114,6 @@ export const allBuiltInFunctions = [
     ...arrayFunctions,
     ...listFunctions,
     ...mapFunctions,
-    ...windowsApiFunctions,
     ...graphicsFunctions,
     ...networkFunctions,
     ...databaseFunctions,

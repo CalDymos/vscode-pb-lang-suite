@@ -14,6 +14,7 @@ import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
 import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
+import type { ApiFunctionListing, ApiFunctionEntry } from '../utils/api-function-listing';
 
 /**
  * Handle hover requests
@@ -21,7 +22,8 @@ import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
 export function handleHover(
     params: HoverParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    apiListing?: ApiFunctionListing
 ): Hover | null {
     const position = params.position;
     const text = document.getText();
@@ -78,6 +80,14 @@ export function handleHover(
     const symbolInfo = findSymbolInfo(word, document, documentCache);
     if (symbolInfo) {
         return createHoverFromSymbol(symbolInfo);
+    }
+
+    // OS/native API functions (from APIFunctionListing.txt)
+    if (apiListing) {
+        const apiHover = getApiFunctionHover(word, apiListing);
+        if (apiHover) {
+            return apiHover;
+       }
     }
 
     // Check built-in functions
@@ -420,6 +430,30 @@ function createHoverFromSymbol(symbolInfo: any): Hover {
             value: content
         }
     };
+}
+
+function getApiFunctionHover(word: string, apiListing: ApiFunctionListing): Hover | null {
+    const entry = apiListing.find(word);
+    if (!entry) return null;
+
+    const signature = entry.rawParams
+        ? `${entry.pbName}(${entry.rawParams})`
+        : `${entry.pbName}()`;
+
+    const description = entry.comment ? `\n\n${escapeMarkdown(entry.comment)}` : '';
+    const content = `\`\`\`purebasic\n${signature}\n\`\`\`${description}`;
+
+    return {
+        contents: {
+            kind: MarkupKind.Markdown,
+            value: content
+        }
+    };
+}
+
+function escapeMarkdown(text: string): string {
+    // Keep this minimal; the hover content is Markdown.
+    return text.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
 }
 
 /**
