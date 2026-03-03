@@ -574,13 +574,9 @@ function renderShellHtml(title: string, nonce: string): string {
     }
 
     function renderRawXml() {
-      const ta = h('textarea', { class: 'mono' }, state.xml ?? '');
-      ta.addEventListener('input', () => {
-        state.xml = ta.value;
-        setRawDirty(true);
-      });
+      const ta = h('textarea', { class: 'mono', readonly: 'true', style: 'min-height: 500px;' }, state.xml ?? '');
 
-      const note = h('div', { class: 'muted', text: 'Editing raw XML bypasses the structured writer. Use with care.' });
+      const note = h('div', { class: 'muted', text: 'Raw XML view is read-only. Use the structured tabs to make changes.' });
 
       return h('div', {}, ta, h('div', { style: 'height: 10px;' }), note);
     }
