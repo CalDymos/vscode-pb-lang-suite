@@ -368,10 +368,11 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run webpack:prod",
+    "vscode:prepublish": "npm run typecheck && npm run webpack:prod",
+    "typecheck": "tsc -p ./ --noEmit",
     "compile": "tsc -p ./",
     "watch": "tsc -w",
-    "webpack": "webpack --mode development",
+    "webpack": "webpack --mode development --config webpack.config.js",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "webpack:watch": "webpack --mode development --watch",
     "test": "jest",
