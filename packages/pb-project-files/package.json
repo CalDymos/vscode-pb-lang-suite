@@ -40,6 +40,16 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+      "configuration": {
+      "title": "%purebasicProjectEditor.configuration.title%",
+      "properties": {
+        "purebasicProjectEditor.inactiveTabForeground": {
+          "type": "string",
+          "default": "",
+          "description": "%purebasicProjectEditor.inactiveTabForeground.description%"
+        }
+      }
+    },
     "commands": [
       {
         "command": "pbProjectFiles.pickProject",

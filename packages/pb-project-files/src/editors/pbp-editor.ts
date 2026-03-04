@@ -7,8 +7,9 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-
+import { readProjectEditorSettings, SETTINGS_SECTION, ProjectEditorSettings } from '../config/settings'
 import { parsePbpProjectText, writePbpProjectText, type PbpProject } from '@caldymos/pb-project-core';
+import { settings } from 'cluster';
 
 export const PBP_EDITOR_VIEW_TYPE = 'pbProjectFiles.pbpEditor';
 
@@ -22,7 +23,7 @@ function getNonce(): string {
 }
 
 // scriptUri: webview-safe URI to out/webview/pbp-editor-view.js
-function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, project: PbpProject | null, xml: string, scriptUri: vscode.Uri, errorText?: string): string {
+function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, project: PbpProject | null, xml: string, scriptUri: vscode.Uri, settings: ProjectEditorSettings, errorText?: string): string {
     const nonce = getNonce();
 
     // Inline script (bootstrap) is covered by nonce.
@@ -48,6 +49,7 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
   <title>PureBasic Project</title>
   <style>
     body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 0; margin: 0; }
+    :root { --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'}; }
     .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 2; }
     .toolbar button { padding: 4px 10px; }
     .status { opacity: 0.8; }
@@ -135,6 +137,7 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
 
         const update = () => {
             const xml = document.getText();
+            const settings = readProjectEditorSettings();
             let project: PbpProject | null = null;
             let errorText: string | undefined;
             try {
@@ -142,8 +145,8 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
             } catch (err: any) {
                 errorText = err?.message ?? String(err);
             }
-
-            webviewPanel.webview.html = renderHtml(webviewPanel.webview, document, project, xml, scriptUri, errorText);
+            
+            webviewPanel.webview.html = renderHtml(webviewPanel.webview, document, project, xml, scriptUri, settings, errorText);
         };
 
         update();
@@ -162,7 +165,11 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
             void webviewPanel.webview.postMessage({ type: 'state', xml, project, errorText: errorText ?? null });
         });
 
-        webviewPanel.onDidDispose(() => docChangeSub.dispose());
+        const cfgChangeSub = vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(SETTINGS_SECTION)) update();
+        });
+
+        webviewPanel.onDidDispose(() => { docChangeSub.dispose(); cfgChangeSub.dispose(); });
 
         webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
             if (!msg || typeof msg.type !== 'string') return;
