@@ -175,11 +175,16 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
             if (!msg || typeof msg.type !== 'string') return;
 
             if (msg.type === 'saveModel') {
-                const model = msg.project as PbpProject;
-                const xml = writePbpProjectText(model);
-                await replaceDocumentText(document, xml);
-                await document.save();
-                void webviewPanel.webview.postMessage({ type: 'saved', errorText: null });
+                let errorText: string | null = null;
+                try {
+                    const model = msg.project as PbpProject;
+                    const xml = writePbpProjectText(model);
+                    await replaceDocumentText(document, xml);
+                    await document.save();
+                } catch (err: any) {
+                    errorText = err?.message ?? 'Unknown error';
+                }
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText });
                 return;
             }
 
@@ -197,30 +202,33 @@ export class PbpEditorProvider implements vscode.CustomTextEditorProvider {
                     return;
                 }
 
-                await replaceDocumentText(document, xml);
-                await document.save();
-                void webviewPanel.webview.postMessage({ type: 'saved', errorText: null });
+                try {
+                    await replaceDocumentText(document, xml);
+                    await document.save();
+                } catch (err: any) {
+                    errorText = err?.message ?? 'Unknown error';
+                }
+                void webviewPanel.webview.postMessage({ type: 'saved', errorText });
                 return;
             }
 
             if (msg.type === 'pickFile') {
-                const projectDir = path.dirname(document.uri.fsPath);
-                const uris = await vscode.window.showOpenDialog({
-                    canSelectMany: false,
-                    defaultUri: vscode.Uri.file(projectDir),
-                    filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
-                });
-                if (!uris || uris.length === 0) return;
-                const picked = uris[0];
-                const rel = path.relative(projectDir, picked.fsPath);
-                // Use absolute path for files outside the project root (PureBasic IDE behavior).
-                const isExternal = rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel);
-                const rawPath = isExternal ? picked.fsPath : rel;
-                void webviewPanel.webview.postMessage({
-                    type: 'filePicked',
-                    rawPath,
-                    fsPath: picked.fsPath,
-                });
+                try {
+                    const projectDir = path.dirname(document.uri.fsPath);
+                    const uris = await vscode.window.showOpenDialog({
+                        canSelectMany: false,
+                        defaultUri: vscode.Uri.file(projectDir),
+                        filters: { 'PureBasic Files': ['pb', 'pbi', 'pbf', 'pbh'] },
+                    });
+                    if (!uris || uris.length === 0) return;
+                    const picked = uris[0];
+                    const rel = path.relative(projectDir, picked.fsPath);
+                    const isExternal = rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel);
+                    const rawPath = isExternal ? picked.fsPath : rel;
+                    void webviewPanel.webview.postMessage({ type: 'filePicked', rawPath, fsPath: picked.fsPath });
+                } catch (err: any) {
+                    void vscode.window.showErrorMessage(`File pick failed: ${err?.message ?? 'Unknown error'}`);
+                }
                 return;
             }
         });
