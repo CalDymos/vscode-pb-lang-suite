@@ -720,20 +720,6 @@ function renderTargetRun(container: HTMLElement, t: PbpTarget): void {
         <label>Create temporary executable in source directory</label>
         <input id="run_temp" type="text" placeholder="source" />
 
-        <label>Compile count</label>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <input id="run_cc_enable" type="checkbox" />
-          <input id="run_cc_value" type="number" step="1" />
-        </div>
-
-        <label>Build count</label>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <input id="run_bc_enable" type="checkbox" />
-          <input id="run_bc_value" type="number" step="1" />
-        </div>
-
-        <label>EXE constant</label>
-        <input id="run_execonst" type="checkbox" />
       </div>
     `;
 
@@ -805,43 +791,6 @@ function renderTargetRun(container: HTMLElement, t: PbpTarget): void {
     ($('run_temp') as HTMLInputElement).value = t.temporaryExe ?? '';
     $('run_temp').addEventListener('input', (e) => { setTargetValueTag(t, 'temporaryexe', (e.target as HTMLInputElement).value); });
 
-    ($('run_cc_enable') as HTMLInputElement).checked = !!t.compileCount?.enabled;
-    ($('run_cc_value') as HTMLInputElement).value = String(t.compileCount?.value ?? 0);
-    $('run_cc_enable').addEventListener('change', (e) => {
-        if (!t.compileCount) t.compileCount = { enabled: false };
-        t.compileCount.enabled = (e.target as HTMLInputElement).checked;
-        markNode('compilecount');
-        setDirtyModel(true);
-    });
-    $('run_cc_value').addEventListener('input', (e) => {
-        if (!t.compileCount) t.compileCount = { enabled: false };
-        t.compileCount.value = parseIntSafe((e.target as HTMLInputElement).value);
-        markNode('compilecount');
-        setDirtyModel(true);
-    });
-
-    ($('run_bc_enable') as HTMLInputElement).checked = !!t.buildCount?.enabled;
-    ($('run_bc_value') as HTMLInputElement).value = String(t.buildCount?.value ?? 0);
-    $('run_bc_enable').addEventListener('change', (e) => {
-        if (!t.buildCount) t.buildCount = { enabled: false };
-        t.buildCount.enabled = (e.target as HTMLInputElement).checked;
-        markNode('buildcount');
-        setDirtyModel(true);
-    });
-    $('run_bc_value').addEventListener('input', (e) => {
-        if (!t.buildCount) t.buildCount = { enabled: false };
-        t.buildCount.value = parseIntSafe((e.target as HTMLInputElement).value);
-        markNode('buildcount');
-        setDirtyModel(true);
-    });
-
-    ($('run_execonst') as HTMLInputElement).checked = !!t.exeConstant?.enabled;
-    $('run_execonst').addEventListener('change', (e) => {
-        if (!t.exeConstant) t.exeConstant = { enabled: false };
-        t.exeConstant.enabled = (e.target as HTMLInputElement).checked;
-        markNode('execonstant');
-        setDirtyModel(true);
-    });
 }
 
 // ---------------------------------------------------------------------------
@@ -852,6 +801,28 @@ function renderTargetConstants(container: HTMLElement, t: PbpTarget): void {
     if (!t.constants) t.constants = [];
 
     container.innerHTML = `
+      <fieldset style="margin-bottom:12px;">
+        <legend>Editor constants:</legend>
+        <div class="grid2" style="grid-template-columns: auto 1fr;">
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="ec_cc_enable">
+            #PB_Editor_CompileCount:
+          </label>
+          <input id="ec_cc_value" type="number" step="1" style="width:80px;" />
+
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="ec_bc_enable">
+            #PB_Editor_BuildCount:
+          </label>
+          <input id="ec_bc_value" type="number" step="1" style="width:80px;" />
+
+          <label style="display:flex; align-items:center; gap:6px; grid-column: 1 / -1;">
+            <input type="checkbox" id="ec_exe_enable">
+            #PB_Editor_CreateExecutable
+          </label>
+        </div>
+      </fieldset>
+      <div class="muted" style="margin-bottom:6px;">Custom constants:</div>
       <div class="btnrow" style="margin-bottom:8px;">
         <button class="btn" id="constAdd">Add</button>
       </div>
@@ -860,6 +831,51 @@ function renderTargetConstants(container: HTMLElement, t: PbpTarget): void {
         <tbody id="constRows"></tbody>
       </table>
     `;
+
+    // --- Editor constants ---
+    function markEditorConst(node: string): void {
+        if (!t.meta) t.meta = {};
+        if (!t.meta.presentNodes) t.meta.presentNodes = {};
+        (t.meta.presentNodes as Record<string, boolean>)[node] = true;
+    }
+
+    ($('ec_cc_enable') as HTMLInputElement).checked = !!t.compileCount?.enabled;
+    ($('ec_cc_value') as HTMLInputElement).value = String(t.compileCount?.value ?? 0);
+    $('ec_cc_enable').addEventListener('change', (e) => {
+        if (!t.compileCount) t.compileCount = { enabled: false };
+        t.compileCount.enabled = (e.target as HTMLInputElement).checked;
+        markEditorConst('compilecount');
+        setDirtyModel(true);
+    });
+    $('ec_cc_value').addEventListener('input', (e) => {
+        if (!t.compileCount) t.compileCount = { enabled: false };
+        t.compileCount.value = parseIntSafe((e.target as HTMLInputElement).value);
+        markEditorConst('compilecount');
+        setDirtyModel(true);
+    });
+
+    ($('ec_bc_enable') as HTMLInputElement).checked = !!t.buildCount?.enabled;
+    ($('ec_bc_value') as HTMLInputElement).value = String(t.buildCount?.value ?? 0);
+    $('ec_bc_enable').addEventListener('change', (e) => {
+        if (!t.buildCount) t.buildCount = { enabled: false };
+        t.buildCount.enabled = (e.target as HTMLInputElement).checked;
+        markEditorConst('buildcount');
+        setDirtyModel(true);
+    });
+    $('ec_bc_value').addEventListener('input', (e) => {
+        if (!t.buildCount) t.buildCount = { enabled: false };
+        t.buildCount.value = parseIntSafe((e.target as HTMLInputElement).value);
+        markEditorConst('buildcount');
+        setDirtyModel(true);
+    });
+
+    ($('ec_exe_enable') as HTMLInputElement).checked = !!t.exeConstant?.enabled;
+    $('ec_exe_enable').addEventListener('change', (e) => {
+        if (!t.exeConstant) t.exeConstant = { enabled: false };
+        t.exeConstant.enabled = (e.target as HTMLInputElement).checked;
+        markEditorConst('execonstant');
+        setDirtyModel(true);
+    });
 
     function markNode(): void {
         if (!t.meta) t.meta = {};
