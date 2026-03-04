@@ -241,7 +241,7 @@ describe('PBP parser/writer roundtrip', () => {
   <section name="data">
     <explorer view="D:\\Documents\\PureBasic\\Projects\\" pattern="0"/>
     <log show="1"/>
-    <lastopen date="2026-03-03 08:37" user="thiemann" host="FS-PC-CAD-RT"/>
+    <lastopen date="2026-03-03 08:37" user="CalDymos" host="RT"/>
   </section>
   <section name="files">
     <file name="test_basic.pb">
