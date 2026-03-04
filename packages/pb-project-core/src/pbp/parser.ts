@@ -413,7 +413,7 @@ function parseProjectTargets(targetsSection: string | null, projectDir: string):
             inputfile: containsTag(body, 'inputfile'),
             outputfile: containsTag(body, 'outputfile'),
             executable: containsTag(body, 'executable'),
-            directory: containsTag(body, 'directory') || attrs['directory'] !== undefined,
+            directory: containsTag(body, 'directory'),
             compiler: containsTag(body, 'compiler'),
             commandline: containsTag(body, 'commandline'),
             options: containsTag(body, 'options'),
