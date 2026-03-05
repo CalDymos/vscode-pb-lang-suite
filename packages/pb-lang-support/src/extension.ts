@@ -245,8 +245,8 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             targetName: ctx.targetName,
             includeDirs: ctx.includeDirs ?? [],
             projectFiles: ctx.projectFiles ?? [],
-            project: ctx.project ? stripProjectForLsp(ctx.project) : undefined,
-            target: ctx.target ? stripTargetForLsp(ctx.target) : undefined,
+            project: ctx.project ? stripProjectForLsp(ctx.project) : null,
+            target: ctx.target ? stripTargetForLsp(ctx.target) : null,
         });
     };
 

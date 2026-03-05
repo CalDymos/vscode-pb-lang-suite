@@ -25,10 +25,10 @@ export interface ProjectContextLspPayload {
     includeDirs?: string[];
     projectFiles?: string[];
 
-    /** Full parsed project model forwarded from pb-project-files. */
-    project?: PbpProject;
-    /** Active target model forwarded from pb-project-files. */
-    target?: PbpTarget;
+    /** Full parsed project model forwarded from pb-project-files. null = explicitly cleared. */
+    project?: PbpProject | null;
+    /** Active target model forwarded from pb-project-files. null = explicitly cleared. */
+    target?: PbpTarget | null;
 }
 
 export interface FileProjectLspPayload {
@@ -95,10 +95,10 @@ export class ProjectManager {
         }
 
         if (payload.project !== undefined) {
-            ctx.project = payload.project;
+            ctx.project = payload.project ?? undefined;
         }
         if (payload.target !== undefined) {
-            ctx.activeTarget = payload.target;
+            ctx.activeTarget = payload.target ?? undefined;
         }
 
         ctx.lastModified = Date.now();
