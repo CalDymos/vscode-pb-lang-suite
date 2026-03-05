@@ -192,7 +192,7 @@ export class ProjectManager {
         const ctx = this.projects.get(projectKey);
         if (!ctx) return null;
 
-        const results = symbolCache.findSymbolDetailed(symbolName);
+        const results = symbolCache.findSymbolExactDetailed(symbolName);
         if (results.length === 0) return null;
 
         // If the project has a known file list, prefer hits inside the project.
