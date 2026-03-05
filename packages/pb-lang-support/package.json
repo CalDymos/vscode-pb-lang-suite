@@ -180,6 +180,23 @@
           "default": 1048576,
           "minimum": 102400,
           "description": "%config.purebasic.performance.maxFileSize.description%"
+        },
+        "purebasic.build.fallbackSource": {
+          "type": "string",
+          "enum": [
+            "sourceMetadata",
+            "launchJson",
+            "fileCfg",
+            "projectCfg"
+          ],
+          "enumDescriptions": [
+            "%config.purebasic.build.fallbackSource.sourceMetadata.description%",
+            "%config.purebasic.build.fallbackSource.launchJson.description%",
+            "%config.purebasic.build.fallbackSource.fileCfg.description%",
+            "%config.purebasic.build.fallbackSource.projectCfg.description%"
+          ],
+          "default": "launchJson",
+          "description": "%config.purebasic.build.fallbackSource.description%"
         }
       }
     },

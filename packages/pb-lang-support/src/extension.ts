@@ -3,6 +3,7 @@ import * as path from 'path';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { PureBasicDebugAdapterDescriptorFactory } from './debug/debugAdapterDescriptorFactory';
 import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
+import { FallbackResolver } from './host/fallback-resolver';
 
 
 let client: LanguageClient;
@@ -10,12 +11,13 @@ let debugChannel: vscode.OutputChannel;
 let fileWatcher: vscode.FileSystemWatcher;
 
 // ---------------------------------------------------------------------------
-// pb-project-files API (v2)
+// pb-project-files API (v3)
 // Mirrors PbProjectFilesApi from pb-project-files/src/api.ts.
 // Only the subset used by this bridge is declared here – unknown fields are
 // ignored at runtime, so the declaration stays lean.
 // ---------------------------------------------------------------------------
 interface PbProjectContextPayload {
+    noProject?: boolean;
     projectFile?: string;
     projectDir?: string;
     projectName?: string;
@@ -206,7 +208,10 @@ function stripTargetForLsp(target: PbpTarget): PbpTarget {
 async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promise<void> {
     const ext = vscode.extensions.getExtension('CalDymos.pb-project-files');
     if (!ext) {
-        // pb-project-files not installed – run in standalone mode, no bridge needed.
+        debugChannel.appendLine(
+            '[pb-project-files] Not installed – activating standalone fallback mode.'
+        );
+        await activateFallbackMode(context);
         return;
     }
 
@@ -234,15 +239,29 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     // Helpers
     // ------------------------------------------------------------------
 
-    const sendProjectContext = () => {
+    const fallbackResolver = new FallbackResolver();
+
+    const sendProjectContext = async () => {
         const ctx = api!.getActiveContextPayload();
+
+        if (ctx.noProject) {
+            const ed       = vscode.window.activeTextEditor;
+            const fallback = ed ? await fallbackResolver.resolve(ed.document.uri) : null;
+            client.sendNotification('purebasic/projectContext', {
+                version:      3,
+                noProject:    true,
+                projectFiles: fallback?.projectFiles ?? [],
+            });
+            return;
+        }
+
         client.sendNotification('purebasic/projectContext', {
-            version: 2,
+            version:        3,
             projectFileUri: ctx.projectFile ? vscode.Uri.file(ctx.projectFile).toString() : undefined,
-            projectDir: ctx.projectDir,
-            projectName: ctx.projectName,
-            targetName: ctx.targetName,
-            projectFiles: ctx.projectFiles ?? [],
+            projectDir:     ctx.projectDir,
+            projectName:    ctx.projectName,
+            targetName:     ctx.targetName,
+            projectFiles:   ctx.projectFiles ?? [],
             project: ctx.project ? stripProjectForLsp(ctx.project) : null,
             target: ctx.target ? stripTargetForLsp(ctx.target) : null,
         });
@@ -257,7 +276,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
         if (doc.uri.scheme !== 'file') return;
         const proj = isClosed ? undefined : api!.getProjectForFile(doc.uri);
         client.sendNotification('purebasic/fileProject', {
-            version: 1,
+            version: 3,
             documentUri: doc.uri.toString(),
             projectFileUri: proj?.projectFile ? vscode.Uri.file(proj.projectFile).toString() : undefined,
             scope: proj?.projectDir ? computeScope(proj.projectDir, doc.uri.fsPath) : 'external',
@@ -267,7 +286,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     // ------------------------------------------------------------------
     // Initial sync
     // ------------------------------------------------------------------
-    sendProjectContext();
+    void sendProjectContext();
     for (const doc of vscode.workspace.textDocuments) {
         sendFileProject(doc);
     }
@@ -277,7 +296,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     // ------------------------------------------------------------------
     const subs: vscode.Disposable[] = [
         api.onDidChangeActiveContext(() => {
-            sendProjectContext();
+            void sendProjectContext();
             const ed = vscode.window.activeTextEditor;
             if (ed) sendFileProject(ed.document);
         }),
@@ -289,6 +308,30 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
     ];
 
     context.subscriptions.push(...subs);
+}
+
+async function activateFallbackMode(context: vscode.ExtensionContext): Promise<void> {
+    const resolver = new FallbackResolver();
+
+    const send = async (doc: vscode.TextDocument | undefined) => {
+        if (!doc || doc.uri.scheme !== 'file') return;
+        const fallback = await resolver.resolve(doc.uri);
+        client.sendNotification('purebasic/projectContext', {
+            version:      2,
+            noProject:    true,
+            includeDirs:  fallback?.includeDirs  ?? [],
+            projectFiles: fallback?.projectFiles ?? [],
+        });
+    };
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(ed => { void send(ed?.document); }),
+        vscode.workspace.onDidSaveTextDocument(doc  => {
+            if (vscode.window.activeTextEditor?.document === doc) void send(doc);
+        }),
+    );
+
+    void send(vscode.window.activeTextEditor?.document);
 }
 
 function registerDebugProvider(context: vscode.ExtensionContext): void {
