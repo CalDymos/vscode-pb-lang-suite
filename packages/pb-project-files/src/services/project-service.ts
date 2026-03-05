@@ -88,7 +88,7 @@ export class ProjectService implements vscode.Disposable {
 
     public getApi(): PbProjectFilesApi {
         return {
-            version: 2,
+            version: 3,
             getActiveContext: () => this.getActiveContext(),
             getActiveContextPayload: () => this.getActiveContextPayload(),
             getProjectForFile: (fileUri: vscode.Uri) => this.getProjectForFile(fileUri),

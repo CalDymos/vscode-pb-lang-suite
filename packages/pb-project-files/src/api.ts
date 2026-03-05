@@ -45,7 +45,7 @@ export interface PbFileProjectPayload {
 }
 
 export interface PbProjectFilesApi {
-    readonly version: 2;
+    readonly version: 3;
 
     getActiveContext(): PbProjectContext;
     getActiveContextPayload(): PbProjectContextPayload;
