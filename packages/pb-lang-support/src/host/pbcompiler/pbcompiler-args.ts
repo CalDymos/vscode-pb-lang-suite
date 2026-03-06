@@ -196,7 +196,7 @@ function applyPurifier(args: string[], t: PbpTarget, opt: PbCompilerArgBuildOpti
     args.push('--purifier');
 
     // The pbcompiler doc requires debugger for purifier to have effect.
-    const hasDebugger = args.includes('--debugger') || args.includes('/DEBUGGER');
+    const hasDebugger = args.includes('--debugger');
     if (!hasDebugger && opt.purpose !== 'debug') {
         warnings.push('Purifier is enabled but debugger is not enabled; pbcompiler will ignore purifier.');
     }

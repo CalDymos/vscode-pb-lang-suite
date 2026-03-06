@@ -258,11 +258,8 @@ export class CompilerLauncher {
   }
 
   private getCompileArgs(sourcePath: string, executablePath: string): string[] {
-    if (this.isWindows) {
-      return [sourcePath, '/DEBUGGER', '/LINENUMBERING', '/OUTPUT', executablePath];
-      // return [sourcePath, '/DEBUGGER', '/CONSOLE', '/LINENUMBERING', '/OUTPUT', executablePath];
-    }
-    return [sourcePath, '--debugger', '--console', '--linenumbering', '--output', executablePath];
+    // GNU-style flags (--) are valid on all platforms per pbcompiler docs.
+    return [sourcePath, '--debugger', '--linenumbering', '--output', executablePath];
   }
 
   private static tryExtractOutputFromArgs(argv: string[]): string | undefined {
