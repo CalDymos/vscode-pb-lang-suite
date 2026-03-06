@@ -316,8 +316,8 @@ export class CompilerLauncher {
 
     const outputFromArgs = opt.compilerArgs ? CompilerLauncher.tryExtractOutputFromArgs(opt.compilerArgs) : undefined;
     const executablePath = opt.outputPath
-      ? path.resolve(opt.outputPath)
-      : (outputFromArgs ? path.resolve(outputFromArgs) : this.getOutputPath(resolvedSource));
+      ? path.resolve(cwd, opt.outputPath)
+      : (outputFromArgs ? path.resolve(cwd, outputFromArgs) : this.getOutputPath(resolvedSource));
 
     const argv = (opt.compilerArgs && opt.compilerArgs.length > 0)
       ? opt.compilerArgs

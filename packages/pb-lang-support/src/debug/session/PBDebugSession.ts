@@ -214,7 +214,7 @@ export class PBDebugSession extends DebugSession {
       // Store the promise so configurationDoneRequest can wait for it
       // unified compile inputs coming from host
       const compileCwd = args.cwd ? path.resolve(args.cwd) : path.dirname(path.resolve(args.program));
-      const outputPath = args.output ? path.resolve(args.output) : undefined;
+      const outputPath = args.output ? path.resolve(compileCwd, args.output) : undefined;
 
       this.compilePromise = this.launcher.compile(args.program, {
         cwd: compileCwd,
