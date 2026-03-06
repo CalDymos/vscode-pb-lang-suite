@@ -171,29 +171,34 @@ function getWordAtPosition(line: string, character: number): string | null {
 
 /**
  * Get module call information
+ * Original used .match() (first hit only) + line.indexOf() → wrong result
+ * when the same line contains multiple Module::Symbol expressions.
+ * Now uses /g exec-loop so every occurrence is checked against the cursor position.
+ * Constants (Module::#Const) are tried first so they take precedence over the
+ * plain-identifier pattern (Module::Ident) which would also match.
  */
 function getModuleCallFromPosition(line: string, character: number): {
     moduleName: string;
     functionName: string;
 } | null {
-    const beforeCursor = line.substring(0, character);
-    const afterCursor = line.substring(character);
-    const fullContext = beforeCursor + afterCursor;
-
-    // Prefer matching constants (#) first
-    let moduleMatch = fullContext.match(/(\w+)::#(\w+)/);
-    if (!moduleMatch) {
-        moduleMatch = fullContext.match(/(\w+)::(\w+)/);
+    // Pass 1 – prefer constant form  Module::#Const
+    const constRe = /(\w+)::#(\w+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = constRe.exec(line)) !== null) {
+        const start = m.index;
+        const end   = start + m[0].length;
+        if (character >= start && character <= end) {
+            return { moduleName: m[1], functionName: m[2] };
+        }
     }
-    if (moduleMatch) {
-        const matchStart = line.indexOf(moduleMatch[0]);
-        const matchEnd = matchStart + moduleMatch[0].length;
 
-        if (character >= matchStart && character <= matchEnd) {
-            return {
-                moduleName: moduleMatch[1],
-                functionName: moduleMatch[2]
-            };
+    // Pass 2 – plain form  Module::Ident
+    const funcRe = /(\w+)::(\w+)/g;
+    while ((m = funcRe.exec(line)) !== null) {
+        const start = m.index;
+        const end   = start + m[0].length;
+        if (character >= start && character <= end) {
+            return { moduleName: m[1], functionName: m[2] };
         }
     }
 
@@ -235,8 +240,9 @@ function getModuleFunctionHover(
             }
 
             // Look for function definition inside module
+            // ProcedureC / ProcedureDLL / ProcedureCDLL
             if (inModule) {
-                const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeFunctionName})\\s*\\(([^)]*)\\)`, 'i'));
+                const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.(\\w+))?\\s+(${safeFunctionName})\\s*\\(([^)]*)\\)`, 'i'));
                 if (procMatch) {
                     const returnType = procMatch[1] || 'void';
                     const params = procMatch[3] || '';
@@ -295,7 +301,8 @@ function findSymbolInfo(
             const line = lines[i].trim();
 
             // Look for procedure definition
-            const procMatch = line.match(new RegExp(`^Procedure(?:\\.(\\w+))?\\s+(${safeWord})\\s*\\(([^)]*)\\)`, 'i'));
+            // ProcedureC / ProcedureDLL / ProcedureCDLL
+            const procMatch = line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.(\\w+))?\\s+(${safeWord})\\s*\\(([^)]*)\\)`, 'i'));
             if (procMatch) {
                 const returnType = procMatch[1] || 'void';
                 const params = procMatch[3] || '';
@@ -322,8 +329,34 @@ function findSymbolInfo(
                 };
             }
 
+            // Macro
+            // Macro name hover – parameterless macros have no '(' after the name.
+            const macroMatch = line.match(new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'));
+            if (macroMatch) {
+                return {
+                    type: 'macro',
+                    name: word,
+                    documentation: 'User-defined macro'
+                };
+            }
+
+            // Prototype / PrototypeC
+            const protoMatch = line.match(new RegExp(`^Prototype(?:C)?(?:\\.(\\w+))?\\s+(${safeWord})\\s*\\(([^)]*)\\)`, 'i'));
+            if (protoMatch) {
+                const returnType = protoMatch[1] || 'void';
+                const params = protoMatch[3] || '';
+                return {
+                    type: 'prototype',
+                    name: word,
+                    returnType,
+                    parameters: params,
+                    documentation: 'Function pointer type (Prototype)'
+                };
+            }
+
             // Look for variable definition
-            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.(\\w+))?`, 'i'));
+            // Shared and Threaded added as scope keywords.
+            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim|Shared|Threaded)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.(\\w+))?`, 'i'));
             if (varMatch) {
                 const scope = varMatch[1];
                 const varName = varMatch[2];
@@ -372,11 +405,13 @@ function findSymbolInfo(
             }
 
             // Look for enumeration definition
-            const enumMatch = line.match(new RegExp(`^Enumeration\\s+(${safeWord})\\b`, 'i'));
+            // EnumerationBinary added; subType stored for correct hover rendering.
+            const enumMatch = line.match(new RegExp(`^(Enumeration(?:Binary)?)\\s+(${safeWord})\\b`, 'i'));
             if (enumMatch) {
                 return {
                     type: 'enumeration',
                     name: word,
+                    enumKeyword: enumMatch[1],   // 'Enumeration' or 'EnumerationBinary'
                     documentation: 'Enumeration block'
                 };
             }
@@ -393,12 +428,27 @@ function createHoverFromSymbol(symbolInfo: any): Hover {
     let content = '';
 
     switch (symbolInfo.type) {
-        case 'procedure':
+        case 'procedure': {
             const signature = symbolInfo.returnType !== 'void'
                 ? `Procedure.${symbolInfo.returnType} ${symbolInfo.name}(${symbolInfo.parameters})`
                 : `Procedure ${symbolInfo.name}(${symbolInfo.parameters})`;
             content = `\`\`\`purebasic\n${signature}\n\`\`\`\n\n${symbolInfo.documentation}`;
             break;
+        }
+
+        // Macro hover
+        case 'macro':
+            content = `\`\`\`purebasic\nMacro ${symbolInfo.name}\n\`\`\`\n\n${symbolInfo.documentation}`;
+            break;
+
+        // Prototype hover
+        case 'prototype': {
+            const sig = symbolInfo.returnType !== 'void'
+                ? `Prototype.${symbolInfo.returnType} ${symbolInfo.name}(${symbolInfo.parameters})`
+                : `Prototype ${symbolInfo.name}(${symbolInfo.parameters})`;
+            content = `\`\`\`purebasic\n${sig}\n\`\`\`\n\n${symbolInfo.documentation}`;
+            break;
+        }
 
         case 'variable':
             content = `\`\`\`purebasic\n${symbolInfo.scope} ${symbolInfo.name}.${symbolInfo.varType}\n\`\`\`\n\n${symbolInfo.documentation}`;
@@ -416,8 +466,9 @@ function createHoverFromSymbol(symbolInfo: any): Hover {
             content = `\`\`\`purebasic\nInterface ${symbolInfo.name}\n\`\`\`\n\n${symbolInfo.documentation}`;
             break;
 
+        // Use stored enumKeyword so EnumerationBinary renders correctly.
         case 'enumeration':
-            content = `\`\`\`purebasic\nEnumeration ${symbolInfo.name}\n\`\`\`\n\n${symbolInfo.documentation}`;
+            content = `\`\`\`purebasic\n${symbolInfo.enumKeyword || 'Enumeration'} ${symbolInfo.name}\n\`\`\`\n\n${symbolInfo.documentation}`;
             break;
 
         default:
@@ -461,31 +512,35 @@ function escapeMarkdown(text: string): string {
  */
 function getBuiltinFunctionInfo(functionName: string): Hover | null {
     const builtinFunctions: { [key: string]: any } = {
+        // Debug is a statement, not a function. No parentheses required.
+        // Syntax: Debug expression [, DebugLevel]
         'Debug': {
-            signature: 'Debug(Text$)',
-            description: 'Display debug information in the debug output window',
-            parameters: ['Text$ - String to display']
+            signature: 'Debug expression [, DebugLevel]',
+            description: 'Display an expression in the debug output window. Ignored when the debugger is disabled.',
+            parameters: [
+                'expression - Any valid PureBasic expression (numeric or string)',
+                'DebugLevel (optional) - Only displayed if current DebugLevel >= this value'
+            ]
         },
         'OpenWindow': {
-            signature: 'OpenWindow(#Window, X, Y, Width, Height, Title$, Flags)',
+            signature: 'OpenWindow(#Window, x, y, Width, Height, Title$ [, Flags [, ParentWindowID]])',
             description: 'Open a new window',
             parameters: [
-                '#Window - Window identifier',
-                'X - X position of the window',
-                'Y - Y position of the window',
-                'Width - Window width',
-                'Height - Window height',
+                '#Window - Window identifier (or #PB_Any)',
+                'x, y - Screen position of the window',
+                'Width, Height - Window dimensions',
                 'Title$ - Window title',
-                'Flags - Window creation flags'
+                'Flags (optional) - Window creation flags (e.g. #PB_Window_SystemMenu)',
+                'ParentWindowID (optional) - Parent window OS handle for child windows'
             ]
         },
         'MessageRequester': {
-            signature: 'MessageRequester(Title$, Text$, Flags)',
+            signature: 'MessageRequester(Title$, Text$ [, Flags])',
             description: 'Display a message dialog box',
             parameters: [
                 'Title$ - Dialog title',
                 'Text$ - Message text',
-                'Flags - Dialog flags'
+                'Flags (optional) - Dialog flags (e.g. #PB_MessageRequester_YesNo)'
             ]
         },
         'CloseWindow': {
@@ -494,19 +549,21 @@ function getBuiltinFunctionInfo(functionName: string): Hover | null {
             parameters: ['#Window - Window identifier to close']
         },
         'ReadFile': {
-            signature: 'ReadFile(#File, Filename$)',
+            signature: 'ReadFile(#File, Filename$ [, Flags])',
             description: 'Open a file for reading',
             parameters: [
-                '#File - File identifier',
-                'Filename$ - Path to the file'
+                '#File - File identifier (or #PB_Any)',
+                'Filename$ - Path to the file',
+                'Flags (optional) - e.g. #PB_File_SharedRead'
             ]
         },
         'WriteFile': {
-            signature: 'WriteFile(#File, Filename$)',
+            signature: 'WriteFile(#File, Filename$ [, Flags])',
             description: 'Open a file for writing',
             parameters: [
-                '#File - File identifier',
-                'Filename$ - Path to the file'
+                '#File - File identifier (or #PB_Any)',
+                'Filename$ - Path to the file',
+                'Flags (optional) - e.g. #PB_File_SharedRead'
             ]
         }
     };
