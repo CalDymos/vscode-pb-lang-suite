@@ -88,9 +88,14 @@ function buildShellCommand(executablePath: string, commandLine: string): string 
     return `${exe} ${commandLine}`;
 }
 
-function quoteExecutable(executablePath: string): string {
-    // Always quote to support spaces in paths.
-    // Escape double-quotes to keep the command valid in typical shells.
-    const escaped = executablePath.replace(/"/g, '\"');
+function quoteExecutable(executablePath: string, platform: NodeJS.Platform = process.platform): string {
+    // Always quote to handle spaces in paths.
+    if (platform === 'win32') {
+        // cmd.exe / PowerShell: escape embedded double-quotes by doubling them.
+        const escaped = executablePath.replace(/"/g, '""');
+        return `"${escaped}"`;
+    }
+    // POSIX (bash/zsh): escape backslashes first, then double-quotes.
+    const escaped = executablePath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     return `"${escaped}"`;
 }
