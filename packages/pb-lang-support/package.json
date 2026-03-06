@@ -236,6 +236,16 @@
         "command": "purebasic.buildActiveTarget",
         "title": "%command.buildActiveTarget.title%",
         "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.runActiveTarget",
+        "title": "%command.runActiveTarget.title%",
+        "category": "PureBasic"
+      },
+      {
+        "command": "purebasic.buildAndRunActiveTarget",
+        "title": "%command.buildAndRunActiveTarget.title%",
+        "category": "PureBasic"
       }
     ],
     "menus": {
@@ -262,6 +272,14 @@
         },
         {
           "command": "purebasic.buildActiveTarget",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.runActiveTarget",
+          "when": "editorLangId == purebasic"
+        },
+        {
+          "command": "purebasic.buildAndRunActiveTarget",
           "when": "editorLangId == purebasic"
         }
       ],

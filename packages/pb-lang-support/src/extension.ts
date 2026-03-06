@@ -7,6 +7,7 @@ import type { PbpProject, PbpTarget } from '@caldymos/pb-project-core';
 import { FallbackResolver } from './host/fallback-resolver';
 import { resolveUnifiedContext, type PbProjectFilesApi } from './host/unified-context';
 import { buildActiveTarget } from './host/pbcompiler/build-active-target';
+import { runActiveTarget } from './host/pbcompiler/run-active-target';
 import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
 
@@ -614,6 +615,26 @@ function registerCommands(context: vscode.ExtensionContext) {
             outputChannel: buildChannel,
         });
     });
+    const runTarget = vscode.commands.registerCommand('purebasic.runActiveTarget', async () => {
+        await runActiveTarget({
+            projectFilesApi,
+            outputChannel: buildChannel,
+        });
+    });
+
+    const buildAndRunTarget = vscode.commands.registerCommand('purebasic.buildAndRunActiveTarget', async () => {
+        const ok = await buildActiveTarget({
+            projectFilesApi,
+            outputChannel: buildChannel,
+        });
+        if (ok) {
+            await runActiveTarget({
+                projectFilesApi,
+                outputChannel: buildChannel,
+            });
+        }
+    });
+
 
     // Register all commands
     context.subscriptions.push(
@@ -622,7 +643,9 @@ function registerCommands(context: vscode.ExtensionContext) {
         clearSymbolCache,
         formatDocument,
         findSymbols,
-        buildTarget
+        buildTarget, 
+        runTarget,
+        buildAndRunTarget
     );
 }
 

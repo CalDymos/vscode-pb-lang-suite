@@ -21,11 +21,11 @@ export interface BuildActiveTargetDeps {
     outputChannel: vscode.OutputChannel;
 }
 
-export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<void> {
+export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<boolean> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.uri.scheme !== 'file') {
         void vscode.window.showWarningMessage('No file-backed editor is active.');
-        return;
+        return false;
     }
 
     const fallbackResolver = new FallbackResolver();
@@ -37,13 +37,13 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<vo
 
     if (!uctx) {
         void vscode.window.showWarningMessage('No active PureBasic file found.');
-        return;
+        return false;
     }
 
     const compiler = await resolveCompilerPath();
     if (!compiler) {
         void vscode.window.showErrorMessage('PureBasic compiler not found. Configure purebasic.build.compiler or add pbcompiler to PATH.');
-        return;
+        return false;
     }
 
     // Build (Create executable / Build Target) does not use the target "Current directory".
@@ -51,7 +51,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<vo
     const compileCwd = uctx.projectDir || (uctx.inputFile ? path.dirname(uctx.inputFile) : '');
     if (!compileCwd) {
         void vscode.window.showErrorMessage('Missing compilation working directory.');
-        return;
+        return false;
     }
 
     const mapped = buildPbCompilerArgs(uctx, {
@@ -61,7 +61,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<vo
 
     if (mapped.args.length === 0) {
         void vscode.window.showErrorMessage(mapped.warnings[0] ?? 'Failed to build pbcompiler arguments.');
-        return;
+        return false;
     }
 
     // For "Build Target" semantics, we require an explicit output path.
@@ -69,7 +69,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<vo
         void vscode.window.showErrorMessage(
             'No output file configured. In project mode set the target output file; in fallback mode provide an executable in the selected fallback source.',
         );
-        return;
+        return false;
     }
 
     deps.outputChannel.clear();
@@ -84,38 +84,39 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<vo
     const title = uctx.mode === 'pbp'
         ? `PureBasic: Build Target (${uctx.targetName ?? 'active'})`
         : `PureBasic: Build (${uctx.fallbackSource ?? 'fallback'})`;
+        
+    try {
+        await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title, cancellable: false },
+            async () => {
+                deps.outputChannel.appendLine('--- Build ---');
 
-    await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title, cancellable: false },
-        async () => {
-            deps.outputChannel.appendLine('--- Build ---');
+                const result = await runPbCompiler({
+                    compiler,
+                    args: mapped.args,
+                    cwd: compileCwd,
+                    outputChannel: deps.outputChannel,
+                });
 
-            const result = await runPbCompiler({
-                compiler,
-                args: mapped.args,
-                cwd: compileCwd,
-                outputChannel: deps.outputChannel,
-            });
+                if (result.exitCode !== 0) {
+                    throw new Error(`pbcompiler exited with code ${result.exitCode}`);
+                }
 
-            if (result.exitCode !== 0) {
-                throw new Error(`pbcompiler exited with code ${result.exitCode}`);
-            }
+                try {
+                    await fs.promises.access(mapped.outputFile!);
+                } catch {
+                    throw new Error(`Build succeeded but output file was not found: ${mapped.outputFile}`);
+                }
+            },
+        );
 
-            try {
-                await fs.promises.access(mapped.outputFile!);
-            } catch {
-                throw new Error(`Build succeeded but output file was not found: ${mapped.outputFile}`);
-            }
-        },
-    ).then(
-        async () => {
-            void vscode.window.showInformationMessage(`Build succeeded: ${mapped.outputFile}`);
-        },
-        async (err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            void vscode.window.showErrorMessage(`Build failed: ${msg}`);
-        },
-    );
+        void vscode.window.showInformationMessage(`Build succeeded: ${mapped.outputFile}`);
+        return true;
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(`Build failed: ${msg}`);
+        return false;
+    }
 }
 
 async function resolveCompilerPath(): Promise<string | null> {
