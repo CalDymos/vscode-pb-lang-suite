@@ -58,8 +58,8 @@ export class FallbackResolver {
 
     // -----------------------------------------------------------------------
     // launchJson  (.vscode/launch.json)
-    // Expects optional fields in the purebasic configuration:
-    //  "projectFiles": [],  "executable": ""
+    // Reads the contributed purebasic debug configuration schema fields:
+    //  "program": "${file}",  "output": ""
     // -----------------------------------------------------------------------
     private async fromLaunchJson(uri: vscode.Uri): Promise<FallbackBuildContext | null> {
         const wsFolder = vscode.workspace.getWorkspaceFolder(uri)
@@ -79,10 +79,11 @@ export class FallbackResolver {
             if (!cfg) return null;
 
             const base = wsFolder.uri.fsPath;
-            const projectFiles = ((cfg.projectFiles ?? []) as string[]).map(f => this.abs(base, f));
-            const outputFile   = cfg.executable ? this.abs(base, cfg.executable as string) : undefined;
+            // projectFiles is not part of the launch schema; the active document
+            // serves as the input file (consistent with other fallback resolvers).
+            const outputFile = cfg.output ? this.abs(base, cfg.output as string) : undefined;
 
-            return { source: 'launchJson', projectFiles, outputFile };
+            return { source: 'launchJson', projectFiles: [], outputFile };
         } catch {
             return null;
         }
