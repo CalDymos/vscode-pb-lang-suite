@@ -15,6 +15,16 @@ import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
 import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
 import type { ApiFunctionListing, ApiFunctionEntry } from '../utils/api-function-listing';
+import builtinFunctions from '../../data/pb-builtin-functions.json';
+
+/** Single entry in the built-in function data file. */
+interface BuiltinFunctionEntry {
+    signature: string;
+    description: string;
+    parameters: string[];
+    /** Optional link to the official PureBasic documentation page. */
+    docUrl?: string;
+}
 
 /**
  * Handle hover requests
@@ -508,83 +518,36 @@ function escapeMarkdown(text: string): string {
 }
 
 /**
- * Get built-in function information
+ * Build a case-insensitive lookup map once at module load time.
+ * Key: lowercase function name → value: [canonicalName, entry]
+ */
+const builtinFunctionMap = new Map<string, [string, BuiltinFunctionEntry]>(
+    Object.entries(builtinFunctions as Record<string, BuiltinFunctionEntry>)
+        .map(([name, entry]) => [name.toLowerCase(), [name, entry]])
+);
+
+/**
+ * Get built-in function hover information from the data file.
  */
 function getBuiltinFunctionInfo(functionName: string): Hover | null {
-    const builtinFunctions: { [key: string]: any } = {
-        // Debug is a statement, not a function. No parentheses required.
-        // Syntax: Debug expression [, DebugLevel]
-        'Debug': {
-            signature: 'Debug expression [, DebugLevel]',
-            description: 'Display an expression in the debug output window. Ignored when the debugger is disabled.',
-            parameters: [
-                'expression - Any valid PureBasic expression (numeric or string)',
-                'DebugLevel (optional) - Only displayed if current DebugLevel >= this value'
-            ]
-        },
-        'OpenWindow': {
-            signature: 'OpenWindow(#Window, x, y, Width, Height, Title$ [, Flags [, ParentWindowID]])',
-            description: 'Open a new window',
-            parameters: [
-                '#Window - Window identifier (or #PB_Any)',
-                'x, y - Screen position of the window',
-                'Width, Height - Window dimensions',
-                'Title$ - Window title',
-                'Flags (optional) - Window creation flags (e.g. #PB_Window_SystemMenu)',
-                'ParentWindowID (optional) - Parent window OS handle for child windows'
-            ]
-        },
-        'MessageRequester': {
-            signature: 'MessageRequester(Title$, Text$ [, Flags])',
-            description: 'Display a message dialog box',
-            parameters: [
-                'Title$ - Dialog title',
-                'Text$ - Message text',
-                'Flags (optional) - Dialog flags (e.g. #PB_MessageRequester_YesNo)'
-            ]
-        },
-        'CloseWindow': {
-            signature: 'CloseWindow(#Window)',
-            description: 'Close the specified window',
-            parameters: ['#Window - Window identifier to close']
-        },
-        'ReadFile': {
-            signature: 'ReadFile(#File, Filename$ [, Flags])',
-            description: 'Open a file for reading',
-            parameters: [
-                '#File - File identifier (or #PB_Any)',
-                'Filename$ - Path to the file',
-                'Flags (optional) - e.g. #PB_File_SharedRead'
-            ]
-        },
-        'WriteFile': {
-            signature: 'WriteFile(#File, Filename$ [, Flags])',
-            description: 'Open a file for writing',
-            parameters: [
-                '#File - File identifier (or #PB_Any)',
-                'Filename$ - Path to the file',
-                'Flags (optional) - e.g. #PB_File_SharedRead'
-            ]
-        }
-    };
-
-    const lowerFunctionName = functionName.toLowerCase();
-    for (const [key, value] of Object.entries(builtinFunctions)) {
-        if (key.toLowerCase() === lowerFunctionName) {
-            const paramInfo = value.parameters.length > 0
-                ? '\n\n**Parameters:**\n' + value.parameters.map((p: string) => `- ${p}`).join('\n')
-                : '';
-
-            const content = `\`\`\`purebasic\n${value.signature}\n\`\`\`\n\n${value.description}${paramInfo}`;
-
-            return {
-                contents: {
-                    kind: MarkupKind.Markdown,
-                    value: content
-                }
-            };
-        }
+    const hit = builtinFunctionMap.get(functionName.toLowerCase());
+    if (!hit) {
+        return null;
     }
 
-    return null;
+    const [, entry] = hit;
+    const paramInfo = entry.parameters.length > 0
+        ? '\n\n**Parameters:**\n' + entry.parameters.map(p => `- ${p}`).join('\n')
+        : '';
+    const docLink = entry.docUrl
+        ? `\n\n[Documentation](${entry.docUrl})`
+        : '';
+    const content = `\`\`\`purebasic\n${entry.signature}\n\`\`\`\n\n${entry.description}${paramInfo}${docLink}`;
+
+    return {
+        contents: {
+            kind: MarkupKind.Markdown,
+            value: content
+        }
+    };
 }
