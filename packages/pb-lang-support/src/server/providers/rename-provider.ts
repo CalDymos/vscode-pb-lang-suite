@@ -1,6 +1,6 @@
 /**
- * 重命名提供者
- * 为PureBasic提供符号重命名功能
+ * Rename provider
+ * Provides symbol renaming functionality for PureBasic
  */
 
 import {
@@ -81,7 +81,7 @@ export function handlePrepareRename(
 }
 
 /**
- * 执行重命名
+ * Execute rename
  */
 export function handleRename(
     params: RenameParams,
@@ -104,7 +104,7 @@ export function handleRename(
         return null;
     }
 
-    // 检查是否是模块调用
+    // Check whether this is a module call
     const moduleMatch = getModuleCallFromPosition(line, position.character);
     if (moduleMatch) {
         return handleModuleFunctionRename(
@@ -116,7 +116,7 @@ export function handleRename(
         );
     }
 
-    // 结构体成员重命名
+    // Structure member rename
     const structLoc2 = getStructAccessFromLine(line, position.character);
     if (structLoc2) {
         const structName = getVariableStructureAt(document, position.line, structLoc2.varName);
@@ -125,7 +125,7 @@ export function handleRename(
         }
     }
 
-    // 模块符号（非函数）重命名：Module::Name / Module::#CONST
+    // Module symbol (non-function) rename: Module::Name / Module::#CONST
     const modSym = getModuleSymbolFromLine(line, position.character);
     if (modSym) {
         return handleModuleSymbolRename(
@@ -137,14 +137,14 @@ export function handleRename(
         );
     }
 
-    // 常规符号重命名
+    // Regular symbol rename
     const edits = findAllOccurrences(oldName, document, documentCache);
 
     if (edits.length === 0) {
         return null;
     }
 
-    // 将编辑按文档URI分组
+    // Group edits by document URI
     const changes: { [uri: string]: TextEdit[] } = {};
     for (const edit of edits) {
         if (!changes[edit.uri]) {
@@ -166,7 +166,7 @@ function getWordAtPosition(line: string, character: number): string | null {
     let start = character;
     let end = character;
 
-    // Search forward to find word start
+    // Search backward to find word start
     while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
         start--;
     }
@@ -176,7 +176,7 @@ function getWordAtPosition(line: string, character: number): string | null {
         start--;
     }
 
-    // Search backward to find word end
+    // Search forward to find word end
     while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
         end++;
     }
@@ -237,26 +237,60 @@ function isRenameableSymbol(
     documentCache: Map<string, TextDocument>,
     position: Position
 ): boolean {
-    // 不允许重命名关键字
+    // Do not allow renaming of PureBasic keywords.
+    // Info: PureBasic types are expressed as dot-suffixes (.i/.s/.f/.d).
     const keywords = [
-        'If', 'EndIf', 'Else', 'ElseIf', 'For', 'Next', 'While', 'Wend',
-        'Repeat', 'Until', 'Select', 'Case', 'Default', 'EndSelect',
-        'Procedure', 'EndProcedure', 'Declare', 'Structure', 'EndStructure',
-        'Module', 'EndModule', 'Global', 'Protected', 'Static', 'Define',
-        'Integer', 'String', 'Float', 'Double', 'Byte', 'Word', 'Long',
-        'Quad', 'Character', 'Ascii', 'Unicode'
+        // Conditionals
+        'If', 'EndIf', 'Else', 'ElseIf',
+        // Loops
+        'For', 'ForEach', 'Next', 'While', 'Wend', 'Repeat', 'Until', 'ForEver',
+        // With
+        'With', 'EndWith',
+        // Select / Case
+        'Select', 'EndSelect', 'Case', 'Default',
+        // Procedures / Declarations
+        'Procedure', 'ProcedureC', 'ProcedureDLL', 'ProcedureCDLL',
+        'EndProcedure', 'ProcedureReturn',
+        'Declare', 'DeclareC', 'DeclareDLL', 'DeclareCDLL',
+        // Modules
+        'Module', 'EndModule', 'DeclareModule', 'EndDeclareModule',
+        // Structures / Interfaces / Enumerations
+        'Structure', 'EndStructure', 'StructureUnion', 'EndStructureUnion',
+        'Interface', 'EndInterface',
+        'Enumeration', 'EnumerationBinary', 'EndEnumeration',
+        // Macros
+        'Macro', 'EndMacro',
+        // Data
+        'DataSection', 'EndDataSection', 'Data', 'Read', 'Restore',
+        // Variable scopes / modifiers
+        'Global', 'Protected', 'Static', 'Define', 'Shared', 'Threaded',
+        'Dim', 'NewList', 'NewMap', 'NewArray',
+        // Compiler directives
+        'CompilerIf', 'CompilerElse', 'CompilerElseIf', 'CompilerEndIf',
+        'CompilerSelect', 'CompilerCase', 'CompilerDefault', 'CompilerEndSelect',
+        'CompilerError', 'CompilerWarning',
+        // Miscellaneous
+        'End', 'Import', 'EndImport', 'ImportC',
+        'IncludeFile', 'XIncludeFile', 'IncludePath',
+        'EnableExplicit', 'DisableExplicit', 'EnableASM', 'DisableASM',
+        'Goto', 'Gosub', 'Return', 'Break', 'Continue',
+        // Built-in PureBasic type names used in typed declarations
+        // (e.g. Define x.Byte, Structure fields, SizeOf(Byte)).
+        // Note: These behave like type identifiers, not primitive variables
+        // (the primitive shorthand would be x.b, x.w, x.l, etc.).
+        'Byte', 'Word', 'Long', 'Quad', 'Character', 'Ascii', 'Unicode', 'String', 'Integer', 'Float', 'Double',
     ];
 
     if (keywords.some(kw => kw.toLowerCase() === word.toLowerCase())) {
         return false;
     }
 
-    // 检查是否是用户定义的符号
+    // Check whether it is a user-defined symbol
     return isUserDefinedSymbol(word, document, documentCache, position);
 }
 
 /**
- * 检查是否是用户定义的符号
+ * Check whether a word resolves to a user-defined symbol
  */
 function isUserDefinedSymbol(
     word: string,
@@ -274,35 +308,33 @@ function isUserDefinedSymbol(
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // 检查过程定义
-            const procMatch = line.match(new RegExp(`^Procedure(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'));
-            if (procMatch) {
-                return true;
-            }
+            // Procedure definition (all calling conventions)
+            if (line.match(new RegExp(`^Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'))) return true;
 
-            // Check variable definitions
-            const varMatch = line.match(new RegExp(`^(Global|Protected|Static|Define|Dim)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.\\w+)?`, 'i'));
-            if (varMatch) {
-                return true;
-            }
+            // Macro definition – FIX: was missing entirely.
+            if (line.match(new RegExp(`^Macro\\s+(${safeWord})\\b`, 'i'))) return true;
 
-            // Check constant definitions
+            // Prototype / PrototypeC – FIX: was missing entirely.
+            if (line.match(new RegExp(`^Prototype(?:C)?(?:\\.\\w+)?\\s+(${safeWord})\\s*\\(`, 'i'))) return true;
+
+            // Variable declarations (all scope keywords)
+            if (line.match(new RegExp(`^(?:Global|Protected|Static|Define|Dim|Shared|Threaded)\\s+(?:\\w+\\s+)?(\\*?${safeWord})(?:\\.\\w+)?`, 'i'))) return true;
+
+            // Constant definitions
             const constMatch = parsePureBasicConstantDefinition(line) || parsePureBasicConstantDeclaration(line);
-            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) {
-                return true;
-            }
+            if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(word)) return true;
 
-            // Check the structure definition
-            const structMatch = line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'));
-            if (structMatch) {
-                return true;
-            }
+            // Structure definition
+            if (line.match(new RegExp(`^Structure\\s+(${safeWord})\\b`, 'i'))) return true;
 
-            // 检查模块定义
-            const moduleMatch = line.match(new RegExp(`^Module\\s+(${safeWord})\\b`, 'i'));
-            if (moduleMatch) {
-                return true;
-            }
+            // Interface definition – FIX: was missing entirely.
+            if (line.match(new RegExp(`^Interface\\s+(${safeWord})\\b`, 'i'))) return true;
+
+            // Enumeration / EnumerationBinary – FIX: both were missing entirely.
+            if (line.match(new RegExp(`^Enumeration(?:Binary)?\\s+(${safeWord})\\b`, 'i'))) return true;
+
+            // Module / DeclareModule definition
+            if (line.match(new RegExp(`^(?:Module|DeclareModule)\\s+(${safeWord})\\b`, 'i'))) return true;
         }
     }
 
@@ -310,21 +342,18 @@ function isUserDefinedSymbol(
 }
 
 /**
- * 获取模块调用信息
+ * Get module call information from cursor position.
+ * uses a /g exec-loop so every occurrence is checked against the cursor.
  */
 function getModuleCallFromPosition(line: string, character: number): {
     moduleName: string;
     functionName: string;
 } | null {
-    const beforeCursor = line.substring(0, character);
-    const afterCursor = line.substring(character);
-    const fullContext = beforeCursor + afterCursor;
-
-    const moduleMatch = fullContext.match(/(\w+)::(\w+)/);
-    if (moduleMatch) {
-        const matchStart = line.indexOf(moduleMatch[0]);
-        const matchEnd = matchStart + moduleMatch[0].length;
-
+    const re = /(\w+)::(\w+)/g;
+    let moduleMatch: RegExpExecArray | null;
+    while ((moduleMatch = re.exec(line)) !== null) {
+        const matchStart = moduleMatch.index;
+        const matchEnd   = matchStart + moduleMatch[0].length;
         if (character >= matchStart && character <= matchEnd) {
             return {
                 moduleName: moduleMatch[1],
@@ -397,9 +426,10 @@ function handleModuleFunctionRename(
                 continue;
             }
 
-            // Find Procedure definition inside module
+            // Find Procedure definition inside module.
+            // ProcedureC / ProcedureDLL / ProcedureCDLL added.
             if (inModule) {
-                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
+                const procMatch = line.match(new RegExp(`^\\s*Procedure(?:C|DLL|CDLL)?(?:\\.\\w+)?\\s+(${safeFn})\\s*\\(`, 'i'));
                 if (procMatch) {
                     const startChar = line.indexOf(procMatch[1]);
                     edits.push({
@@ -418,7 +448,7 @@ function handleModuleFunctionRename(
         return null;
     }
 
-    // 将编辑按文档URI分组
+    // Group edits by document URI
     const changes: { [uri: string]: TextEdit[] } = {};
     for (const edit of edits) {
         if (!changes[edit.uri]) {
@@ -434,7 +464,8 @@ function handleModuleFunctionRename(
 }
 
 /**
- * 查找所有出现位置
+ * Find all occurrences of a word across all search documents.
+ * for constants is used a negative lookbehind (?<!\w) at the start.
  */
 function findAllOccurrences(
     word: string,
@@ -443,6 +474,13 @@ function findAllOccurrences(
 ): Array<{ uri: string; range: Range }> {
     const occurrences: Array<{ uri: string; range: Range }> = [];
     const searchDocuments = [document, ...Array.from(documentCache.values())];
+    const safe = escapeRegExp(word);
+    const isConstant = word.startsWith('#');
+    // For #constants : (?<!\w)#Name\b  – no leading \b because '#' is not a word char
+    // For identifiers: \bName\b        – standard word boundaries
+    const pattern = isConstant
+        ? new RegExp(`(?<!\\w)${safe}\\b`, 'gi')
+        : new RegExp(`\\b${safe}\\b`, 'gi');
 
     for (const doc of searchDocuments) {
         const text = doc.getText();
@@ -451,16 +489,15 @@ function findAllOccurrences(
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
 
-            // 使用单词边界匹配
-            const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi');
+            pattern.lastIndex = 0;
             let match;
-            while ((match = regex.exec(line)) !== null) {
-                // 跳过注释中的匹配
+            while ((match = pattern.exec(line)) !== null) {
+                // Skip matches within comments
                 if (line.substring(0, match.index).includes(';')) {
                     continue;
                 }
 
-                // 跳过字符串中的匹配
+                // Skip matches within strings
                 const beforeMatch = line.substring(0, match.index);
                 const quoteCount = (beforeMatch.match(/"/g) || []).length;
                 if (quoteCount % 2 === 1) {
@@ -482,7 +519,7 @@ function findAllOccurrences(
 }
 
 /**
- * 处理模块符号（常量/结构/接口/枚举）重命名
+ * Handle module symbol (constant/structure/interface/enumeration) rename
  */
 function handleModuleSymbolRename(
     moduleName: string,
@@ -505,7 +542,7 @@ function handleModuleSymbolRename(
             const raw = lines[i];
             const trimmed = raw.trim();
 
-            // 使用处：Module::ident / Module::#ident
+            // Usages: Module::ident / Module::#ident
             const re = new RegExp(`\\b${safeModule}::#?${safeIdent}\\b`, 'g');
             let m: RegExpExecArray | null;
             while ((m = re.exec(raw)) !== null) {
@@ -525,7 +562,7 @@ function handleModuleSymbolRename(
                 edits.push({ range: { start: { line: i, character: identStart }, end: { line: i, character: identStart + ident.length } }, newText: newName });
             }
 
-            // 声明：Structure/Interface/Enumeration/常量名
+            // Declarations: Structure/Interface/Enumeration/constant name
             const constMatch = parsePureBasicConstantDefinition(trimmed) || parsePureBasicConstantDeclaration(trimmed);
             if (constMatch && normalizeConstantName(constMatch.name) === normalizeConstantName(ident)) {
                 const constIndex = raw.indexOf('#' + constMatch.name);
@@ -537,7 +574,7 @@ function handleModuleSymbolRename(
             const defMatchers = [
                 new RegExp(`^Structure\\s+(${safeIdent})\\b`, 'i'),
                 new RegExp(`^Interface\\s+(${safeIdent})\\b`, 'i'),
-                new RegExp(`^Enumeration\\s+(${safeIdent})\\b`, 'i'),
+                new RegExp(`^Enumeration(?:Binary)?\\s+(${safeIdent})\\b`, 'i'),
             ];
             for (const r of defMatchers) {
                 const mm = trimmed.match(r);
@@ -558,29 +595,28 @@ function handleModuleSymbolRename(
 }
 
 /**
- * 获取模块符号位置（常量/结构/接口/枚举）
+ * Get module symbol position (constant/structure/interface/enumeration).
+ * uses a /g exec-loop; constants (Module::#Ident) are checked first.
  */
 function getModuleSymbolFromLine(line: string, character: number): { moduleName: string; ident: string } | null {
-    const before = line.substring(0, character);
-    const after = line.substring(character);
-    const full = before + after;
-    let m = full.match(/(\w+)::#(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
+    // Pass 1: prefer constant form  Module::#Ident
+    const constRe = /(\w+)::#(\w+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = constRe.exec(line)) !== null) {
+        const start = m.index, end = start + m[0].length;
         if (character >= start && character <= end) return { moduleName: m[1], ident: m[2] };
     }
-    m = full.match(/(\w+)::(\w+)/);
-    if (m) {
-        const start = line.indexOf(m[0]);
-        const end = start + m[0].length;
+    // Pass 2: plain symbol form  Module::Ident
+    const symRe = /(\w+)::(\w+)/g;
+    while ((m = symRe.exec(line)) !== null) {
+        const start = m.index, end = start + m[0].length;
         if (character >= start && character <= end) return { moduleName: m[1], ident: m[2] };
     }
     return null;
 }
 
 /**
- * 结构体成员位置：var\\member
+ * Structure member position: var\\member
  */
 function getStructAccessFromLine(line: string, character: number): { varName: string; memberName: string } | null {
     const re = /([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w+)/g;
@@ -626,7 +662,7 @@ function getMemberRange(line: string, character: number, memberName: string, lin
 }
 
 /**
- * 处理结构体成员重命名
+ * Handle structure member rename
  */
 function handleStructMemberRename(
     structName: string,
@@ -640,7 +676,7 @@ function handleStructMemberRename(
     const safeStructName = escapeRegExp(structName);
     const safeMemberName = escapeRegExp(memberName);
 
-    // 收集各文档内属于该结构体的变量名
+    // Collect variable names of the struct type per document
     const structVarsPerDoc = new Map<string, string[]>();
     for (const doc of searchDocuments) {
         const analysis = analyzeScopesAndVariables(doc.getText(), Number.MAX_SAFE_INTEGER);
@@ -662,7 +698,7 @@ function handleStructMemberRename(
         const lines = text.split('\n');
         const edits: TextEdit[] = [];
 
-        // 1) 修改结构体定义内的成员名
+        // 1) Rename the member inside the Structure definition
         let inStruct = false;
         for (let i = 0; i < lines.length; i++) {
             const raw = lines[i];
@@ -670,27 +706,28 @@ function handleStructMemberRename(
             if (line.match(new RegExp(`^Structure\\s+${safeStructName}\\b`, 'i'))) { inStruct = true; continue; }
             if (inStruct && line.match(/^EndStructure\b/i)) { inStruct = false; continue; }
             if (inStruct) {
-                const mm = line.match(new RegExp(`^(?:\\*?)(${safeMemberName})(?:\\.|\\s|$)`));
+                // Structure members can be prefixed with Array/List/Map keywords, e.g. "Array arrField.i(5)". 
+                const collectionMatch = line.match(
+                    new RegExp(`^(?:Array|List|Map)\\s+\\*?(${safeMemberName})(?:\\.|\\s|\\[|$)`, 'i')
+                );
+                const directMatch = !collectionMatch && line.match(
+                    new RegExp(`^\\*?(${safeMemberName})(?:\\.|\\s|$)`)
+                );
+                const mm = collectionMatch || directMatch;
                 if (mm) {
-                    // Skip matching in comments
-                    if (raw.substring(0, raw.indexOf(mm[1])).includes(';')) {
-                        continue;
-                    }
-
-                    // Skip matches within the string
-                    const beforeMatch = raw.substring(0, raw.indexOf(mm[1]));
-                    const quoteCount = (beforeMatch.match(/"/g) || []).length;
-                    if (quoteCount % 2 === 1) {
-                        continue;
-                    }
-
-                    const startChar = raw.indexOf(mm[1]);
+                    const capturedName = mm[1];
+                    const startChar = raw.indexOf(capturedName);
+                    if (startChar === -1) continue;
+                    // Skip matches in comments
+                    if (raw.substring(0, startChar).includes(';')) continue;
+                    // Skip matches in strings
+                    if ((raw.substring(0, startChar).match(/"/g) || []).length % 2 === 1) continue;
                     edits.push({ range: { start: { line: i, character: startChar }, end: { line: i, character: startChar + memberName.length } }, newText: newName });
                 }
             }
         }
 
-        // 2) 修改使用处：var\\memberName，支持 *var 与 var(...) 形式
+        // 2) Rename usages: var\\memberName, *var, and var(...) forms
         const vars = structVarsPerDoc.get(doc.uri) || [];
         if (vars.length > 0) {
             for (let i = 0; i < lines.length; i++) {
