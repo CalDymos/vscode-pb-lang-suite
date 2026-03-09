@@ -252,3 +252,30 @@ export function safeIndexOf(haystack: string, needle: string): number {
 export function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/**
+ * Extracts the base structure type name from a `v.type` string produced by the
+ * scope-manager's variable parser.
+ *
+ * The scope-manager stores type strings in the following forms:
+ * - `"MyStruct"`             – plain type
+ * - `"*MyStruct (pointer)"`  – pointer variable  (`Define *myVar.MyStruct`)
+ * - `"MyStruct[] (array)"`   – Dim array         (`Dim myVar.MyStruct(10)`)
+ *
+ * Note: the `[]` suffix is added by the parser itself, NOT PureBasic syntax.
+ * PureBasic arrays are declared with `()`. The `[` check here strips that
+ * parser-internal suffix and must NOT be removed as dead code.
+ *
+ * @example
+ * getBaseType('MyStruct')            // 'MyStruct'
+ * getBaseType('*MyStruct (pointer)') // 'MyStruct'
+ * getBaseType('MyStruct[] (array)')  // 'MyStruct'
+ * getBaseType('')                    // ''
+ */
+export function getBaseType(typeStr: string): string {
+    if (!typeStr) return '';
+    const cleaned = typeStr.split(' ')[0];
+    const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
+    const arrIdx = noPtr.indexOf('[');
+    return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
+}

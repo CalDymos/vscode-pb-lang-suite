@@ -14,7 +14,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
@@ -503,10 +503,7 @@ function getVariableStructureAt(document: TextDocument, lineNumber: number, varN
     const v = analysis.availableVariables.find(x => x.name.toLowerCase() === normalized.toLowerCase());
     if (!v) return null;
     const t = v.type || '';
-    const cleaned = t.split(' ')[0];
-    const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-    const arrIdx = noPtr.indexOf('[');
-    return (arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr) || null;
+    return getBaseType(t) || null;
 }
 
 function getMemberRange(line: string, character: number, memberName: string, lineNo: number): Range | null {
@@ -546,11 +543,7 @@ function handleStructMemberRename(
         const vars = analysis.availableVariables
             .filter(v => {
                 const t = v.type || '';
-                const cleaned = t.split(' ')[0];
-                const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-                const arrIdx = noPtr.indexOf('[');
-                const base = arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
-                return base.toLowerCase() === structName.toLowerCase();
+                return getBaseType(t).toLowerCase() === structName.toLowerCase();
             })
             .map(v => v.name);
         structVarsPerDoc.set(doc.uri, vars);

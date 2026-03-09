@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 
@@ -133,14 +133,6 @@ function getStructAccessFromPosition(line: string, character: number): { varName
         }
     }
     return null;
-}
-
-function getBaseType(typeStr: string): string {
-    if (!typeStr) return '';
-    const cleaned = typeStr.split(' ')[0];
-    const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-    const arrIdx = noPtr.indexOf('[');
-    return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
 }
 
 /**

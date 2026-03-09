@@ -15,7 +15,7 @@ import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
 import * as path from 'path';
 
 /**
@@ -451,14 +451,6 @@ function getStructAccessFromPosition(text: string, position: Position): { varNam
 
 function normalizeVarName(n: string): string {
     return n.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
-}
-
-function getBaseType(typeStr: string): string {
-    if (!typeStr) return '';
-    const cleaned = typeStr.split(' ')[0];
-    const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
-    const arrIdx = noPtr.indexOf('[');
-    return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
 }
 
 /**
