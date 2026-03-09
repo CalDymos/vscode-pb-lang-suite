@@ -31,28 +31,13 @@ export class OptimizedSymbolParser {
     async parseDocumentSymbols(uri: string, text: string): Promise<ParsedDocument> {
         const startTime = performance.now();
 
-        // 简单的预分析 - 根据文本长度选择策略
-        const preAnalysis = {
-            strategy: text.length > 10000 ? 'minimal' : 'full'
-        };
+        // Always use full strategy — partial scanning would miss symbols
+        // in documents longer than the scan limit.
+        const result = await this.parseFull(uri, text, {});
 
-        // 根据预分析结果选择解析策略
-        let result: ParsedDocument;
+        result.metrics.parseTime = performance.now() - startTime;
 
-        switch (preAnalysis.strategy) {
-            case 'minimal':
-                result = await this.parseMinimalSymbols(uri, text, preAnalysis);
-                break;
-            case 'full':
-            default:
-                result = await this.parseFull(uri, text, preAnalysis);
-                break;
-        }
-
-        const totalTime = performance.now() - startTime;
-        result.metrics.parseTime = totalTime;
-
-        // 更新缓存
+        // Update cache
         symbolCache.setSymbols(uri, result.symbols);
 
         return result;
@@ -126,81 +111,7 @@ export class OptimizedSymbolParser {
         };
     }
 
-    private async parseStreaming(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
-        // 流式解析 - 按行解析
-        const symbols = this.parseBasicSymbols(text);
 
-        return {
-            symbols,
-            metrics: {
-                parseTime: performance.now(),
-                symbolCount: symbols.length,
-                cacheHits: 0,
-                memoryUsage: JSON.stringify(symbols).length
-            },
-            strategy: 'streaming'
-        };
-    }
-
-    private async parseMinimalSymbols(uri: string, text: string, preAnalysis: any): Promise<ParsedDocument> {
-        // 最小化解析 - 只解析关键符号
-        const lines = text.split('\n');
-        const symbols: PureBasicSymbol[] = [];
-        const maxLinesToScan = Math.min(lines.length, 100); // 只扫描前100行
-
-        for (let i = 0; i < maxLinesToScan; i++) {
-            const line = lines[i].trim();
-
-            // Skip comment lines
-            if (line.startsWith(';')) {
-                continue;
-            }
-
-            // 只解析过程定义（最重要的符号）
-            const procMatch = line.match(/^Procedure\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
-            if (procMatch) {
-                symbols.push({
-                    name: procMatch[2],
-                    kind: SymbolKind.Procedure,
-                    range: {
-                        start: { line: i, character: 0 },
-                        end: { line: i, character: line.length }
-                    },
-                    detail: procMatch[1] ? `Procedure.${procMatch[1]}` : 'Procedure',
-                    documentation: `Procedure definition: ${procMatch[2]}`
-                });
-            }
-
-            // 解析模块定义（第二优先级）
-            const moduleMatch = line.match(/^(?:Module|DeclareModule)\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
-            if (moduleMatch) {
-                symbols.push({
-                    name: moduleMatch[1],
-                    kind: SymbolKind.Module,
-                    range: {
-                        start: { line: i, character: 0 },
-                        end: { line: i, character: line.length }
-                    },
-                    detail: 'Module',
-                    documentation: `Module definition: ${moduleMatch[1]}`
-                });
-            }
-        }
-
-        const parseTime = performance.now();
-        const memoryUsage = JSON.stringify(symbols).length;
-
-        return {
-            symbols,
-            metrics: {
-                parseTime: 0,
-                symbolCount: symbols.length,
-                cacheHits: 0,
-                memoryUsage
-            },
-            strategy: 'minimal'
-        };
-    }
 
     private parseBasicSymbols(text: string): PureBasicSymbol[] {
         const symbols: PureBasicSymbol[] = [];
@@ -215,7 +126,7 @@ export class OptimizedSymbolParser {
             }
 
             // 解析过程定义
-            const procMatch = line.match(/^Procedure\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
+            const procMatch = line.match(/^Procedure(?:C|DLL|CDLL)?\s*(?:\.(\w+))?\s*([a-zA-Z_][a-zA-Z0-9_]*)/);
             if (procMatch) {
                 symbols.push({
                     name: procMatch[2],
@@ -260,7 +171,7 @@ export class OptimizedSymbolParser {
             }
 
             // 解析枚举定义
-            const enumMatch = line.match(/^Enumeration\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+            const enumMatch = line.match(/^Enumeration(?:Binary)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
             if (enumMatch) {
                 symbols.push({
                     name: enumMatch[1],
@@ -332,6 +243,36 @@ export class OptimizedSymbolParser {
                     },
                     detail: `Variable.${varMatch[2]}`,
                     documentation: `Variable definition: ${varMatch[1]}.${varMatch[2]}`
+                });
+            }
+
+            // Array definitions: Dim/Global/Protected/Static Name(...)
+            const arrayMatch = line.match(/^(?:Dim|Global|Protected|Static)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+            if (arrayMatch) {
+                symbols.push({
+                    name: arrayMatch[1],
+                    kind: SymbolKind.Variable,
+                    range: {
+                        start: { line: i, character: 0 },
+                        end: { line: i, character: line.length }
+                    },
+                    detail: 'Array',
+                    documentation: `Array definition: ${arrayMatch[1]}(${arrayMatch[2]})`
+                });
+            }
+
+            // List definitions: NewList Name.Type
+            const listMatch = line.match(/^NewList\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[.](\w+)/);
+            if (listMatch) {
+                symbols.push({
+                    name: listMatch[1],
+                    kind: SymbolKind.Variable,
+                    range: {
+                        start: { line: i, character: 0 },
+                        end: { line: i, character: line.length }
+                    },
+                    detail: 'List',
+                    documentation: `List definition: NewList ${listMatch[1]}.${listMatch[2]}`
                 });
             }
         }

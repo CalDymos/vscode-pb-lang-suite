@@ -58,7 +58,7 @@ import { handlePrepareRename, handleRename } from './providers/rename-provider';
 import { handleDocumentFormatting, handleDocumentRangeFormatting } from './providers/formatting-provider';
 
 // Import symbol management
-import { initSymbolManager, parseDocumentSymbols } from './symbols/symbol-manager';
+import { optimizedSymbolParser } from './symbols/optimized-symbol-parser';
 import { setWorkspaceRoots, getWorkspaceRootForUri } from './indexer/workspace-index';
 import { symbolCache } from './symbols/symbol-cache';
 import { SymbolInformation, SymbolKind as LSPSymbolKind, WorkspaceSymbolParams } from 'vscode-languageserver/node';
@@ -128,7 +128,6 @@ const lspErrorLog = (msg: string, err?: unknown) =>
 
 initFileCache(lspErrorLog);
 initModuleResolver(lspErrorLog);
-initSymbolManager(lspErrorLog);
 initValidator(lspErrorLog);
 initCompletionProvider(lspErrorLog);
 
@@ -362,7 +361,7 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
     documentHashes.set(textDocument.uri, newHash);
 
     // Parse symbols
-    parseDocumentSymbols(textDocument.uri, text);
+    await optimizedSymbolParser.parseDocumentSymbols(textDocument.uri, text);
 
     // Run all validators and send results
     const workspaceRoot = getWorkspaceRootForUri(textDocument.uri);
