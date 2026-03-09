@@ -11,9 +11,7 @@ import {
     InsertTextFormat
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import {
-    keywords, types, windowsApiFunctions, parsePureBasicConstantDefinition
-} from '../utils/constants';
+import {keywords, types, typeSuffixes, windowsApiFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
 import { allBuiltinNames, findBuiltin } from '../utils/builtin-functions';
 import { stripInlineComment } from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
@@ -153,6 +151,94 @@ function handleCompletionInternal(
                     detail: `${baseType}\\${ptrPrefix}${m.name}${typeStr}`,
                     documentation: `With ${withVarName}: Structure ${baseType} member ${ptrPrefix}${m.name}${typeStr}`
                 };
+            });
+
+        return { isIncomplete: false, items };
+    }
+
+    // Type annotation context: identifier. — offer type suffixes, long-form types, structures
+    if (context.isAfterTypeAnnotation) {
+        const docSymbols = extractDocumentSymbols(document, documentCache);
+        const p = context.typeAnnotationPrefix.toLowerCase();
+        const items: CompletionItem[] = [];
+
+        // Type suffix documentation map (single-letter PureBasic type suffixes)
+        const suffixDocs: Record<string, string> = {
+            i: 'Integer – platform-native integer (4 or 8 bytes)',
+            l: 'Long – 32-bit signed integer',
+            w: 'Word – 16-bit signed integer',
+            b: 'Byte – 8-bit signed integer',
+            c: 'Character – Unicode character (2 bytes)',
+            s: 'String – string reference',
+            f: 'Float – 32-bit floating-point',
+            d: 'Double – 64-bit floating-point',
+            q: 'Quad – 64-bit signed integer',
+            a: 'Ascii – 8-bit ASCII character',
+            u: 'Unicode – 16-bit Unicode character',
+        };
+
+        // 1) Single-letter type suffixes
+        typeSuffixes
+            .filter(s => !p || s.startsWith(p))
+            .forEach((s, idx) => {
+                items.push({
+                    label: s,
+                    kind: CompletionItemKind.TypeParameter,
+                    data: 'tsuffix_' + idx,
+                    detail: `Type suffix .${s}`,
+                    documentation: suffixDocs[s] ?? `PureBasic type suffix .${s}`,
+                    insertText: s,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '0_' + s,
+                });
+            });
+
+        // 2) Long-form built-in types (Integer, Long, …)
+        types
+            .filter(t => !p || t.toLowerCase().startsWith(p))
+            .forEach((t, idx) => {
+                items.push({
+                    label: t,
+                    kind: CompletionItemKind.Class,
+                    data: 'tlong_' + idx,
+                    detail: `Built-in type ${t}`,
+                    documentation: `PureBasic built-in type: ${t}`,
+                    insertText: t,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '1_' + t,
+                });
+            });
+
+        // 3) User-defined structure names
+        docSymbols.structures
+            .filter(s => !p || s.name.toLowerCase().startsWith(p))
+            .forEach((s, idx) => {
+                items.push({
+                    label: s.name,
+                    kind: CompletionItemKind.Struct,
+                    data: 'tstruct_' + idx,
+                    detail: `Structure ${s.name}`,
+                    documentation: `User-defined structure: ${s.name}`,
+                    insertText: s.name,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '2_' + s.name,
+                });
+            });
+
+        // 4) Interface names (usable as pointer types)
+        docSymbols.interfaces
+            .filter(it => !p || it.name.toLowerCase().startsWith(p))
+            .forEach((it, idx) => {
+                items.push({
+                    label: it.name,
+                    kind: CompletionItemKind.Interface,
+                    data: 'tiface_' + idx,
+                    detail: `Interface ${it.name}`,
+                    documentation: `User-defined interface: ${it.name}`,
+                    insertText: it.name,
+                    insertTextFormat: InsertTextFormat.PlainText,
+                    sortText: '3_' + it.name,
+                });
             });
 
         return { isIncomplete: false, items };
@@ -809,6 +895,8 @@ function getTriggerContext(linePrefix: string): {
     structMemberPrefix: string;
     isAfterWithAccess: boolean;
     withMemberPrefix: string;
+    isAfterTypeAnnotation: boolean;
+    typeAnnotationPrefix: string;
 } {
     // isInString – strip content after ';' before counting quotes,
     // otherwise a comment like  ; say "hello"  would corrupt the count.
@@ -856,6 +944,16 @@ function getTriggerContext(linePrefix: string): {
     const isAfterWithAccess = !!withAccessMatch;
     const withMemberPrefix = withAccessMatch ? (withAccessMatch[1] ?? '') : '';
 
+    // Type annotation context: identifier. or *identifier. (type suffix after variable/Procedure)
+    // In PureBasic '.' is the type-annotation separator (var.i, Procedure.s, param.MyStruct).
+    // Member access uses '\' and is already handled by isAfterStructAccess.
+    // Module access uses '::' and is already handled by isAfterModuleOperator.
+    const typeAnnotationMatch = !isAfterStructAccess && !isAfterModuleOperator && !isInString
+        ? linePrefix.match(/\*?[a-zA-Z_]\w*\.([a-zA-Z_]\w*)$|\*?[a-zA-Z_]\w*\.()$/)
+        : null;
+    const isAfterTypeAnnotation = !!typeAnnotationMatch;
+    const typeAnnotationPrefix = typeAnnotationMatch ? (typeAnnotationMatch[1] ?? typeAnnotationMatch[2] ?? '') : '';
+
     // Get current word prefix
     const match = linePrefix.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
     const prefix = match ? match[1] : '';
@@ -874,7 +972,9 @@ function getTriggerContext(linePrefix: string): {
         structVarName,
         structMemberPrefix,
         isAfterWithAccess,
-        withMemberPrefix
+        withMemberPrefix,
+        isAfterTypeAnnotation,
+        typeAnnotationPrefix
     };
 }
 
