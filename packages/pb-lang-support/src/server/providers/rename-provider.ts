@@ -98,7 +98,7 @@ export function handleRename(
     // Handle module syntax: Module::Function or Module::#Const / Module::Type
     const moduleMatch = getModuleSymbolAtPosition(line, position.character);
     if (moduleMatch) {
-        if (!moduleMatch.isConstant) {
+        if (moduleMatch.kind !== 'constant') {
             return handleModuleFunctionRename(
                 moduleMatch.moduleName,
                 moduleMatch.symbolName,

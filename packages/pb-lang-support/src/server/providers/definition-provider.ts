@@ -63,49 +63,40 @@ export function handleDefinition(
 
     // Handle module syntax: Module::#Const / Module::Type / Module::Function
     const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
-    if (moduleMatch?.isConstant) {
-        // Module::#Const or Module::Type – look for constant/structure/interface/enumeration
-        const moduleSymbolDefs = findModuleSymbolDefinition(
-            moduleMatch.moduleName,
-            moduleMatch.symbolName,
-            searchDocs
-        );
-        definitions.push(...moduleSymbolDefs);
-        if (definitions.length > 0) return definitions;
+    if (moduleMatch) {
+        if (moduleMatch.kind === 'function') {
+            // Module::Func( – look for procedure definition only
+            definitions.push(...findModuleFunctionDefinition(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs
+            ));
+        } else {
+            // 'constant' (Module::#Const) or 'type' (Module::Struct/Enum/Interface)
+            definitions.push(...findModuleSymbolDefinition(
+                moduleMatch.moduleName,
+                moduleMatch.symbolName,
+                searchDocs
+            ));
+        }
+        return definitions;
     }
 
-    if (moduleMatch && !moduleMatch.isConstant) {
-        // Module::Function – look for procedure definition, then also check symbols
-        const moduleDefinitions = findModuleFunctionDefinition(
-            moduleMatch.moduleName,
-            moduleMatch.symbolName,
-            searchDocs
-        );
-        definitions.push(...moduleDefinitions);
-        // Also try as a symbol in case the ident is a type/constant with the same name
-        const moduleSymbolDefs = findModuleSymbolDefinition(
-            moduleMatch.moduleName,
-            moduleMatch.symbolName,
-            searchDocs
-        );
-        definitions.push(...moduleSymbolDefs);
-    } else {
-        // First search in project symbols
-        if (projectManager) {
-            const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
-            if (projectSymbol) {
-                definitions.push({
-                    uri: projectSymbol.uri,
-                    range: projectSymbol.symbol.range
-                });
-            }
+    // First search in project symbols
+    if (projectManager) {
+        const projectSymbol = projectManager.findSymbolDefinition(word, document.uri);
+        if (projectSymbol) {
+            definitions.push({
+                uri: projectSymbol.uri,
+                range: projectSymbol.symbol.range
+            });
         }
+    }
 
-        // Regular search: traverse all search documents
-        for (const doc of searchDocs.values()) {
-            const docDefinitions = findDefinitionsInDocument(doc, word);
-            definitions.push(...docDefinitions);
-        }
+    // Regular search: traverse all search documents
+    for (const doc of searchDocs.values()) {
+        const docDefinitions = findDefinitionsInDocument(doc, word);
+        definitions.push(...docDefinitions);
     }
 
     return definitions;

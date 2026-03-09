@@ -187,19 +187,29 @@ export function normalizeConstantName(name: string): string {
     return name.replace(/\$$/, '').toLowerCase();
 }
 
+/**
+ * Discriminated kind for a resolved Module::Symbol reference.
+ *
+ * - 'constant' – Module::#Const  (leading '#')
+ * - 'function' – Module::Ident(  (opening parenthesis immediately follows)
+ * - 'type'     – Module::Ident   (no '#', no '(' – Structure/Enum/Interface/…)
+ */
+export type ModuleSymbolKind = 'constant' | 'function' | 'type';
+
 /** Result of resolving a Module::Symbol or Module::#Const reference at a cursor position. */
 export interface ModuleSymbolMatch {
     moduleName: string;
     symbolName: string;
-    /** true when the matched form was Module::#Const, false for Module::Symbol */
-    isConstant: boolean;
+    kind: ModuleSymbolKind;
 }
 
 /**
  * Resolves a `Module::Symbol` or `Module::#Const` reference at the cursor position.
  *
- * Two-pass strategy: constant form (`Module::#Ident`) is preferred so the
- * `#`-prefix is never swallowed by the plain-identifier pattern.
+ * Three-pass strategy (highest priority first):
+ *   1. `Module::#Const`  → kind 'constant'
+ *   2. `Module::Ident(`  → kind 'function'  (opening paren immediately follows)
+ *   3. `Module::Ident`   → kind 'type'      (Structure / Enum / Interface / …)
  *
  * @param line      The source line text.
  * @param character 0-based cursor column.
@@ -210,23 +220,27 @@ export function getModuleSymbolAtPosition(
 ): ModuleSymbolMatch | null {
     let m: RegExpExecArray | null;
 
-    // Pass 1 – prefer constant form  Module::#Const
+    // Pass 1 – constant form  Module::#Const
     const constRe = /(\w+)::#(\w+)/g;
     while ((m = constRe.exec(line)) !== null) {
         const start = m.index;
         const end   = start + m[0].length;
         if (character >= start && character <= end) {
-            return { moduleName: m[1], symbolName: m[2], isConstant: true };
+            return { moduleName: m[1], symbolName: m[2], kind: 'constant' };
         }
     }
 
-    // Pass 2 – plain form  Module::Ident
+    // Pass 2 – plain form  Module::Ident  (function or type)
     const identRe = /(\w+)::(\w+)/g;
     while ((m = identRe.exec(line)) !== null) {
         const start = m.index;
         const end   = start + m[0].length;
         if (character >= start && character <= end) {
-            return { moduleName: m[1], symbolName: m[2], isConstant: false };
+            // Classify as function when an opening parenthesis immediately follows
+            // (skipping optional whitespace to be robust against `Func (` style).
+            const tail = line.substring(end).trimStart();
+            const kind: ModuleSymbolKind = tail.startsWith('(') ? 'function' : 'type';
+            return { moduleName: m[1], symbolName: m[2], kind };
         }
     }
 

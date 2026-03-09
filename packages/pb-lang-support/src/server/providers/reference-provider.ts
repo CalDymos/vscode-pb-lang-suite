@@ -42,11 +42,11 @@ export function handleReferences(
     // Find references
     const references: Location[] = [];
 
-    // Handle module syntax: Module::Symbol or Module::#Const
+    // Handle module syntax: Module::#Const / Module::Type / Module::Function
     const moduleMatch = getModuleSymbolAtPosition(lines[position.line], position.character);
     if (moduleMatch) {
-        if (!moduleMatch.isConstant) {
-            // Module::Function – search for procedure references
+        if (moduleMatch.kind === 'function') {
+            // Module::Func( – search for procedure references
             const moduleReferences = findModuleFunctionReferences(
                 moduleMatch.moduleName,
                 moduleMatch.symbolName,
@@ -55,7 +55,7 @@ export function handleReferences(
             );
             references.push(...moduleReferences);
         } else {
-            // Module::#Const – search for constant/structure/interface/enumeration references
+            // 'constant' (Module::#Const) or 'type' (Module::Struct/Enum/Interface)
             const modSymRefs = findModuleSymbolReferences(
                 moduleMatch.moduleName,
                 moduleMatch.symbolName,
