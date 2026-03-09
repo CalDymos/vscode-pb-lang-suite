@@ -17,6 +17,10 @@
  *       DOES terminate the string (the backslash is consumed by '\\').
  */
 
+/* ========================================================================== */
+/* PureBasic line string and comment scanning                                 */
+/* ========================================================================== */
+
 /**
  * Returns true if the scanner is still inside an open string literal
  * at the end of `line`.
@@ -125,21 +129,9 @@ export function stripInlineComment(value: string): string {
     return value;
 }
 
-/**
- * Returns a safe index for range calculations.
- * Falls back to 0 if the substring cannot be found.
- */
-export function safeIndexOf(haystack: string, needle: string): number {
-    const idx = haystack.indexOf(needle);
-    return idx >= 0 ? idx : 0;
-}
-
-/**
- * Escape special characters in regular expressions
- */
-export function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+/* ========================================================================== */
+/* Identifier and symbol extraction                                           */
+/* ========================================================================== */
 
 /**
  * Returns the PureBasic identifier at `character` within `line`.
@@ -239,4 +231,24 @@ export function getModuleSymbolAtPosition(
     }
 
     return null;
+}
+
+/* ========================================================================== */
+/* Generic text helpers                                                       */
+/* ========================================================================== */
+
+/**
+ * Returns a safe index for range calculations.
+ * Falls back to 0 if the substring cannot be found.
+ */
+export function safeIndexOf(haystack: string, needle: string): number {
+    const idx = haystack.indexOf(needle);
+    return idx >= 0 ? idx : 0;
+}
+
+/**
+ * Escape special characters in regular expressions
+ */
+export function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
