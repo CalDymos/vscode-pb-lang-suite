@@ -451,7 +451,7 @@ connection.onReferences((params: ReferenceParams): Location[] => {
     }
 
     try {
-        return handleReferences(params, document, documentCache);
+        return handleReferences(params, document, documentCache, projectManager);
     } catch (error) {
         logLspError('References error', error, { uri: params.textDocument.uri });
         return [];

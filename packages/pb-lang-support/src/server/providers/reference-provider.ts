@@ -9,7 +9,9 @@ import {
     Position
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { ProjectManager } from '../managers/project-manager';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
+import * as path from 'path';
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
 import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition } from '../utils/string-utils';
@@ -20,7 +22,8 @@ import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbol
 export function handleReferences(
     params: ReferenceParams,
     document: TextDocument,
-    allDocuments: Map<string, TextDocument>
+    allDocuments: Map<string, TextDocument>,
+    projectManager?: ProjectManager
 ): Location[] {
     const text = document.getText();
     const position = params.position;
@@ -34,7 +37,7 @@ export function handleReferences(
     }
 
     // Collect searchable documents: current + opened + recursive includes
-    const searchDocs = collectSearchDocuments(document, allDocuments);
+    const searchDocs = collectSearchDocuments(document, allDocuments, projectManager);
 
     // Find references
     const references: Location[] = [];
@@ -411,6 +414,7 @@ function findModuleSymbolReferences(
 function collectSearchDocuments(
     document: TextDocument,
     allDocuments: Map<string, TextDocument>,
+    projectManager?: ProjectManager,
     maxDepth = 3
 ): Map<string, TextDocument> {
     const workspaceRoot = getWorkspaceRootForUri(document.uri);
@@ -425,7 +429,8 @@ function collectSearchDocuments(
 
     addDoc(document);
 
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
+    const rootDocUri = document.uri;
+    const queue: Array<{ uri: string; depth: number }> = [{ uri: rootDocUri, depth: 0 }];
 
     while (queue.length) {
         const { uri, depth } = queue.shift()!;
@@ -437,7 +442,11 @@ function collectSearchDocuments(
         const text = baseDoc.getText();
         const lines = text.split('\n');
 
-        // Maintain current IncludePath search directory (latest first)
+        const target = projectManager?.getActiveTarget(uri);
+        const inputFileDir = target?.inputFile?.fsPath
+            ? path.dirname(target.inputFile.fsPath)
+            : undefined;
+        // Maintain current IncludePath search directories (newest first)
         const includeDirs: string[] = [];
 
         for (const line of lines) {
@@ -449,10 +458,11 @@ function collectSearchDocuments(
                 continue;
             }
 
+            // IncludeFile / XIncludeFile directives
             const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
             if (!m) continue;
             const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
+            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot, inputFileDir);
             if (!fsPath) continue;
             const incUri = fsPathToUri(fsPath);
             if (result.has(incUri)) {
@@ -473,5 +483,25 @@ function collectSearchDocuments(
             }
         }
     }
+    // Add project files (pbp-derived) if available
+    try {
+        if (typeof projectManager?.getProjectFilesForDocument === 'function') {
+            const projectFiles = projectManager.getProjectFilesForDocument(rootDocUri);
+            if (Array.isArray(projectFiles) && projectFiles.length > 0) {
+                for (const fsPath of projectFiles) {
+                    const incUri = fsPathToUri(fsPath);
+                    if (result.has(incUri)) continue;
+                    const content = readFileIfExistsSync(fsPath);
+                    if (content != null) {
+                        const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
+                        result.set(incUri, tempDoc);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        // Ignore errors during project file scanning
+    }
+
     return result;
 }
