@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment, escapeRegExp } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp, getWordAtPosition } from '../utils/string-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 
@@ -146,30 +146,6 @@ function getBaseType(typeStr: string): string {
     const noPtr = cleaned.startsWith('*') ? cleaned.substring(1) : cleaned;
     const arrIdx = noPtr.indexOf('[');
     return arrIdx > -1 ? noPtr.substring(0, arrIdx) : noPtr;
-}
-
-/**
- * Get word at a given position
- */
-function getWordAtPosition(line: string, character: number): string | null {
-    let start = character;
-    let end = character;
-
-    // Search backward for word start
-    while (start > 0 && /[a-zA-Z0-9_]/.test(line[start - 1])) {
-        start--;
-    }
-
-    // Search forward for word end
-    while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
-        end++;
-    }
-
-    if (start === end) {
-        return null;
-    }
-
-    return line.substring(start, end);
 }
 
 /**

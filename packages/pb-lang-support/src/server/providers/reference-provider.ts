@@ -12,7 +12,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { escapeRegExp} from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition } from '../utils/string-utils';
 
 /**
  * Handle references request
@@ -26,7 +26,9 @@ export function handleReferences(
     const position = params.position;
 
     // Get word at current position
-    const word = getWordAtPosition(text, position);
+    const lines = text.split('\n');
+    if (position.line >= lines.length) return [];
+    const word = getWordAtPosition(lines[position.line], position.character);
     if (!word) {
         return [];
     }
@@ -69,55 +71,6 @@ export function handleReferences(
     }
 
     return references;
-}
-
-/**
- * Get word at position (support module syntax Module::Function)
- */
-function getWordAtPosition(text: string, position: Position): string | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) {
-        return null;
-    }
-
-    const line = lines[position.line];
-    const char = position.character;
-
-    // Find word boundary (support :: syntax and # prefix for constants).
-    let start = char;
-    let end = char;
-
-    // Search backward to find word start
-    while (start > 0 && /[a-zA-Z0-9_:#]/.test(line[start - 1])) {
-        start--;
-    }
-
-    // Search forward to find word end
-    while (end < line.length && /[a-zA-Z0-9_:#]/.test(line[end])) {
-        end++;
-    }
-
-    if (start === end) {
-        return null;
-    }
-
-    const fullWord = line.substring(start, end);
-
-    // Handle module call syntax Module::Function
-    if (fullWord.includes('::')) {
-        const parts = fullWord.split('::');
-        if (parts.length === 2) {
-            // Check if cursor is on module name or function name
-            const moduleEnd = start + parts[0].length;
-            if (char <= moduleEnd) {
-                return parts[0]; // Return module name
-            } else {
-                return parts[1]; // Return function name
-            }
-        }
-    }
-
-    return fullWord;
 }
 
 /**

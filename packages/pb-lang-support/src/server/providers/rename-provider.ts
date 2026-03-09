@@ -14,7 +14,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
-import { escapeRegExp } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
@@ -163,35 +163,6 @@ export function handleRename(
     }
 
     return { changes };
-}
-
-/**
- * Get the word at the specified position
- */
-function getWordAtPosition(line: string, character: number): string | null {
-    let start = character;
-    let end = character;
-
-    // Search backward to find word start
-    while (start > 0 && /[a-zA-Z0-9_:]/.test(line[start - 1])) {
-        start--;
-    }
-
-    // Include leading '#' if present (PureBasic constant prefix)
-    if (start > 0 && line[start - 1] === '#') {
-        start--;
-    }
-
-    // Search forward to find word end
-    while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
-        end++;
-    }
-
-    if (start === end) {
-        return null;
-    }
-
-    return line.substring(start, end);
 }
 
 /**

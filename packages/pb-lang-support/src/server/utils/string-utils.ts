@@ -140,3 +140,40 @@ export function safeIndexOf(haystack: string, needle: string): number {
 export function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/**
+ * Returns the PureBasic identifier at `character` within `line`.
+ *
+ * Rules:
+ *  - Word characters: `[a-zA-Z0-9_]`
+ *  - A leading `#` is included so that constants such as `#MyConst` are
+ *    returned as a whole.
+ *  - `::` is NOT part of the word — module context is resolved separately
+ *    by the caller (e.g. via getModuleCallFromPosition).
+ *
+ * @returns The identifier string, or `null` when the cursor is not on an
+ *          identifier character.
+ */
+export function getWordAtPosition(line: string, character: number): string | null {
+    let start = character;
+    let end = character;
+
+    // Scan backward over identifier characters
+    while (start > 0 && /[a-zA-Z0-9_]/.test(line[start - 1])) {
+        start--;
+    }
+
+    // Include leading '#' for PureBasic constants (e.g. #MyConst)
+    if (start > 0 && line[start - 1] === '#') {
+        start--;
+    }
+
+    // Scan forward over identifier characters
+    while (end < line.length && /[a-zA-Z0-9_]/.test(line[end])) {
+        end++;
+    }
+
+    if (start === end) return null;
+
+    return line.substring(start, end);
+}
