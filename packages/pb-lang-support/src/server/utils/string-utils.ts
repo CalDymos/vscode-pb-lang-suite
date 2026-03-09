@@ -233,6 +233,47 @@ export function getModuleSymbolAtPosition(
     return null;
 }
 
+/**
+ * Strips the pointer prefix (`*`) and any function-call suffix (`(...)`) from
+ * a variable name so it can be looked up in the scope-manager's variable list.
+ *
+ * @example
+ * normalizeVarName('*myPtr')      // 'myPtr'
+ * normalizeVarName('getVar()')    // 'getVar'
+ * normalizeVarName('myVar')       // 'myVar'
+ */
+export function normalizeVarName(n: string): string {
+    return n.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
+}
+
+/**
+ * Detects a `varName\memberName` struct-member access at the given cursor column.
+ *
+ * Recognised forms:
+ * - `myVar\member`          – plain variable
+ * - `*myPtr\member`         – pointer variable
+ * - `getResult()\member`    – function-call return value
+ * - `*getPtr()\member`      – pointer returned from function
+ *
+ * @param line      The full source line text.
+ * @param character 0-based cursor column.
+ */
+export function getStructAccessFromLine(
+    line: string,
+    character: number
+): { varName: string; memberName: string } | null {
+    const re = /([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+        const start = m.index;
+        const end   = start + m[0].length;
+        if (character >= start && character <= end) {
+            return { varName: m[1], memberName: m[2] };
+        }
+    }
+    return null;
+}
+
 /* ========================================================================== */
 /* Generic text helpers                                                       */
 /* ========================================================================== */

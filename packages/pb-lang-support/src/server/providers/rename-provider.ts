@@ -14,7 +14,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/string-utils';
 import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
 import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 
@@ -480,26 +480,10 @@ function handleModuleSymbolRename(
     return Object.keys(changes).length ? { changes } : null;
 }
 
-/**
- * Structure member position: var\\member
- */
-function getStructAccessFromLine(line: string, character: number): { varName: string; memberName: string } | null {
-    const re = /([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (character >= start && character <= end) {
-            return { varName: m[1], memberName: m[2] };
-        }
-    }
-    return null;
-}
-
 function getVariableStructureAt(document: TextDocument, lineNumber: number, varName: string): string | null {
     const text = document.getText();
     const analysis = analyzeScopesAndVariables(text, lineNumber);
-    const normalized = varName.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
+    const normalized = normalizeVarName(varName);
     const v = analysis.availableVariables.find(x => x.name.toLowerCase() === normalized.toLowerCase());
     if (!v) return null;
     const t = v.type || '';

@@ -15,7 +15,7 @@ import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/string-utils';
 import * as path from 'path';
 
 /**
@@ -45,7 +45,7 @@ export function handleDefinition(
     const definitions: Location[] = [];
 
     // Struct member access: var\\member → jump to structure member definition
-    const structAccess = getStructAccessFromPosition(text, position);
+    const structAccess = getStructAccessFromLine(lines[position.line], position.character);
     if (structAccess) {
         const scopeInfo = analyzeScopesAndVariables(text, position.line);
         const varInfo = scopeInfo.availableVariables.find(v => v.name.toLowerCase() === normalizeVarName(structAccess.varName).toLowerCase());
@@ -426,31 +426,6 @@ function findModuleSymbolDefinition(
         }
     }
     return defs;
-}
-
-/**
- * Struct member access match: var\\member (cursor on that segment)
- */
-function getStructAccessFromPosition(text: string, position: Position): { varName: string; memberName: string } | null {
-    const lines = text.split('\n');
-    if (position.line >= lines.length) return null;
-    const line = lines[position.line];
-    const char = position.character;
-
-    const re = /([A-Za-z_][A-Za-z0-9_]*|\*[A-Za-z_][A-Za-z0-9_]*)(?:\([^)]*\))?\\(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (char >= start && char <= end) {
-            return { varName: m[1], memberName: m[2] };
-        }
-    }
-    return null;
-}
-
-function normalizeVarName(n: string): string {
-    return n.replace(/^\*/, '').replace(/\([^)]*\)$/, '');
 }
 
 /**

@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { getModuleExports } from '../utils/module-resolver';
 import { parsePureBasicConstantDefinition} from '../utils/constants';
-import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType } from '../utils/string-utils';
+import { stripInlineComment, escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/string-utils';
 import type { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 
@@ -67,10 +67,10 @@ export function handleHover(
     }
 
     // Struct member hover: var\\member
-    const structAccess = getStructAccessFromPosition(line, position.character);
+    const structAccess = getStructAccessFromLine(line, position.character);
     if (structAccess) {
         const scope = analyzeScopesAndVariables(text, position.line);
-        const baseVar = scope.availableVariables.find(v => v.name.toLowerCase() === structAccess.varName.toLowerCase());
+        const baseVar = scope.availableVariables.find(v => v.name.toLowerCase() === normalizeVarName(structAccess.varName).toLowerCase());
         if (baseVar) {
             const structName = getBaseType(baseVar.type);
             const memberName = structAccess.memberName;
@@ -118,19 +118,6 @@ function getModuleExportHover(
     if (s) {
         const content = '```purebasic\nStructure ' + s.name + '\n```\n\nModule ' + moduleName;
         return { contents: { kind: MarkupKind.Markdown, value: content } };
-    }
-    return null;
-}
-
-function getStructAccessFromPosition(line: string, character: number): { varName: string; memberName: string } | null {
-    const re = /(\w+)\\(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-        const start = m.index;
-        const end = start + m[0].length;
-        if (character >= start && character <= end) {
-            return { varName: m[1], memberName: m[2] };
-        }
     }
     return null;
 }
