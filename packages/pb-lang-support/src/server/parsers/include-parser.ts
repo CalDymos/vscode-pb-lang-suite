@@ -99,7 +99,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
         // Parse conditional includes (Single-line form)
         // NOTE: Multi-line compiler if blocks are not conceptually covered in full here
         // – this requires state tracking. The isConditional flag
-        const conditionalMatch = line.match(/^If\s+\w+\s*:\s*XIncludeFile\s+"([^"]+)"/i);
+        const conditionalMatch = line.match(/^(?:Compiler)?If\s+\w+\s*:\s*XIncludeFile\s+"([^"]+)"/i);
         if (conditionalMatch) {
             const includePath = conditionalMatch[1];
             const resolvedPath = resolveIncludePath(includePath, includeDirs);
@@ -447,10 +447,14 @@ function resolveIncludePath(includePath: string, includeDirs: string[]): string 
 }
 
 /**
- * Check if it is conditional include
+ * Check if it is conditional include.
+ * Handles both runtime conditionals (If) and
+ * compiler-time conditionals (CompilerIf).
+ * The input line is already trimmed by the caller.
  */
 function isConditionalInclude(line: string): boolean {
-    return line.startsWith('If') || line.includes('CompilerIf');
+    const t = line.toLowerCase();
+    return t.startsWith('if ') || t.startsWith('compilerif ');
 }
 
 /**
