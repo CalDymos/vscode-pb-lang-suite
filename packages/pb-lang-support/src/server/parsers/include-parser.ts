@@ -2,11 +2,10 @@
  * PureBasic Include File Parser
  * Parse XIncludeFile directives and include files
  */
-import * as fs from 'fs';
-import * as path from 'path';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
+import { resolveIncludePath as fsResolveIncludePath } from '../utils/fs-utils';
 
 export interface IncludeFile {
     filePath: string;
@@ -25,7 +24,7 @@ export interface IncludeAnalysis {
 /**
  * Parse XIncludeFile directives in document
  */
-export function parseIncludeFiles(document: TextDocument, baseDirectory: string = ''): IncludeAnalysis {
+export function parseIncludeFiles(document: TextDocument, workspaceRoot: string = ''): IncludeAnalysis {
     const content = document.getText();
     const lines = content.split('\n');
 
@@ -40,7 +39,7 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
     // Collect IncludePath directives so that relative paths
     // are resolved correctly – analogous to collectSearchDocuments in definition-provider.
     // Latest entries first (unshift), as later IncludePath specifications may take precedence.
-    const includeDirs: string[] = baseDirectory ? [baseDirectory] : [];
+    const includeDirs: string[] = [];
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -61,57 +60,38 @@ export function parseIncludeFiles(document: TextDocument, baseDirectory: string 
             continue;
         }
 
-        // Parse XIncludeFile directive
-        // PureBasic syntax is `IncludePath "directory"` – only double quotation marks.
-        const includeMatch = line.match(/^XIncludeFile\s+"([^"]+)"/i);
-        if (includeMatch) {
-            const includePath = includeMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, includeDirs);
-
-            const includeFile: IncludeFile = {
-                filePath: includePath,
-                resolvedPath,
-                lineNumber: i,
-                isConditional: isConditionalInclude(line)
-            };
-
-            includeFiles.push(includeFile);
-            dependencies.get(currentFile)!.push(resolvedPath);
-        }
-
-        // Parse IncludeFile directive
-        const oldIncludeMatch = line.match(/^IncludeFile\s+"([^"]+)"/i);
-        if (oldIncludeMatch) {
-            const includePath = oldIncludeMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, includeDirs);
-
-            const includeFile: IncludeFile = {
-                filePath: includePath,
-                resolvedPath,
-                lineNumber: i,
-                isConditional: isConditionalInclude(line)
-            };
-
-            includeFiles.push(includeFile);
-            dependencies.get(currentFile)!.push(resolvedPath);
-        }
-
-        // Parse conditional includes (Single-line form)
-        // NOTE: Multi-line compiler if blocks are not conceptually covered in full here
-        // – this requires state tracking. The isConditional flag
+        // Parse XIncludeFile / IncludeFile / conditional XIncludeFile directives.
+        // resolveInc() uses the document URI as base so relative paths without an
+        // explicit IncludePath directive are resolved against the document directory.
+        const includeMatch     = line.match(/^XIncludeFile\s+"([^"]+)"/i);
+        const oldIncludeMatch  = line.match(/^IncludeFile\s+"([^"]+)"/i);
         const conditionalMatch = line.match(/^(?:Compiler)?If\s+\w+\s*:\s*XIncludeFile\s+"([^"]+)"/i);
-        if (conditionalMatch) {
-            const includePath = conditionalMatch[1];
-            const resolvedPath = resolveIncludePath(includePath, includeDirs);
 
-            const includeFile: IncludeFile = {
-                filePath: includePath,
+        const rawIncludePath =
+            includeMatch?.[1] ?? oldIncludeMatch?.[1] ?? conditionalMatch?.[1];
+
+        if (rawIncludePath !== undefined) {
+            const isConditional = conditionalMatch !== null || isConditionalInclude(line);
+            const resolved = fsResolveIncludePath(
+                document.uri,
+                rawIncludePath,
+                includeDirs,
+                workspaceRoot || undefined
+            );
+
+            // resolved === null means the file could not be found on disk.
+            // Store the raw path so callers can generate "file not found" diagnostics.
+            const resolvedPath = resolved ?? rawIncludePath;
+            if (resolved === null) {
+                missingFiles.push(rawIncludePath);
+            }
+
+            includeFiles.push({
+                filePath: rawIncludePath,
                 resolvedPath,
                 lineNumber: i,
-                isConditional: true
-            };
-
-            includeFiles.push(includeFile);
+                isConditional
+            });
             dependencies.get(currentFile)!.push(resolvedPath);
         }
     }
@@ -417,34 +397,6 @@ function parseEnumerationValues(lines: string[], startLine: number): Array<{name
     return values;
 }
 
-/**
- * Resolve include file path considering IncludePath directories
- * Uses fs.existsSync to verify candidates actually exist on disk.
- */
-function resolveIncludePath(includePath: string, includeDirs: string[]): string {
-    // Normalize path separators to forward slashes
-    const normalized = includePath.replace(/\\/g, '/');
-
-    // Absolute path: return directly (normalize separators only)
-    if (normalized.startsWith('/') || /^[A-Za-z]:[\\/]/.test(normalized)) {
-        return path.normalize(normalized);
-    }
-
-    // Relative path: strip leading ./ or ../
-    // path.resolve handles both forms correctly per-directory below,
-    // but we keep normalize() for the fallback at the end.
-
-    // Iterate through all IncludePath directories (newest first → highest priority)
-    for (const dir of includeDirs) {
-        const candidate = path.resolve(dir, includePath);
-        if (fs.existsSync(candidate)) {
-            return candidate;
-        }
-    }
-
-    // Fallback: Return normalized path (no directory prefix possible)
-    return path.normalize(includePath);
-}
 
 /**
  * Check if it is conditional include.
@@ -507,8 +459,8 @@ function detectCircularDependencies(dependencies: Map<string, string[]>, circula
 /**
  * Get all dependencies of include files (recursively)
  */
-export function getAllIncludeDependencies(document: TextDocument, baseDirectory: string = ''): string[] {
-    const analysis = parseIncludeFiles(document, baseDirectory);
+export function getAllIncludeDependencies(document: TextDocument, workspaceRoot: string = ''): string[] {
+    const analysis = parseIncludeFiles(document, workspaceRoot);
     const allDependencies = new Set<string>();
 
     function collectDeps(filePath: string) {
