@@ -108,26 +108,47 @@ function findFunctionCall(linePrefix: string): {
 /**
  * Find the index of the last '(' in s that has no matching ')' to its right
  * (i.e., the innermost currently-open call site), ignoring characters inside
- * PureBasic string literals ("…") and balanced inner paren pairs.
+ * PureBasic string literals and balanced inner paren pairs.
+ *
+ * Scans left-to-right with a stack so that escape strings (~"...\"...") are
+ * handled correctly: inside a ~"..." literal, \" does NOT close the string.
+ * A reverse scan with simple quote-toggling cannot make this distinction.
  */
 function findLastUnmatchedParen(s: string): number {
-    let depth = 0;
     let inString = false;
-    for (let i = s.length - 1; i >= 0; i--) {
+    let isEscape = false;
+    const stack: number[] = [];
+
+    for (let i = 0; i < s.length; i++) {
         const ch = s[i];
-        // PureBasic strings use '"' only – no backslash escape inside "…"
-        if (ch === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString) continue;
-        if (ch === ')') { depth++; }
-        else if (ch === '(') {
-            if (depth === 0) return i;   // unmatched '(' found
-            depth--;
+
+        if (!inString) {
+            if (ch === '"') {
+                inString = true;
+                isEscape = i > 0 && s[i - 1] === '~';
+            } else if (ch === '(') {
+                stack.push(i);
+            } else if (ch === ')') {
+                stack.pop();
+            }
+        } else {
+            if (ch === '"') {
+                if (isEscape) {
+                    // Count consecutive backslashes before this '"'
+                    let bsCount = 0;
+                    let k = i - 1;
+                    while (k >= 0 && s[k] === '\\') { bsCount++; k--; }
+                    // Odd count → escaped quote, stay in string
+                    if (bsCount % 2 !== 0) continue;
+                }
+                inString = false;
+                isEscape = false;
+            }
         }
     }
-    return -1;
+
+    // The last entry on the stack is the innermost unmatched '('
+    return stack.length > 0 ? stack[stack.length - 1] : -1;
 }
 
 /**
