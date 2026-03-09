@@ -13,7 +13,7 @@ import { validateModules } from './module-validator';
 import { validateGeneric } from './generic-validator';
 import { validateUnclosedStructures } from './unclosed-structure-validator';
 import { withErrorHandling, getErrorHandler } from '../utils/error-handler';
-import { stripInlineComment } from '../utils/string-utils';
+import { stripInlineComment } from '../utils/pb-lexer-utils';
 
 type LogFn = (message: string, err?: unknown) => void;
 

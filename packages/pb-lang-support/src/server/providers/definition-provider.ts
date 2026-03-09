@@ -15,7 +15,7 @@ import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath
 import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
-import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/string-utils';
+import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/pb-lexer-utils';
 import * as path from 'path';
 
 /**

@@ -9,7 +9,7 @@ import { generateHash } from '../utils/hash-utils';
 import { optimizedSymbolParser } from './optimized-symbol-parser';
 import { ParsedDocument } from './optimized-symbol-parser';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { stripInlineComment } from '../utils/string-utils';
+import { stripInlineComment } from '../utils/pb-lexer-utils';
 
 type LogFn = (message: string, err?: unknown) => void;
 

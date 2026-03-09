@@ -12,7 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { getModuleFunctionCompletions as getModuleFunctions } from '../utils/module-resolver';
 import { getActiveUsedModules } from '../utils/scope-manager';
-import { escapeRegExp} from '../utils/string-utils';
+import { escapeRegExp} from '../utils/pb-lexer-utils';
 import { ApiFunctionListing } from '../utils/api-function-listing';
 import { findBuiltin } from '../utils/builtin-functions';
 

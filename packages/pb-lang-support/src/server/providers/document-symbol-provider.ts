@@ -11,7 +11,7 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parsePureBasicConstantDefinition } from '../utils/constants';
-import { safeIndexOf } from '../utils/string-utils';
+import { safeIndexOf } from '../utils/pb-lexer-utils';
 
 /**
  * Handle document symbol requests

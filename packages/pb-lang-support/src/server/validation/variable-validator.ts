@@ -6,7 +6,7 @@
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
 import { isValidType } from '../utils/constants';
-import { isInStringLiteral, isPositionInString } from '../utils/string-utils';
+import { isInStringLiteral, isPositionInString } from '../utils/pb-lexer-utils';
 
 /**
  * Validate variable declaration syntax
