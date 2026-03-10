@@ -264,6 +264,38 @@ function searchFunctionInDocument(
 }
 
 /**
+ * Split a parameter string on top-level commas only.
+ *
+ * Commas inside nested parentheses (e.g. default-value expressions like
+ * `ArraySize(arr, 0)`) and inside string literals are ignored, so that
+ * `Foo(x.i = ArraySize(a, 0), y.s = "a,b")` is correctly split into two
+ * parameters instead of four.
+ */
+function splitTopLevelParams(paramsText: string): string[] {
+    const parts: string[] = [''];
+    let parenDepth = 0;
+    let inString = false;
+
+    for (const char of paramsText) {
+        if (char === '"') {
+            inString = !inString;
+        } else if (!inString) {
+            if (char === '(') {
+                parenDepth++;
+            } else if (char === ')') {
+                parenDepth--;
+            } else if (char === ',' && parenDepth === 0) {
+                parts.push('');
+                continue;
+            }
+        }
+        parts[parts.length - 1] += char;
+    }
+
+    return parts;
+}
+
+/**
  * Parse parameter list
  */
 function parseParameters(paramsText: string): ParameterInformation[] {
@@ -272,7 +304,7 @@ function parseParameters(paramsText: string): ParameterInformation[] {
     }
 
     const parameters: ParameterInformation[] = [];
-    const paramList = paramsText.split(',');
+    const paramList = splitTopLevelParams(paramsText);
 
     for (const param of paramList) {
         const trimmedParam = param.trim();
