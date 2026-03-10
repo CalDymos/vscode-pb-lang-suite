@@ -314,6 +314,7 @@ documents.onDidClose(e => {
     documentSettings.delete(e.document.uri);
     documentHashes.delete(e.document.uri);
     documentCache.delete(e.document.uri);
+    optimizedSymbolParser.invalidate(e.document.uri);
     // Notify project manager
     projectManager.onDocumentClose(e.document);
 });

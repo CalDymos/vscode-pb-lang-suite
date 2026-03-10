@@ -1,6 +1,6 @@
 /**
- * 符号管理器
- * 负责解析和管理PureBasic符号
+ * Symbol manager
+ * Responsible for parsing and managing PureBasic symbols
  */
 
 import { PureBasicSymbol, SymbolKind } from './types';
@@ -9,7 +9,7 @@ import { optimizedSymbolParser } from './optimized-symbol-parser';
 import { ParsedDocument } from './optimized-symbol-parser';
 
 /**
- * 批量解析多个文档（性能优化）
+ * Batch parse multiple documents (performance optimized)
  */
 export async function parseMultipleDocuments(documents: Array<{ uri: string; text: string }>): Promise<Map<string, ParsedDocument>> {
     return await optimizedSymbolParser.parseMultipleDocuments(documents);
@@ -30,7 +30,7 @@ export function getPerformanceStats() {
 }
 
 /**
- * 清理性能缓存
+ * Clean up performance cache
  */
 export function cleanupPerformanceCache() {
     optimizedSymbolParser.cleanup();

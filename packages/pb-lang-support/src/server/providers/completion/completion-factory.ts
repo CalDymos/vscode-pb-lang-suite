@@ -1,6 +1,6 @@
 /**
- * 补全项工厂
- * 负责创建标准化的补全项
+ * Completion item factory
+ * Responsible for creating standardized completion items
  */
 
 import { CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
@@ -8,7 +8,7 @@ import { PureBasicSymbol, SymbolKind } from '../../symbols/types';
 import { CompletionContext, CompletionFactoryConfig, SymbolExtractResult } from './completion-types';
 
 /**
- * 补全项工厂类
+ * Completion item factory class
  */
 export class CompletionItemFactory {
     private config: CompletionFactoryConfig;
@@ -29,7 +29,7 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 从符号创建补全项
+     * Create a completion item from a symbol
      */
     createFromSymbol(symbol: PureBasicSymbol, context: CompletionContext, sourceType: 'local' | 'module' | 'builtin' | 'structure' = 'local'): CompletionItem {
         const item: CompletionItem = {
@@ -46,7 +46,7 @@ export class CompletionItemFactory {
             }
         };
 
-        // 添加额外的元数据
+        // Add additional metadata
         if (this.config.includeTypeInfo && symbol.detail) {
             item.data.typeInfo = symbol.detail;
         }
@@ -59,34 +59,34 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 批量创建补全项
+     * Create completion items in batch
      */
     createBatch(symbols: PureBasicSymbol[], context: CompletionContext, sourceType: 'local' | 'module' | 'builtin' | 'structure' = 'local'): CompletionItem[] {
         return symbols.map(symbol => this.createFromSymbol(symbol, context, sourceType));
     }
 
     /**
-     * 从提取结果创建所有补全项
+     * Create all completion items from an extract result
      */
     createFromExtractResult(result: SymbolExtractResult, context: CompletionContext): CompletionItem[] {
         const items: CompletionItem[] = [];
 
-        // 本地符号
+        // Local symbols
         if (result.documentSymbols.length > 0) {
             items.push(...this.createBatch(result.documentSymbols, context, 'local'));
         }
 
-        // 模块符号
+        // Module symbols
         if (result.moduleSymbols.length > 0) {
             items.push(...this.createBatch(result.moduleSymbols, context, 'module'));
         }
 
-        // 结构体符号
+        // Structure symbols
         if (result.structureSymbols.length > 0) {
             items.push(...this.createBatch(result.structureSymbols, context, 'structure'));
         }
 
-        // 内置符号
+        // Built-in symbols
         if (result.builtinSymbols.length > 0) {
             items.push(...this.createBatch(result.builtinSymbols, context, 'builtin'));
         }
@@ -95,7 +95,7 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 映射符号类型到补全项类型
+     * Map symbol type to completion item type
      */
     private mapSymbolKindToCompletionKind(symbolKind: SymbolKind): CompletionItemKind {
         switch (symbolKind) {
@@ -124,12 +124,12 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 生成详细信息
+     * Generate detail information
      */
     private generateDetail(symbol: PureBasicSymbol, sourceType: string): string {
         let detail = symbol.detail || '';
 
-        // 添加来源信息
+        // Add source information
         if (sourceType === 'module' && symbol.module) {
             detail = `${detail} (from ${symbol.module})`;
         } else if (sourceType === 'builtin') {
@@ -142,36 +142,36 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 生成插入文本
+     * Generate insert text
      */
     private generateInsertText(symbol: PureBasicSymbol, context: CompletionContext): string {
         const { currentWord, linePrefix } = context;
 
-        // 对于函数和过程，添加括号
+        // For functions and procedures, add parentheses
         if (symbol.kind === SymbolKind.Procedure || symbol.kind === SymbolKind.Function) {
-            // 如果光标前有点号，可能是模块函数调用
+            // If there is a dot before the cursor, it may be a module function call
             if (linePrefix.endsWith('.')) {
                 return symbol.name;
             }
             return `${symbol.name}()`;
         }
 
-        // 对于结构体，添加点号提示成员访问
+        // For structures, add a dot to suggest member access
         if (symbol.kind === SymbolKind.Structure) {
             return `${symbol.name}.`;
         }
 
-        // 默认情况
+        // Default case
         return symbol.name;
     }
 
     /**
-     * 生成排序文本
+     * Generate sort text
      */
     private generateSortText(symbol: PureBasicSymbol, sourceType: string): string {
         const weight = this.config.sortWeights[sourceType as keyof typeof this.config.sortWeights] || 50;
 
-        // 根据符号类型添加额外的权重
+        // Add extra weight based on symbol type
         let typeWeight = 0;
         switch (symbol.kind) {
             case SymbolKind.Procedure:
@@ -196,14 +196,14 @@ export class CompletionItemFactory {
     }
 
     /**
-     * 更新工厂配置
+     * Update factory configuration
      */
     updateConfig(config: Partial<CompletionFactoryConfig>): void {
         this.config = { ...this.config, ...config };
     }
 
     /**
-     * 获取当前配置
+     * Get the current configuration
      */
     getConfig(): CompletionFactoryConfig {
         return { ...this.config };
