@@ -11,12 +11,10 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { ProjectManager } from '../managers/project-manager';
-import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceRootForUri  } from '../indexer/workspace-index';
+import { collectSearchDocuments } from '../utils/document-collector';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration } from '../utils/constants';
 import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/pb-lexer-utils';
-import * as path from 'path';
 
 /**
  * Handle definition requests
@@ -499,103 +497,4 @@ function findStructureMemberDefinition(
         }
     }
     return matches;
-}
-
-/**
- * Collect search documents: current + open + recursively included
- */
-function collectSearchDocuments(
-    document: TextDocument,
-    allDocuments: Map<string, TextDocument>,
-    projectManager?: ProjectManager,
-    maxDepth = 3
-): Map<string, TextDocument> {
-    const workspaceRoot = getWorkspaceRootForUri(document.uri);
-    const result = new Map<string, TextDocument>();
-    const visited = new Set<string>();
-
-    const addDoc = (doc: TextDocument) => {
-        if (!result.has(doc.uri)) {
-            result.set(doc.uri, doc);
-        }
-    };
-
-    addDoc(document);
-
-    const rootDocUri = document.uri;
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: rootDocUri, depth: 0 }];
-
-    while (queue.length) {
-        const { uri, depth } = queue.shift()!;
-        if (visited.has(uri) || depth > maxDepth) continue;
-        visited.add(uri);
-
-        const baseDoc = result.get(uri);
-        if (!baseDoc) continue;
-        const text = baseDoc.getText();
-        const lines = text.split('\n');
-
-        const target = projectManager?.getActiveTarget(uri);
-        const inputFileDir = target?.inputFile?.fsPath
-             ? path.dirname(target.inputFile.fsPath)
-             : undefined
-        // Maintain current IncludePath search directories (newest first)
-        const includeDirs: string[] = [];
-
-        for (const line of lines) {
-            // IncludePath directive
-            const ip = line.match(/^\s*IncludePath\s+\"([^\"]+)\"/i);
-            if (ip) {
-                const dir = normalizeDirPath(uri, ip[1]);
-                // Newest first
-                if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
-                continue;
-            }
-
-            // IncludeFile / XIncludeFile directives
-            const m = line.match(/^\s*(?:X?IncludeFile)\s+\"([^\"]+)\"/i);
-            if (!m) continue;
-            const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot, inputFileDir);
-            if (!fsPath) continue;
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) {
-                if (!visited.has(incUri)) queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const opened = allDocuments.get(incUri);
-            if (opened) {
-                addDoc(opened);
-                queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                addDoc(tempDoc);
-                queue.push({ uri: incUri, depth: depth + 1 });
-            }
-        }
-    }
-    // Add project files (pbp-derived) if available
-    try {
-        if (typeof projectManager?.getAllProjectFilesForDocument === 'function') {
-            const projectFiles = projectManager.getAllProjectFilesForDocument(rootDocUri);
-            if (Array.isArray(projectFiles) && projectFiles.length > 0) {
-                for (const fsPath of projectFiles) {
-                    const incUri = fsPathToUri(fsPath);
-                    if (result.has(incUri)) continue;
-                    const content = readFileIfExistsSync(fsPath);
-                    if (content != null) {
-                        const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                        result.set(incUri, tempDoc);
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        // Ignore errors during project file scanning
-    }
-
-    return result;
 }

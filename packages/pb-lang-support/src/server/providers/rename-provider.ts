@@ -15,8 +15,8 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyzeScopesAndVariables } from '../utils/scope-manager';
 import { parsePureBasicConstantDefinition, parsePureBasicConstantDeclaration, keywords, types } from '../utils/constants';
 import { escapeRegExp, getWordAtPosition, normalizeConstantName, getModuleSymbolAtPosition, getBaseType, getStructAccessFromLine, normalizeVarName } from '../utils/pb-lexer-utils';
-import { readFileIfExistsSync, resolveIncludePath, fsPathToUri, normalizeDirPath } from '../utils/fs-utils';
-import { getWorkspaceRootForUri } from '../indexer/workspace-index';
+import { ProjectManager } from '../managers/project-manager';
+import { collectSearchDocuments } from '../utils/document-collector';
 
 /**
  * Preparing to rename - Checking if renaming is possible
@@ -24,7 +24,8 @@ import { getWorkspaceRootForUri } from '../indexer/workspace-index';
 export function handlePrepareRename(
     params: PrepareRenameParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    projectManager?: ProjectManager
 ): Range | { range: Range; placeholder: string } | null {
     const position = params.position;
     const text = document.getText();
@@ -42,7 +43,7 @@ export function handlePrepareRename(
     }
 
     // Build the full search scope once – used for symbol existence check
-    const searchDocs = collectSearchDocuments(document, documentCache);
+    const searchDocs = collectSearchDocuments(document, documentCache, projectManager, 3, 'scan');
 
     // Check if it is a renameable symbol
     if (isRenameableSymbol(word, searchDocs, position)) {
@@ -74,7 +75,8 @@ export function handlePrepareRename(
 export function handleRename(
     params: RenameParams,
     document: TextDocument,
-    documentCache: Map<string, TextDocument>
+    documentCache: Map<string, TextDocument>,
+    projectManager?: ProjectManager
 ): WorkspaceEdit | null {
     const position = params.position;
     const newName = params.newName;
@@ -93,7 +95,7 @@ export function handleRename(
     }
 
     // Build the full search scope once – all helpers below receive it directly
-    const searchDocs = collectSearchDocuments(document, documentCache);
+    const searchDocs = collectSearchDocuments(document, documentCache, projectManager);
 
     // Handle module syntax: Module::Function or Module::#Const / Module::Type
     const moduleMatch = getModuleSymbolAtPosition(line, position.character);
@@ -605,80 +607,4 @@ function handleStructMemberRename(
     }
 
     return Object.keys(changes).length ? { changes } : null;
-}
-
-/**
- * Collect search documents: current document + all open documents +
- * recursively resolved IncludeFile / XIncludeFile chains + workspace files.
- *
- * This ensures that Rename operates on the same document set as
- * Go-to-Definition, so symbols in non-open included files are also renamed.
- */
-function collectSearchDocuments(
-    document: TextDocument,
-    allDocuments: Map<string, TextDocument>,
-    maxDepth = 3
-): Map<string, TextDocument> {
-    const workspaceRoot = getWorkspaceRootForUri(document.uri);
-    const result = new Map<string, TextDocument>();
-    const visited = new Set<string>();
-
-    const addDoc = (doc: TextDocument) => {
-        if (!result.has(doc.uri)) {
-            result.set(doc.uri, doc);
-        }
-    };
-
-    addDoc(document);
-
-    const queue: Array<{ uri: string; depth: number }> = [{ uri: document.uri, depth: 0 }];
-
-    while (queue.length) {
-        const { uri, depth } = queue.shift()!;
-        if (visited.has(uri) || depth > maxDepth) continue;
-        visited.add(uri);
-
-        const baseDoc = result.get(uri);
-        if (!baseDoc) continue;
-        const text = baseDoc.getText();
-        const lines = text.split('\n');
-
-        // Maintain current IncludePath search directories (newest first)
-        const includeDirs: string[] = [];
-
-        for (const line of lines) {
-            // IncludePath directive
-            const ip = line.match(/^\s*IncludePath\s+"([^"]+)"/i);
-            if (ip) {
-                const dir = normalizeDirPath(uri, ip[1]);
-                if (!includeDirs.includes(dir)) includeDirs.unshift(dir);
-                continue;
-            }
-
-            const m = line.match(/^\s*(?:X?IncludeFile)\s+"([^"]+)"/i);
-            if (!m) continue;
-            const inc = m[1];
-            const fsPath = resolveIncludePath(uri, inc, includeDirs, workspaceRoot);
-            if (!fsPath) continue;
-            const incUri = fsPathToUri(fsPath);
-            if (result.has(incUri)) {
-                if (!visited.has(incUri)) queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const opened = allDocuments.get(incUri);
-            if (opened) {
-                addDoc(opened);
-                queue.push({ uri: incUri, depth: depth + 1 });
-                continue;
-            }
-            const content = readFileIfExistsSync(fsPath);
-            if (content != null) {
-                const tempDoc = TextDocument.create(incUri, 'purebasic', 0, content);
-                addDoc(tempDoc);
-                queue.push({ uri: incUri, depth: depth + 1 });
-            }
-        }
-    }
-
-    return result;
 }
