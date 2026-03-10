@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.2
+
+### Fixed
+
+- repair the indentationRules, extend folding (Macro, EndMacro, CompilerIf, CompilerEndIf ...)
+
 ## 0.16.1
 
 ### Fixed
