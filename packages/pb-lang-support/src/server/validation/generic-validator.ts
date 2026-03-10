@@ -5,7 +5,8 @@
 
 import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidatorFunction } from './types';
-import { keywords, builtInFunctions, parsePureBasicConstantDefinition } from '../utils/constants';
+import { keywords, parsePureBasicConstantDefinition } from '../utils/constants';
+import { builtinFunctionMap } from '../utils/builtin-functions';
 
 /**
  * Validates generic syntax rules
@@ -56,8 +57,8 @@ export const validateGeneric: ValidatorFunction = (
             line.includes('\\') ||          // file path
             line.startsWith('*') ||         // pointer variable (e.g., *Ptr in structures)
             line.startsWith('@') ||         // address operator
-            keywords.some(kw => line.startsWith(kw)) ||  // starts with a keyword
-            builtInFunctions.some(fn => line.includes(fn)); // contains a built-in function
+            keywords.some(kw => line.startsWith(kw)) ||   // starts with a keyword
+            [...line.matchAll(/\b\w+\b/g)].some(m => builtinFunctionMap.has(m[0].toLowerCase())); // contains a built-in
 
         if (!isValidSpecialCase) {
             diagnostics.push({

@@ -34,7 +34,8 @@ import { serverCapabilities } from './config/capabilities';
 import { defaultSettings, globalSettings, PureBasicSettings } from './config/settings';
 
 // Import validator
-import { initValidator, validateDocument } from './validation/validator';
+import { initValidator } from './validation/validator';
+import { runDiagnostics } from './validation/diagnostics-runner';
 
 // Import code completion provider
 import { initCompletionProvider, handleCompletion, handleCompletionResolve } from './providers/completion-provider';
@@ -57,8 +58,8 @@ import { handlePrepareRename, handleRename } from './providers/rename-provider';
 import { handleDocumentFormatting, handleDocumentRangeFormatting } from './providers/formatting-provider';
 
 // Import symbol management
-import { initSymbolManager, parseDocumentSymbols } from './symbols/symbol-manager';
-import { setWorkspaceRoots } from './indexer/workspace-index';
+import { optimizedSymbolParser } from './symbols/optimized-symbol-parser';
+import { setWorkspaceRoots, getWorkspaceRootForUri } from './indexer/workspace-index';
 import { symbolCache } from './symbols/symbol-cache';
 import { SymbolInformation, SymbolKind as LSPSymbolKind, WorkspaceSymbolParams } from 'vscode-languageserver/node';
 import { SymbolKind as PBSymbolKind, PureBasicSymbol } from './symbols/types';
@@ -127,7 +128,6 @@ const lspErrorLog = (msg: string, err?: unknown) =>
 
 initFileCache(lspErrorLog);
 initModuleResolver(lspErrorLog);
-initSymbolManager(lspErrorLog);
 initValidator(lspErrorLog);
 initCompletionProvider(lspErrorLog);
 
@@ -314,6 +314,7 @@ documents.onDidClose(e => {
     documentSettings.delete(e.document.uri);
     documentHashes.delete(e.document.uri);
     documentCache.delete(e.document.uri);
+    optimizedSymbolParser.invalidate(e.document.uri);
     // Notify project manager
     projectManager.onDocumentClose(e.document);
 });
@@ -361,17 +362,11 @@ const safeValidateTextDocument = (textDocument: TextDocument): Promise<void> => 
     documentHashes.set(textDocument.uri, newHash);
 
     // Parse symbols
-    parseDocumentSymbols(textDocument.uri, text);
+    await optimizedSymbolParser.parseDocumentSymbols(textDocument.uri, text);
 
-    // Validate document
-    let diagnostics = validateDocument(text);
-
-    // Limit number of diagnostics
-    if (diagnostics.length > settings.maxNumberOfProblems) {
-        diagnostics = diagnostics.slice(0, settings.maxNumberOfProblems);
-    }
-
-    // Send diagnostics
+    // Run all validators and send results
+    const workspaceRoot = getWorkspaceRootForUri(textDocument.uri);
+    const diagnostics = runDiagnostics(textDocument, settings, workspaceRoot);
     connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
     });
 };
@@ -451,7 +446,7 @@ connection.onReferences((params: ReferenceParams): Location[] => {
     }
 
     try {
-        return handleReferences(params, document, documentCache);
+        return handleReferences(params, document, documentCache, projectManager);
     } catch (error) {
         logLspError('References error', error, { uri: params.textDocument.uri });
         return [];

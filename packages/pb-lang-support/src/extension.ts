@@ -269,10 +269,18 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             client.sendNotification('purebasic/projectContext', {
                 version: 3,
                 noProject: true,
-                projectFiles: uctx.projectFiles,
+                projectFiles: uctx.projectFiles.map(fsPath => ({ fsPath, scan: true })),
             });
             return;
         }
+
+        // Build a { fsPath, scan } list so the language server can filter
+        // per operation (e.g. scan-only for indexing, all files for Go to Definition).
+        const projectFilesWithFlags: { fsPath: string; scan: boolean }[] = uctx.project
+            ? uctx.project.files
+                .filter(f => Boolean(f.fsPath))
+                .map(f => ({ fsPath: f.fsPath!, scan: f.config?.scan !== false }))
+            : uctx.projectFiles.map(fsPath => ({ fsPath, scan: true }));
 
         client.sendNotification('purebasic/projectContext', {
             version: 3,
@@ -280,7 +288,7 @@ async function setupProjectFilesBridge(context: vscode.ExtensionContext): Promis
             projectDir: uctx.projectDir,
             projectName: uctx.projectName,
             targetName: uctx.targetName,
-            projectFiles: uctx.projectFiles,
+            projectFiles: projectFilesWithFlags,
             project: uctx.project ? stripProjectForLsp(uctx.project) : null,
             target: uctx.target ? stripTargetForLsp(uctx.target) : null,
         });

@@ -7,7 +7,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver/node';
 import { ValidationContext, ValidatorFunction } from './types';
 import { isValidType } from '../utils/constants';
 import { validateParameters } from './parameter-validator';
-import { stripInlineComment } from '../utils/string-utils';
+import { stripInlineComment } from '../utils/pb-lexer-utils';
 
 /**
  * Validate procedure related syntax
