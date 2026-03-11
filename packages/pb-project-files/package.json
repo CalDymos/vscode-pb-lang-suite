@@ -42,7 +42,12 @@
   "contributes": {
     "configuration": {
       "title": "%purebasicProjectEditor.configuration.title%",
-      "properties": {
+        "properties": {
+          "purebasicProjectEditor.newProject.templateFile": {
+          "type": "string",
+          "default": "",
+          "description": "%purebasicProjectEditor.newProject.templateFile.description%"
+        },
         "purebasicProjectEditor.inactiveTabForeground": {
           "type": "string",
           "default": "",
@@ -102,6 +107,11 @@
         "command": "pbProjectFiles.refresh",
         "title": "PureBasic: Refresh Projects",
         "category": "PureBasic"
+      },
+      {
+        "command": "pbProjectFiles.newProject",
+        "title": "%pbProjectFiles.newProject.title%",
+        "category": "PureBasic"        
       }
     ],
     "customEditors": [

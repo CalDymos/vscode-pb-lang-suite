@@ -6,5 +6,7 @@
   "purebasicProjectEditor.xmlBracketColor.description": "Farbe für XML-Klammern und Interpunktion in der Raw-XML-Ansicht.",
   "purebasicProjectEditor.xmlCommentColor.description": "Farbe für XML-Kommentare in der Raw-XML-Ansicht.",
   "purebasicProjectEditor.xmlProcInstColor.description": "Farbe für XML-Verarbeitungsanweisungen in der Raw-XML-Ansicht.",
-  "purebasicProjectEditor.inactiveTabForeground.description": "Schriftfarbe für inaktive Tabs im PureBasic Projekt-Editor (z. B. '#cccccc'). Leer lassen für die Standard-Schriftfarbe von VS Code."
+  "purebasicProjectEditor.inactiveTabForeground.description": "Schriftfarbe für inaktive Tabs im PureBasic Projekt-Editor (z. B. '#cccccc'). Leer lassen für die Standard-Schriftfarbe von VS Code.",
+  "pbProjectFiles.newProject.title": "Neues PureBasic-Projekt…",
+  "purebasicProjectEditor.newProject.templateFile.description": "Absoluter Pfad zu einer .pbp-Datei, die als Vorlage beim Erstellen neuer Projekte verwendet wird. Targets, Bibliotheken und Compiler-Optionen werden übernommen; Name und Datensektion werden zurückgesetzt. Leer lassen, um mit einem minimalen Standard-Projekt zu beginnen."
 }
