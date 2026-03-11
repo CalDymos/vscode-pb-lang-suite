@@ -35,12 +35,12 @@ async function closeTabs(tabs: readonly vscode.Tab[]): Promise<void> {
 async function resolvePbfLanguageId(): Promise<string | undefined> {
   const languages = new Set(await vscode.languages.getLanguages());
 
-  if (languages.has("purebasic")) {
-    return "purebasic";
+  if (languages.has("purebasic-form")) {
+    return "purebasic-form";   
   }
 
-  if (languages.has("purebasic-form")) {
-    return "purebasic-form";
+  if (languages.has("purebasic")) {
+    return "purebasic";       
   }
 
   return undefined;
