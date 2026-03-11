@@ -120,10 +120,7 @@
         },
         "purebasicFormsDesigner.gridMode": {
           "type": "string",
-          "enum": [
-            "dots",
-            "lines"
-          ],
+          "enum": ["dots", "lines"],
           "default": "dots",
           "description": "%purebasicFormsDesigner.gridMode.description%"
         },
@@ -165,10 +162,7 @@
         },
         "purebasicFormsDesigner.snapMode": {
           "type": "string",
-          "enum": [
-            "live",
-            "drop"
-          ],
+          "enum": ["live", "drop"],
           "default": "drop",
           "description": "%purebasicFormsDesigner.snapMode.description%"
         },
@@ -192,28 +186,7 @@
           "description": "%purebasicFormsDesigner.expectedPbVersion.description%"
         }
       }
-    },
-    "languages": [
-      {
-        "id": "purebasic-form",
-        "aliases": [
-          "PureBasic Form",
-          "purebasic-form"
-        ],
-        "configuration": "./language-configuration.json",
-        "icon": {
-          "light": "./icon.png",
-          "dark": "./icon.png"
-        }
-      }
-    ],
-    "grammars": [
-      {
-        "language": "purebasic-form",
-        "scopeName": "source.purebasic.form",
-        "path": "./syntaxes/purebasic-form.tmLanguage.json"
-      }
-    ]
+    }
   },
   "scripts": {
     "compile": "tsc -p .",
@@ -223,5 +196,8 @@
     "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
     "typescript": "^5.4.0"
-  }
+  },
+  "extensionDependencies": [
+    "CalDymos.pb-lang-support"
+  ]
 }
