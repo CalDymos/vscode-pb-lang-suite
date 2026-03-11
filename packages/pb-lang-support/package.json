@@ -203,6 +203,17 @@
           "default": "",
           "scope": "machine",
           "description": "%config.purebasic.build.compiler.description%"
+        },
+        "purebasic.run.mode": {
+            "type": "string",
+            "enum": ["spawn", "terminal"],
+            "enumDescriptions": [
+                "%config.purebasic.run.mode.spawn.description%",
+                "%config.purebasic.run.mode.terminal.description%"
+            ],
+            "default": "spawn",
+            "description": "%config.purebasic.run.mode.description%",
+            "scope": "resource"
         }
       }
     },

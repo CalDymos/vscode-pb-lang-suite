@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import * as path   from 'path';
 import { parse } from 'jsonc-parser';
 import { splitPbFile, parseCfgFile, parseProjectCfg, extractExecutable } from './utils/pb-metadata';
+import { readHostSettings } from './config/settings';
 
 export type FallbackSource =
     | 'sourceMetadata'   // PureBasic IDE comments at end of file
@@ -140,11 +141,7 @@ export class FallbackResolver {
     // -----------------------------------------------------------------------
 
     private configuredSource(): FallbackSource {
-        const val   = vscode.workspace.getConfiguration('purebasic.build')
-            .get<string>('fallbackSource', 'launchJson');
-        const valid: FallbackSource[] =
-            ['sourceMetadata', 'launchJson', 'fileCfg', 'projectCfg'];
-        return valid.includes(val as FallbackSource) ? (val as FallbackSource) : 'launchJson';
+    return readHostSettings().build.fallbackSource;
     }
 
     private abs(base: string, p: string): string {

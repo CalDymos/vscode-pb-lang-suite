@@ -15,6 +15,7 @@ import { resolveUnifiedContext, type PbProjectFilesApi } from '../unified-contex
 import { buildPbCompilerArgs } from './pbcompiler-args';
 import { runPbCompiler } from './pbcompiler-runner';
 import { CompilerLauncher } from '../../debug/compiler/CompilerLauncher';
+import { readHostSettings } from '../config/settings';
 
 export interface BuildActiveTargetDeps {
     projectFilesApi?: PbProjectFilesApi;
@@ -130,8 +131,7 @@ export async function buildActiveTarget(deps: BuildActiveTargetDeps): Promise<bo
 }
 
 async function resolveCompilerPath(): Promise<string | null> {
-    const cfg = vscode.workspace.getConfiguration('purebasic.build');
-    const configured = (cfg.get<string>('compiler') ?? '').trim();
+    const configured = readHostSettings().build.compiler ?? '';
     if (configured) {
         return configured;
     }

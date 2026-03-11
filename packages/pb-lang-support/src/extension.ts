@@ -10,6 +10,7 @@ import { buildActiveTarget } from './host/pbcompiler/build-active-target';
 import { runActiveTarget } from './host/pbcompiler/run-active-target';
 import { buildPbCompilerArgs } from './host/pbcompiler/pbcompiler-args';
 import {splitPbFile, PbFileSplit} from './host/utils/pb-metadata';
+import { readHostSettings } from './host/config/settings';
 
 
 let client: LanguageClient;
@@ -504,7 +505,7 @@ function registerDebugProvider(context: vscode.ExtensionContext): void {
         }
 
         // Compiler path: prefer user config setting, then keep launch.json compiler, else let adapter auto-detect
-        const compilerSetting = (vscode.workspace.getConfiguration('purebasic.build').get<string>('compiler') ?? '').trim();
+        const compilerSetting = readHostSettings().build.compiler ?? '';
         if (compilerSetting && !config.compiler) {
           config.compiler = compilerSetting;
         }
