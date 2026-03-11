@@ -4,7 +4,7 @@
  * Host-side command that runs the active target executable (if available) or
  * runs the fallback executable.
  *
- * Run mode is controlled by `purebasic.build.runMode`:
+ * Run mode is controlled by `purebasic.run.mode`:
  *   "spawn"    – child_process.spawn, shell:false, output streamed to OutputChannel (default)
  *   "terminal" – VS Code terminal, args are argv-safe re-quoted for the target shell
  */
