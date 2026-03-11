@@ -2,7 +2,7 @@
   "name": "pb-lang-support",
   "displayName": "PureBasic Language Services",
   "description": "%extension.description%",
-  "version": "0.17.2",
+  "version": "0.18.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -116,11 +116,7 @@
         },
         "purebasic.completion.triggerCharacters": {
           "type": "array",
-          "default": [
-            ".",
-            "(",
-            "["
-          ],
+          "default": [".", "(", "["],
           "description": "%config.purebasic.completion.triggerCharacters.description%"
         },
         "purebasic.completion.autoClosingPairs": {
@@ -206,10 +202,7 @@
         },
         "purebasic.run.mode": {
           "type": "string",
-          "enum": [
-            "spawn",
-            "terminal"
-          ],
+          "enum": ["spawn", "terminal"],
           "enumDescriptions": [
             "%config.purebasic.run.mode.spawn.description%",
             "%config.purebasic.run.mode.terminal.description%"
@@ -321,6 +314,21 @@
           "light": "./icons/purebasic.png",
           "dark": "./icons/purebasic.png"
         }
+      },
+      {
+        "id": "purebasic-form",
+        "aliases": [
+          "PureBasic Form",
+          "purebasic-form"
+        ],
+        "extensions": [
+          ".pbf"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/purebasic.png",
+          "dark": "./icons/purebasic.png"
+        }
       }
     ],
     "grammars": [
@@ -328,11 +336,20 @@
         "language": "purebasic",
         "scopeName": "source.purebasic",
         "path": "./syntaxes/purebasic.tmLanguage.json"
+      },
+      {
+        "language": "purebasic-form",
+        "scopeName": "source.purebasic.form",
+        "path": "./syntaxes/purebasic-form.tmLanguage.json"
       }
     ],
     "snippets": [
       {
         "language": "purebasic",
+        "path": "./snippets/purebasic.json"
+      },
+      {
+        "language": "purebasic-form",
         "path": "./snippets/purebasic.json"
       }
     ],
