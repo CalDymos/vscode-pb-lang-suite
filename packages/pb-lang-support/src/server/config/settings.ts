@@ -2,6 +2,8 @@
  * Language Server settings configuration
  */
 
+export const SETTINGS_SECTION = 'purebasic';
+
 export interface PureBasicSettings {
     maxNumberOfProblems: number;
     enableValidation: boolean;

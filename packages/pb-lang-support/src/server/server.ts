@@ -31,7 +31,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 
 // Import configuration
 import { serverCapabilities } from './config/capabilities';
-import { defaultSettings, globalSettings, PureBasicSettings } from './config/settings';
+import { defaultSettings, globalSettings, PureBasicSettings, SETTINGS_SECTION } from './config/settings';
 
 // Import validator
 import { initValidator } from './validation/validator';
@@ -148,22 +148,6 @@ const documentCache: Map<string, TextDocument> = new Map();
 // API Function Listing (loaded lazily when the path is known from settings)
 const apiFunctionListing = new ApiFunctionListing();
 
-/**
- * Fetches the current global `apiFunctionListingPath` from the client and
- * (re)loads the listing.  Intended for non-hot paths: initialisation and
- * configuration-change events only.
- */
-async function reloadApiListing(): Promise<void> {
-    try {
-        const config = await connection.workspace.getConfiguration('purebasic');
-        const listingPath: string = config?.apiFunctionListingPath ?? '';
-        
-        apiFunctionListing.load(listingPath);
-    } catch (err) {
-        logLspError('Failed to reload API function listing', err);
-    }
-}
-
 // Project manager for handling .pbp project files
 let projectManager: ProjectManager;
 
@@ -245,7 +229,8 @@ connection.onInitialized(async () => {
     }
 
     // Initial load of the API function listing (non-hot path).
-    await reloadApiListing();
+    await loadGlobalSettings();
+    apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
 });
 
 // Custom Request: Clear Symbol Cache (to be used with the client command `purebasic.clearSymbolCache`)
@@ -265,20 +250,45 @@ connection.onDidChangeConfiguration(change => {
     if (hasConfigurationCapability) {
         // Clear cached document settings
         documentSettings.clear();
+        // Fetch fresh from client
+        loadGlobalSettings()
+            // Reload the API listing whenever configuration changes (non-hot path).
+            .then(() => apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? ''))
+            .catch(err => logLspError('Failed to load global settings', err));
     } else {
-        globalSettings.maxNumberOfProblems = (change.settings.purebasic || defaultSettings).maxNumberOfProblems;
-        globalSettings.enableValidation = (change.settings.purebasic || defaultSettings).enableValidation;
-        globalSettings.enableCompletion = (change.settings.purebasic || defaultSettings).enableCompletion;
-        globalSettings.validationDelay = (change.settings.purebasic || defaultSettings).validationDelay;
-        globalSettings.apiFunctionListingPath = (change.settings.purebasic || defaultSettings).apiFunctionListingPath;
+        // Fallback: settings pushed via change.settings
+        const s = change.settings.purebasic ?? defaultSettings;
+        globalSettings.maxNumberOfProblems    = s.maxNumberOfProblems    ?? defaultSettings.maxNumberOfProblems;
+        globalSettings.enableValidation       = s.enableValidation       ?? defaultSettings.enableValidation;
+        globalSettings.enableCompletion       = s.enableCompletion       ?? defaultSettings.enableCompletion;
+        globalSettings.validationDelay        = s.validationDelay        ?? defaultSettings.validationDelay;
+        globalSettings.formatting             = s.formatting             ?? defaultSettings.formatting;
+        globalSettings.completion             = s.completion             ?? defaultSettings.completion;
+        globalSettings.linting                = s.linting                ?? defaultSettings.linting;
+        globalSettings.symbols                = s.symbols                ?? defaultSettings.symbols;
+        globalSettings.apiFunctionListingPath = s.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+        apiFunctionListing.load(globalSettings.apiFunctionListingPath ?? '');
     }
-
-    // Reload the API listing whenever configuration changes (non-hot path).
-    reloadApiListing().catch(err => logLspError('reloadApiListing failed', err));
-
     // Re-validate all open documents
     documents.all().forEach(safeValidateTextDocument);
 });
+
+async function loadGlobalSettings(): Promise<void> {
+    try {
+        const config = await connection.workspace.getConfiguration('purebasic');
+        globalSettings.maxNumberOfProblems  = config?.maxNumberOfProblems  ?? defaultSettings.maxNumberOfProblems;
+        globalSettings.enableValidation     = config?.enableValidation     ?? defaultSettings.enableValidation;
+        globalSettings.enableCompletion     = config?.enableCompletion     ?? defaultSettings.enableCompletion;
+        globalSettings.validationDelay      = config?.validationDelay      ?? defaultSettings.validationDelay;
+        globalSettings.formatting           = config?.formatting           ?? defaultSettings.formatting;
+        globalSettings.completion           = config?.completion           ?? defaultSettings.completion;
+        globalSettings.linting              = config?.linting              ?? defaultSettings.linting;
+        globalSettings.symbols              = config?.symbols              ?? defaultSettings.symbols;
+        globalSettings.apiFunctionListingPath = config?.apiFunctionListingPath ?? defaultSettings.apiFunctionListingPath;
+    } catch (err) {
+        logLspError('Failed to load global settings', err);
+    }
+}
 
 function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
     if (!hasConfigurationCapability) {
@@ -289,7 +299,7 @@ function getDocumentSettings(resource: string): Thenable<PureBasicSettings> {
     if (!result) {
         result = connection.workspace.getConfiguration({
             scopeUri: resource,
-            section: 'purebasic'
+            section: SETTINGS_SECTION
         }).then(config => {
             // Ensure a complete settings object is returned, filling missing properties with defaults
             return {
