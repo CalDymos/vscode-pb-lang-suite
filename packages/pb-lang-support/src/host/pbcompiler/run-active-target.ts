@@ -93,7 +93,7 @@ interface SpawnOpts {
 }
 
 async function runInSpawn(opts: SpawnOpts): Promise<boolean> {
-    await new Promise<void>((resolve) => {
+    return new Promise<boolean>((resolve) => {
         const proc = cp.spawn(opts.executablePath, opts.args, {
             cwd: opts.runCwd,
             shell: false,
@@ -109,16 +109,14 @@ async function runInSpawn(opts: SpawnOpts): Promise<boolean> {
 
         proc.on('error', (err: NodeJS.ErrnoException) => {
             opts.outputChannel.appendLine(`error: ${err.message}`);
-            resolve();
+            resolve(false);
         });
 
         proc.on('close', (code) => {
             opts.outputChannel.appendLine(`--- Exit: ${code ?? -1} ---`);
-            resolve();
+            resolve(code === 0);
         });
     });
-
-    return true;
 }
 
 // ---------------------------------------------------------------------------
