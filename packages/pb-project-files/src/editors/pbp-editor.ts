@@ -48,7 +48,15 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
   <title>PureBasic Project</title>
   <style>
     body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 0; margin: 0; }
-    :root { --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'}; }
+    :root {
+    --pbp-inactive-tab-fg: ${settings.inactiveTabForeground || 'var(--vscode-foreground)'};
+    --pbp-xml-tag:    ${settings.xmlTagColor       || 'var(--vscode-terminal-ansiBlue)'};
+    --pbp-xml-attr:   ${settings.xmlAttributeColor || 'var(--vscode-terminal-ansiCyan)'};
+    --pbp-xml-val:    ${settings.xmlValueColor      || 'var(--vscode-terminal-ansiYellow)'};
+    --pbp-xml-brk:    ${settings.xmlBracketColor    || 'var(--vscode-editorLineNumber-foreground)'};
+    --pbp-xml-cmt:    ${settings.xmlCommentColor    || 'var(--vscode-terminal-ansiGreen)'};
+    --pbp-xml-pi:     ${settings.xmlProcInstColor   || 'var(--vscode-terminal-ansiMagenta)'};
+    }
     .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-editorWidget-border); position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 2; }
     .toolbar button { padding: 4px 10px; }
     .status { opacity: 0.8; }
@@ -79,6 +87,17 @@ function renderHtml(webview: vscode.Webview, document: vscode.TextDocument, proj
 
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; }
     .btn { padding: 4px 10px; }
+
+    pre.xml-hl { margin:0; padding:8px; overflow:auto; min-height:400px;
+    background:var(--vscode-input-background); border:1px solid var(--vscode-input-border);
+    border-radius:3px; font-family:var(--vscode-editor-font-family,monospace);
+    font-size:var(--vscode-editor-font-size); color:var(--vscode-foreground); white-space:pre; }
+    .xc { color:var(--pbp-xml-cmt); font-style:italic; }
+    .xp { color:var(--pbp-xml-pi); }
+    .xt { color:var(--pbp-xml-tag); }
+    .xa { color:var(--pbp-xml-attr); }
+    .xv { color:var(--pbp-xml-val); }
+    .xb { color:var(--pbp-xml-brk); }
   </style>
 </head>
 <body>

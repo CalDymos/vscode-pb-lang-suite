@@ -1,4 +1,10 @@
 {
   "purebasicProjectEditor.configuration.title": "PureBasic Projekt-Editor",
+  "purebasicProjectEditor.xmlTagColor.description": "Farbe für XML-Tagnamen in der Raw-XML-Ansicht.",
+  "purebasicProjectEditor.xmlAttributeColor.description": "Farbe für XML-Attributnamen in der Raw-XML-Ansicht.",
+  "purebasicProjectEditor.xmlValueColor.description": "Farbe für XML-Attributwerte in der Raw-XML-Ansicht.",
+  "purebasicProjectEditor.xmlBracketColor.description": "Farbe für XML-Klammern und Interpunktion in der Raw-XML-Ansicht.",
+  "purebasicProjectEditor.xmlCommentColor.description": "Farbe für XML-Kommentare in der Raw-XML-Ansicht.",
+  "purebasicProjectEditor.xmlProcInstColor.description": "Farbe für XML-Verarbeitungsanweisungen in der Raw-XML-Ansicht.",
   "purebasicProjectEditor.inactiveTabForeground.description": "Schriftfarbe für inaktive Tabs im PureBasic Projekt-Editor (z. B. '#cccccc'). Leer lassen für die Standard-Schriftfarbe von VS Code."
 }

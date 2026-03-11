@@ -1408,6 +1408,57 @@ function renderTargetWatchlist(container: HTMLElement, t: PbpTarget): void {
 }
 
 // ---------------------------------------------------------------------------
+// XML Syntax Highlight (minimal tokenizer, no deps)
+// ---------------------------------------------------------------------------
+
+function highlightXmlTag(raw: string): string {
+    const out: string[] = [];
+    let s = raw;
+    const tok = (cls: string, r: string) =>
+        out.push(cls ? `<span class="${cls}">${esc(r)}</span>` : esc(r));
+
+    const openM = s.match(/^<\/?/);
+    if (openM) { tok('xb', openM[0]); s = s.slice(openM[0].length); }
+
+    const nameM = s.match(/^[\w:.-]+/);
+    if (nameM) { tok('xt', nameM[0]); s = s.slice(nameM[0].length); }
+
+    while (s.length > 0 && !/^\/?>/.test(s)) {
+        let m: RegExpMatchArray | null;
+        if ((m = s.match(/^(\s+)([\w:.-]+)(\s*=\s*)("[^"]*"|'[^']*')/))) {
+            tok('', m[1]); tok('xa', m[2]); tok('xb', m[3]); tok('xv', m[4]);
+            s = s.slice(m[0].length); continue;
+        }
+        if ((m = s.match(/^(\s+)([\w:.-]+)/))) {
+            tok('', m[1]); tok('xa', m[2]);
+            s = s.slice(m[0].length); continue;
+        }
+        if ((m = s.match(/^\s+/))) { tok('', m[0]); s = s.slice(m[0].length); continue; }
+        tok('xb', s[0]); s = s.slice(1);
+    }
+    const closeM = s.match(/^\/?>?/);
+    if (closeM?.[0]) tok('xb', closeM[0]);
+    return out.join('');
+}
+
+function highlightXml(xml: string): string {
+    const out: string[] = [];
+    let s = xml;
+    const push = (cls: string, r: string) =>
+        out.push(cls ? `<span class="${cls}">${esc(r)}</span>` : esc(r));
+
+    while (s.length > 0) {
+        let m: RegExpMatchArray | null;
+        if ((m = s.match(/^<!--[\s\S]*?-->/)))         { push('xc', m[0]); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^<\?[\s\S]*?\?>/)))          { push('xp', m[0]); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^<\/?[^>]*(?:>|$)/)))        { out.push(highlightXmlTag(m[0])); s = s.slice(m[0].length); continue; }
+        if ((m = s.match(/^[^<]+/)))                   { push('', m[0]); s = s.slice(m[0].length); continue; }
+        push('', s[0]); s = s.slice(1);
+    }
+    return out.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Render: Targets — outer layout
 // ---------------------------------------------------------------------------
 
@@ -1516,13 +1567,13 @@ function renderXml(): void {
 
     const panel = document.createElement('div');
     panel.className = 'panel';
-    panel.innerHTML = `
-      <div class="muted" style="margin-bottom:8px;">Raw XML view is read-only. Use the structured tabs to make changes.</div>
-      <textarea id="xmlText" style="min-height: 480px;" readonly></textarea>
-    `;
-    el.appendChild(panel);
+    panel.innerHTML = `<div class="muted" style="margin-bottom:8px;">Raw XML view is read-only. Use the structured tabs to make changes.</div>`;
 
-    ($('xmlText') as HTMLTextAreaElement).value = state.xml ?? '';
+    const pre = document.createElement('pre');
+    pre.className = 'xml-hl';
+    pre.innerHTML = highlightXml(state.xml ?? '');
+    panel.appendChild(pre);
+    el.appendChild(panel);
 }
 
 // ---------------------------------------------------------------------------

@@ -46,7 +46,44 @@
         "purebasicProjectEditor.inactiveTabForeground": {
           "type": "string",
           "default": "",
+          "format": "color-hex",
           "description": "%purebasicProjectEditor.inactiveTabForeground.description%"
+        },
+        "purebasicProjectEditor.xmlTagColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlTagColor.description%"
+        },
+        "purebasicProjectEditor.xmlAttributeColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlAttributeColor.description%"
+        },
+        "purebasicProjectEditor.xmlValueColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlValueColor.description%"
+        },
+        "purebasicProjectEditor.xmlBracketColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlBracketColor.description%"
+        },
+        "purebasicProjectEditor.xmlCommentColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlCommentColor.description%"
+        },
+        "purebasicProjectEditor.xmlProcInstColor": {
+          "type": "string",
+          "default": "",
+          "format": "color-hex",
+          "description": "%purebasicProjectEditor.xmlProcInstColor.description%"
         }
       }
     },

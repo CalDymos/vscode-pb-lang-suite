@@ -1,4 +1,10 @@
 {
   "purebasicProjectEditor.configuration.title": "PureBasic Project Editor",
+  "purebasicProjectEditor.xmlTagColor.description": "Color for XML tag names in the Raw XML view.",
+  "purebasicProjectEditor.xmlAttributeColor.description": "Color for XML attribute names in the Raw XML view.",
+  "purebasicProjectEditor.xmlValueColor.description": "Color for XML attribute values in the Raw XML view.",
+  "purebasicProjectEditor.xmlBracketColor.description": "Color for XML brackets and punctuation in the Raw XML view.",
+  "purebasicProjectEditor.xmlCommentColor.description": "Color for XML comments in the Raw XML view.",
+  "purebasicProjectEditor.xmlProcInstColor.description": "Color for XML processing instructions in the Raw XML view.",
   "purebasicProjectEditor.inactiveTabForeground.description": "Foreground color for inactive tabs in the PureBasic Project Editor (e.g. '#cccccc'). Leave empty to use the VS Code default foreground color."
 }
