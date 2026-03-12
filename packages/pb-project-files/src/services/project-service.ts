@@ -25,7 +25,7 @@ import {
         PB_PROJECT_EXTENSION,
 } from '../utils/constants'
 
-import { hasAnyExtension } from '../utils/file-utils';
+import { hasAnyExtension, toDialogExtensions } from '../utils/file-utils';
 
 
 function normalizeFsPath(fsPath: string): string {
@@ -299,13 +299,19 @@ export class ProjectService implements vscode.Disposable {
     public async createNewProject(): Promise<void> {
         // 1 – Pick save location
         const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-        const saveUri = await vscode.window.showSaveDialog({
+        let saveUri = await vscode.window.showSaveDialog({
             defaultUri,
-            filters: { 'PureBasic Project': [PB_PROJECT_EXTENSION] },
+            filters: { 'PureBasic Project': toDialogExtensions([PB_PROJECT_EXTENSION]) },
             saveLabel: 'Create Project',
             title: 'Create new PureBasic project',
         });
         if (!saveUri) return;
+
+        // Ensure the chosen path always ends with .pbp so the glob watcher
+        // (DEFAULT_PBP_GLOB = '**/*.pbp') picks it up reliably.
+        if (!saveUri.fsPath.toLowerCase().endsWith(PB_PROJECT_EXTENSION)) {
+            saveUri = vscode.Uri.file(saveUri.fsPath + PB_PROJECT_EXTENSION);
+        }
 
         // 2 – Project name (default: filename without extension)
         const defaultName = path.basename(saveUri.fsPath, PB_PROJECT_EXTENSION);
