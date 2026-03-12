@@ -314,7 +314,7 @@ export class ProjectService implements vscode.Disposable {
         }
 
         // 2 – Project name (default: filename without extension)
-        const defaultName = path.basename(saveUri.fsPath, PB_PROJECT_EXTENSION);
+        const defaultName = path.parse(saveUri.fsPath).name;
         const projectName = await vscode.window.showInputBox({
             prompt: 'Project name',
             value: defaultName,
