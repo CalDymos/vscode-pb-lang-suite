@@ -168,6 +168,8 @@ export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
   textRaw?: string;
+  shortcut?: string;
+  iconRaw?: string;
 }
 
 export interface ToolBarEntryArgs {
@@ -175,6 +177,8 @@ export interface ToolBarEntryArgs {
   idRaw?: string;
   iconRaw?: string;
   textRaw?: string;
+  tooltip?: string;
+  toggle?: boolean;
 }
 
 export interface StatusBarFieldArgs {
@@ -204,12 +208,29 @@ function findNearestCreateAbove(
   return best;
 }
 
+function appendMenuShortcut(textRaw: string, shortcut: string | undefined): string {
+  const shortcutText = shortcut?.trim();
+  if (!shortcutText) return textRaw;
+
+  const match = /^(~)?"([\s\S]*)"$/.exec(textRaw);
+  if (!match) return textRaw;
+
+  const prefix = match[1] ?? "";
+  const inner = match[2] ?? "";
+  const escapedShortcut = shortcutText.replace(/"/g, '""');
+  return `${prefix}"${inner}""${escapedShortcut}"`;
+}
+
 function buildMenuEntryLine(args: MenuEntryArgs): string {
   switch (args.kind) {
     case MENU_ENTRY_KIND.MenuTitle:
       return `MenuTitle(${(args.textRaw ?? "\"\"").trim()})`;
-    case MENU_ENTRY_KIND.MenuItem:
-      return `MenuItem(${(args.idRaw ?? "0").trim()}, ${(args.textRaw ?? "\"\"").trim()})`;
+    case MENU_ENTRY_KIND.MenuItem: {
+      const id = (args.idRaw ?? "0").trim();
+      const text = appendMenuShortcut((args.textRaw ?? "\"\"").trim(), args.shortcut);
+      const icon = args.iconRaw?.trim();
+      return icon ? `MenuItem(${id}, ${text}, ${icon})` : `MenuItem(${id}, ${text})`;
+    }
     case MENU_ENTRY_KIND.MenuBar:
       return "MenuBar()";
     case MENU_ENTRY_KIND.OpenSubMenu:
@@ -221,7 +242,7 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
   }
 }
 
-function buildToolBarEntryLine(args: ToolBarEntryArgs): string {
+function buildToolBarEntryLine(args: ToolBarEntryArgs, toolBarId?: string): string {
   switch (args.kind) {
     case TOOLBAR_ENTRY_KIND.ToolBarStandardButton:
       return `ToolBarStandardButton(${(args.idRaw ?? "0").trim()}, ${(args.iconRaw ?? "0").trim()})`;
@@ -231,15 +252,23 @@ function buildToolBarEntryLine(args: ToolBarEntryArgs): string {
       const text = (args.textRaw ?? "\"\"").trim();
       return `ToolBarButton(${id}, ${icon}, ${text})`;
     }
+    case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
+      const id = (args.idRaw ?? "0").trim();
+      const icon = (args.iconRaw ?? "0").trim();
+      const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
+      return `ToolBarImageButton(${id}, ${icon}${toggle})`;
+    }
     case TOOLBAR_ENTRY_KIND.ToolBarSeparator:
       return "ToolBarSeparator()";
-    case TOOLBAR_ENTRY_KIND.ToolBarToolTip:
-      return `ToolBarToolTip(${(args.idRaw ?? "0").trim()}, ${(args.textRaw ?? "\"\"").trim()})`;
+    case TOOLBAR_ENTRY_KIND.ToolBarToolTip: {
+      const id = (args.idRaw ?? "0").trim();
+      const text = (args.textRaw ?? "\"\"").trim();
+      return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
+    }
     default:
       return "";
   }
 }
-
 
 // -----------------------------------------------------------------------------
 // Helpers for window id / pbAny patching
@@ -1158,6 +1187,7 @@ const MENU_ENTRY_NAMES = new Set(["menutitle", "menuitem", "menubar", "opensubme
 const TOOLBAR_ENTRY_NAMES = new Set([
   "toolbarstandardbutton",
   "toolbarbutton",
+  "toolbarimagebutton",
   "toolbarseparator",
   "toolbartooltip"
 ]);
@@ -1328,7 +1358,7 @@ export function applyToolBarEntryInsert(
     "createtoolbar",
     toolBarId,
     TOOLBAR_ENTRY_NAMES,
-    indent => `${indent}${buildToolBarEntryLine(args)}`
+    indent => `${indent}${buildToolBarEntryLine(args, toolBarId)}`
   );
 }
 
@@ -1348,7 +1378,7 @@ export function applyToolBarEntryUpdate(
     toolBarId,
     sourceLine,
     args.kind.toLowerCase(),
-    buildToolBarEntryLine(args)
+    buildToolBarEntryLine(args, toolBarId)
   );
 }
 

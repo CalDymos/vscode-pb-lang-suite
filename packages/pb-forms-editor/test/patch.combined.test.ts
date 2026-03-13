@@ -26,6 +26,11 @@ import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 // are accepted without additional casts at each call site.
 import type { TextDocument } from "vscode";
 
+// NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
+// The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,
+// so passing FakeTextDocument where TextDocument is expected causes TS2345.
+// The cast is done once via document.asTextDocument() — do NOT change the parameter
+// type back to FakeTextDocument, and do NOT inline the cast at each test call site.
 function patchAndReparse(
   text: string,
   editFactory: (document: TextDocument) =>
@@ -63,12 +68,14 @@ function parseFixture() {
   return { text, parsed, menu: menu!, toolBar: toolBar!, statusBar: statusBar! };
 }
 
-test("roundtrips menu entry insert", () => {
+test("roundtrips menu entry insert with shortcut and icon", () => {
   const { text } = parseFixture();
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
     idRaw: "#MnuSave",
     textRaw: '"Save"',
+    shortcut: "Ctrl+S",
+    iconRaw: "ImageID(#ImgSave)",
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
@@ -81,7 +88,9 @@ test("roundtrips menu entry insert", () => {
   assert.equal(menu!.entries[3]?.kind, MENU_ENTRY_KIND.MenuItem);
   assert.equal(menu!.entries[3]?.idRaw, "#MnuSave");
   assert.equal(menu!.entries[3]?.text, "Save");
-  assert.match(patchedText, /MenuItem\(#MnuSave, "Save"\)/);
+  assert.equal(menu!.entries[3]?.shortcut, "Ctrl+S");
+  assert.equal(menu!.entries[3]?.iconId, "#ImgSave");
+  assert.match(patchedText, /MenuItem\(#MnuSave, "Save""Ctrl\+S", ImageID\(#ImgSave\)\)/);
 });
 
 test("roundtrips menu entry update", () => {
@@ -123,13 +132,13 @@ test("roundtrips menu entry delete", () => {
   assert.doesNotMatch(patchedText, /MenuItem\(#MnuOpen, "Open"\)/);
 });
 
-test("roundtrips toolbar entry insert", () => {
+test("roundtrips toolbar image button insert", () => {
   const { text } = parseFixture();
   const args: ToolBarEntryArgs = {
-    kind: TOOLBAR_ENTRY_KIND.ToolBarButton,
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#TbSync",
-    iconRaw: "0",
-    textRaw: '"Sync"',
+    iconRaw: "ImageID(#ImgSync)",
+    toggle: true,
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
@@ -139,13 +148,14 @@ test("roundtrips toolbar entry insert", () => {
   const toolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
   assert.ok(toolBar, "Expected toolbar after insert.");
   assert.equal(toolBar!.entries.length, 3);
-  assert.equal(toolBar!.entries[2]?.kind, TOOLBAR_ENTRY_KIND.ToolBarButton);
+  assert.equal(toolBar!.entries[2]?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
   assert.equal(toolBar!.entries[2]?.idRaw, "#TbSync");
-  assert.equal(toolBar!.entries[2]?.text, "Sync");
-  assert.match(patchedText, /ToolBarButton\(#TbSync, 0, "Sync"\)/);
+  assert.equal(toolBar!.entries[2]?.iconId, "#ImgSync");
+  assert.equal(toolBar!.entries[2]?.toggle, true);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSync, ImageID\(#ImgSync\), #PB_ToolBar_Toggle\)/);
 });
 
-test("roundtrips toolbar entry update", () => {
+test("roundtrips toolbar tooltip update", () => {
   const { text, toolBar } = parseFixture();
   const sourceLine = toolBar.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar tooltip.");
@@ -164,7 +174,7 @@ test("roundtrips toolbar entry update", () => {
   const updatedTip = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
   assert.ok(updatedTip, "Expected updated toolbar tooltip.");
   assert.equal(updatedTip?.text, "Refresh all data");
-  assert.match(patchedText, /ToolBarToolTip\(#TbRefresh, "Refresh all data"\)/);
+  assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbRefresh, "Refresh all data"\)/);
 });
 
 test("roundtrips toolbar entry delete", () => {
