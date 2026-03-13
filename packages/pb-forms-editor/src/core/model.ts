@@ -93,8 +93,19 @@ export interface FormWindow {
   y: number;
   w: number;
   h: number;
-  title?: string;
+  caption?: string;          // canonical field matching original FormWindow\caption
+  captionVariable?: boolean; // matches original FormWindow\captionvariable
+  title?: string;            // temporary compatibility alias for current extension code
   flagsExpr?: string;
+  color?: number;
+  generateEventLoop?: boolean;
+  disabled?: boolean;
+  hidden?: boolean;
+  parent?: string;
+  eventFile?: string;
+  eventProc?: string;
+  customFlags?: string[];
+  source?: SourceRange;
 }
 
 export type FormIssueSeverity = "error" | "warning" | "info";

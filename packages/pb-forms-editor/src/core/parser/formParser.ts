@@ -347,7 +347,7 @@ export function parseFormDocument(text: string): FormDocument {
 
       case "OpenWindow": {
         const procDefaults = findProcDefaultsAbove(lines, c.range.line);
-        const win = parseOpenWindow(c.assignedVar, c.args, procDefaults);
+        const win = parseOpenWindow(c.assignedVar, c.args, procDefaults, c.range);
         if (win) {
           if (!win.pbAny && win.firstParam.startsWith("#")) {
             win.enumValueRaw = winEnumValues[win.firstParam] ?? undefined;
@@ -554,9 +554,21 @@ function resolveProcDefault(raw: string | undefined, name: string, defs?: Record
   return t;
 }
 
-function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>): FormDocument["window"] {
+function normalizeWindowParent(raw: string | undefined): string | undefined {
+  const parentRaw = raw?.trim();
+  if (!parentRaw) return undefined;
+
+  const windowIdMatch = /^WindowID\((.+)\)$/i.exec(parentRaw);
+  if (windowIdMatch) {
+    return windowIdMatch[1]?.trim() || undefined;
+  }
+
+  return "=" + parentRaw;
+}
+
+function parseOpenWindow(assignedVar: string | undefined, args: string, procDefaults?: Record<string, string>, source?: FormWindow["source"]): FormDocument["window"] {
   const p = splitParams(args);
-  // OpenWindow(id, x, y, w, h, "title", flags)
+  // OpenWindow(id, x, y, w, h, caption, flags, parent)
   if (p.length < 6) return undefined;
 
   const firstParam = (p[0] ?? "").trim();
@@ -573,8 +585,12 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const w = asNumber(wRaw) ?? 0;
   const h = asNumber(hRaw) ?? 0;
 
-  const title = unquoteString(p[5] ?? "");
+  const captionRaw = (p[5] ?? "").trim();
+  const literalCaption = unquoteString(captionRaw);
+  const caption = literalCaption ?? (captionRaw.length ? captionRaw : undefined);
+  const captionVariable = literalCaption === undefined && captionRaw.length > 0;
   const flagsExpr = p[6]?.trim();
+  const parent = normalizeWindowParent(p[7]);
 
   return {
     id,
@@ -586,8 +602,12 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
     y,
     w,
     h,
-    title,
-    flagsExpr
+    caption,
+    captionVariable,
+    title: caption,
+    flagsExpr,
+    parent,
+    source
   };
 }
 
