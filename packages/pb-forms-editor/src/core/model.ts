@@ -57,8 +57,26 @@ export interface Gadget {
   y: number;
   w: number;
   h: number;
+  textRaw?: string;      // raw caption/text expression from the gadget constructor
   text?: string;
+  textVariable?: boolean;
   flagsExpr?: string;
+  tooltipRaw?: string;   // raw tooltip expression from GadgetToolTip(...)
+  tooltip?: string;
+  tooltipVariable?: boolean;
+  stateRaw?: string;     // raw state expression from SetGadgetState(...)
+  state?: number;
+  frontColorRaw?: string;
+  frontColor?: number;
+  backColorRaw?: string;
+  backColor?: number;
+  gadgetFont?: string;
+  gadgetFontSize?: number;
+  gadgetFontFlagsRaw?: string;
+  hiddenRaw?: string;
+  hidden?: boolean;
+  disabledRaw?: string;
+  disabled?: boolean;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
   source?: SourceRange;

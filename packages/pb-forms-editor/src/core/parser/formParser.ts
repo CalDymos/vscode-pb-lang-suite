@@ -85,6 +85,7 @@ export function parseFormDocument(text: string): FormDocument {
 
   const gadgetById = new Map<string, Gadget>();
   const panelCurrentItem = new Map<string, number>();
+  const fontById = new Map<string, { name: string; size: number; flagsRaw?: string }>();
 
   type ParentCtx = { id: string; kind: GadgetKind; currentPanelItem?: number };
   const parentStack: ParentCtx[] = [];
@@ -357,6 +358,125 @@ export function parseFormDocument(text: string): FormDocument {
 
             if (!g.columns) g.columns = [];
             g.columns.push(col);
+          }
+        }
+        continue;
+      }
+
+
+      case "HideGadget": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 2 && g) {
+          const hiddenRaw = (p[1] ?? "").trim();
+          g.hiddenRaw = hiddenRaw || undefined;
+
+          const hidden = asNumber(hiddenRaw);
+          if (typeof hidden === "number") {
+            g.hidden = hidden !== 0;
+          }
+        }
+        continue;
+      }
+
+      case "DisableGadget": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 2 && g) {
+          const disabledRaw = (p[1] ?? "").trim();
+          g.disabledRaw = disabledRaw || undefined;
+
+          const disabled = asNumber(disabledRaw);
+          if (typeof disabled === "number") {
+            g.disabled = disabled !== 0;
+          }
+        }
+        continue;
+      }
+
+      case "GadgetToolTip": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 2 && g) {
+          const tooltipRaw = (p[1] ?? "").trim();
+          const literalTooltip = unquoteString(tooltipRaw);
+          g.tooltipRaw = tooltipRaw || undefined;
+          g.tooltip = literalTooltip ?? (tooltipRaw.length ? tooltipRaw : undefined);
+          g.tooltipVariable = literalTooltip === undefined && tooltipRaw.length > 0;
+        }
+        continue;
+      }
+
+      case "SetGadgetColor": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 3 && g) {
+          const colorType = (p[1] ?? "").trim();
+          const colorRaw = (p[2] ?? "").trim();
+          const color = parsePbColor(colorRaw);
+
+          if (colorType === "#PB_Gadget_BackColor") {
+            g.backColorRaw = colorRaw || undefined;
+            if (typeof color === "number") g.backColor = color;
+          } else if (colorType === "#PB_Gadget_FrontColor") {
+            g.frontColorRaw = colorRaw || undefined;
+            if (typeof color === "number") g.frontColor = color;
+          }
+        }
+        continue;
+      }
+
+      case "LoadFont": {
+        const p = splitParams(c.args);
+        if (p.length >= 3) {
+          const id = (p[0] ?? "").trim();
+          const nameRaw = (p[1] ?? "").trim();
+          const sizeRaw = (p[2] ?? "").trim();
+          const name = unquoteString(nameRaw);
+          const size = asNumber(sizeRaw);
+
+          if (id.length && typeof name === "string" && typeof size === "number") {
+            fontById.set(id, {
+              name,
+              size,
+              flagsRaw: p[3]?.trim() || undefined
+            });
+          }
+        }
+        continue;
+      }
+
+      case "SetGadgetFont": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 2 && g) {
+          const fontExpr = (p[1] ?? "").trim();
+          const m = /^FontID\((.+)\)$/i.exec(fontExpr);
+          const fontId = m?.[1]?.trim();
+          const font = fontId ? fontById.get(fontId) : undefined;
+          if (font) {
+            g.gadgetFont = font.name;
+            g.gadgetFontSize = font.size;
+            g.gadgetFontFlagsRaw = font.flagsRaw;
+          }
+        }
+        continue;
+      }
+
+      case "SetGadgetState": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 2 && g) {
+          const stateRaw = (p[1] ?? "").trim();
+          g.stateRaw = stateRaw || undefined;
+
+          if (/^#PB_CheckBox_Checked$/i.test(stateRaw)) {
+            g.state = 1;
+          } else {
+            const state = asNumber(stateRaw);
+            if (typeof state === "number") {
+              g.state = state;
+            }
           }
         }
         continue;
@@ -688,6 +808,19 @@ function applyWindowEventMetadata(lines: string[], win: FormWindow): void {
   }
 }
 
+function normalizeGadgetReference(raw: string | undefined): string | undefined {
+  const refRaw = raw?.trim();
+  if (!refRaw) return undefined;
+  return refRaw.startsWith("#") ? refRaw.slice(1) : refRaw;
+}
+
+function findGadgetByReference(gadgetById: Map<string, Gadget>, rawRef: string | undefined): Gadget | undefined {
+  const ref = normalizeGadgetReference(rawRef);
+  if (!ref) return undefined;
+
+  return gadgetById.get(ref) ?? gadgetById.get("#" + ref);
+}
+
 function normalizeWindowParent(raw: string | undefined): string | undefined {
   const parentRaw = raw?.trim();
   if (!parentRaw) return undefined;
@@ -837,21 +970,26 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const w = asNumber(p[3] ?? "") ?? 0;
   const h = asNumber(p[4] ?? "") ?? 0;
 
-  const text = unquoteString(p[5] ?? "");
+  const textRaw = p[5]?.trim();
+  const literalText = unquoteString(textRaw ?? "");
+  const text = literalText ?? (textRaw?.length ? textRaw : undefined);
+  const textVariable = literalText === undefined && !!textRaw?.length;
   const flagsExpr = p[6]?.trim();
 
-  return { 
-    id, 
-    kind, 
-    pbAny, 
-    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""), 
-    firstParam, 
-    x, 
-    y, 
-    w, 
-    h, 
-    text, 
-    flagsExpr, 
-    source: range 
+  return {
+    id,
+    kind,
+    pbAny,
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    x,
+    y,
+    w,
+    h,
+    textRaw,
+    text,
+    textVariable,
+    flagsExpr,
+    source: range
   };
 }
