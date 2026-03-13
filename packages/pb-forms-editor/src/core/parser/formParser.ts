@@ -155,6 +155,35 @@ export function parseFormDocument(text: string): FormDocument {
     if (curStatusBar) curStatusBar.fields.push(field);
   };
 
+  const findStatusBarByReference = (rawId: string | undefined): FormStatusBar | undefined => {
+    const ref = rawId?.trim();
+    if (ref && ref.length) {
+      const statusBar = doc.statusbars.find((entry) => entry.id === ref);
+      if (statusBar) return statusBar;
+    }
+    return curStatusBar;
+  };
+
+  const updateStatusBarField = (statusBar: FormStatusBar | undefined, indexRaw: string | undefined, apply: (field: FormStatusBarField) => void) => {
+    if (!statusBar) return;
+    const index = asNumber(indexRaw ?? "");
+    if (typeof index !== "number" || index < 0 || index >= statusBar.fields.length) return;
+    const field = statusBar.fields[index];
+    if (!field) return;
+    apply(field);
+  };
+
+  const applyToolBarTooltip = (toolBar: FormToolBar | undefined, buttonIdRaw: string | undefined, tooltip: string | undefined) => {
+    if (!toolBar || !buttonIdRaw || !tooltip) return;
+    for (let i = toolBar.entries.length - 1; i >= 0; i--) {
+      const entry = toolBar.entries[i];
+      if (entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip) continue;
+      if (!entry.idRaw || entry.idRaw !== buttonIdRaw) continue;
+      entry.tooltip = tooltip;
+      break;
+    }
+  };
+
   const calls: PbCall[] = scanCalls(text, scanRange);
   for (const c of calls) {
     // -----------------------------------------------------------------------------
@@ -187,7 +216,19 @@ export function parseFormDocument(text: string): FormDocument {
         const p = splitParams(c.args);
         const idRaw = p[0]?.trim();
         const textRaw = p[1]?.trim();
-        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuItem, level: menuLevel, idRaw, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        const parsedText = parseMenuItemText(textRaw);
+        const parsedIcon = parseImageReference(p[2]);
+        addMenuEntry({
+          kind: MENU_ENTRY_KIND.MenuItem,
+          level: menuLevel,
+          idRaw,
+          textRaw,
+          text: parsedText.text,
+          shortcut: parsedText.shortcut,
+          iconRaw: parsedIcon.imageRaw,
+          iconId: parsedIcon.imageId,
+          source: c.range
+        });
         break;
       }
 
@@ -247,6 +288,21 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
+      case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
+        if (!curToolBar) break;
+        const p = splitParams(c.args);
+        const parsedIcon = parseImageReference(p[1]);
+        addToolBarEntry({
+          kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+          idRaw: p[0]?.trim(),
+          iconRaw: parsedIcon.imageRaw,
+          iconId: parsedIcon.imageId,
+          toggle: (p[2]?.trim() ?? "") === "#PB_ToolBar_Toggle",
+          source: c.range
+        });
+        break;
+      }
+
       case TOOLBAR_ENTRY_KIND.ToolBarSeparator: {
         if (!curToolBar) break;
         addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarSeparator, source: c.range });
@@ -256,7 +312,11 @@ export function parseFormDocument(text: string): FormDocument {
       case TOOLBAR_ENTRY_KIND.ToolBarToolTip: {
         if (!curToolBar) break;
         const p = splitParams(c.args);
-        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip, idRaw: p[0]?.trim(), textRaw: p[1]?.trim(), text: unquoteString(p[1] ?? ""), source: c.range });
+        const buttonIdRaw = (p.length >= 3 ? p[1] : p[0])?.trim();
+        const textRaw = (p.length >= 3 ? p[2] : p[1])?.trim();
+        const text = unquoteString(textRaw ?? "");
+        addToolBarEntry({ kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip, idRaw: buttonIdRaw, textRaw, text, source: c.range });
+        applyToolBarTooltip(curToolBar, buttonIdRaw, text ?? undefined);
         break;
       }
 
@@ -280,6 +340,39 @@ export function parseFormDocument(text: string): FormDocument {
         if (widthRaw && widthRaw.length) {
           addStatusBarField({ widthRaw, source: c.range });
         }
+        break;
+      }
+
+      case "StatusBarText": {
+        const p = splitParams(c.args);
+        const statusBar = findStatusBarByReference(p[0]);
+        updateStatusBarField(statusBar, p[1], (field) => {
+          field.textRaw = p[2]?.trim() || undefined;
+          field.text = unquoteString(p[2] ?? "") ?? field.textRaw;
+          field.flagsRaw = p[3]?.trim() || undefined;
+        });
+        break;
+      }
+
+      case "StatusBarProgress": {
+        const p = splitParams(c.args);
+        const statusBar = findStatusBarByReference(p[0]);
+        updateStatusBarField(statusBar, p[1], (field) => {
+          field.progressBar = true;
+          field.flagsRaw = p[3]?.trim() || undefined;
+        });
+        break;
+      }
+
+      case "StatusBarImage": {
+        const p = splitParams(c.args);
+        const statusBar = findStatusBarByReference(p[0]);
+        updateStatusBarField(statusBar, p[1], (field) => {
+          const parsedImage = parseImageReference(p[2]);
+          field.imageRaw = parsedImage.imageRaw;
+          field.imageId = parsedImage.imageId;
+          field.flagsRaw = p[3]?.trim() || undefined;
+        });
         break;
       }
 
@@ -916,6 +1009,29 @@ function extractWindowCustomFlags(flagsExpr: string | undefined): string[] | und
   }
 
   return out.length ? out : undefined;
+}
+
+function parseMenuItemText(textRaw: string | undefined): { text?: string; shortcut?: string } {
+  const raw = textRaw?.trim();
+  if (!raw) return {};
+
+  const unescaped = raw.startsWith('~"') ? raw.slice(1) : raw;
+  if (unescaped.length < 2 || !unescaped.startsWith('"') || !unescaped.endsWith('"')) {
+    return { text: undefined, shortcut: undefined };
+  }
+
+  const inner = unescaped.slice(1, -1);
+  const shortcutPos = inner.indexOf('""');
+  if (shortcutPos < 0) {
+    return { text: inner.replace(/""/g, '"') || undefined };
+  }
+
+  const text = inner.slice(0, shortcutPos).replace(/""/g, '"');
+  const shortcut = inner.slice(shortcutPos + 2).replace(/""/g, '"');
+  return {
+    text: text.length ? text : undefined,
+    shortcut: shortcut.length ? shortcut : undefined
+  };
 }
 
 function parseImageReference(raw: string | undefined): { imageRaw?: string; imageId?: string } {

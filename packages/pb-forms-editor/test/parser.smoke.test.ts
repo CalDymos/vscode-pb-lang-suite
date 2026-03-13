@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { GADGET_KIND } from "../src/core/model";
+import { GADGET_KIND, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
 
 test("parses fixtures/smoke/01-window-basic.pbf", () => {
@@ -46,6 +46,131 @@ test("parses fixtures/smoke/03-gadgets-basic.pbf", () => {
   assert.equal(pbAnyGadgets[0]?.variable, "gInput");
 });
 
+
+
+test("parses fixtures/smoke/08-menu-basic.pbf", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.equal(doc.menus.length, 1);
+  const menu = doc.menus[0];
+  assert.ok(menu, "Expected a parsed menu.");
+  assert.equal(menu?.id, "#MenuMain");
+  assert.equal(menu?.entries.length, 6);
+
+  const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+  assert.ok(openItem, "Expected a menu item with icon and shortcut.");
+  assert.equal(openItem?.text, "Open");
+  assert.equal(openItem?.shortcut, "Ctrl+O");
+  assert.equal(openItem?.iconRaw, "ImageID(#ImgOpen)");
+  assert.equal(openItem?.iconId, "#ImgOpen");
+
+  const recentItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuRecent1");
+  assert.ok(recentItem, "Expected submenu item.");
+  assert.equal(recentItem?.level, 1);
+  assert.equal(recentItem?.text, "Last file");
+});
+
+test("parses fixtures/smoke/09-toolbar-basic.pbf", () => {
+  const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.equal(doc.toolbars.length, 1);
+  const toolBar = doc.toolbars[0];
+  assert.ok(toolBar, "Expected a parsed toolbar.");
+  assert.equal(toolBar?.id, "#TbMain");
+
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.ok(imageButton, "Expected a toolbar image button.");
+  assert.equal(imageButton?.idRaw, "#TbSave");
+  assert.equal(imageButton?.iconRaw, "ImageID(#ImgSave)");
+  assert.equal(imageButton?.iconId, "#ImgSave");
+  assert.equal(imageButton?.toggle, true);
+  assert.equal(imageButton?.tooltip, "Save current form");
+
+  const tipEntry = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
+  assert.ok(tipEntry, "Expected a toolbar tooltip entry.");
+  assert.equal(tipEntry?.idRaw, "#TbSave");
+  assert.equal(tipEntry?.text, "Save current form");
+});
+
+test("parses fixtures/smoke/10-statusbar-basic.pbf", () => {
+  const text = loadFixture("fixtures/smoke/10-statusbar-basic.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.equal(doc.statusbars.length, 1);
+  const statusBar = doc.statusbars[0];
+  assert.ok(statusBar, "Expected a parsed status bar.");
+  assert.equal(statusBar?.id, "#SbMain");
+  assert.equal(statusBar?.fields.length, 3);
+
+  const textField = statusBar?.fields[0];
+  assert.equal(textField?.widthRaw, "120");
+  assert.equal(textField?.textRaw, '"Ready"');
+  assert.equal(textField?.text, "Ready");
+  assert.equal(textField?.flagsRaw, "#PB_StatusBar_Center");
+
+  const progressField = statusBar?.fields[1];
+  assert.equal(progressField?.progressBar, true);
+  assert.equal(progressField?.flagsRaw, "#PB_StatusBar_Raised");
+
+  const imageField = statusBar?.fields[2];
+  assert.equal(imageField?.widthRaw, "#PB_Ignore");
+  assert.equal(imageField?.imageRaw, "ImageID(#ImgState)");
+  assert.equal(imageField?.imageId, "#ImgState");
+  assert.equal(imageField?.flagsRaw, "#PB_StatusBar_BorderLess");
+});
+
+
+test("parses fixtures/smoke/05-container-panel.pbf", () => {
+  const text = loadFixture("fixtures/smoke/05-container-panel.pbf");
+  const doc = parseFormDocument(text);
+
+  const panel = doc.gadgets.find((g) => g.id === "#PnlMain");
+  const txtTab0 = doc.gadgets.find((g) => g.id === "#TxtTab0");
+  const strTab1 = doc.gadgets.find((g) => g.id === "#StrTab1");
+  const btnTab2 = doc.gadgets.find((g) => g.id === "#BtnTab2");
+
+  assert.ok(panel, "Expected #PnlMain gadget.");
+  assert.equal(panel?.kind, GADGET_KIND.PanelGadget);
+  assert.equal(panel?.items?.length, 3);
+  assert.equal(panel?.items?.[0]?.text, "General");
+  assert.equal(panel?.items?.[1]?.text, "Advanced");
+  assert.equal(panel?.items?.[2]?.text, "Third");
+
+  assert.ok(txtTab0, "Expected #TxtTab0 gadget.");
+  assert.equal(txtTab0?.parentId, "#PnlMain");
+  assert.equal(txtTab0?.parentItem, 0);
+
+  assert.ok(strTab1, "Expected #StrTab1 gadget.");
+  assert.equal(strTab1?.parentId, "#PnlMain");
+  assert.equal(strTab1?.parentItem, 1);
+
+  assert.ok(btnTab2, "Expected #BtnTab2 gadget.");
+  assert.equal(btnTab2?.parentId, "#PnlMain");
+  assert.equal(btnTab2?.parentItem, 2);
+});
+
+
+test("parses fixtures/smoke/06-container-scrollarea.pbf", () => {
+  const text = loadFixture("fixtures/smoke/06-container-scrollarea.pbf");
+  const doc = parseFormDocument(text);
+
+  const scroll = doc.gadgets.find((g) => g.id === "#ScrMain");
+  const inner = doc.gadgets.find((g) => g.id === "#TxtInner");
+
+  assert.ok(scroll, "Expected #ScrMain gadget.");
+  assert.equal(scroll?.kind, GADGET_KIND.ScrollAreaGadget);
+  assert.equal(scroll?.minRaw, "480");
+  assert.equal(scroll?.min, 480);
+  assert.equal(scroll?.maxRaw, "320");
+  assert.equal(scroll?.max, 320);
+  assert.equal(scroll?.flagsExpr, "#PB_ScrollArea_Flat");
+
+  assert.ok(inner, "Expected #TxtInner gadget.");
+  assert.equal(inner?.parentId, "#ScrMain");
+  assert.equal(inner?.parentItem, undefined);
+});
 test("parses fixtures/smoke/07-container-splitter.pbf", () => {
   const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
   const doc = parseFormDocument(text);

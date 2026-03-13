@@ -193,7 +193,9 @@ export interface FormMenuEntry {
   idRaw?: string;        // raw id token (MenuItem)
   textRaw?: string;      // raw title/text token
   text?: string;         // unquoted (when possible)
-  iconRaw?: string;      // for ToolBar entries (optional)
+  shortcut?: string;     // parsed shortcut suffix from MenuItem(...)
+  iconRaw?: string;      // raw ImageID(...) expression for menu icons
+  iconId?: string;       // normalized image identifier for menu icons
   widthRaw?: string;     // for StatusBar fields (optional)
   source?: SourceRange;
 }
@@ -207,6 +209,7 @@ export interface FormMenu {
 export const TOOLBAR_ENTRY_KIND = {
   ToolBarStandardButton: "ToolBarStandardButton",
   ToolBarButton: "ToolBarButton",
+  ToolBarImageButton: "ToolBarImageButton",
   ToolBarSeparator: "ToolBarSeparator",
   ToolBarToolTip: "ToolBarToolTip",
   Unknown: "Unknown",
@@ -219,8 +222,11 @@ export interface FormToolBarEntry {
   kind: ToolBarEntryKind;
   idRaw?: string;
   iconRaw?: string;
+  iconId?: string;
   textRaw?: string;
   text?: string;
+  tooltip?: string;
+  toggle?: boolean;
   source?: SourceRange;
 }
 
@@ -232,6 +238,12 @@ export interface FormToolBar {
 
 export interface FormStatusBarField {
   widthRaw: string;
+  textRaw?: string;
+  text?: string;
+  imageRaw?: string;
+  imageId?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
   source?: SourceRange;
 }
 
