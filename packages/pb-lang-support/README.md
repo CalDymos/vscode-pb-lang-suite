@@ -175,6 +175,12 @@ The extension provides some configuration options. Access these via:
 - `Shift+Alt+F` → Format  
 - `Ctrl+Space` → Suggestions  
 
+## Acknowledgements
+
+This extension is based on [vscode-pb-lang-support](https://github.com/meimingqi222/vscode-pb-lang-support) by [meimingqi222](https://github.com/meimingqi222), which provided the initial PureBasic TextMate grammar and language support foundation.
+
+It has since been significantly extended with a Language Server, Debug Adapter, build/run toolchain integration, and is now part of the [PureBasic VS Code Language Suite](https://github.com/CalDymos/vscode-pb-lang-suite) monorepo.
+
 ## License
 
 MIT License

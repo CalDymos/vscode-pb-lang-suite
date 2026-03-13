@@ -398,3 +398,9 @@ npm run test:coverage
 - **Comments**: JSDoc comments for public APIs where helpful
 - **Error Handling**: Prefer centralized handling and typed fallbacks in host/server layers
 - **Testing**: Add or update tests for user-visible changes
+
+## Acknowledgements
+
+This extension is based on [vscode-pb-lang-support](https://github.com/meimingqi222/vscode-pb-lang-support) by [meimingqi222](https://github.com/meimingqi222), which provided the initial PureBasic TextMate grammar and language support foundation.
+
+It has since been significantly extended with a Language Server, Debug Adapter, build/run toolchain integration, and is now part of the [PureBasic VS Code Language Suite](https://github.com/CalDymos/vscode-pb-lang-suite) monorepo.
