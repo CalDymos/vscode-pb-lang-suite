@@ -68,6 +68,15 @@ function parseFixture() {
   return { text, parsed, menu: menu!, toolBar: toolBar!, statusBar: statusBar! };
 }
 
+function parseStatusFixture() {
+  const text = loadFixture("fixtures/smoke/10-statusbar-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+
+  assert.ok(statusBar, "Expected #SbMain statusbar in statusbar fixture.");
+  return { text, parsed, statusBar: statusBar! };
+}
+
 test("roundtrips menu entry insert with shortcut and icon", () => {
   const { text } = parseFixture();
   const args: MenuEntryArgs = {
@@ -194,10 +203,12 @@ test("roundtrips toolbar entry delete", () => {
   assert.doesNotMatch(patchedText, /ToolBarButton\(#TbRefresh, 0, "Refresh"\)/);
 });
 
-test("roundtrips statusbar field insert", () => {
+test("roundtrips statusbar field insert with text decoration", () => {
   const { text } = parseFixture();
   const args: StatusBarFieldArgs = {
     widthRaw: "240",
+    textRaw: '"State"',
+    flagsRaw: "#PB_StatusBar_Center",
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
@@ -208,16 +219,21 @@ test("roundtrips statusbar field insert", () => {
   assert.ok(statusBar, "Expected statusbar after insert.");
   assert.equal(statusBar!.fields.length, 2);
   assert.equal(statusBar!.fields[1]?.widthRaw, "240");
+  assert.equal(statusBar!.fields[1]?.text, "State");
+  assert.equal(statusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Center");
   assert.match(patchedText, /AddStatusBarField\(240\)/);
+  assert.match(patchedText, /StatusBarText\(#SbMain, 1, "State", #PB_StatusBar_Center\)/);
 });
 
-test("roundtrips statusbar field update", () => {
-  const { text, statusBar } = parseFixture();
+test("roundtrips statusbar field update while preserving later field decorations", () => {
+  const { text, statusBar } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
 
   const args: StatusBarFieldArgs = {
     widthRaw: "180",
+    textRaw: '"Ready now"',
+    flagsRaw: "#PB_StatusBar_Right",
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
@@ -226,13 +242,19 @@ test("roundtrips statusbar field update", () => {
 
   const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
   assert.ok(updatedStatusBar, "Expected statusbar after update.");
-  assert.equal(updatedStatusBar!.fields.length, 1);
+  assert.equal(updatedStatusBar!.fields.length, 3);
   assert.equal(updatedStatusBar!.fields[0]?.widthRaw, "180");
-  assert.match(patchedText, /AddStatusBarField\(180\)/);
+  assert.equal(updatedStatusBar!.fields[0]?.text, "Ready now");
+  assert.equal(updatedStatusBar!.fields[0]?.flagsRaw, "#PB_StatusBar_Right");
+  assert.equal(updatedStatusBar!.fields[1]?.progressBar, true);
+  assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "35");
+  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#ImgState");
+  assert.match(patchedText, /StatusBarProgress\(#SbMain, 1, 35, #PB_StatusBar_Raised\)/);
+  assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
 });
 
-test("roundtrips statusbar field delete", () => {
-  const { text, statusBar } = parseFixture();
+test("roundtrips statusbar field delete reindexes later decoration lines", () => {
+  const { text, statusBar } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
 
@@ -242,6 +264,11 @@ test("roundtrips statusbar field delete", () => {
 
   const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
   assert.ok(updatedStatusBar, "Expected statusbar after delete.");
-  assert.equal(updatedStatusBar!.fields.length, 0);
-  assert.doesNotMatch(patchedText, /AddStatusBarField\(120\)/);
+  assert.equal(updatedStatusBar!.fields.length, 2);
+  assert.equal(updatedStatusBar!.fields[0]?.progressBar, true);
+  assert.equal(updatedStatusBar!.fields[0]?.progressRaw, "35");
+  assert.equal(updatedStatusBar!.fields[1]?.imageId, "#ImgState");
+  assert.doesNotMatch(patchedText, /StatusBarText\(#SbMain, 0, "Ready", #PB_StatusBar_Center\)/);
+  assert.match(patchedText, /StatusBarProgress\(#SbMain, 0, 35, #PB_StatusBar_Raised\)/);
+  assert.match(patchedText, /StatusBarImage\(#SbMain, 1, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
 });

@@ -376,6 +376,7 @@ export function parseFormDocument(text: string): FormDocument {
         const statusBar = findStatusBarByReference(p[0]);
         updateStatusBarField(statusBar, p[1], (field) => {
           field.progressBar = true;
+          field.progressRaw = p[2]?.trim() || undefined;
           field.flagsRaw = p[3]?.trim() || undefined;
         });
         break;

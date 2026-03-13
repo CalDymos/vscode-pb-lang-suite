@@ -244,6 +244,7 @@ export interface FormStatusBarField {
   imageId?: string;
   flagsRaw?: string;
   progressBar?: boolean;
+  progressRaw?: string;
   source?: SourceRange;
 }
 

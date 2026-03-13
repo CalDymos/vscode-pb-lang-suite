@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
+import { parseFormDocument } from "../parser/formParser";
 import { splitParams } from "../parser/tokenizer";
-import { ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormStatusBarField, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -183,6 +184,11 @@ export interface ToolBarEntryArgs {
 
 export interface StatusBarFieldArgs {
   widthRaw: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
 }
 
 function isCreateBoundary(nameLower: string): boolean {
@@ -1191,7 +1197,7 @@ const TOOLBAR_ENTRY_NAMES = new Set([
   "toolbarseparator",
   "toolbartooltip"
 ]);
-const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield"]);
+const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
 
 function findCreateCallById(calls: PbCall[], createNameLower: string, id: string): PbCall | undefined {
   return calls.find(c => c.name.toLowerCase() === createNameLower && firstParamOfCall(c.args) === id);
@@ -1288,6 +1294,115 @@ function applySectionEntryDelete(
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  return edit;
+}
+
+function mapStatusBarArgsToField(args: StatusBarFieldArgs): FormStatusBarField {
+  return {
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+}
+
+function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarField, index: number): string | undefined {
+  const flags = field.flagsRaw?.trim();
+  const flagsSuffix = flags ? `, ${flags}` : "";
+
+  if (field.progressBar) {
+    const progress = field.progressRaw?.trim() || "0";
+    return `StatusBarProgress(${statusBarId}, ${index}, ${progress}${flagsSuffix})`;
+  }
+
+  const image = field.imageRaw?.trim();
+  if (image) {
+    return `StatusBarImage(${statusBarId}, ${index}, ${image}${flagsSuffix})`;
+  }
+
+  const text = field.textRaw?.trim();
+  if (text) {
+    return `StatusBarText(${statusBarId}, ${index}, ${text}${flagsSuffix})`;
+  }
+
+  return undefined;
+}
+
+function buildStatusBarSectionText(statusBarId: string, fields: FormStatusBarField[], indent: string): string {
+  const lines: string[] = [];
+
+  for (const field of fields) {
+    lines.push(`${indent}AddStatusBarField(${field.widthRaw.trim()})`);
+  }
+
+  fields.forEach((field, index) => {
+    const decoration = buildStatusBarDecorationLine(statusBarId, field, index);
+    if (decoration) {
+      lines.push(`${indent}${decoration}`);
+    }
+  });
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function cloneStatusBarField(field: FormStatusBarField): FormStatusBarField {
+  return {
+    widthRaw: field.widthRaw,
+    textRaw: field.textRaw,
+    text: field.text,
+    imageRaw: field.imageRaw,
+    imageId: field.imageId,
+    flagsRaw: field.flagsRaw,
+    progressBar: field.progressBar,
+    progressRaw: field.progressRaw,
+    source: field.source,
+  };
+}
+
+function applyStatusBarFieldMutation(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  mutate: (fields: FormStatusBarField[]) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const statusBar = parsed.statusbars.find(sb => sb.id === statusBarId);
+  if (!statusBar) return undefined;
+
+  const nextFields = statusBar.fields.map(cloneStatusBarField);
+  if (!mutate(nextFields)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const create = findCreateCallById(calls, "createstatusbar", statusBarId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const endLineExclusive = endIdx < calls.length ? calls[endIdx].range.line : Number.POSITIVE_INFINITY;
+  const statusCalls = calls.filter(c => c.range.line > create.range.line && c.range.line < endLineExclusive && STATUSBAR_FIELD_NAMES.has(c.name.toLowerCase()));
+
+  const indentLine = statusCalls.length ? statusCalls[0].range.line : create.range.line;
+  const indent = getLineIndent(document, indentLine);
+  const rebuilt = buildStatusBarSectionText(statusBarId, nextFields, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  if (statusCalls.length) {
+    const firstLine = statusCalls[0].range.line;
+    const lastLine = statusCalls[statusCalls.length - 1].range.line;
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      rebuilt
+    );
+    return edit;
+  }
+
+  if (!rebuilt) return undefined;
+
+  edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, create.range.line + 1), 0), rebuilt);
   return edit;
 }
 
@@ -1406,14 +1521,14 @@ export function applyStatusBarFieldInsert(
   args: StatusBarFieldArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryInsert(
+  return applyStatusBarFieldMutation(
     document,
-    calls,
-    "createstatusbar",
     statusBarId,
-    STATUSBAR_FIELD_NAMES,
-    indent => `${indent}AddStatusBarField(${args.widthRaw.trim()})`
+    fields => {
+      fields.push(mapStatusBarArgsToField(args));
+      return true;
+    },
+    scanRange
   );
 }
 
@@ -1424,15 +1539,19 @@ export function applyStatusBarFieldUpdate(
   args: StatusBarFieldArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryUpdate(
+  return applyStatusBarFieldMutation(
     document,
-    calls,
-    "createstatusbar",
     statusBarId,
-    sourceLine,
-    "addstatusbarfield",
-    `AddStatusBarField(${args.widthRaw.trim()})`
+    fields => {
+      const index = fields.findIndex(field => field.source?.line === sourceLine);
+      if (index < 0) return false;
+      fields[index] = {
+        ...fields[index],
+        ...mapStatusBarArgsToField(args),
+      };
+      return true;
+    },
+    scanRange
   );
 }
 
@@ -1442,13 +1561,15 @@ export function applyStatusBarFieldDelete(
   sourceLine: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryDelete(
+  return applyStatusBarFieldMutation(
     document,
-    calls,
-    "createstatusbar",
     statusBarId,
-    sourceLine,
-    "addstatusbarfield"
+    fields => {
+      const index = fields.findIndex(field => field.source?.line === sourceLine);
+      if (index < 0) return false;
+      fields.splice(index, 1);
+      return true;
+    },
+    scanRange
   );
 }
