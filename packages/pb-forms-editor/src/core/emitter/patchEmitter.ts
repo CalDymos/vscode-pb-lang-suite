@@ -171,6 +171,12 @@ export interface WindowPropertyArgs {
   colorRaw?: string;
 }
 
+export interface WindowOpenArgs {
+  captionRaw?: string;
+  flagsExpr?: string;
+  parentRaw?: string;
+}
+
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
@@ -721,6 +727,40 @@ export function applyWindowRectPatch(
   params[2] = String(Math.trunc(y));
   params[3] = String(Math.trunc(w));
   params[4] = String(Math.trunc(h));
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
+
+export function applyWindowOpenArgsUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowOpenArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 6) return undefined;
+
+  const captionRaw = normalizeOptionalRaw(args.captionRaw) ?? (params[5]?.trim().length ? params[5].trim() : '""');
+  const parentRaw = normalizeOptionalRaw(args.parentRaw);
+  let flagsExpr = normalizeOptionalRaw(args.flagsExpr);
+
+  if (parentRaw && !flagsExpr) {
+    flagsExpr = "0";
+  }
+
+  params[5] = captionRaw;
+  params[6] = flagsExpr ?? "";
+  params[7] = parentRaw ?? "";
+
+  while (params.length > 6 && !(params[params.length - 1]?.trim().length)) {
+    params.pop();
+  }
 
   return replaceCallArgsEdit(document, call, params);
 }
