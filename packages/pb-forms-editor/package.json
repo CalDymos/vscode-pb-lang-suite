@@ -202,8 +202,5 @@
     "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
     "typescript": "^5.4.0"
-  },
-  "extensionDependencies": [
-    "CalDymos.pb-lang-support"
-  ]
+  }
 }
