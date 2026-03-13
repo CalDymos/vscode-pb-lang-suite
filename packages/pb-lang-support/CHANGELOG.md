@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.2
+
+- Fixed an issue where the extension failed to activate in some cases.
+
 ## 0.18.1
 
 ### Changed
