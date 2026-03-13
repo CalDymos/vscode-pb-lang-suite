@@ -212,10 +212,11 @@ test("parses fixtures/smoke/13-events-and-parent-window.pbf", () => {
   assert.equal(doc.window?.eventFile, "events/form-events.pbi");
   assert.equal(doc.window?.generateEventLoop, true);
   assert.equal(doc.window?.eventProc, "HandleFrmEventsParent");
+  assert.deepEqual(doc.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
   assert.deepEqual(doc.window?.customFlags, ["#PB_Window_CustomTag"]);
 });
 
-test("deduplicates custom window flags and does not treat known flags as custom", () => {
+test("deduplicates known and custom window flags separately", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
 ; EnableExplicit
@@ -231,12 +232,13 @@ Enumeration FormGadget
 EndEnumeration
 
 Procedure OpenFrmMain()
-  OpenWindow(#FrmMain, 0, 0, 100, 100, "Main", #PB_Window_SystemMenu | #PB_Window_CustomAlpha | #PB_Window_CustomAlpha | #PB_Window_SizeGadget | #PB_Window_CustomBeta)
+  OpenWindow(#FrmMain, 0, 0, 100, 100, "Main", #PB_Window_SystemMenu | #PB_Window_CustomAlpha | #PB_Window_CustomAlpha | #PB_Window_SizeGadget | #PB_Window_SystemMenu | #PB_Window_CustomBeta)
 EndProcedure
 `;
 
   const doc = parseFormDocument(text);
   assert.ok(doc.window, "Expected a parsed window.");
+  assert.deepEqual(doc.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
   assert.deepEqual(doc.window?.customFlags, ["#PB_Window_CustomAlpha", "#PB_Window_CustomBeta"]);
 });
 

@@ -749,6 +749,17 @@ function splitFlagExpr(flagsExpr: string | undefined): string[] {
     .filter((flag) => flag.length > 0 && flag !== "0");
 }
 
+function extractWindowKnownFlags(flagsExpr: string | undefined): string[] | undefined {
+  const out: string[] = [];
+
+  for (const flag of splitFlagExpr(flagsExpr)) {
+    if (!KNOWN_WINDOW_FLAGS.has(flag)) continue;
+    if (!out.includes(flag)) out.push(flag);
+  }
+
+  return out.length ? out : undefined;
+}
+
 function extractWindowCustomFlags(flagsExpr: string | undefined): string[] | undefined {
   const out: string[] = [];
 
@@ -784,6 +795,7 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   const caption = literalCaption ?? (captionRaw.length ? captionRaw : undefined);
   const captionVariable = literalCaption === undefined && captionRaw.length > 0;
   const flagsExpr = p[6]?.trim();
+  const knownFlags = extractWindowKnownFlags(flagsExpr);
   const parentRaw = p[7]?.trim();
   const parent = normalizeWindowParent(parentRaw);
   const customFlags = extractWindowCustomFlags(flagsExpr);
@@ -803,6 +815,7 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
     captionVariable,
     title: caption,
     flagsExpr,
+    knownFlags,
     parentRaw,
     parent,
     eventFile,

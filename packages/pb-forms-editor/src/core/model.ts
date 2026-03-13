@@ -98,6 +98,7 @@ export interface FormWindow {
   captionVariable?: boolean; // matches original FormWindow\captionvariable
   title?: string;            // temporary compatibility alias for current extension code
   flagsExpr?: string;
+  knownFlags?: string[];
   colorRaw?: string;         // raw color expression from SetWindowColor(...)
   color?: number;
   generateEventLoop?: boolean;
