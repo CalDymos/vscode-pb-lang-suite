@@ -133,6 +133,8 @@ export interface FormWindow {
   colorRaw?: string;         // raw color expression from SetWindowColor(...)
   color?: number;
   generateEventLoop?: boolean;
+  hasEventGadgetBlock?: boolean;
+  hasEventMenuBlock?: boolean;
   disabledRaw?: string;      // raw disabled expression from DisableWindow(...)
   disabled?: boolean;
   hiddenRaw?: string;        // raw hidden expression from HideWindow(...)

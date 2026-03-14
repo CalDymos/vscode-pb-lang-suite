@@ -360,6 +360,8 @@ test("parses fixtures/smoke/13-events-and-parent-window.pbf", () => {
   assert.equal(doc.window?.parent, "#ParentWin");
   assert.equal(doc.window?.eventFile, "events/form-events.pbi");
   assert.equal(doc.window?.generateEventLoop, true);
+  assert.equal(doc.window?.hasEventGadgetBlock, true);
+  assert.equal(doc.window?.hasEventMenuBlock, undefined);
   assert.equal(doc.window?.eventProc, "HandleFrmEventsParent");
   assert.deepEqual(doc.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
   assert.deepEqual(doc.window?.customFlags, ["#PB_Window_CustomTag"]);
@@ -372,6 +374,8 @@ test("parses fixtures/smoke/15-object-event-bindings.pbf", () => {
   assert.ok(doc.window, "Expected a parsed window.");
   assert.equal(doc.window?.id, "#FrmObjectEvents");
   assert.equal(doc.window?.generateEventLoop, true);
+  assert.equal(doc.window?.hasEventGadgetBlock, true);
+  assert.equal(doc.window?.hasEventMenuBlock, true);
 
   const btn = doc.gadgets.find((g) => g.id === "#BtnApply");
   assert.ok(btn, "Expected #BtnApply gadget.");
@@ -385,6 +389,18 @@ test("parses fixtures/smoke/15-object-event-bindings.pbf", () => {
   assert.ok(toolBarButton, "Expected #TbRefresh toolbar entry.");
   assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
 });
+
+
+test("keeps event-block presence flags undefined when no event selects exist", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.ok(doc.window, "Expected a parsed window.");
+  assert.equal(doc.window?.generateEventLoop, undefined);
+  assert.equal(doc.window?.hasEventGadgetBlock, undefined);
+  assert.equal(doc.window?.hasEventMenuBlock, undefined);
+});
+
 
 test("deduplicates known and custom window flags separately", () => {
   const text = `; Form Designer for PureBasic - 6.20

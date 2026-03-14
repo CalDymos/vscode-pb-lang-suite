@@ -48,6 +48,8 @@ type WindowModel = {
   eventFile?: string;
   eventProc?: string;
   generateEventLoop?: boolean;
+  hasEventGadgetBlock?: boolean;
+  hasEventMenuBlock?: boolean;
 };
 
 type MenuEntry = {
@@ -1449,7 +1451,7 @@ function renderProps() {
     label: string,
     onEdit?: () => void,
     onDelete?: () => void,
-    extra?: { label: string; onClick?: () => void }
+    extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1469,8 +1471,9 @@ function renderProps() {
 
     const b3 = document.createElement("button");
     b3.textContent = extra?.label ?? "";
-    b3.disabled = !extra?.onClick;
+    b3.disabled = extra ? Boolean(extra.disabled) || !extra.onClick : true;
     b3.hidden = !extra;
+    b3.title = extra?.title ?? "";
     b3.onclick = () => extra?.onClick?.();
 
     r.appendChild(l);
@@ -1538,19 +1541,33 @@ function renderProps() {
         renderProps();
       }))
     );
+    const hasEventGadgetBlock = Boolean(model.window.hasEventGadgetBlock);
+    const windowEventProcHint = hasEventGadgetBlock
+      ? ""
+      : "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.";
     propsEl.appendChild(
-      row("Event Proc", textInput(model.window.eventProc ?? "", v => {
-        if (!model.window) return;
-        const trimmed = v.trim();
-        model.window.eventProc = trimmed || undefined;
-        post({
-          type: "setWindowEventProc",
-          windowKey: model.window.id,
-          eventProc: trimmed.length ? trimmed : undefined
-        });
-        renderProps();
-      }))
+      row(
+        "Event Proc",
+        textInput(
+          model.window.eventProc ?? "",
+          v => {
+            if (!model.window || !hasEventGadgetBlock) return;
+            const trimmed = v.trim();
+            model.window.eventProc = trimmed || undefined;
+            post({
+              type: "setWindowEventProc",
+              windowKey: model.window.id,
+              eventProc: trimmed.length ? trimmed : undefined
+            });
+            renderProps();
+          },
+          { disabled: !hasEventGadgetBlock, title: windowEventProcHint }
+        )
+      )
     );
+    if (!hasEventGadgetBlock) {
+      propsEl.appendChild(mutedNote(windowEventProcHint));
+    }
     propsEl.appendChild(
       row("Generate Event Loop", checkboxInput(Boolean(model.window.generateEventLoop), v => {
         if (!model.window) return;
@@ -1587,6 +1604,10 @@ function renderProps() {
 
     propsEl.appendChild(row("Id", readonlyInput(m.id)));
     propsEl.appendChild(row("Entries", readonlyInput(String(m.entries?.length ?? 0))));
+    const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
+    if (!hasEventMenuBlock) {
+      propsEl.appendChild(mutedNote("Event editing requires an existing Select EventMenu() block."));
+    }
     const box = miniList();
     for (const e of m.entries ?? []) {
       const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
@@ -1644,7 +1665,7 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw
+      const eventFn = e.idRaw && hasEventMenuBlock
         ? () => {
             const cur = e.event ?? "";
             const value = prompt("Event proc (blank clears)", cur);
@@ -1659,8 +1680,13 @@ function renderProps() {
             renderProps();
           }
         : undefined;
+      const menuEventTitle = !e.idRaw
+        ? "Only menu entries with ids can have event procedures."
+        : hasEventMenuBlock
+          ? ""
+          : "Requires an existing Select EventMenu() block.";
 
-      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn }));
+      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle }));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -1713,6 +1739,10 @@ function renderProps() {
 
     propsEl.appendChild(row("Id", readonlyInput(t.id)));
     propsEl.appendChild(row("Entries", readonlyInput(String(t.entries?.length ?? 0))));
+    const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
+    if (!hasEventMenuBlock) {
+      propsEl.appendChild(mutedNote("Event editing requires an existing Select EventMenu() block."));
+    }
     const box = miniList();
     for (const e of t.entries ?? []) {
       const text = e.text ?? e.textRaw ?? "";
@@ -1792,7 +1822,7 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw
+      const eventFn = e.idRaw && hasEventMenuBlock
         ? () => {
             const cur = e.event ?? "";
             const value = prompt("Event proc (blank clears)", cur);
@@ -1807,8 +1837,13 @@ function renderProps() {
             renderProps();
           }
         : undefined;
+      const toolBarEventTitle = !e.idRaw
+        ? "Only toolbar entries with ids can have event procedures."
+        : hasEventMenuBlock
+          ? ""
+          : "Requires an existing Select EventMenu() block.";
 
-      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn }));
+      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle }));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -1941,16 +1976,33 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
-  propsEl.appendChild(row("Event Proc", textInput(g.eventProc ?? "", v => {
-    const trimmed = v.trim();
-    g.eventProc = trimmed || undefined;
-    post({
-      type: "setGadgetEventProc",
-      id: g.id,
-      eventProc: trimmed.length ? trimmed : undefined
-    });
-    renderProps();
-  })));
+  const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
+  const gadgetEventProcHint = hasEventGadgetBlock
+    ? ""
+    : "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.";
+  propsEl.appendChild(
+    row(
+      "Event Proc",
+      textInput(
+        g.eventProc ?? "",
+        v => {
+          if (!hasEventGadgetBlock) return;
+          const trimmed = v.trim();
+          g.eventProc = trimmed || undefined;
+          post({
+            type: "setGadgetEventProc",
+            id: g.id,
+            eventProc: trimmed.length ? trimmed : undefined
+          });
+          renderProps();
+        },
+        { disabled: !hasEventGadgetBlock, title: gadgetEventProcHint }
+      )
+    )
+  );
+  if (!hasEventGadgetBlock) {
+    propsEl.appendChild(mutedNote(gadgetEventProcHint));
+  }
 
   if (g.parentId) {
     const btn = document.createElement("button");
@@ -2123,9 +2175,24 @@ function readonlyInput(value: string) {
   return i;
 }
 
-function textInput(value: string, onChange: (v: string) => void) {
+
+function mutedNote(message: string) {
+  const d = document.createElement("div");
+  d.className = "muted";
+  d.textContent = message;
+  return d;
+}
+
+function textInput(
+  value: string,
+  onChange: (v: string) => void,
+  options?: { disabled?: boolean; title?: string; placeholder?: string }
+) {
   const i = document.createElement("input");
   i.value = value;
+  i.disabled = Boolean(options?.disabled);
+  i.title = options?.title ?? "";
+  i.placeholder = options?.placeholder ?? "";
   i.onchange = () => onChange(i.value);
   return i;
 }

@@ -889,7 +889,10 @@ function applyEventMetadata(lines: string[], doc: FormDocument): void {
     if (!line.length) continue;
 
     if (/^Select\s+EventMenu\s*\(\s*\)\s*$/i.test(line)) {
-      if (doc.window) doc.window.generateEventLoop = true;
+      if (doc.window) {
+        doc.window.generateEventLoop = true;
+        doc.window.hasEventMenuBlock = true;
+      }
       inEventMenuSelect = true;
       eventMenuDepth = 1;
       pendingMenuCaseRaw = undefined;
@@ -897,7 +900,10 @@ function applyEventMetadata(lines: string[], doc: FormDocument): void {
     }
 
     if (/^Select\s+EventGadget\s*\(\s*\)\s*$/i.test(line)) {
-      if (doc.window) doc.window.generateEventLoop = true;
+      if (doc.window) {
+        doc.window.generateEventLoop = true;
+        doc.window.hasEventGadgetBlock = true;
+      }
       inEventGadgetSelect = true;
       eventGadgetDepth = 1;
       pendingWindowDefaultProc = false;
