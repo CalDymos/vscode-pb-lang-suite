@@ -258,6 +258,29 @@ if (!window.__PBFD_SYMBOLS__) {
   throw new Error("__PBFD_SYMBOLS__ is not defined");
 }
 
+const EVENT_UI_HINT = {
+  eventGadgetMissing: "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.",
+  eventMenuMissing: "Event editing requires an existing Select EventMenu() block.",
+  menuIdRequired: "Only menu entries with ids can have event procedures.",
+  toolBarIdRequired: "Only toolbar entries with ids can have event procedures.",
+  generateEventLoopMenuBlock: "Cannot disable while a Select EventMenu() block exists.",
+  generateEventLoopGadgetCases: "Cannot disable while Select EventGadget() contains Case branches."
+} as const;
+
+function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entryLabel: "menu" | "toolbar" = "menu"): string {
+  if (!idRaw) {
+    return entryLabel === "menu" ? EVENT_UI_HINT.menuIdRequired : EVENT_UI_HINT.toolBarIdRequired;
+  }
+  return hasEventMenuBlock ? "" : EVENT_UI_HINT.eventMenuMissing;
+}
+
+function getGenerateEventLoopDisableHint(win?: WindowModel): string {
+  if (!win) return "";
+  if (win.hasEventMenuBlock) return EVENT_UI_HINT.generateEventLoopMenuBlock;
+  if (win.hasEventGadgetCaseBranches) return EVENT_UI_HINT.generateEventLoopGadgetCases;
+  return "";
+}
+
 const PBFD_SYMBOLS: PbfdSymbols = window.__PBFD_SYMBOLS__;
 
 function menuEntryKindHint(): string {
@@ -1545,7 +1568,7 @@ function renderProps() {
     const hasEventGadgetBlock = Boolean(model.window.hasEventGadgetBlock);
     const windowEventProcHint = hasEventGadgetBlock
       ? ""
-      : "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.";
+      : EVENT_UI_HINT.eventGadgetMissing;
     propsEl.appendChild(
       row(
         "Event Proc",
@@ -1572,11 +1595,7 @@ function renderProps() {
     const hasEventMenuBlockForLoop = Boolean(model.window.hasEventMenuBlock);
     const hasEventGadgetCasesForLoop = Boolean(model.window.hasEventGadgetCaseBranches);
     const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
-    const generateEventLoopDisableHint = hasEventMenuBlockForLoop
-      ? "Cannot disable while a Select EventMenu() block exists."
-      : hasEventGadgetCasesForLoop
-        ? "Cannot disable while Select EventGadget() contains Case branches."
-        : "";
+    const generateEventLoopDisableHint = getGenerateEventLoopDisableHint(model.window);
     propsEl.appendChild(
       row(
         "Generate Event Loop",
@@ -1634,8 +1653,12 @@ function renderProps() {
     propsEl.appendChild(row("Id", readonlyInput(m.id)));
     propsEl.appendChild(row("Entries", readonlyInput(String(m.entries?.length ?? 0))));
     const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
+    const hasEntriesWithoutEventIds = (m.entries ?? []).some(e => !e.idRaw);
     if (!hasEventMenuBlock) {
-      propsEl.appendChild(mutedNote("Event editing requires an existing Select EventMenu() block."));
+      propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
+    }
+    if (hasEntriesWithoutEventIds) {
+      propsEl.appendChild(mutedNote(EVENT_UI_HINT.menuIdRequired));
     }
     const box = miniList();
     for (const e of m.entries ?? []) {
@@ -1709,11 +1732,7 @@ function renderProps() {
             renderProps();
           }
         : undefined;
-      const menuEventTitle = !e.idRaw
-        ? "Only menu entries with ids can have event procedures."
-        : hasEventMenuBlock
-          ? ""
-          : "Requires an existing Select EventMenu() block.";
+      const menuEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "menu");
 
       box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle }));
     }
@@ -1769,8 +1788,12 @@ function renderProps() {
     propsEl.appendChild(row("Id", readonlyInput(t.id)));
     propsEl.appendChild(row("Entries", readonlyInput(String(t.entries?.length ?? 0))));
     const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
+    const hasEntriesWithoutEventIds = (t.entries ?? []).some(e => !e.idRaw);
     if (!hasEventMenuBlock) {
-      propsEl.appendChild(mutedNote("Event editing requires an existing Select EventMenu() block."));
+      propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
+    }
+    if (hasEntriesWithoutEventIds) {
+      propsEl.appendChild(mutedNote(EVENT_UI_HINT.toolBarIdRequired));
     }
     const box = miniList();
     for (const e of t.entries ?? []) {
@@ -1866,11 +1889,7 @@ function renderProps() {
             renderProps();
           }
         : undefined;
-      const toolBarEventTitle = !e.idRaw
-        ? "Only toolbar entries with ids can have event procedures."
-        : hasEventMenuBlock
-          ? ""
-          : "Requires an existing Select EventMenu() block.";
+      const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
 
       box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle }));
     }
@@ -2008,7 +2027,7 @@ function renderProps() {
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
   const gadgetEventProcHint = hasEventGadgetBlock
     ? ""
-    : "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.";
+    : EVENT_UI_HINT.eventGadgetMissing;
   propsEl.appendChild(
     row(
       "Event Proc",
