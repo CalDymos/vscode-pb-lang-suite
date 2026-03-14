@@ -101,6 +101,7 @@ export interface GadgetItem {
   textRaw?: string;      // raw text expression
   text?: string;         // unquoted text (when possible)
   imageRaw?: string;     // optional image expression
+  imageId?: string;      // normalized image identifier extracted from ImageID(...)
   flagsRaw?: string;     // optional flags expression
   source?: SourceRange;
 }

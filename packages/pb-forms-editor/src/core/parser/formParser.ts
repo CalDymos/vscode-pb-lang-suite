@@ -426,11 +426,13 @@ export function parseFormDocument(text: string): FormDocument {
             const beforeLen = g.items?.length ?? 0;
             const posRaw = (p[1] ?? "").trim();
             const textRaw = (p[2] ?? "").trim();
+            const parsedImage = parseImageReference(p[3]);
             const item: GadgetItem = {
               posRaw,
               textRaw,
               text: unquoteString(textRaw),
-              imageRaw: p[3]?.trim(),
+              imageRaw: parsedImage.imageRaw,
+              imageId: parsedImage.imageId,
               flagsRaw: p[4]?.trim(),
               source: c.range
             };

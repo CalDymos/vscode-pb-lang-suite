@@ -6,6 +6,7 @@ type GadgetItem = {
   textRaw?: string;
   text?: string;
   imageRaw?: string;
+  imageId?: string;
   flagsRaw?: string;
   source?: SourceRange;
 };
@@ -337,6 +338,16 @@ function collectImageUsages(imageId: string): ImageUsage[] {
         select: { kind: "gadget", id: g.id }
       });
     }
+
+    (g.items ?? []).forEach((it, idx) => {
+      if (it.imageId === imageId) {
+        const itemName = it.text ?? it.textRaw ?? `item ${idx}`;
+        usages.push({
+          label: `Gadget ${g.id} (${g.kind}) :: Item ${idx} ${itemName}`,
+          select: { kind: "gadget", id: g.id }
+        });
+      }
+    });
   }
 
   for (const m of model.menus ?? []) {
@@ -2427,6 +2438,9 @@ function renderProps() {
     const label = `${idx}  ${it.text ?? it.textRaw ?? ""}`;
     const canPatch = typeof it.source?.line === "number";
 
+    const itemImage = findImageEntryById(it.imageId);
+    const itemImageHint = getImageReferenceHint(it.imageId, "gadget");
+
     itemsBox.appendChild(
       miniRow(
         label,
@@ -2457,7 +2471,13 @@ function renderProps() {
               if (!confirm("Delete this item?")) return;
               vscode.postMessage({ type: "deleteGadgetItem", id: g.id, sourceLine: it.source!.line });
             }
-          : undefined
+          : undefined,
+        {
+          label: "Image",
+          onClick: itemImage ? () => selectImageById(itemImage.id) : undefined,
+          disabled: !itemImage,
+          title: itemImage ? "" : itemImageHint
+        }
       )
     );
   });
