@@ -152,6 +152,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
   setGadgetEventProc: "setGadgetEventProc",
+  setGadgetImageRaw: "setGadgetImageRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -199,6 +200,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -402,6 +404,19 @@ function selectImageById(imageId: string): void {
   render();
   renderListAndParentSelector();
   renderProps();
+}
+
+const IMAGE_CAPABLE_GADGET_KINDS = new Set(["ImageGadget", "ButtonImageGadget"]);
+
+function normalizeImageReference(raw?: string): { imageRaw?: string; imageId?: string } {
+  const imageRaw = raw?.trim();
+  if (!imageRaw) return {};
+  const m = /^ImageID\((.+)\)$/i.exec(imageRaw);
+  const imageId = (m?.[1]?.trim() || imageRaw).trim();
+  return {
+    imageRaw,
+    imageId: imageId.length ? imageId : undefined
+  };
 }
 
 function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
@@ -2370,7 +2385,27 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
-  propsEl.appendChild(row("Image Raw", readonlyInput(g.imageRaw ?? "")));
+  const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
+  const gadgetImageRawInput = isImageCapableGadget
+    ? textInput(
+        g.imageRaw ?? "",
+        v => {
+          if (!isImageCapableGadget) return;
+          const normalized = normalizeImageReference(v);
+          if (!normalized.imageRaw) return;
+          g.imageRaw = normalized.imageRaw;
+          g.imageId = normalized.imageId;
+          post({
+            type: "setGadgetImageRaw",
+            id: g.id,
+            imageRaw: normalized.imageRaw
+          });
+          renderProps();
+        },
+        { title: "Use a raw image argument such as ImageID(#ImgOpen) or 0." }
+      )
+    : readonlyInput(g.imageRaw ?? "");
+  propsEl.appendChild(row("Image Raw", gadgetImageRawInput));
   propsEl.appendChild(row("Image Id", readonlyInput(g.imageId ?? "")));
   const gadgetImage = findImageEntryById(g.imageId);
   const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
@@ -2385,6 +2420,9 @@ function renderProps() {
   propsEl.appendChild(row("", gadgetImageBtn));
   if (gadgetImageHint) {
     propsEl.appendChild(mutedNote(gadgetImageHint));
+  }
+  if (isImageCapableGadget) {
+    propsEl.appendChild(mutedNote("Image-capable gadgets accept raw image expressions such as ImageID(#ImgOpen) or 0."));
   }
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
   const gadgetEventProcHint = hasEventGadgetBlock

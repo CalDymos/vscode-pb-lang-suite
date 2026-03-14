@@ -256,12 +256,14 @@ EndEnumeration
 Enumeration FormGadget
   #PrgMain
   #ImgPreview
+  #BtnSave
 EndEnumeration
 
 Procedure OpenFrmCtor(x = 0, y = 0, width = 320, height = 180)
   OpenWindow(#FrmCtor, x, y, width, height, "Ctor")
   ProgressBarGadget(#PrgMain, 10, 10, 160, 20, 0, 100, #PB_ProgressBar_Smooth)
   ImageGadget(#ImgPreview, 10, 40, 32, 32, ImageID(#ImgOpen), #PB_Image_Border)
+  ButtonImageGadget(#BtnSave, 60, 40, 80, 24, ImageID(#ImgOpen), #PB_Button_Toggle)
 EndProcedure
 `;
 
@@ -293,6 +295,20 @@ EndProcedure
   assert.ok(image, 'Expected patched image gadget.');
   assert.equal(image?.imageId, '#ImgAlt');
   assert.equal(image?.flagsExpr, undefined);
+
+  const third = patchAndReparse(second.patchedText, (document) =>
+    applyGadgetOpenArgsUpdate(document, "#BtnSave", {
+      imageRaw: "0",
+      flagsExpr: "#PB_Button_Default",
+    })
+  );
+
+  assert.match(third.patchedText, /ButtonImageGadget\(#BtnSave, 60, 40, 80, 24, 0, #PB_Button_Default\)/);
+  const button = third.parsed.gadgets.find((g) => g.id === "#BtnSave");
+  assert.ok(button, "Expected patched button image gadget.");
+  assert.equal(button?.imageRaw, "0");
+  assert.equal(button?.imageId, "0");
+  assert.equal(button?.flagsExpr, "#PB_Button_Default");
 });
 
 test("roundtrips gadget constructor arg updates for splitter references and flags", () => {

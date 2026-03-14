@@ -4,6 +4,7 @@ import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
+  applyGadgetOpenArgsUpdate,
   applyImageDelete,
   applyImageInsert,
   applyImageUpdate,
@@ -54,6 +55,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
   setGadgetEventProc: "setGadgetEventProc",
+  setGadgetImageRaw: "setGadgetImageRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -94,6 +96,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -323,6 +326,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc: {
           const edit = applyGadgetEventProcUpdate(document, msg.id, msg.eventProc, sr);
           await applyEditOrError(edit, `Could not patch event proc for gadget '${msg.id}'. No matching EventGadget block found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw: {
+          const edit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: msg.imageRaw }, sr);
+          await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
