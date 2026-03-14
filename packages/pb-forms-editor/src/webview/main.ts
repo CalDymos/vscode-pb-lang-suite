@@ -44,6 +44,9 @@ type WindowModel = {
   w: number;
   h: number;
   title?: string;
+  eventFile?: string;
+  eventProc?: string;
+  generateEventLoop?: boolean;
 };
 
 type MenuEntry = {
@@ -124,6 +127,9 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
   setWindowVariableName: "setWindowVariableName",
+  setWindowEventFile: "setWindowEventFile",
+  setWindowEventProc: "setWindowEventProc",
+  setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
@@ -161,6 +167,9 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -1496,6 +1505,44 @@ function renderProps() {
     }
 
     propsEl.appendChild(row("Title", readonlyInput(model.window.title ?? "")));
+    propsEl.appendChild(
+      row("Event File", textInput(model.window.eventFile ?? "", v => {
+        if (!model.window) return;
+        const trimmed = v.trim();
+        model.window.eventFile = trimmed || undefined;
+        post({
+          type: "setWindowEventFile",
+          windowKey: model.window.id,
+          eventFile: trimmed.length ? toPbString(trimmed) : undefined
+        });
+        renderProps();
+      }))
+    );
+    propsEl.appendChild(
+      row("Event Proc", textInput(model.window.eventProc ?? "", v => {
+        if (!model.window) return;
+        const trimmed = v.trim();
+        model.window.eventProc = trimmed || undefined;
+        post({
+          type: "setWindowEventProc",
+          windowKey: model.window.id,
+          eventProc: trimmed.length ? trimmed : undefined
+        });
+        renderProps();
+      }))
+    );
+    propsEl.appendChild(
+      row("Generate Event Loop", checkboxInput(Boolean(model.window.generateEventLoop), v => {
+        if (!model.window) return;
+        model.window.generateEventLoop = v;
+        post({
+          type: "setWindowGenerateEventLoop",
+          windowKey: model.window.id,
+          enabled: v
+        });
+        renderProps();
+      }))
+    );
     propsEl.appendChild(
       row("X", numberInput(model.window.x, v => { if (!model.window) return; model.window.x = asInt(v); postWindowRect(); render(); renderProps(); }))
     );

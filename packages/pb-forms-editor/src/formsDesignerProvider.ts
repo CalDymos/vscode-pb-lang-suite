@@ -19,6 +19,9 @@ import {
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
+  applyWindowEventProcUpdate,
+  applyWindowEventUpdate,
+  applyWindowGenerateEventLoopUpdate,
   applyWindowVariableNamePatch,
   applyWindowPbAnyToggle,
   applyWindowRectPatch
@@ -48,6 +51,9 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
   setWindowVariableName: "setWindowVariableName",
+  setWindowEventFile: "setWindowEventFile",
+  setWindowEventProc: "setWindowEventProc",
+  setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
@@ -78,6 +84,9 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -127,6 +136,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         menus: [],
         toolbars: [],
         statusbars: [],
+        images: [],
         meta: {
           scanRange: { start: 0, end: textLen },
           issues: [{ severity: "error", message }]
@@ -288,6 +298,24 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             edit,
             `Could not patch FormWindow variable name '${msg.variableName}'. No matching OpenWindow call found${rangeInfo}.`
           );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile: {
+          const edit = applyWindowEventUpdate(document, msg.windowKey, { eventFileRaw: msg.eventFile }, sr);
+          await applyEditOrError(edit, `Could not patch event include for window '${msg.windowKey}'. No matching procedure block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc: {
+          const edit = applyWindowEventProcUpdate(document, msg.windowKey, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for window '${msg.windowKey}'. No matching EventGadget block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop: {
+          const edit = applyWindowGenerateEventLoopUpdate(document, msg.windowKey, msg.enabled, sr);
+          await applyEditOrError(edit, `Could not patch generate-event-loop flag for window '${msg.windowKey}'. No safe EventGadget patch path found${rangeInfo}.`);
           return;
         }
 
