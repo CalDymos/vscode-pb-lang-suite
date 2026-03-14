@@ -186,6 +186,7 @@ export interface WindowEventProcBlock {
   endLine: number;
   defaultLine?: number;
   procLine?: number;
+  hasCaseBranches: boolean;
 }
 
 export interface MenuEntryArgs {
@@ -1448,6 +1449,7 @@ function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlo
   let defaultLine: number | undefined;
   let procLine: number | undefined;
   let pendingDefaultProc = false;
+  let hasCaseBranches = false;
 
   for (let i = selectLine; i <= proc.endLine; i++) {
     const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
@@ -1461,12 +1463,18 @@ function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlo
     if (/^EndSelect\b/i.test(line)) {
       depth--;
       if (depth <= 0) {
-        return { selectLine, endLine: i, defaultLine, procLine };
+        return { selectLine, endLine: i, defaultLine, procLine, hasCaseBranches };
       }
       continue;
     }
 
     if (depth !== 1) continue;
+
+    if (/^Case\b/i.test(line)) {
+      hasCaseBranches = true;
+      pendingDefaultProc = false;
+      continue;
+    }
 
     if (/^Default\b/i.test(line)) {
       defaultLine = i;
@@ -1476,14 +1484,44 @@ function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlo
 
     if (!pendingDefaultProc) continue;
 
-    if (/^Case\b/i.test(line)) {
-      pendingDefaultProc = false;
-      continue;
-    }
-
     if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
       procLine = i;
       pendingDefaultProc = false;
+    }
+  }
+
+  return undefined;
+}
+
+function findWindowEventMenuBlock(document: vscode.TextDocument, proc: LineBlock): LineBlock | undefined {
+  let selectLine: number | undefined;
+
+  for (let i = proc.startLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Select\s+EventMenu\s*\(\s*\)\s*$/i.test(line)) {
+      selectLine = i;
+      break;
+    }
+  }
+
+  if (selectLine === undefined) return undefined;
+
+  let depth = 0;
+
+  for (let i = selectLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) {
+        return { startLine: selectLine, endLine: i };
+      }
     }
   }
 
@@ -1525,6 +1563,55 @@ export function applyWindowEventUpdate(
   if (!eventFileRaw) return undefined;
 
   edit.insert(document.uri, new vscode.Position(proc.startLine, 0), `XIncludeFile ${eventFileRaw}\n`);
+  return edit;
+}
+
+export function applyWindowGenerateEventLoopUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  enabled: boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const eventGadgetBlock = findWindowEventGadgetBlock(document, proc);
+  const eventMenuBlock = findWindowEventMenuBlock(document, proc);
+
+  if (enabled) {
+    if (eventGadgetBlock || eventMenuBlock) return undefined;
+
+    const bodyIndent = getLineIndent(document, openCall.range.line);
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(
+      document.uri,
+      new vscode.Position(proc.endLine, 0),
+      `${bodyIndent}Select EventGadget()\n${bodyIndent}EndSelect\n`
+    );
+    return edit;
+  }
+
+  if (!eventGadgetBlock && !eventMenuBlock) return undefined;
+  if (eventMenuBlock) return undefined;
+  if (!eventGadgetBlock) return undefined;
+  if (eventGadgetBlock.hasCaseBranches) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(eventGadgetBlock.selectLine, 0),
+      new vscode.Position(eventGadgetBlock.endLine + 1, 0)
+    )
+  );
   return edit;
 }
 
