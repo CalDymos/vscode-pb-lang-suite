@@ -134,6 +134,7 @@ export interface FormWindow {
   color?: number;
   generateEventLoop?: boolean;
   hasEventGadgetBlock?: boolean;
+  hasEventGadgetCaseBranches?: boolean;
   hasEventMenuBlock?: boolean;
   disabledRaw?: string;      // raw disabled expression from DisableWindow(...)
   disabled?: boolean;

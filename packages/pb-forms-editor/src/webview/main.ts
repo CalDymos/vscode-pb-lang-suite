@@ -49,6 +49,7 @@ type WindowModel = {
   eventProc?: string;
   generateEventLoop?: boolean;
   hasEventGadgetBlock?: boolean;
+  hasEventGadgetCaseBranches?: boolean;
   hasEventMenuBlock?: boolean;
 };
 
@@ -1568,18 +1569,46 @@ function renderProps() {
     if (!hasEventGadgetBlock) {
       propsEl.appendChild(mutedNote(windowEventProcHint));
     }
+    const hasEventMenuBlockForLoop = Boolean(model.window.hasEventMenuBlock);
+    const hasEventGadgetCasesForLoop = Boolean(model.window.hasEventGadgetCaseBranches);
+    const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
+    const generateEventLoopDisableHint = hasEventMenuBlockForLoop
+      ? "Cannot disable while a Select EventMenu() block exists."
+      : hasEventGadgetCasesForLoop
+        ? "Cannot disable while Select EventGadget() contains Case branches."
+        : "";
     propsEl.appendChild(
-      row("Generate Event Loop", checkboxInput(Boolean(model.window.generateEventLoop), v => {
-        if (!model.window) return;
-        model.window.generateEventLoop = v;
-        post({
-          type: "setWindowGenerateEventLoop",
-          windowKey: model.window.id,
-          enabled: v
-        });
-        renderProps();
-      }))
+      row(
+        "Generate Event Loop",
+        checkboxInput(
+          Boolean(model.window.generateEventLoop),
+          v => {
+            if (!model.window) return;
+            if (!v && Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) return;
+            model.window.generateEventLoop = v;
+            if (!v) {
+              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetBlock = false;
+              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetCaseBranches = false;
+            } else {
+              model.window.hasEventGadgetBlock = true;
+            }
+            post({
+              type: "setWindowGenerateEventLoop",
+              windowKey: model.window.id,
+              enabled: v
+            });
+            renderProps();
+          },
+          {
+            disabled: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop,
+            title: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop ? generateEventLoopDisableHint : ""
+          }
+        )
+      )
     );
+    if (Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) {
+      propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
+    }
     propsEl.appendChild(
       row("X", numberInput(model.window.x, v => { if (!model.window) return; model.window.x = asInt(v); postWindowRect(); render(); renderProps(); }))
     );
@@ -2197,10 +2226,16 @@ function textInput(
   return i;
 }
 
-function checkboxInput(value: boolean, onChange: (v: boolean) => void) {
+function checkboxInput(
+  value: boolean,
+  onChange: (v: boolean) => void,
+  options?: { disabled?: boolean; title?: string }
+) {
   const i = document.createElement("input");
   i.type = "checkbox";
   i.checked = Boolean(value);
+  i.disabled = Boolean(options?.disabled);
+  i.title = options?.title ?? "";
   i.onchange = () => onChange(i.checked);
   return i;
 }

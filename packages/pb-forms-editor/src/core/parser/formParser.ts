@@ -968,6 +968,7 @@ function applyEventMetadata(lines: string[], doc: FormDocument): void {
     if (caseMatch) {
       pendingWindowDefaultProc = false;
       pendingGadgetCaseRaw = caseMatch[1]?.trim() || undefined;
+      if (doc.window) doc.window.hasEventGadgetCaseBranches = true;
       continue;
     }
 
