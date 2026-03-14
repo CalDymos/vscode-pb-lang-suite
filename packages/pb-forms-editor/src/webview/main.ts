@@ -381,6 +381,38 @@ function countImageUsages(imageId: string): number {
   return collectImageUsages(imageId).length;
 }
 
+function findImageEntryById(imageId?: string): ImageEntry | undefined {
+  if (!imageId) return undefined;
+  return (model.images ?? []).find(entry => entry.id === imageId);
+}
+
+function selectImageById(imageId: string): void {
+  selection = { kind: "image", id: imageId };
+  render();
+  renderListAndParentSelector();
+  renderProps();
+}
+
+function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "toolbar" | "statusbar" = "gadget"): string {
+  if (!imageId) {
+    switch (label) {
+      case "menu":
+      case "toolbar":
+        return "This entry has no parsed image reference.";
+      case "statusbar":
+        return "This field has no parsed image reference.";
+      default:
+        return "This gadget has no parsed image reference.";
+    }
+  }
+
+  if (!findImageEntryById(imageId)) {
+    return `Referenced image '${imageId}' is not loaded in this form.`;
+  }
+
+  return "";
+}
+
 function toPbString(v: string): string {
   const esc = (v ?? "").replace(/"/g, '""');
   return `"${esc}"`;
@@ -1588,7 +1620,8 @@ function renderProps() {
     label: string,
     onEdit?: () => void,
     onDelete?: () => void,
-    extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
+    extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1613,10 +1646,18 @@ function renderProps() {
     b3.title = extra?.title ?? "";
     b3.onclick = () => extra?.onClick?.();
 
+    const b4 = document.createElement("button");
+    b4.textContent = extra2?.label ?? "";
+    b4.disabled = extra2 ? Boolean(extra2.disabled) || !extra2.onClick : true;
+    b4.hidden = !extra2;
+    b4.title = extra2?.title ?? "";
+    b4.onclick = () => extra2?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
     r.appendChild(b3);
+    r.appendChild(b4);
     return r;
   };
 
@@ -1876,8 +1917,16 @@ function renderProps() {
           }
         : undefined;
       const menuEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "menu");
+      const menuImage = findImageEntryById(e.iconId);
+      const menuImageTitle = getImageReferenceHint(e.iconId, "menu");
 
-      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle }));
+      box.appendChild(miniRow(
+        line,
+        editFn,
+        delFn,
+        { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
+        { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
+      ));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -2033,8 +2082,16 @@ function renderProps() {
           }
         : undefined;
       const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
+      const toolBarImage = findImageEntryById(e.iconId);
+      const toolBarImageTitle = getImageReferenceHint(e.iconId, "toolbar");
 
-      box.appendChild(miniRow(line, editFn, delFn, { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle }));
+      box.appendChild(miniRow(
+        line,
+        editFn,
+        delFn,
+        { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
+        { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
+      ));
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -2128,8 +2185,15 @@ function renderProps() {
             });
           }
         : undefined;
+      const statusImage = findImageEntryById(f.imageId);
+      const statusImageTitle = getImageReferenceHint(f.imageId, "statusbar");
 
-      box.appendChild(miniRow(label, editFn, delFn));
+      box.appendChild(miniRow(
+        label,
+        editFn,
+        delFn,
+        { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
+      ));
     });
     propsEl.appendChild(section("Fields"));
     propsEl.appendChild(box);
@@ -2295,6 +2359,22 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  propsEl.appendChild(row("Image Raw", readonlyInput(g.imageRaw ?? "")));
+  propsEl.appendChild(row("Image Id", readonlyInput(g.imageId ?? "")));
+  const gadgetImage = findImageEntryById(g.imageId);
+  const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
+  const gadgetImageBtn = document.createElement("button");
+  gadgetImageBtn.textContent = "Select Image";
+  gadgetImageBtn.disabled = !gadgetImage;
+  gadgetImageBtn.title = gadgetImage ? "" : gadgetImageHint;
+  gadgetImageBtn.onclick = () => {
+    if (!gadgetImage) return;
+    selectImageById(gadgetImage.id);
+  };
+  propsEl.appendChild(row("", gadgetImageBtn));
+  if (gadgetImageHint) {
+    propsEl.appendChild(mutedNote(gadgetImageHint));
+  }
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
   const gadgetEventProcHint = hasEventGadgetBlock
     ? ""
