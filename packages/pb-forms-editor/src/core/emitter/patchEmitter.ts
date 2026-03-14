@@ -181,6 +181,13 @@ export interface WindowEventArgs {
   eventFileRaw?: string;
 }
 
+export interface WindowEventProcBlock {
+  selectLine: number;
+  endLine: number;
+  defaultLine?: number;
+  procLine?: number;
+}
+
 export interface MenuEntryArgs {
   kind: MenuEntryKind;
   idRaw?: string;
@@ -1424,6 +1431,65 @@ function findWindowEventIncludeLine(document: vscode.TextDocument, procedureStar
   return undefined;
 }
 
+function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlock): WindowEventProcBlock | undefined {
+  let selectLine: number | undefined;
+
+  for (let i = proc.startLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Select\s+EventGadget\s*\(\s*\)\s*$/i.test(line)) {
+      selectLine = i;
+      break;
+    }
+  }
+
+  if (selectLine === undefined) return undefined;
+
+  let depth = 0;
+  let defaultLine: number | undefined;
+  let procLine: number | undefined;
+  let pendingDefaultProc = false;
+
+  for (let i = selectLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) {
+        return { selectLine, endLine: i, defaultLine, procLine };
+      }
+      continue;
+    }
+
+    if (depth !== 1) continue;
+
+    if (/^Default\b/i.test(line)) {
+      defaultLine = i;
+      pendingDefaultProc = true;
+      continue;
+    }
+
+    if (!pendingDefaultProc) continue;
+
+    if (/^Case\b/i.test(line)) {
+      pendingDefaultProc = false;
+      continue;
+    }
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      procLine = i;
+      pendingDefaultProc = false;
+    }
+  }
+
+  return undefined;
+}
+
 export function applyWindowEventUpdate(
   document: vscode.TextDocument,
   windowKey: string,
@@ -1459,6 +1525,59 @@ export function applyWindowEventUpdate(
   if (!eventFileRaw) return undefined;
 
   edit.insert(document.uri, new vscode.Position(proc.startLine, 0), `XIncludeFile ${eventFileRaw}\n`);
+  return edit;
+}
+
+export function applyWindowEventProcUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const block = findWindowEventGadgetBlock(document, proc);
+  if (!block) return undefined;
+
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const edit = new vscode.WorkspaceEdit();
+
+  if (block.procLine !== undefined) {
+    if (!normalizedEventProc) {
+      edit.delete(document.uri, document.lineAt(block.procLine).rangeIncludingLineBreak);
+      return edit;
+    }
+
+    const indent = getLineIndent(document, block.procLine);
+    edit.replace(document.uri, document.lineAt(block.procLine).range, `${indent}${normalizedEventProc}()`);
+    return edit;
+  }
+
+  if (!normalizedEventProc) return undefined;
+
+  if (block.defaultLine !== undefined) {
+    const indent = `${getLineIndent(document, block.defaultLine)}  `;
+    edit.insert(document.uri, new vscode.Position(block.defaultLine + 1, 0), `${indent}${normalizedEventProc}()\n`);
+    return edit;
+  }
+
+  const selectIndent = getLineIndent(document, block.selectLine);
+  const defaultIndent = `${selectIndent}  `;
+  const procIndent = `${defaultIndent}  `;
+  edit.insert(
+    document.uri,
+    new vscode.Position(block.endLine, 0),
+    `${defaultIndent}Default\n${procIndent}${normalizedEventProc}()\n`
+  );
   return edit;
 }
 
