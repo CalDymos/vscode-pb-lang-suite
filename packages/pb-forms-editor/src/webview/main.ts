@@ -85,12 +85,24 @@ type StatusbarModel = {
   fields: StatusbarField[];
 };
 
+type ImageEntry = {
+  id: string;
+  pbAny: boolean;
+  variable?: string;
+  firstParam: string;
+  imageRaw: string;
+  image?: string;
+  inline: boolean;
+  source?: SourceRange;
+};
+
 type Model = {
   window?: WindowModel;
   gadgets: Gadget[];
   menus?: MenuModel[];
   toolbars?: ToolbarModel[];
   statusbars?: StatusbarModel[];
+  images: ImageEntry[];
   meta?: {
     header?: { version?: string; line: number; hasStrictSyntaxWarning: boolean };
     issues?: Array<{ severity: "error" | "warning" | "info"; message: string; line?: number }>;
@@ -157,7 +169,11 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
-  deleteStatusBarField: "deleteStatusBarField"
+  deleteStatusBarField: "deleteStatusBarField",
+
+  insertImage: "insertImage",
+  updateImage: "updateImage",
+  deleteImage: "deleteImage"
 } as const;
 
 // Backwards compatible:
@@ -195,7 +211,10 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -213,7 +232,7 @@ const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
 
-let model: Model = { gadgets: [] };
+let model: Model = { gadgets: [], images: [] };
 
 type DesignerSelection =
   | { kind: "gadget"; id: string }
@@ -221,6 +240,7 @@ type DesignerSelection =
   | { kind: "menu"; id: string }
   | { kind: "toolbar"; id: string }
   | { kind: "statusbar"; id: string }
+  | { kind: "images" }
   | null;
 let selection: DesignerSelection = null;
 
@@ -368,6 +388,11 @@ function sanitizeSelectionAfterModelUpdate() {
   if (sel && sel.kind === "statusbar") {
     const statusbars = model.statusbars ?? [];
     if (!statusbars.some(sb => sb.id === sel.id)) selection = null;
+    return;
+  }
+
+  if (sel && sel.kind === "images") {
+    if (!model.window) selection = null;
     return;
   }
 }
@@ -1184,7 +1209,7 @@ function renderList() {
   listEl.innerHTML = "";
 
   type Node = {
-    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "menuEntry";
+    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "images" | "menuEntry";
     id: string;
     label: string;
     selectable: boolean;
@@ -1201,6 +1226,7 @@ function renderList() {
     if (n.kind === "menu") return sel.kind === "menu" && sel.id === n.id;
     if (n.kind === "toolbar") return sel.kind === "toolbar" && sel.id === n.id;
     if (n.kind === "statusbar") return sel.kind === "statusbar" && sel.id === n.id;
+    if (n.kind === "images") return sel.kind === "images";
     return false;
   };
 
@@ -1294,6 +1320,20 @@ function renderList() {
     };
   });
 
+  const imageNodes: Node[] = [{
+    kind: "images" as const,
+    id: "images",
+    label: `Images  entries:${model.images?.length ?? 0}`,
+    selectable: true,
+    children: (model.images ?? []).map((img, idx) => ({
+      kind: "menuEntry" as const,
+      id: `image:${idx}`,
+      label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}`,
+      selectable: false,
+      children: []
+    }))
+  }];
+
   const roots: Node[] = [];
   if (model.window) {
     roots.push({ kind: "window", id: model.window.id, label: `Window  ${model.window.id}`, selectable: true, children: [] });
@@ -1305,9 +1345,9 @@ function renderList() {
   // Attach non-visual structures under the window node (if present)
   if (roots.length > 0 && roots[0].kind === "window") {
     const win = roots[0];
-    win.children = [...menuNodes, ...toolbarNodes, ...statusbarNodes];
+    win.children = [...imageNodes, ...menuNodes, ...toolbarNodes, ...statusbarNodes];
   } else {
-    roots.push(...menuNodes, ...toolbarNodes, ...statusbarNodes);
+    roots.push(...imageNodes, ...menuNodes, ...toolbarNodes, ...statusbarNodes);
   }
 
   const ensureExpanded = (n: Node) => {
@@ -1352,6 +1392,7 @@ function renderList() {
       else if (n.kind === "menu") selection = { kind: "menu", id: n.id };
       else if (n.kind === "toolbar") selection = { kind: "toolbar", id: n.id };
       else if (n.kind === "statusbar") selection = { kind: "statusbar", id: n.id };
+      else if (n.kind === "images") selection = { kind: "images" };
       render();
       renderListAndParentSelector();
       renderProps();
@@ -1997,6 +2038,94 @@ function renderProps() {
       const width = prompt("Width raw", "0");
       if (width === null) return;
       vscode.postMessage({ type: "insertStatusBarField", statusBarId: sb.id, widthRaw: width.trim() });
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
+    actions.appendChild(addBtn);
+    propsEl.appendChild(actions);
+    return;
+  }
+
+  if (sel.kind === "images") {
+    propsEl.appendChild(row("Entries", readonlyInput(String(model.images?.length ?? 0))));
+
+    const promptImageArgs = (current?: ImageEntry): { inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } | undefined => {
+      const procName = prompt("Image kind (LoadImage/CatchImage)", current?.inline ? "CatchImage" : "LoadImage");
+      if (procName === null) return undefined;
+      const normalizedProc = procName.trim().toLowerCase();
+      const inline = normalizedProc === "catchimage";
+      if (normalizedProc !== "loadimage" && normalizedProc !== "catchimage") return undefined;
+
+      const firstParamDefault = current?.firstParam ?? (current?.pbAny ? "#PB_Any" : current?.id ?? "#ImgNew");
+      const firstParam = prompt("First param (#ImgName or #PB_Any)", firstParamDefault);
+      if (firstParam === null) return undefined;
+      const idRaw = firstParam.trim();
+      if (!idRaw.length) return undefined;
+
+      let assignedVar: string | undefined;
+      if (idRaw.toLowerCase() === "#pb_any") {
+        const assigned = prompt("Assigned variable", current?.variable ?? current?.id ?? "imgNew");
+        if (assigned === null) return undefined;
+        const trimmedAssigned = assigned.trim();
+        if (!trimmedAssigned.length) return undefined;
+        assignedVar = trimmedAssigned;
+      }
+
+      const imageRawPrompt = prompt("Image raw", current?.imageRaw ?? '"image.png"');
+      if (imageRawPrompt === null) return undefined;
+      const imageRaw = imageRawPrompt.trim();
+      if (!imageRaw.length) return undefined;
+
+      return { inline, idRaw, imageRaw, assignedVar };
+    };
+
+    const box = miniList();
+    for (const img of model.images ?? []) {
+      const label = `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`;
+      const canPatch = typeof img.source?.line === "number";
+
+      box.appendChild(
+        miniRow(
+          label,
+          canPatch
+            ? () => {
+                const next = promptImageArgs(img);
+                if (!next) return;
+                post({
+                  type: "updateImage",
+                  sourceLine: img.source!.line,
+                  inline: next.inline,
+                  idRaw: next.idRaw,
+                  imageRaw: next.imageRaw,
+                  assignedVar: next.assignedVar
+                });
+              }
+            : undefined,
+          canPatch
+            ? () => {
+                if (!confirm("Delete this image entry?")) return;
+                post({ type: "deleteImage", sourceLine: img.source!.line });
+              }
+            : undefined
+        )
+      );
+    }
+    propsEl.appendChild(section("Images"));
+    propsEl.appendChild(box);
+
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add Image";
+    addBtn.onclick = () => {
+      const next = promptImageArgs();
+      if (!next) return;
+      post({
+        type: "insertImage",
+        inline: next.inline,
+        idRaw: next.idRaw,
+        imageRaw: next.imageRaw,
+        assignedVar: next.assignedVar
+      });
     };
 
     const actions = document.createElement("div");

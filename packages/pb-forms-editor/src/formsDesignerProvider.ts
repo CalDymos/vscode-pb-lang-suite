@@ -4,6 +4,9 @@ import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
+  applyImageDelete,
+  applyImageInsert,
+  applyImageUpdate,
   applyGadgetEventProcUpdate,
   applyGadgetItemDelete,
   applyGadgetItemInsert,
@@ -79,7 +82,11 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
-  deleteStatusBarField: "deleteStatusBarField"
+  deleteStatusBarField: "deleteStatusBarField",
+
+  insertImage: "insertImage",
+  updateImage: "updateImage",
+  deleteImage: "deleteImage"
 } as const;
 
 type WebviewToExtensionMessage =
@@ -110,7 +117,10 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number };
 
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
@@ -477,6 +487,24 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             edit,
             `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
           );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertImage: {
+          const edit = applyImageInsert(document, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar }, sr);
+          await applyEditOrError(edit, `Could not insert image entry. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateImage: {
+          const edit = applyImageUpdate(document, msg.sourceLine, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteImage: {
+          const edit = applyImageDelete(document, msg.sourceLine, sr);
+          await applyEditOrError(edit, `Could not delete image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
           return;
         }
 
