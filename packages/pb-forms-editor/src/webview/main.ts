@@ -125,6 +125,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
+  setGadgetEventProc: "setGadgetEventProc",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -165,6 +166,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -1891,7 +1893,16 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
-  propsEl.appendChild(row("Event Proc", readonlyInput(g.eventProc ?? "")));
+  propsEl.appendChild(row("Event Proc", textInput(g.eventProc ?? "", v => {
+    const trimmed = v.trim();
+    g.eventProc = trimmed || undefined;
+    post({
+      type: "setGadgetEventProc",
+      id: g.id,
+      eventProc: trimmed.length ? trimmed : undefined
+    });
+    renderProps();
+  })));
 
   if (g.parentId) {
     const btn = document.createElement("button");
