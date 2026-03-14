@@ -29,6 +29,7 @@ type Gadget = {
   w: number;
   h: number;
   text?: string;
+  eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
 };
@@ -57,6 +58,7 @@ type MenuEntry = {
   text?: string;
   iconRaw?: string;
   widthRaw?: string;
+  event?: string;
   source?: SourceRange;
 };
 
@@ -1572,7 +1574,8 @@ function renderProps() {
       const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
-      const line = `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}`;
+      const eventPart = e.event ? `  -> ${e.event}` : "";
+      const line = `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}${eventPart}`;
 
       const canPatch = typeof e.source?.line === "number";
       const editFn = canPatch
@@ -1681,7 +1684,8 @@ function renderProps() {
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
-      const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}`;
+      const eventPart = e.event ? `  -> ${e.event}` : "";
+      const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}${eventPart}`;
 
       const canPatch = typeof e.source?.line === "number";
       const editFn = canPatch
@@ -1887,6 +1891,7 @@ function renderProps() {
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  propsEl.appendChild(row("Event Proc", readonlyInput(g.eventProc ?? "")));
 
   if (g.parentId) {
     const btn = document.createElement("button");
