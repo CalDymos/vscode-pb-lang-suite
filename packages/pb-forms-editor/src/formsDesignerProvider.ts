@@ -36,6 +36,7 @@ import {
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
+import { readImageDimensions } from "./core/imageDimensionUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -94,6 +95,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   chooseImageFileForEntry: "chooseImageFileForEntry",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
+  chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
   createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
   createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
@@ -138,6 +140,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -272,7 +275,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return true;
       };
 
-      const pickImageFileRaw = async (): Promise<string | undefined> => {
+      const pickImageFile = async (): Promise<{ fsPath: string; imageRaw: string } | undefined> => {
         const picked = await vscode.window.showOpenDialog({
           canSelectFiles: true,
           canSelectFolders: false,
@@ -282,7 +285,16 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         const fileUri = picked?.[0];
         if (!fileUri) return undefined;
-        return toPbFilePathLiteral(fileUri.fsPath);
+
+        return {
+          fsPath: fileUri.fsPath,
+          imageRaw: toPbFilePathLiteral(fileUri.fsPath)
+        };
+      };
+
+      const pickImageFileRaw = async (): Promise<string | undefined> => {
+        const picked = await pickImageFile();
+        return picked?.imageRaw;
       };
 
       const buildCreatedImageReference = (idRaw: string, assignedVar?: string): string | undefined => {
@@ -617,6 +629,43 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage: {
+          const picked = await pickImageFile();
+          if (!picked) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+            return;
+          }
+
+          if (msg.resizeToImage) {
+            try {
+              const dims = await readImageDimensions(picked.fsPath);
+              if (dims) {
+                const resizeEdit = applyRectPatch(document, msg.id, msg.x, msg.y, dims.width, dims.height, sr);
+                await applyEditOrError(resizeEdit, `Could not resize gadget '${msg.id}' to the selected image size${rangeInfo}.`);
+              } else {
+                postError(`Assigned image to gadget '${msg.id}', but could not determine the selected image size for auto-resize${rangeInfo}.`);
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              postError(`Assigned image to gadget '${msg.id}', but could not read the selected image size: ${message}${rangeInfo}.`);
+            }
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
           await applyEditOrError(insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }

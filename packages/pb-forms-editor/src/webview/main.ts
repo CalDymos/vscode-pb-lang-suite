@@ -192,6 +192,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   chooseImageFileForEntry: "chooseImageFileForEntry",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
+  chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
   createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
   createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
@@ -243,6 +244,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -1889,6 +1891,16 @@ function renderProps() {
     };
   };
 
+  const promptChooseFileAndAssignGadgetImageArgs = (): ({ idRaw: string; assignedVar?: string; resizeToImage: boolean } & { imageId: string; imageRefRaw: string }) | undefined => {
+    const next = promptCreateAndAssignLoadImageArgs();
+    if (!next) return undefined;
+
+    return {
+      ...next,
+      resizeToImage: confirm("Resize gadget to the selected image size?")
+    };
+  };
+
   if (sel.kind === "window") {
     if (!model.window) {
       propsEl.innerHTML = "<div class='muted'>No window</div>";
@@ -2921,6 +2933,27 @@ function renderProps() {
       renderProps();
     };
     gadgetImageActions.appendChild(gadgetCreateImageBtn);
+
+    const gadgetChooseFileBtn = document.createElement("button");
+    gadgetChooseFileBtn.textContent = "Choose File";
+    gadgetChooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this gadget. Optionally resize the gadget to the image size.";
+    gadgetChooseFileBtn.onclick = () => {
+      const next = promptChooseFileAndAssignGadgetImageArgs();
+      if (!next) return;
+      g.imageRaw = next.imageRefRaw;
+      g.imageId = next.imageId;
+      post({
+        type: "chooseFileAndAssignGadgetImage",
+        id: g.id,
+        x: g.x,
+        y: g.y,
+        resizeToImage: next.resizeToImage,
+        newImageIdRaw: next.idRaw,
+        newAssignedVar: next.assignedVar,
+      });
+      renderProps();
+    };
+    gadgetImageActions.appendChild(gadgetChooseFileBtn);
   }
 
   const gadgetImageBtn = document.createElement("button");

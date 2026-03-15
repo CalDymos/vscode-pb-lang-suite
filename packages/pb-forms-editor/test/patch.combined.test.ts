@@ -11,6 +11,7 @@ import {
   applyMenuEntryDelete,
   applyMenuEntryInsert,
   applyMenuEntryUpdate,
+  applyRectPatch,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
@@ -107,6 +108,78 @@ function patchTwiceAndReparse(
   const secondEdit = secondEditFactory(secondDocument.asTextDocument());
   assert.ok(secondEdit, "Expected second WorkspaceEdit result.");
   const patchedText = applyWorkspaceEditToText(firstPatchedText, secondEdit!);
+
+  return {
+    patchedText,
+    parsed: parseFormDocument(patchedText),
+  };
+}
+
+function patchThriceAndReparse(
+  text: string,
+  firstEditFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetOpenArgsUpdate>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
+    | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyRectPatch>
+    | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryUpdate>
+    | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarFieldInsert>
+    | ReturnType<typeof applyStatusBarFieldUpdate>
+    | ReturnType<typeof applyStatusBarFieldDelete>,
+  secondEditFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetOpenArgsUpdate>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
+    | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyRectPatch>
+    | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryUpdate>
+    | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarFieldInsert>
+    | ReturnType<typeof applyStatusBarFieldUpdate>
+    | ReturnType<typeof applyStatusBarFieldDelete>,
+  thirdEditFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetOpenArgsUpdate>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
+    | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyRectPatch>
+    | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryUpdate>
+    | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarFieldInsert>
+    | ReturnType<typeof applyStatusBarFieldUpdate>
+    | ReturnType<typeof applyStatusBarFieldDelete>
+) {
+  const firstDocument = new FakeTextDocument(text);
+  const firstEdit = firstEditFactory(firstDocument.asTextDocument());
+  assert.ok(firstEdit, "Expected first WorkspaceEdit result.");
+  const firstPatchedText = applyWorkspaceEditToText(text, firstEdit!);
+
+  const secondDocument = new FakeTextDocument(firstPatchedText);
+  const secondEdit = secondEditFactory(secondDocument.asTextDocument());
+  assert.ok(secondEdit, "Expected second WorkspaceEdit result.");
+  const secondPatchedText = applyWorkspaceEditToText(firstPatchedText, secondEdit!);
+
+  const thirdDocument = new FakeTextDocument(secondPatchedText);
+  const thirdEdit = thirdEditFactory(thirdDocument.asTextDocument());
+  assert.ok(thirdEdit, "Expected third WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(secondPatchedText, thirdEdit!);
 
   return {
     patchedText,
@@ -484,6 +557,29 @@ test("roundtrips image delete", () => {
 
   assert.equal(updated.images.some((image) => image.id === "#ImgState"), false);
   assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
+});
+
+test("roundtrips choose-file gadget workflow with auto-resize patch sequence", () => {
+  const { text } = parseImageFixture();
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "#ImgPreview", { imageRaw: "ImageID(#ImgChosen)" }),
+    (document) => applyRectPatch(document, "#ImgPreview", 20, 20, 96, 48),
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgChosen", imageRaw: '"chosen.png"' })
+  );
+
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#ImgPreview");
+  const image = parsed.images.find((entry) => entry.id === "#ImgChosen");
+
+  assert.equal(gadget?.imageRaw, "ImageID(#ImgChosen)");
+  assert.equal(gadget?.imageId, "#ImgChosen");
+  assert.equal(gadget?.w, 96);
+  assert.equal(gadget?.h, 48);
+  assert.ok(image, "Expected inserted file-backed image entry.");
+  assert.equal(image?.imageRaw, '"chosen.png"');
+  assert.match(patchedText, /ImageGadget\(#ImgPreview, 20, 20, 96, 48, ImageID\(#ImgChosen\)\)/);
+  assert.match(patchedText, /LoadImage\(#ImgChosen, "chosen\.png"\)/);
 });
 
 test("roundtrips create-and-assign workflow for image gadget", () => {
