@@ -5,6 +5,7 @@ import {
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
   applyGadgetOpenArgsUpdate,
+  applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
   applyImageUpdate,
@@ -58,6 +59,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetRect: "setGadgetRect",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
+  setGadgetStateRaw: "setGadgetStateRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -111,6 +113,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -402,6 +405,36 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw: {
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: msg.imageRaw }, sr);
           await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw: {
+          const gadget = lastModel?.gadgets.find(entry => entry.id === msg.id);
+          if (!gadget) {
+            postError(`Could not find gadget '${msg.id}' for state update${rangeInfo}.`);
+            return;
+          }
+          if (gadget.kind !== "SplitterGadget") {
+            postError(`State editing is currently only enabled for SplitterGadget entries.`);
+            return;
+          }
+
+          const trimmed = msg.stateRaw.trim();
+          const nextState = Number(trimmed);
+          if (!trimmed.length || !Number.isFinite(nextState)) {
+            postError(`Splitter position must be a finite number.`);
+            return;
+          }
+
+          const vertical = (gadget.flagsExpr ?? "").split("|").map(part => part.trim()).includes("#PB_Splitter_Vertical");
+          const limit = vertical ? gadget.w : gadget.h;
+          const stateInt = Math.trunc(nextState);
+          if (stateInt <= 0 || stateInt >= limit) {
+            postError(`Splitter position must be greater than 0 and smaller than the splitter ${vertical ? "width" : "height"}.`);
+            return;
+          }
+
+          const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: String(stateInt) }, sr);
+          await applyEditOrError(edit, `Could not update splitter state for '${msg.id}'${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {

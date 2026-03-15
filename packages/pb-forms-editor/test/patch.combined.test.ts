@@ -803,6 +803,21 @@ test("roundtrips gadget property update for state and removes cleared lines", ()
   assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_CheckBox_Checked\)/);
 });
 
+
+test("roundtrips splitter state update via SetGadgetState", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#SplitMain", { stateRaw: "80" })
+  );
+
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  assert.ok(splitter, "Expected #SplitMain gadget after state update.");
+  assert.equal(splitter?.stateRaw, "80");
+  assert.equal(splitter?.state, 80);
+  assert.match(patchedText, /SetGadgetState\(#SplitMain, 80\)/);
+});
+
 test("roundtrips gadget property update removing managed property lines", () => {
   const { text } = parseGadgetFixture();
   const args: GadgetPropertyArgs = {};

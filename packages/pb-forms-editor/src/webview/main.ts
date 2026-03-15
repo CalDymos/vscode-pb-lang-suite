@@ -183,6 +183,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetRect: "setGadgetRect",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
+  setGadgetStateRaw: "setGadgetStateRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -243,6 +244,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -2437,6 +2439,17 @@ function renderParentSelector() {
   }
 }
 
+function getEditableSplitterState(g: Gadget): number {
+  if (typeof g.state === "number" && Number.isFinite(g.state)) {
+    return Math.trunc(g.state);
+  }
+
+  const metrics = getPreviewChromeMetrics();
+  const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
+  const range = Math.max(0, (vertical ? g.w : g.h) - metrics.splitterWidth);
+  return Math.trunc(range / 2);
+}
+
 function renderProps() {
   propsEl.innerHTML = "";
 
@@ -3816,6 +3829,30 @@ function renderProps() {
   propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
+
+  if (g.kind === "SplitterGadget") {
+    propsEl.appendChild(
+      row(
+        "Splitter Position",
+        numberInput(getEditableSplitterState(g), v => {
+          const next = Math.trunc(v);
+          const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
+          const limit = vertical ? g.w : g.h;
+          if (!Number.isFinite(next) || next <= 0 || next >= limit) {
+            alert(`Splitter position must be between 1 and ${Math.max(1, limit - 1)}.`);
+            renderProps();
+            return;
+          }
+          g.state = next;
+          g.stateRaw = String(next);
+          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+          render();
+          renderProps();
+        })
+      )
+    );
+    propsEl.appendChild(mutedNote("Matches the original SplitterPosition property and writes SetGadgetState(...)."));
+  }
 
   // Items editor (minimal UI)
   propsEl.appendChild(section("Items"));
