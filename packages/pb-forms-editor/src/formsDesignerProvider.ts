@@ -93,6 +93,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteImage: "deleteImage",
   relativizeImagePath: "relativizeImagePath",
   chooseImageFileForEntry: "chooseImageFileForEntry",
+  toggleImagePbAny: "toggleImagePbAny",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
@@ -139,6 +140,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny; sourceLine: number; toPbAny: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -307,6 +309,18 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         return `ImageID(${trimmedId})`;
+      };
+
+      const toPbAnyAssignedVar = (firstParam: string): string | undefined => {
+        const trimmed = firstParam.trim();
+        if (!trimmed.length) return undefined;
+        return trimmed.startsWith("#") ? trimmed.slice(1).trim() || undefined : trimmed;
+      };
+
+      const toEnumImageId = (variableOrId: string): string | undefined => {
+        const trimmed = variableOrId.trim();
+        if (!trimmed.length) return undefined;
+        return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
       };
 
       const ensureMenuEntryKind = (kind: string): boolean => {
@@ -613,6 +627,117 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             assignedVar: msg.assignedVar
           }, sr);
           await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny: {
+          const model = lastModel;
+          const image = model?.images.find((entry) => entry.source?.line === msg.sourceLine);
+          if (!image) {
+            postError(`Could not toggle image pbAny. No matching image entry found${rangeInfo}.`);
+            return;
+          }
+
+          const oldImageId = image.id;
+          const toggledAssignedVar = msg.toPbAny
+            ? toPbAnyAssignedVar(image.firstParam)
+            : undefined;
+          const toggledIdRaw = msg.toPbAny
+            ? "#PB_Any"
+            : toEnumImageId(image.variable ?? image.id ?? "");
+
+          if (!toggledIdRaw || (msg.toPbAny && !toggledAssignedVar)) {
+            postError(`Could not derive the target image identifier for '${image.id}'${rangeInfo}.`);
+            return;
+          }
+
+          const nextImageRef = buildCreatedImageReference(toggledIdRaw, toggledAssignedVar);
+          if (!nextImageRef) {
+            postError(`Could not build the updated image reference for '${image.id}'${rangeInfo}.`);
+            return;
+          }
+
+          const gadgetUsages = (model?.gadgets ?? []).filter((entry) => entry.imageId === oldImageId);
+          const menuUsages = (model?.menus ?? []).flatMap((menu) =>
+            menu.entries
+              .filter((entry) => entry.iconId === oldImageId)
+              .map((entry) => ({ menuId: menu.id, entry }))
+          );
+          const toolBarUsages = (model?.toolbars ?? []).flatMap((toolBar) =>
+            toolBar.entries
+              .filter((entry) => entry.iconId === oldImageId)
+              .map((entry) => ({ toolBarId: toolBar.id, entry }))
+          );
+          const statusBarUsages = (model?.statusbars ?? []).flatMap((statusBar) =>
+            statusBar.fields
+              .filter((field) => field.imageId === oldImageId)
+              .map((field) => ({ statusBarId: statusBar.id, field }))
+          );
+
+          const applyOrAbort = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
+            if (!edit) {
+              postError(errorMessage);
+              return false;
+            }
+            await vscode.workspace.applyEdit(edit);
+            return true;
+          };
+
+          for (const gadget of gadgetUsages) {
+            const edit = applyGadgetOpenArgsUpdate(document, gadget.id, { imageRaw: nextImageRef }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in gadget '${gadget.id}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { menuId, entry } of menuUsages) {
+            const sourceLine = entry.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyMenuEntryUpdate(document, menuId, sourceLine, {
+              kind: entry.kind as any,
+              idRaw: entry.idRaw,
+              textRaw: entry.textRaw,
+              shortcut: entry.shortcut,
+              iconRaw: nextImageRef,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in menu '${menuId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { toolBarId, entry } of toolBarUsages) {
+            const sourceLine = entry.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyToolBarEntryUpdate(document, toolBarId, sourceLine, {
+              kind: entry.kind as any,
+              idRaw: entry.idRaw,
+              iconRaw: nextImageRef,
+              toggle: entry.toggle,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in toolbar '${toolBarId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { statusBarId, field } of statusBarUsages) {
+            const sourceLine = field.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyStatusBarFieldUpdate(document, statusBarId, sourceLine, {
+              widthRaw: field.widthRaw,
+              imageRaw: nextImageRef,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in statusbar '${statusBarId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          const declarationEdit = applyImageUpdate(document, msg.sourceLine, {
+            inline: image.inline,
+            idRaw: toggledIdRaw,
+            imageRaw: image.imageRaw,
+            assignedVar: toggledAssignedVar,
+          }, sr);
+          await applyEditOrError(declarationEdit, `Could not toggle image entry '${image.id}'${rangeInfo}.`);
           return;
         }
 

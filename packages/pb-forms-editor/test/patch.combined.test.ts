@@ -648,7 +648,7 @@ test("roundtrips choose-file button image gadget workflow with auto-resize patch
   assert.equal(gadget?.h, 36);
   assert.ok(image, "Expected inserted file-backed image entry for button image gadget.");
   assert.equal(image?.imageRaw, '"toolbar/apply-selected.png"');
-  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 128, 36, ImageID\(#ImgBtnChosen\)\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 128, 36, ImageID\(#ImgBtnChosen\), #PB_Button_Default\)/);
   assert.match(patchedText, /LoadImage\(#ImgBtnChosen, "toolbar\/apply-selected\.png"\)/);
 });
 
@@ -824,4 +824,146 @@ test("roundtrips gadget property update removing managed property lines", () => 
   assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_BackColor,/);
   assert.doesNotMatch(patchedText, /SetGadgetColor\(#TxtName, #PB_Gadget_FrontColor,/);
   assert.doesNotMatch(patchedText, /SetGadgetFont\(#TxtName,/);
+});
+
+
+test("roundtrips image pbAny toggle from enum image and updates gadget plus menu references", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const sourceLine = initial.images.find((image) => image.id === "#ImgOpen")?.source?.line;
+  const menu = initial.menus.find((entry) => entry.id === "#MenuMain");
+  const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+
+  assert.equal(typeof sourceLine, "number", "Expected source line for #ImgOpen.");
+  assert.equal(typeof openItem?.source?.line, "number", "Expected menu item source line.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "#ImgPreview", { imageRaw: "ImageID(ImgOpen)" }),
+    (document) => applyMenuEntryUpdate(document, "#MenuMain", openItem!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: openItem!.idRaw,
+      textRaw: openItem!.textRaw,
+      shortcut: openItem!.shortcut,
+      iconRaw: "ImageID(ImgOpen)",
+    }),
+    (document) => applyImageUpdate(document, sourceLine!, {
+      inline: false,
+      idRaw: "#PB_Any",
+      assignedVar: "ImgOpen",
+      imageRaw: '"open.png"',
+    })
+  );
+
+  const image = parsed.images.find((entry) => entry.id === "ImgOpen");
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#ImgPreview");
+  const updatedMenu = parsed.menus.find((entry) => entry.id === "#MenuMain");
+  const updatedOpen = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+
+  assert.ok(image, "Expected pbAny image entry after toggle.");
+  assert.equal(image?.pbAny, true);
+  assert.equal(image?.firstParam, "#PB_Any");
+  assert.equal(image?.variable, "ImgOpen");
+  assert.equal(gadget?.imageId, "ImgOpen");
+  assert.equal(updatedOpen?.iconId, "ImgOpen");
+  assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any, "open\.png"\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgPreview, 10, 10, 32, 32, ImageID\(ImgOpen\)\)/);
+  assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(ImgOpen\)\)/);
+});
+
+test("roundtrips image pbAny toggle from pbAny image and updates toolbar references", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const sourceLine = initial.images.find((image) => image.id === "imgSave")?.source?.line;
+  const toolBar = initial.toolbars.find((entry) => entry.id === "#TbMain");
+  const saveButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+
+  assert.equal(typeof sourceLine, "number", "Expected source line for imgSave.");
+  assert.equal(typeof saveButton?.source?.line, "number", "Expected toolbar button source line.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, "#TbMain", saveButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: saveButton!.idRaw,
+      iconRaw: "ImageID(#imgSave)",
+      toggle: saveButton!.toggle,
+    }),
+    (document) => applyImageUpdate(document, sourceLine!, {
+      inline: false,
+      idRaw: "#imgSave",
+      imageRaw: '"save.png"',
+    })
+  );
+
+  const image = parsed.images.find((entry) => entry.id === "#imgSave");
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === "#TbMain");
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+
+  assert.ok(image, "Expected enum image entry after toggle.");
+  assert.equal(image?.pbAny, false);
+  assert.equal(image?.firstParam, "#imgSave");
+  assert.equal(updatedButton?.iconId, "#imgSave");
+  assert.match(patchedText, /LoadImage\(#imgSave, "save\.png"\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#imgSave\)\)/);
+});
+
+test("roundtrips image pbAny toggle updates statusbar references", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const sourceLine = initial.images.find((image) => image.id === "#ImgState")?.source?.line;
+  const statusBar = initial.statusbars.find((entry) => entry.id === "#SbMain");
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#ImgState");
+
+  assert.equal(typeof sourceLine, "number", "Expected source line for #ImgState.");
+  assert.equal(typeof imageField?.source?.line, "number", "Expected statusbar field source line.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, "#SbMain", imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(ImgState)",
+    }),
+    (document) => applyImageUpdate(document, sourceLine!, {
+      inline: true,
+      idRaw: "#PB_Any",
+      assignedVar: "ImgState",
+      imageRaw: "?ImgState",
+    })
+  );
+
+  const image = parsed.images.find((entry) => entry.id === "ImgState");
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === "#SbMain");
+  const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "ImgState");
+
+  assert.ok(image, "Expected pbAny status image entry after toggle.");
+  assert.equal(image?.pbAny, true);
+  assert.equal(updatedField?.imageId, "ImgState");
+  assert.match(patchedText, /ImgState = CatchImage\(#PB_Any, \?ImgState\)/);
+  assert.match(patchedText, /StatusBarImage\(#SbMain, 0, ImageID\(ImgState\)\)/);
+});
+
+test("roundtrips image pbAny toggle updates button image gadget references", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const sourceLine = initial.images.find((image) => image.id === "#ImgRelative")?.source?.line;
+
+  assert.equal(typeof sourceLine, "number", "Expected source line for #ImgRelative.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "#BtnApply", { imageRaw: "ImageID(ImgRelative)" }),
+    (document) => applyImageUpdate(document, sourceLine!, {
+      inline: false,
+      idRaw: "#PB_Any",
+      assignedVar: "ImgRelative",
+      imageRaw: '"./icons/apply.png"',
+    })
+  );
+
+  const image = parsed.images.find((entry) => entry.id === "ImgRelative");
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#BtnApply");
+
+  assert.ok(image, "Expected pbAny image entry for button image gadget after toggle.");
+  assert.equal(image?.pbAny, true);
+  assert.equal(gadget?.kind, "ButtonImageGadget");
+  assert.equal(gadget?.imageId, "ImgRelative");
+  assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 96, 28, ImageID\(ImgRelative\), #PB_Button_Default\)/);
 });

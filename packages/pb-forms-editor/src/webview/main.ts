@@ -190,6 +190,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteImage: "deleteImage",
   relativizeImagePath: "relativizeImagePath",
   chooseImageFileForEntry: "chooseImageFileForEntry",
+  toggleImagePbAny: "toggleImagePbAny",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
@@ -243,6 +244,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny; sourceLine: number; toPbAny: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -441,6 +443,14 @@ function canRelativizeImageEntry(entry?: ImageEntry): boolean {
 
 function canChooseFileImageEntry(entry?: ImageEntry): boolean {
   return Boolean(entry && !entry.inline);
+}
+
+function canToggleImagePbAny(entry?: ImageEntry): boolean {
+  if (!entry) return false;
+  if (entry.pbAny) {
+    return Boolean((entry.variable ?? entry.id ?? "").trim().length);
+  }
+  return Boolean(entry.firstParam.trim().length);
 }
 
 function normalizeImageReference(raw?: string): { imageRaw?: string; imageId?: string } {
@@ -2738,6 +2748,21 @@ function renderProps() {
       });
     };
 
+    const togglePbAnyBtn = document.createElement("button");
+    togglePbAnyBtn.textContent = img.pbAny ? "Use Enum Id" : "Use PB_Any";
+    togglePbAnyBtn.disabled = !(canPatch && canToggleImagePbAny(img));
+    togglePbAnyBtn.title = img.pbAny
+      ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
+      : "Switch this image entry to #PB_Any assignment and update parsed references.";
+    togglePbAnyBtn.onclick = () => {
+      if (!(canPatch && canToggleImagePbAny(img))) return;
+      post({
+        type: "toggleImagePbAny",
+        sourceLine: img.source!.line,
+        toPbAny: !img.pbAny,
+      });
+    };
+
     const relativeBtn = document.createElement("button");
     relativeBtn.textContent = "Make Relative";
     relativeBtn.disabled = !(canPatch && canRelativizeImageEntry(img));
@@ -2768,6 +2793,7 @@ function renderProps() {
     actions.appendChild(editBtn);
     actions.appendChild(chooseFileBtn);
     actions.appendChild(toggleInlineBtn);
+    actions.appendChild(togglePbAnyBtn);
     actions.appendChild(relativeBtn);
     actions.appendChild(delBtn);
     propsEl.appendChild(actions);
@@ -2841,6 +2867,22 @@ function renderProps() {
             title: img.inline
               ? "Switch this image entry from CatchImage to LoadImage without changing its raw value."
               : "Switch this image entry from LoadImage to CatchImage without changing its raw value."
+          },
+          {
+            label: img.pbAny ? "Enum" : "PB_Any",
+            onClick: canPatch && canToggleImagePbAny(img)
+              ? () => {
+                  post({
+                    type: "toggleImagePbAny",
+                    sourceLine: img.source!.line,
+                    toPbAny: !img.pbAny
+                  });
+                }
+              : undefined,
+            disabled: !(canPatch && canToggleImagePbAny(img)),
+            title: img.pbAny
+              ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
+              : "Switch this image entry to #PB_Any assignment and update parsed references."
           },
           {
             label: "Relative",

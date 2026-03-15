@@ -898,7 +898,9 @@ export function applyGadgetOpenArgsUpdate(
   setRequiredCtorParam(params, layout.maxIndex, args.maxRaw);
   setRequiredCtorParam(params, layout.gadget1Index, args.gadget1Raw);
   setRequiredCtorParam(params, layout.gadget2Index, args.gadget2Raw);
-  setOptionalCtorParam(params, layout.flagsIndex, args.flagsExpr);
+  if (args.flagsExpr !== undefined) {
+    setOptionalCtorParam(params, layout.flagsIndex, args.flagsExpr);
+  }
 
   while (params.length > layout.minParamCount && !(params[params.length - 1]?.trim().length)) {
     params.pop();
