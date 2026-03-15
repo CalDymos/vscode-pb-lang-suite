@@ -32,6 +32,17 @@ type Gadget = {
   text?: string;
   imageRaw?: string;
   imageId?: string;
+  minRaw?: string;
+  min?: number;
+  maxRaw?: string;
+  max?: number;
+  gadget1Raw?: string;
+  gadget1Id?: string;
+  gadget2Raw?: string;
+  gadget2Id?: string;
+  flagsExpr?: string;
+  stateRaw?: string;
+  state?: number;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -1247,6 +1258,243 @@ window.addEventListener("mouseup", () => {
   drag = null;
 });
 
+type PreviewChromeMetrics = {
+  panelHeight: number;
+  scrollAreaWidth: number;
+  splitterWidth: number;
+};
+
+function getPreviewChromeMetrics(): PreviewChromeMetrics {
+  const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
+
+  if (ua.includes("mac")) {
+    return { panelHeight: 31, scrollAreaWidth: 14, splitterWidth: 12 };
+  }
+
+  if (ua.includes("linux")) {
+    return { panelHeight: 29, scrollAreaWidth: 20, splitterWidth: 9 };
+  }
+
+  return { panelHeight: 22, scrollAreaWidth: 20, splitterWidth: 9 };
+}
+
+function hasPbFlag(flagsExpr: string | undefined, flag: string): boolean {
+  if (!flagsExpr) return false;
+  const parts = flagsExpr.split("|").map((part) => part.trim());
+  return parts.includes(flag);
+}
+
+function unquotePbString(raw: string | undefined): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function getPanelActiveItem(panel: Gadget): number {
+  let active = 0;
+
+  for (const child of model.gadgets) {
+    if (child.parentId !== panel.id) continue;
+    if (typeof child.parentItem !== "number") continue;
+    if (child.parentItem > active) active = child.parentItem;
+  }
+
+  return active;
+}
+
+function drawContainerChrome(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fg: string
+) {
+  const bg = getCssVar("--vscode-editor-background") || "transparent";
+
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = bg;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = fg;
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.restore();
+}
+
+function drawPanelChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fg: string,
+  metrics: PreviewChromeMetrics
+) {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, h));
+  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  const inactiveBg = getCssVar("--vscode-sideBar-background") || bg;
+  const activeBg = getCssVar("--vscode-input-background") || bg;
+  const activeIndex = getPanelActiveItem(g);
+
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = bg;
+  ctx.fillRect(x + 1, y + panelHeight, Math.max(0, w - 2), Math.max(0, h - panelHeight - 1));
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = fg;
+  ctx.strokeRect(x + 0.5, y + panelHeight + 0.5, w, Math.max(0, h - panelHeight));
+  ctx.restore();
+
+  let tabX = x;
+  const tabs = g.items ?? [];
+  for (let i = 0; i < tabs.length; i++) {
+    const label = (tabs[i].text ?? unquotePbString(tabs[i].textRaw)) || `Tab ${i}`;
+    const tabW = Math.max(46, Math.ceil(ctx.measureText(label).width) + 14);
+    const isActive = i === activeIndex;
+
+    ctx.save();
+    ctx.fillStyle = isActive ? activeBg : inactiveBg;
+    ctx.globalAlpha = isActive ? 1 : 0.92;
+    ctx.fillRect(tabX + 1, y + (isActive ? 0 : 2) + 1, tabW - 2, Math.max(16, panelHeight - (isActive ? 1 : 4)) - 1);
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = fg;
+    ctx.strokeRect(tabX + 0.5, y + (isActive ? 0 : 2) + 0.5, tabW, Math.max(16, panelHeight - (isActive ? 1 : 4)));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = fg;
+    ctx.fillText(label, tabX + 7, y + Math.min(panelHeight - 7, 15));
+    ctx.restore();
+
+    tabX += tabW;
+    if (tabX >= x + w - 12) break;
+  }
+}
+
+function drawScrollAreaChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fg: string,
+  metrics: PreviewChromeMetrics
+) {
+  const bar = Math.min(metrics.scrollAreaWidth, Math.max(12, Math.min(w, h) - 4));
+  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  const trackBg = getCssVar("--vscode-sideBar-background") || bg;
+  const thumbBg = getCssVar("--vscode-scrollbarSlider-background") || fg;
+  const viewportW = Math.max(0, w - bar);
+  const viewportH = Math.max(0, h - bar);
+  const innerW = typeof g.min === "number" && g.min > 0 ? g.min : viewportW;
+  const innerH = typeof g.max === "number" && g.max > 0 ? g.max : viewportH;
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = fg;
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = trackBg;
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(x + viewportW, y + 1, bar - 1, Math.max(0, viewportH - 1));
+  ctx.fillRect(x + 1, y + viewportH, Math.max(0, viewportW - 1), bar - 1);
+  ctx.restore();
+
+  if (innerH > viewportH && viewportH > 0) {
+    const trackH = Math.max(1, viewportH);
+    const thumbH = clamp(Math.round((viewportH / innerH) * trackH), 14, trackH);
+    ctx.save();
+    ctx.fillStyle = thumbBg;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(x + viewportW + 3, y + 3, Math.max(3, bar - 6), Math.max(10, thumbH - 6));
+    ctx.restore();
+  }
+
+  if (innerW > viewportW && viewportW > 0) {
+    const trackW = Math.max(1, viewportW);
+    const thumbW = clamp(Math.round((viewportW / innerW) * trackW), 14, trackW);
+    ctx.save();
+    ctx.fillStyle = thumbBg;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(x + 3, y + viewportH + 3, Math.max(10, thumbW - 6), Math.max(3, bar - 6));
+    ctx.restore();
+  }
+}
+
+function drawSplitterChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fg: string,
+  metrics: PreviewChromeMetrics
+) {
+  const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
+  const separator = hasPbFlag(g.flagsExpr, "#PB_Splitter_Separator");
+  const bar = metrics.splitterWidth;
+  const range = Math.max(0, (vertical ? w : h) - bar);
+  const rawPos = typeof g.state === "number" ? Math.trunc(g.state) : Math.trunc(range / 2);
+  const pos = clamp(rawPos, 0, range);
+  const bg = getCssVar("--vscode-editor-background") || "transparent";
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = fg;
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = getCssVar("--vscode-sideBar-background") || bg;
+  ctx.globalAlpha = 0.95;
+  if (vertical) {
+    ctx.fillRect(x + pos, y + 1, bar, Math.max(0, h - 2));
+  } else {
+    ctx.fillRect(x + 1, y + pos, Math.max(0, w - 2), bar);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = fg;
+  if (separator) {
+    if (vertical) {
+      ctx.beginPath();
+      ctx.moveTo(x + pos + Math.trunc(bar / 2) + 0.5, y + 2);
+      ctx.lineTo(x + pos + Math.trunc(bar / 2) + 0.5, y + h - 2);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + pos + Math.trunc(bar / 2) + 0.5);
+      ctx.lineTo(x + w - 2, y + pos + Math.trunc(bar / 2) + 0.5);
+      ctx.stroke();
+    }
+  } else {
+    const dots = 3;
+    for (let i = 0; i < dots; i++) {
+      if (vertical) {
+        const cy = y + Math.trunc(h / 2) - 8 + i * 8;
+        ctx.strokeRect(x + pos + Math.trunc((bar - 4) / 2) + 0.5, cy + 0.5, 3, 3);
+      } else {
+        const cx = x + Math.trunc(w / 2) - 8 + i * 8;
+        ctx.strokeRect(cx + 0.5, y + pos + Math.trunc((bar - 4) / 2) + 0.5, 3, 3);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 function render() {
   const ctx = canvas.getContext("2d")!;
   const rect = canvas.getBoundingClientRect();
@@ -1330,6 +1578,8 @@ function render() {
     drawHandles(ctx, winX, winY, winW, winH, focus);
   }
 
+  const chromeMetrics = getPreviewChromeMetrics();
+
   // Gadgets (offset by window origin)
   for (const g of model.gadgets) {
     const gx = winX + g.x;
@@ -1339,8 +1589,32 @@ function render() {
     ctx.fillStyle = fg;
     ctx.lineWidth = 1;
 
-    ctx.strokeRect(gx + 0.5, gy + 0.5, g.w, g.h);
-    ctx.fillText(`${g.kind} ${g.id}`, gx + 4, gy + 14);
+    let labelY = gy + 14;
+
+    switch (g.kind) {
+      case "ContainerGadget":
+        drawContainerChrome(ctx, gx, gy, g.w, g.h, fg);
+        break;
+
+      case "PanelGadget":
+        drawPanelChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
+        labelY = gy + Math.min(g.h - 8, chromeMetrics.panelHeight + 14);
+        break;
+
+      case "ScrollAreaGadget":
+        drawScrollAreaChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
+        break;
+
+      case "SplitterGadget":
+        drawSplitterChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
+        break;
+
+      default:
+        ctx.strokeRect(gx + 0.5, gy + 0.5, g.w, g.h);
+        break;
+    }
+
+    ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
 
     const sel = selection;
     if (sel && sel.kind === "gadget" && g.id === sel.id) {
