@@ -40,6 +40,7 @@ type Gadget = {
   gadget1Id?: string;
   gadget2Raw?: string;
   gadget2Id?: string;
+  splitterId?: string;
   flagsExpr?: string;
   stateRaw?: string;
   state?: number;
@@ -295,6 +296,7 @@ type DesignerSelection =
 let selection: DesignerSelection = null;
 
 const expanded = new Map<string, boolean>();
+const panelActiveItems = new Map<string, number>();
 
 let settings: DesignerSettings = {
   showGrid: true,
@@ -759,6 +761,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "init") {
     errEl.textContent = "";
     model = msg.model;
+    panelActiveItems.clear();
 
     if (msg.settings) {
       applySettings(msg.settings);
@@ -867,9 +870,16 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
   if (!hitWindow(mx, my)) return null;
 
   const { lx, ly } = toLocal(mx, my);
+  const metrics = getPreviewChromeMetrics();
+  const cache = new Map<string, GadgetPreviewLayout>();
+
   for (let i = model.gadgets.length - 1; i >= 0; i--) {
     const g = model.gadgets[i];
-    if (lx >= g.x && lx <= g.x + g.w && ly >= g.y && ly <= g.y + g.h) return g;
+    const layout = getGadgetPreviewLayout(g, metrics, cache);
+    if (!layout.visible) continue;
+    if (!rectContainsPoint(layout.rect, lx, ly)) continue;
+    if (!rectContainsPoint(layout.clip, lx, ly)) continue;
+    return g;
   }
   return null;
 }
@@ -898,8 +908,11 @@ function hitHandlePoints(points: Array<[Handle, number, number]>, mx: number, my
 }
 
 function hitHandleGadget(g: Gadget, mx: number, my: number): Handle | null {
-  const { gx: ox, gy: oy } = toGlobal(0, 0);
-  const pts = handlePointsLocal(g.x + ox, g.y + oy, g.w, g.h);
+  const metrics = getPreviewChromeMetrics();
+  const layout = getGadgetPreviewLayout(g, metrics);
+  if (!layout.visible) return null;
+  const { gx, gy } = toGlobal(layout.rect.x, layout.rect.y);
+  const pts = handlePointsLocal(gx, gy, layout.rect.w, layout.rect.h);
   return hitHandlePoints(pts, mx, my);
 }
 
@@ -1032,6 +1045,16 @@ canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+
+  const panelTabHit = hitTestPanelTab(mx, my, getPreviewChromeMetrics());
+  if (panelTabHit) {
+    panelActiveItems.set(panelTabHit.panel.id, panelTabHit.index);
+    selection = { kind: "gadget", id: panelTabHit.panel.id };
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
 
   const g = hitTestGadget(mx, my);
   if (g) {
@@ -1293,16 +1316,231 @@ function unquotePbString(raw: string | undefined): string {
   return trimmed;
 }
 
-function getPanelActiveItem(panel: Gadget): number {
-  let active = 0;
+type PreviewRect = { x: number; y: number; w: number; h: number };
 
-  for (const child of model.gadgets) {
-    if (child.parentId !== panel.id) continue;
-    if (typeof child.parentItem !== "number") continue;
-    if (child.parentItem > active) active = child.parentItem;
+type GadgetPreviewLayout = {
+  rect: PreviewRect;
+  clip: PreviewRect;
+  visible: boolean;
+};
+
+type PanelTabRect = {
+  index: number;
+  label: string;
+  rect: PreviewRect;
+  active: boolean;
+};
+
+function getGadgetById(id: string | undefined): Gadget | undefined {
+  if (!id) return undefined;
+  return model.gadgets.find((g) => g.id === id);
+}
+
+function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.w, b.x + b.w);
+  const bottom = Math.min(a.y + a.h, b.y + b.h);
+  return {
+    x,
+    y,
+    w: Math.max(0, right - x),
+    h: Math.max(0, bottom - y)
+  };
+}
+
+function rectContainsPoint(rect: PreviewRect, x: number, y: number): boolean {
+  return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
+function rectIntersects(a: PreviewRect, b: PreviewRect): boolean {
+  const i = intersectRect(a, b);
+  return i.w > 0 && i.h > 0;
+}
+
+function getPanelActiveItem(panel: Gadget): number {
+  const tabCount = panel.items?.length ?? 0;
+  const stored = panelActiveItems.get(panel.id);
+  if (typeof stored === "number" && stored >= 0 && stored < Math.max(1, tabCount)) {
+    return stored;
+  }
+  return 0;
+}
+
+function getPanelTabRects(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PanelTabRect[] {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  const activeIndex = getPanelActiveItem(g);
+  const tabs = g.items ?? [];
+  const tabRects: PanelTabRect[] = [];
+  let tabX = rect.x;
+
+  for (let i = 0; i < tabs.length; i++) {
+    const label = (tabs[i].text ?? unquotePbString(tabs[i].textRaw)) || `Tab ${i}`;
+    const tabW = Math.max(46, Math.ceil(ctx.measureText(label).width) + 14);
+    const active = i === activeIndex;
+    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
+    const tabY = rect.y + (active ? 0 : 2);
+    const nextRight = tabX + tabW;
+
+    if (tabX >= rect.x + rect.w - 12) break;
+
+    tabRects.push({
+      index: i,
+      label,
+      active,
+      rect: {
+        x: tabX,
+        y: tabY,
+        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
+        h: tabH
+      }
+    });
+
+    tabX = nextRight;
   }
 
-  return active;
+  return tabRects;
+}
+
+function getScrollAreaBarSize(rect: PreviewRect, metrics: PreviewChromeMetrics): number {
+  return Math.min(metrics.scrollAreaWidth, Math.max(12, Math.min(rect.w, rect.h) - 4));
+}
+
+function getContentRectForGadget(
+  g: Gadget,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  switch (g.kind) {
+    case "PanelGadget": {
+      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+      return { x: rect.x, y: rect.y + panelHeight, w: rect.w, h: Math.max(0, rect.h - panelHeight) };
+    }
+
+    case "ScrollAreaGadget": {
+      const bar = getScrollAreaBarSize(rect, metrics);
+      return { x: rect.x, y: rect.y, w: Math.max(0, rect.w - bar), h: Math.max(0, rect.h - bar) };
+    }
+
+    default:
+      return rect;
+  }
+}
+
+function getSplitterPaneRect(splitter: Gadget, splitterRect: PreviewRect, childId: string, metrics: PreviewChromeMetrics): PreviewRect {
+  const vertical = hasPbFlag(splitter.flagsExpr, "#PB_Splitter_Vertical");
+  const bar = metrics.splitterWidth;
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof splitter.state === "number" ? Math.trunc(splitter.state) : Math.trunc(range / 2);
+  const pos = clamp(rawPos, 0, range);
+
+  if (childId === splitter.gadget1Id) {
+    return vertical
+      ? { x: splitterRect.x, y: splitterRect.y, w: pos, h: splitterRect.h }
+      : { x: splitterRect.x, y: splitterRect.y, w: splitterRect.w, h: pos };
+  }
+
+  if (childId === splitter.gadget2Id) {
+    return vertical
+      ? { x: splitterRect.x + pos + bar, y: splitterRect.y, w: Math.max(0, splitterRect.w - pos - bar), h: splitterRect.h }
+      : { x: splitterRect.x, y: splitterRect.y + pos + bar, w: splitterRect.w, h: Math.max(0, splitterRect.h - pos - bar) };
+  }
+
+  return splitterRect;
+}
+
+function getGadgetPreviewLayout(
+  g: Gadget,
+  metrics: PreviewChromeMetrics,
+  cache = new Map<string, GadgetPreviewLayout>(),
+  visiting = new Set<string>()
+): GadgetPreviewLayout {
+  const cached = cache.get(g.id);
+  if (cached) return cached;
+
+  if (visiting.has(g.id)) {
+    const cycle: GadgetPreviewLayout = { rect: { x: g.x, y: g.y, w: g.w, h: g.h }, clip: { x: 0, y: 0, w: 0, h: 0 }, visible: false };
+    cache.set(g.id, cycle);
+    return cycle;
+  }
+
+  visiting.add(g.id);
+  const windowRect: PreviewRect = {
+    x: 0,
+    y: 0,
+    w: Math.max(0, model.window?.w ?? 0),
+    h: Math.max(0, model.window?.h ?? 0)
+  };
+
+  let rect: PreviewRect = { x: g.x, y: g.y, w: g.w, h: g.h };
+  let clip = windowRect;
+  let visible = rect.w > 0 && rect.h > 0;
+
+  if (g.splitterId) {
+    const splitter = getGadgetById(g.splitterId);
+    if (splitter) {
+      const splitterLayout = getGadgetPreviewLayout(splitter, metrics, cache, visiting);
+      const paneRect = getSplitterPaneRect(splitter, splitterLayout.rect, g.id, metrics);
+      rect = paneRect;
+      clip = intersectRect(splitterLayout.clip, paneRect);
+      visible = splitterLayout.visible && clip.w > 0 && clip.h > 0;
+    }
+  } else if (g.parentId) {
+    const parent = getGadgetById(g.parentId);
+    if (parent) {
+      const parentLayout = getGadgetPreviewLayout(parent, metrics, cache, visiting);
+      const parentContentRect = getContentRectForGadget(parent, parentLayout.rect, metrics);
+      clip = intersectRect(parentLayout.clip, parentContentRect);
+      rect = { x: parentContentRect.x + g.x, y: parentContentRect.y + g.y, w: g.w, h: g.h };
+      visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
+
+      if (parent.kind === "PanelGadget" && typeof g.parentItem === "number") {
+        visible = visible && g.parentItem === getPanelActiveItem(parent);
+      }
+    }
+  } else {
+    clip = intersectRect(windowRect, rect);
+    visible = clip.w > 0 && clip.h > 0;
+  }
+
+  const layout: GadgetPreviewLayout = { rect, clip, visible };
+  visiting.delete(g.id);
+  cache.set(g.id, layout);
+  return layout;
+}
+
+function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics): { panel: Gadget; index: number } | null {
+  if (!hitWindow(mx, my)) return null;
+
+  const { lx, ly } = toLocal(mx, my);
+  const ctx = canvas.getContext("2d")!;
+  ctx.save();
+  ctx.font = "12px system-ui, -apple-system, Segoe UI, sans-serif";
+
+  try {
+    const cache = new Map<string, GadgetPreviewLayout>();
+    for (let i = model.gadgets.length - 1; i >= 0; i--) {
+      const g = model.gadgets[i];
+      if (g.kind !== "PanelGadget") continue;
+      const layout = getGadgetPreviewLayout(g, metrics, cache);
+      if (!layout.visible) continue;
+      const tabs = getPanelTabRects(ctx, g, layout.rect, metrics);
+      for (const tab of tabs) {
+        if (rectContainsPoint(intersectRect(tab.rect, layout.clip), lx, ly)) {
+          return { panel: g, index: tab.index };
+        }
+      }
+    }
+  } finally {
+    ctx.restore();
+  }
+
+  return null;
 }
 
 function drawContainerChrome(
@@ -1339,8 +1577,6 @@ function drawPanelChrome(
   const bg = getCssVar("--vscode-editor-background") || "transparent";
   const inactiveBg = getCssVar("--vscode-sideBar-background") || bg;
   const activeBg = getCssVar("--vscode-input-background") || bg;
-  const activeIndex = getPanelActiveItem(g);
-
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.fillStyle = bg;
@@ -1350,27 +1586,18 @@ function drawPanelChrome(
   ctx.strokeRect(x + 0.5, y + panelHeight + 0.5, w, Math.max(0, h - panelHeight));
   ctx.restore();
 
-  let tabX = x;
-  const tabs = g.items ?? [];
-  for (let i = 0; i < tabs.length; i++) {
-    const label = (tabs[i].text ?? unquotePbString(tabs[i].textRaw)) || `Tab ${i}`;
-    const tabW = Math.max(46, Math.ceil(ctx.measureText(label).width) + 14);
-    const isActive = i === activeIndex;
-
+  for (const tab of getPanelTabRects(ctx, g, { x, y, w, h }, metrics)) {
     ctx.save();
-    ctx.fillStyle = isActive ? activeBg : inactiveBg;
-    ctx.globalAlpha = isActive ? 1 : 0.92;
-    ctx.fillRect(tabX + 1, y + (isActive ? 0 : 2) + 1, tabW - 2, Math.max(16, panelHeight - (isActive ? 1 : 4)) - 1);
+    ctx.fillStyle = tab.active ? activeBg : inactiveBg;
+    ctx.globalAlpha = tab.active ? 1 : 0.92;
+    ctx.fillRect(tab.rect.x + 1, tab.rect.y + 1, Math.max(0, tab.rect.w - 2), Math.max(0, tab.rect.h - 1));
     ctx.globalAlpha = 0.35;
     ctx.strokeStyle = fg;
-    ctx.strokeRect(tabX + 0.5, y + (isActive ? 0 : 2) + 0.5, tabW, Math.max(16, panelHeight - (isActive ? 1 : 4)));
+    ctx.strokeRect(tab.rect.x + 0.5, tab.rect.y + 0.5, tab.rect.w, tab.rect.h);
     ctx.globalAlpha = 1;
     ctx.fillStyle = fg;
-    ctx.fillText(label, tabX + 7, y + Math.min(panelHeight - 7, 15));
+    ctx.fillText(tab.label, tab.rect.x + 7, y + Math.min(panelHeight - 7, 15));
     ctx.restore();
-
-    tabX += tabW;
-    if (tabX >= x + w - 12) break;
   }
 }
 
@@ -1579,52 +1806,74 @@ function render() {
   }
 
   const chromeMetrics = getPreviewChromeMetrics();
+  const layoutCache = new Map<string, GadgetPreviewLayout>();
 
   // Gadgets (offset by window origin)
   for (const g of model.gadgets) {
-    const gx = winX + g.x;
-    const gy = winY + g.y;
+    const layout = getGadgetPreviewLayout(g, chromeMetrics, layoutCache);
+    if (!layout.visible) continue;
+
+    const gx = winX + layout.rect.x;
+    const gy = winY + layout.rect.y;
+    const gw = layout.rect.w;
+    const gh = layout.rect.h;
+    const clipX = winX + layout.clip.x;
+    const clipY = winY + layout.clip.y;
 
     ctx.strokeStyle = fg;
     ctx.fillStyle = fg;
     ctx.lineWidth = 1;
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+    ctx.clip();
+
     let labelY = gy + 14;
 
     switch (g.kind) {
       case "ContainerGadget":
-        drawContainerChrome(ctx, gx, gy, g.w, g.h, fg);
+        drawContainerChrome(ctx, gx, gy, gw, gh, fg);
         break;
 
       case "PanelGadget":
-        drawPanelChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
-        labelY = gy + Math.min(g.h - 8, chromeMetrics.panelHeight + 14);
+        drawPanelChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
+        labelY = gy + Math.min(gh - 8, chromeMetrics.panelHeight + 14);
         break;
 
       case "ScrollAreaGadget":
-        drawScrollAreaChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
+        drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         break;
 
       case "SplitterGadget":
-        drawSplitterChrome(ctx, g, gx, gy, g.w, g.h, fg, chromeMetrics);
+        drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         break;
 
       default:
-        ctx.strokeRect(gx + 0.5, gy + 0.5, g.w, g.h);
+        ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
         break;
     }
 
     ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
+    ctx.restore();
 
     const sel = selection;
     if (sel && sel.kind === "gadget" && g.id === sel.id) {
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+      ctx.clip();
       ctx.strokeStyle = focus;
       ctx.lineWidth = 2;
-      ctx.strokeRect(gx + 0.5, gy + 0.5, g.w, g.h);
+      ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
       ctx.restore();
 
-      drawHandles(ctx, gx, gy, g.w, g.h, focus);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+      ctx.clip();
+      drawHandles(ctx, gx, gy, gw, gh, focus);
+      ctx.restore();
     }
   }
 }
