@@ -441,6 +441,44 @@ function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "too
   return "";
 }
 
+function promptImageReferenceFromModel(currentImageId?: string): { imageId: string; imageRaw: string } | undefined {
+  const images = model.images ?? [];
+  if (!images.length) {
+    alert("No image entries are defined in this form.");
+    return undefined;
+  }
+
+  const options = images
+    .map((img, index) => {
+      const procName = img.inline ? "CatchImage" : "LoadImage";
+      const assignPrefix = img.pbAny && img.variable ? `${img.variable} = ` : "";
+      return `${index + 1}. ${img.id}  ${assignPrefix}${procName}(${img.firstParam}, ${img.imageRaw})`;
+    })
+    .join("\n");
+
+  const defaultValue = currentImageId && findImageEntryById(currentImageId)
+    ? currentImageId
+    : images[0]?.id;
+  const value = prompt(`Select image by id or number:\n\n${options}`, defaultValue ?? "");
+  if (value === null) return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed.length) return undefined;
+
+  const selected = /^\d+$/.test(trimmed)
+    ? images[Number(trimmed) - 1]
+    : images.find(img => img.id === trimmed);
+  if (!selected) {
+    alert(`Image '${trimmed}' was not found in this form.`);
+    return undefined;
+  }
+
+  return {
+    imageId: selected.id,
+    imageRaw: `ImageID(${selected.id})`
+  };
+}
+
 function toPbString(v: string): string {
   const esc = (v ?? "").replace(/"/g, '""');
   return `"${esc}"`;
@@ -1650,7 +1688,8 @@ function renderProps() {
     onDelete?: () => void,
     extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
     extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
+    extra4?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1689,12 +1728,20 @@ function renderProps() {
     b5.title = extra3?.title ?? "";
     b5.onclick = () => extra3?.onClick?.();
 
+    const b6 = document.createElement("button");
+    b6.textContent = extra4?.label ?? "";
+    b6.disabled = extra4 ? Boolean(extra4.disabled) || !extra4.onClick : true;
+    b6.hidden = !extra4;
+    b6.title = extra4?.title ?? "";
+    b6.onclick = () => extra4?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
     r.appendChild(b3);
     r.appendChild(b4);
     r.appendChild(b5);
+    r.appendChild(b6);
     return r;
   };
 
@@ -1977,6 +2024,22 @@ function renderProps() {
             });
           }
         : undefined;
+      const menuPickImageFn = e.kind === "MenuItem" && canPatch
+        ? () => {
+            const selected = promptImageReferenceFromModel(e.iconId);
+            if (!selected) return;
+            post({
+              type: "updateMenuEntry",
+              menuId: m.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              textRaw: toPbString(e.text ?? ""),
+              shortcut: e.shortcut,
+              iconRaw: selected.imageRaw
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         line,
@@ -1984,6 +2047,7 @@ function renderProps() {
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
         { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
+        { label: "Use Existing", onClick: menuPickImageFn, disabled: !menuPickImageFn, title: e.kind === "MenuItem" ? "Select an image from the form image list." : "Only MenuItem supports a parsed image argument." },
         { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
       ));
     }
@@ -2178,6 +2242,21 @@ function renderProps() {
             });
           }
         : undefined;
+      const toolBarPickImageFn = e.kind === "ToolBarImageButton" && canPatch
+        ? () => {
+            const selected = promptImageReferenceFromModel(e.iconId);
+            if (!selected) return;
+            post({
+              type: "updateToolBarEntry",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              iconRaw: selected.imageRaw,
+              toggle: e.toggle
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         line,
@@ -2185,6 +2264,7 @@ function renderProps() {
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
         { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
+        { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
       ));
     }
@@ -2295,12 +2375,26 @@ function renderProps() {
             });
           }
         : undefined;
+      const statusPickImageFn = canPatch
+        ? () => {
+            const selected = promptImageReferenceFromModel(f.imageId);
+            if (!selected) return;
+            post({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              imageRaw: selected.imageRaw
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         label,
         editFn,
         delFn,
         { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Patch the raw StatusBarImage argument while preserving the field width." },
+        { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
       ));
     });
@@ -2492,6 +2586,29 @@ function renderProps() {
   propsEl.appendChild(row("Image Id", readonlyInput(g.imageId ?? "")));
   const gadgetImage = findImageEntryById(g.imageId);
   const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
+  const gadgetImageActions = document.createElement("div");
+  gadgetImageActions.className = "row-actions";
+
+  if (isImageCapableGadget) {
+    const gadgetPickImageBtn = document.createElement("button");
+    gadgetPickImageBtn.textContent = "Use Existing Image";
+    gadgetPickImageBtn.disabled = !(model.images?.length);
+    gadgetPickImageBtn.title = model.images?.length ? "Select an image from the form image list." : "No image entries are defined in this form.";
+    gadgetPickImageBtn.onclick = () => {
+      const selected = promptImageReferenceFromModel(g.imageId);
+      if (!selected) return;
+      g.imageRaw = selected.imageRaw;
+      g.imageId = selected.imageId;
+      post({
+        type: "setGadgetImageRaw",
+        id: g.id,
+        imageRaw: selected.imageRaw
+      });
+      renderProps();
+    };
+    gadgetImageActions.appendChild(gadgetPickImageBtn);
+  }
+
   const gadgetImageBtn = document.createElement("button");
   gadgetImageBtn.textContent = "Select Image";
   gadgetImageBtn.disabled = !gadgetImage;
@@ -2500,7 +2617,8 @@ function renderProps() {
     if (!gadgetImage) return;
     selectImageById(gadgetImage.id);
   };
-  propsEl.appendChild(row("", gadgetImageBtn));
+  gadgetImageActions.appendChild(gadgetImageBtn);
+  propsEl.appendChild(row("", gadgetImageActions));
   if (gadgetImageHint) {
     propsEl.appendChild(mutedNote(gadgetImageHint));
   }
