@@ -546,6 +546,52 @@ test("roundtrips image update for pbAny catch image", () => {
   assert.match(patchedText, /imgSave = CatchImage\(#PB_Any, \?ImgSaveData\)/);
 });
 
+test("roundtrips image update from load image to catch image without changing raw value", () => {
+  const { text, parsed } = parseImageFixture();
+  const sourceLine = parsed.images.find((image) => image.id === "#ImgOpen")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for load image.");
+
+  const args: ImageArgs = {
+    inline: true,
+    idRaw: "#ImgOpen",
+    imageRaw: '"open.png"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageUpdate(document, sourceLine!, args)
+  );
+
+  const updatedImage = updated.images.find((image) => image.id === "#ImgOpen");
+  assert.ok(updatedImage, "Expected updated load image entry.");
+  assert.equal(updatedImage?.inline, true);
+  assert.equal(updatedImage?.firstParam, "#ImgOpen");
+  assert.equal(updatedImage?.imageRaw, '"open.png"');
+  assert.match(patchedText, /CatchImage\(#ImgOpen, "open\.png"\)/);
+});
+
+test("roundtrips image update from catch image to load image without changing raw value", () => {
+  const { text, parsed } = parseImageFixture();
+  const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for catch image.");
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgState",
+    imageRaw: "?ImgState",
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyImageUpdate(document, sourceLine!, args)
+  );
+
+  const updatedImage = updated.images.find((image) => image.id === "#ImgState");
+  assert.ok(updatedImage, "Expected updated catch image entry.");
+  assert.equal(updatedImage?.inline, false);
+  assert.equal(updatedImage?.firstParam, "#ImgState");
+  assert.equal(updatedImage?.imageRaw, "?ImgState");
+  assert.match(patchedText, /LoadImage\(#ImgState, \?ImgState\)/);
+});
+
 test("roundtrips image delete", () => {
   const { text, parsed } = parseImageFixture();
   const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;

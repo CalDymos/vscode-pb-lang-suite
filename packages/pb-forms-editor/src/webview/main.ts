@@ -2720,6 +2720,24 @@ function renderProps() {
       });
     };
 
+    const toggleInlineBtn = document.createElement("button");
+    toggleInlineBtn.textContent = img.inline ? "Use LoadImage" : "Use CatchImage";
+    toggleInlineBtn.disabled = !canPatch;
+    toggleInlineBtn.title = img.inline
+      ? "Switch this image entry from CatchImage to LoadImage without changing its raw value."
+      : "Switch this image entry from LoadImage to CatchImage without changing its raw value.";
+    toggleInlineBtn.onclick = () => {
+      if (!canPatch) return;
+      post({
+        type: "updateImage",
+        sourceLine: img.source!.line,
+        inline: !img.inline,
+        idRaw: img.firstParam,
+        imageRaw: img.imageRaw,
+        assignedVar: img.pbAny ? img.variable : undefined
+      });
+    };
+
     const relativeBtn = document.createElement("button");
     relativeBtn.textContent = "Make Relative";
     relativeBtn.disabled = !(canPatch && canRelativizeImageEntry(img));
@@ -2749,6 +2767,7 @@ function renderProps() {
 
     actions.appendChild(editBtn);
     actions.appendChild(chooseFileBtn);
+    actions.appendChild(toggleInlineBtn);
     actions.appendChild(relativeBtn);
     actions.appendChild(delBtn);
     propsEl.appendChild(actions);
@@ -2803,6 +2822,25 @@ function renderProps() {
             title: canChooseFileImageEntry(img)
               ? "Select a file for this LoadImage entry."
               : "Only LoadImage entries can select a file path."
+          },
+          {
+            label: img.inline ? "Load" : "Catch",
+            onClick: canPatch
+              ? () => {
+                  post({
+                    type: "updateImage",
+                    sourceLine: img.source!.line,
+                    inline: !img.inline,
+                    idRaw: img.firstParam,
+                    imageRaw: img.imageRaw,
+                    assignedVar: img.pbAny ? img.variable : undefined
+                  });
+                }
+              : undefined,
+            disabled: !canPatch,
+            title: img.inline
+              ? "Switch this image entry from CatchImage to LoadImage without changing its raw value."
+              : "Switch this image entry from LoadImage to CatchImage without changing its raw value."
           },
           {
             label: "Relative",
