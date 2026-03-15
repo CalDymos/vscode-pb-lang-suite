@@ -194,7 +194,10 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
   createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
-  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage"
+  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
+  chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
+  chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
+  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage"
 } as const;
 
 // Backwards compatible:
@@ -242,7 +245,10 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -1734,7 +1740,8 @@ function renderProps() {
     extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
     extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
     extra4?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra5?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    extra5?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
+    extra6?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1787,6 +1794,13 @@ function renderProps() {
     b7.title = extra5?.title ?? "";
     b7.onclick = () => extra5?.onClick?.();
 
+    const b8 = document.createElement("button");
+    b8.textContent = extra6?.label ?? "";
+    b8.disabled = extra6 ? Boolean(extra6.disabled) || !extra6.onClick : true;
+    b8.hidden = !extra6;
+    b8.title = extra6?.title ?? "";
+    b8.onclick = () => extra6?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
@@ -1795,6 +1809,7 @@ function renderProps() {
     r.appendChild(b5);
     r.appendChild(b6);
     r.appendChild(b7);
+    r.appendChild(b8);
     return r;
   };
 
@@ -1840,6 +1855,35 @@ function renderProps() {
 
     return {
       ...next,
+      imageId: reference.imageId,
+      imageRefRaw: reference.imageRaw,
+    };
+  };
+
+  const promptCreateAndAssignLoadImageArgs = (): ({ idRaw: string; assignedVar?: string } & { imageId: string; imageRefRaw: string }) | undefined => {
+    const firstParam = prompt("First param for new LoadImage entry (#ImgName or #PB_Any)", "#ImgNew");
+    if (firstParam === null) return undefined;
+    const idRaw = firstParam.trim();
+    if (!idRaw.length) return undefined;
+
+    let assignedVar: string | undefined;
+    if (idRaw.toLowerCase() === "#pb_any") {
+      const assigned = prompt("Assigned variable", "imgNew");
+      if (assigned === null) return undefined;
+      const trimmedAssigned = assigned.trim();
+      if (!trimmedAssigned.length) return undefined;
+      assignedVar = trimmedAssigned;
+    }
+
+    const reference = buildCreatedImageReference(idRaw, assignedVar);
+    if (!reference) {
+      alert("#PB_Any requires an assigned variable name.");
+      return undefined;
+    }
+
+    return {
+      idRaw,
+      assignedVar,
       imageId: reference.imageId,
       imageRefRaw: reference.imageRaw,
     };
@@ -2110,6 +2154,23 @@ function renderProps() {
             });
           }
         : undefined;
+      const menuChooseFileImageFn = e.kind === "MenuItem" && canPatch
+        ? () => {
+            const next = promptCreateAndAssignLoadImageArgs();
+            if (!next) return;
+            post({
+              type: "chooseFileAndAssignMenuEntryImage",
+              menuId: m.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
+              shortcut: e.shortcut,
+              newImageIdRaw: next.idRaw,
+              newAssignedVar: next.assignedVar,
+            });
+          }
+        : undefined;
       const menuCreateImageFn = e.kind === "MenuItem" && canPatch
         ? () => {
             const next = promptCreateAndAssignImageArgs();
@@ -2137,6 +2198,7 @@ function renderProps() {
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
         { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
         { label: "Use Existing", onClick: menuPickImageFn, disabled: !menuPickImageFn, title: e.kind === "MenuItem" ? "Select an image from the form image list." : "Only MenuItem supports a parsed image argument." },
+        { label: "Choose File", onClick: menuChooseFileImageFn, disabled: !menuChooseFileImageFn, title: e.kind === "MenuItem" ? "Select a file, create a new LoadImage entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Create New", onClick: menuCreateImageFn, disabled: !menuCreateImageFn, title: e.kind === "MenuItem" ? "Create a new form image entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
       ));
@@ -2347,6 +2409,22 @@ function renderProps() {
             });
           }
         : undefined;
+      const toolBarChooseFileImageFn = e.kind === "ToolBarImageButton" && canPatch
+        ? () => {
+            const next = promptCreateAndAssignLoadImageArgs();
+            if (!next) return;
+            post({
+              type: "chooseFileAndAssignToolBarEntryImage",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              toggle: e.toggle,
+              newImageIdRaw: next.idRaw,
+              newAssignedVar: next.assignedVar,
+            });
+          }
+        : undefined;
       const toolBarCreateImageFn = e.kind === "ToolBarImageButton" && canPatch
         ? () => {
             const next = promptCreateAndAssignImageArgs();
@@ -2373,6 +2451,7 @@ function renderProps() {
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
         { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
+        { label: "Choose File", onClick: toolBarChooseFileImageFn, disabled: !toolBarChooseFileImageFn, title: e.kind === "ToolBarImageButton" ? "Select a file, create a new LoadImage entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Create New", onClick: toolBarCreateImageFn, disabled: !toolBarCreateImageFn, title: e.kind === "ToolBarImageButton" ? "Create a new form image entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
       ));
@@ -2497,6 +2576,20 @@ function renderProps() {
             });
           }
         : undefined;
+      const statusChooseFileImageFn = canPatch
+        ? () => {
+            const next = promptCreateAndAssignLoadImageArgs();
+            if (!next) return;
+            post({
+              type: "chooseFileAndAssignStatusBarFieldImage",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              newImageIdRaw: next.idRaw,
+              newAssignedVar: next.assignedVar,
+            });
+          }
+        : undefined;
       const statusCreateImageFn = canPatch
         ? () => {
             const next = promptCreateAndAssignImageArgs();
@@ -2520,6 +2613,7 @@ function renderProps() {
         delFn,
         { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Patch the raw StatusBarImage argument while preserving the field width." },
         { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list." },
+        { label: "Choose File", onClick: statusChooseFileImageFn, disabled: !statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
         { label: "Create New", onClick: statusCreateImageFn, disabled: !statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
       ));

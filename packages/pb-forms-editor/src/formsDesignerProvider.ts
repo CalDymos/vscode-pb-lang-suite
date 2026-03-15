@@ -96,7 +96,10 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
   createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
-  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage"
+  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
+  chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
+  chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
+  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage"
 } as const;
 
 type WebviewToExtensionMessage =
@@ -137,7 +140,10 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string };
 
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
@@ -678,6 +684,88 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyMenuEntryUpdate(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            sr
+          );
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyToolBarEntryUpdate(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            sr
+          );
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage: {
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
           await applyEditOrError(insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
