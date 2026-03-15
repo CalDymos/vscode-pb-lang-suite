@@ -55,6 +55,78 @@ export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: Previ
   };
 }
 
+export function getScrollAreaMaxOffsetX(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number
+): number {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportWidth = Math.max(0, rect.w - bar);
+  const contentWidth = typeof innerWidth === "number" && innerWidth > 0 ? innerWidth : viewportWidth;
+  return Math.max(0, contentWidth - viewportWidth);
+}
+
+export function getScrollAreaMaxOffsetY(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerHeight?: number
+): number {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportHeight = Math.max(0, rect.h - bar);
+  const contentHeight = typeof innerHeight === "number" && innerHeight > 0 ? innerHeight : viewportHeight;
+  return Math.max(0, contentHeight - viewportHeight);
+}
+
+export function getScrollAreaVerticalThumbRect(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerHeight?: number,
+  offsetY = 0
+): PreviewRect {
+  const track = getScrollAreaVerticalBarRect(rect, metrics);
+  const maxOffset = getScrollAreaMaxOffsetY(rect, metrics, innerHeight);
+  if (track.w <= 0 || track.h <= 0) return { x: track.x, y: track.y, w: 0, h: 0 };
+
+  if (maxOffset <= 0) {
+    return { x: track.x, y: track.y, w: track.w, h: track.h };
+  }
+
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportHeight = Math.max(0, rect.h - bar);
+  const contentHeight = typeof innerHeight === "number" && innerHeight > 0 ? innerHeight : viewportHeight;
+  const trackHeight = Math.max(1, track.h);
+  const thumbHeight = Math.max(14, Math.min(trackHeight, Math.round((viewportHeight / contentHeight) * trackHeight)));
+  const travel = Math.max(0, trackHeight - thumbHeight);
+  const clampedOffset = Math.max(0, Math.min(offsetY, maxOffset));
+  const thumbY = track.y + Math.round((clampedOffset / maxOffset) * travel);
+  return { x: track.x, y: thumbY, w: track.w, h: thumbHeight };
+}
+
+export function getScrollAreaHorizontalThumbRect(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number,
+  offsetX = 0
+): PreviewRect {
+  const track = getScrollAreaHorizontalBarRect(rect, metrics);
+  const maxOffset = getScrollAreaMaxOffsetX(rect, metrics, innerWidth);
+  if (track.w <= 0 || track.h <= 0) return { x: track.x, y: track.y, w: 0, h: 0 };
+
+  if (maxOffset <= 0) {
+    return { x: track.x, y: track.y, w: track.w, h: track.h };
+  }
+
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportWidth = Math.max(0, rect.w - bar);
+  const contentWidth = typeof innerWidth === "number" && innerWidth > 0 ? innerWidth : viewportWidth;
+  const trackWidth = Math.max(1, track.w);
+  const thumbWidth = Math.max(14, Math.min(trackWidth, Math.round((viewportWidth / contentWidth) * trackWidth)));
+  const travel = Math.max(0, trackWidth - thumbWidth);
+  const clampedOffset = Math.max(0, Math.min(offsetX, maxOffset));
+  const thumbX = track.x + Math.round((clampedOffset / maxOffset) * travel);
+  return { x: thumbX, y: track.y, w: thumbWidth, h: track.h };
+}
+
 export function getSplitterBarRect(
   splitterRect: PreviewRect,
   vertical: boolean,

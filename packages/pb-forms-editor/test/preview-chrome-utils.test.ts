@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getScrollAreaHorizontalBarRect,
+  getScrollAreaHorizontalThumbRect,
+  getScrollAreaMaxOffsetX,
+  getScrollAreaMaxOffsetY,
   getScrollAreaVerticalBarRect,
+  getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
   intersectRect,
   isPointOnRectBorder,
@@ -49,4 +53,16 @@ test("computes a horizontal splitter bar and clamps oversized state", () => {
   assert.deepEqual(bar, { x: 10, y: 91, w: 120, h: 9 });
   assert.equal(rectContainsPoint(bar, 60, 95), true);
   assert.equal(rectContainsPoint(bar, 60, 70), false);
+});
+
+
+test("computes scrollarea thumb rects from inner size and offset", () => {
+  assert.equal(getScrollAreaMaxOffsetX(RECT, METRICS, 240), 140);
+  assert.equal(getScrollAreaMaxOffsetY(RECT, METRICS, 180), 120);
+
+  const verticalThumb = getScrollAreaVerticalThumbRect(RECT, METRICS, 180, 60);
+  const horizontalThumb = getScrollAreaHorizontalThumbRect(RECT, METRICS, 240, 70);
+
+  assert.deepEqual(verticalThumb, { x: 110, y: 40, w: 20, h: 20 });
+  assert.deepEqual(horizontalThumb, { x: 39, y: 80, w: 42, h: 20 });
 });

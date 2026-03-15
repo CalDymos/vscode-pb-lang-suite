@@ -3,7 +3,11 @@ import {
   type PreviewRect,
   getScrollAreaBarSize,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaHorizontalThumbRect,
+  getScrollAreaMaxOffsetX,
+  getScrollAreaMaxOffsetY,
   getScrollAreaVerticalBarRect,
+  getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
   intersectRect,
   isPointOnRectBorder,
@@ -309,6 +313,7 @@ let selection: DesignerSelection = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
+const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
 let settings: DesignerSettings = {
   showGrid: true,
@@ -712,6 +717,16 @@ function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
 type DragState =
   | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number }
   | {
+      target: "scrollArea";
+      axis: "x" | "y";
+      id: string;
+      startMx: number;
+      startMy: number;
+      startOffset: number;
+      maxOffset: number;
+      trackLength: number;
+    }
+  | {
       target: "gadget";
       mode: "resize";
       id: string;
@@ -776,6 +791,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
     errEl.textContent = "";
     model = msg.model;
     panelActiveItems.clear();
+    scrollAreaOffsets.clear();
 
     if (msg.settings) {
       applySettings(msg.settings);
@@ -1107,6 +1123,23 @@ canvas.addEventListener("mousedown", (e) => {
         startY: g.y
       };
       canvas.style.cursor = "move";
+    } else if (chromeHit.zone === "scrollAreaVBar" || chromeHit.zone === "scrollAreaHBar") {
+      const metrics = getPreviewChromeMetrics();
+      const layout = getGadgetPreviewLayout(g, metrics);
+      const axis = chromeHit.zone === "scrollAreaHBar" ? "x" : "y";
+      drag = {
+        target: "scrollArea",
+        axis,
+        id: g.id,
+        startMx: mx,
+        startMy: my,
+        startOffset: axis === "x" ? getScrollAreaOffsetX(g, layout.rect, metrics) : getScrollAreaOffsetY(g, layout.rect, metrics),
+        maxOffset: axis === "x" ? getScrollAreaMaxOffsetX(layout.rect, metrics, g.min) : getScrollAreaMaxOffsetY(layout.rect, metrics, g.max),
+        trackLength: axis === "x"
+          ? Math.max(1, getScrollAreaHorizontalBarRect(layout.rect, metrics).w)
+          : Math.max(1, getScrollAreaVerticalBarRect(layout.rect, metrics).h)
+      };
+      canvas.style.cursor = "default";
     } else {
       drag = null;
       if (chromeHit.zone === "splitterBar") {
@@ -1256,6 +1289,25 @@ window.addEventListener("mousemove", (e) => {
   const dx = mx - d.startMx;
   const dy = my - d.startMy;
 
+  if (d.target === "scrollArea") {
+    const g = model.gadgets.find(it => it.id === d.id);
+    if (!g) return;
+    const delta = d.axis === "x" ? dx : dy;
+    const nextOffset = clamp(d.startOffset + Math.round((delta / d.trackLength) * d.maxOffset), 0, d.maxOffset);
+    const metrics = getPreviewChromeMetrics();
+    const layout = getGadgetPreviewLayout(g, metrics);
+    const current = getScrollAreaPreviewOffset(g.id);
+    if (d.axis === "x") {
+      setScrollAreaPreviewOffset(g, layout.rect, metrics, nextOffset, current.y);
+    } else {
+      setScrollAreaPreviewOffset(g, layout.rect, metrics, current.x, nextOffset);
+    }
+    canvas.style.cursor = "default";
+    render();
+    renderProps();
+    return;
+  }
+
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (!g) return;
@@ -1341,6 +1393,11 @@ window.addEventListener("mouseup", () => {
   const d = drag;
   if (!d) return;
 
+  if (d.target === "scrollArea") {
+    drag = null;
+    return;
+  }
+
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (g) {
@@ -1423,6 +1480,30 @@ function getPanelActiveItem(panel: Gadget): number {
     return stored;
   }
   return 0;
+}
+
+function getScrollAreaPreviewOffset(gadgetId: string): { x: number; y: number } {
+  const stored = scrollAreaOffsets.get(gadgetId);
+  if (stored) return stored;
+  return { x: 0, y: 0 };
+}
+
+function getScrollAreaOffsetX(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics): number {
+  return clamp(getScrollAreaPreviewOffset(g.id).x, 0, getScrollAreaMaxOffsetX(rect, metrics, g.min));
+}
+
+function getScrollAreaOffsetY(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics): number {
+  return clamp(getScrollAreaPreviewOffset(g.id).y, 0, getScrollAreaMaxOffsetY(rect, metrics, g.max));
+}
+
+function setScrollAreaPreviewOffset(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics, nextX: number, nextY: number) {
+  const clampedX = clamp(nextX, 0, getScrollAreaMaxOffsetX(rect, metrics, g.min));
+  const clampedY = clamp(nextY, 0, getScrollAreaMaxOffsetY(rect, metrics, g.max));
+  if (clampedX === 0 && clampedY === 0) {
+    scrollAreaOffsets.delete(g.id);
+    return;
+  }
+  scrollAreaOffsets.set(g.id, { x: clampedX, y: clampedY });
 }
 
 function getPanelTabRects(
@@ -1550,7 +1631,13 @@ function getGadgetPreviewLayout(
       const parentLayout = getGadgetPreviewLayout(parent, metrics, cache, visiting);
       const parentContentRect = getContentRectForGadget(parent, parentLayout.rect, metrics);
       clip = intersectRect(parentLayout.clip, parentContentRect);
-      rect = { x: parentContentRect.x + g.x, y: parentContentRect.y + g.y, w: g.w, h: g.h };
+      let localX = g.x;
+      let localY = g.y;
+      if (parent.kind === "ScrollAreaGadget") {
+        localX -= getScrollAreaOffsetX(parent, parentLayout.rect, metrics);
+        localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
+      }
+      rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
       visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
 
       if (parent.kind === "PanelGadget" && typeof g.parentItem === "number") {
@@ -1718,7 +1805,8 @@ function drawScrollAreaChrome(
   fg: string,
   metrics: PreviewChromeMetrics
 ) {
-  const bar = Math.min(metrics.scrollAreaWidth, Math.max(12, Math.min(w, h) - 4));
+  const rect = { x, y, w, h };
+  const bar = getScrollAreaBarSize(rect, metrics);
   const bg = getCssVar("--vscode-editor-background") || "transparent";
   const trackBg = getCssVar("--vscode-sideBar-background") || bg;
   const thumbBg = getCssVar("--vscode-scrollbarSlider-background") || fg;
@@ -1726,6 +1814,12 @@ function drawScrollAreaChrome(
   const viewportH = Math.max(0, h - bar);
   const innerW = typeof g.min === "number" && g.min > 0 ? g.min : viewportW;
   const innerH = typeof g.max === "number" && g.max > 0 ? g.max : viewportH;
+  const offsetX = getScrollAreaOffsetX(g, rect, metrics);
+  const offsetY = getScrollAreaOffsetY(g, rect, metrics);
+  const verticalTrack = getScrollAreaVerticalBarRect(rect, metrics);
+  const horizontalTrack = getScrollAreaHorizontalBarRect(rect, metrics);
+  const verticalThumb = getScrollAreaVerticalThumbRect(rect, metrics, innerH, offsetY);
+  const horizontalThumb = getScrollAreaHorizontalThumbRect(rect, metrics, innerW, offsetX);
 
   ctx.save();
   ctx.fillStyle = bg;
@@ -1738,27 +1832,23 @@ function drawScrollAreaChrome(
   ctx.save();
   ctx.fillStyle = trackBg;
   ctx.globalAlpha = 0.9;
-  ctx.fillRect(x + viewportW, y + 1, bar - 1, Math.max(0, viewportH - 1));
-  ctx.fillRect(x + 1, y + viewportH, Math.max(0, viewportW - 1), bar - 1);
+  ctx.fillRect(verticalTrack.x + 1, verticalTrack.y + 1, Math.max(0, verticalTrack.w - 1), Math.max(0, verticalTrack.h - 1));
+  ctx.fillRect(horizontalTrack.x + 1, horizontalTrack.y + 1, Math.max(0, horizontalTrack.w - 1), Math.max(0, horizontalTrack.h - 1));
   ctx.restore();
 
   if (innerH > viewportH && viewportH > 0) {
-    const trackH = Math.max(1, viewportH);
-    const thumbH = clamp(Math.round((viewportH / innerH) * trackH), 14, trackH);
     ctx.save();
     ctx.fillStyle = thumbBg;
     ctx.globalAlpha = 0.45;
-    ctx.fillRect(x + viewportW + 3, y + 3, Math.max(3, bar - 6), Math.max(10, thumbH - 6));
+    ctx.fillRect(verticalThumb.x + 3, verticalThumb.y + 3, Math.max(3, verticalThumb.w - 6), Math.max(10, verticalThumb.h - 6));
     ctx.restore();
   }
 
   if (innerW > viewportW && viewportW > 0) {
-    const trackW = Math.max(1, viewportW);
-    const thumbW = clamp(Math.round((viewportW / innerW) * trackW), 14, trackW);
     ctx.save();
     ctx.fillStyle = thumbBg;
     ctx.globalAlpha = 0.45;
-    ctx.fillRect(x + 3, y + viewportH + 3, Math.max(10, thumbW - 6), Math.max(3, bar - 6));
+    ctx.fillRect(horizontalThumb.x + 3, horizontalThumb.y + 3, Math.max(10, horizontalThumb.w - 6), Math.max(3, horizontalThumb.h - 6));
     ctx.restore();
   }
 }
