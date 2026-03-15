@@ -62,9 +62,11 @@ type MenuEntry = {
   idRaw?: string;
   textRaw?: string;
   text?: string;
+  shortcut?: string;
   iconRaw?: string;
   iconId?: string;
   widthRaw?: string;
+  toggle?: boolean;
   event?: string;
   source?: SourceRange;
 };
@@ -215,15 +217,15 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
@@ -1647,7 +1649,8 @@ function renderProps() {
     onEdit?: () => void,
     onDelete?: () => void,
     extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
+    extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1679,11 +1682,19 @@ function renderProps() {
     b4.title = extra2?.title ?? "";
     b4.onclick = () => extra2?.onClick?.();
 
+    const b5 = document.createElement("button");
+    b5.textContent = extra3?.label ?? "";
+    b5.disabled = extra3 ? Boolean(extra3.disabled) || !extra3.onClick : true;
+    b5.hidden = !extra3;
+    b5.title = extra3?.title ?? "";
+    b5.onclick = () => extra3?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
     r.appendChild(b3);
     r.appendChild(b4);
+    r.appendChild(b5);
     return r;
   };
 
@@ -1887,13 +1898,17 @@ function renderProps() {
               if (idRaw === null) return;
               const txt = prompt("Menu text", e.text ?? "");
               if (txt === null) return;
+              const shortcut = prompt("Shortcut (blank clears)", e.shortcut ?? "");
+              if (shortcut === null) return;
               vscode.postMessage({
                 type: "updateMenuEntry",
                 menuId: m.id,
                 sourceLine: e.source!.line,
                 kind,
                 idRaw: idRaw.trim(),
-                textRaw: toPbString(txt)
+                textRaw: toPbString(txt),
+                shortcut: shortcut.trim() || undefined,
+                iconRaw: e.iconRaw
               });
               return;
             }
@@ -1946,11 +1961,29 @@ function renderProps() {
       const menuImage = findImageEntryById(e.iconId);
       const menuImageTitle = getImageReferenceHint(e.iconId, "menu");
 
+      const menuSetImageFn = e.kind === "MenuItem" && canPatch
+        ? () => {
+            const iconRaw = prompt("Image raw (blank clears)", e.iconRaw ?? "");
+            if (iconRaw === null) return;
+            post({
+              type: "updateMenuEntry",
+              menuId: m.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              textRaw: toPbString(e.text ?? ""),
+              shortcut: e.shortcut,
+              iconRaw: iconRaw.trim() || undefined
+            });
+          }
+        : undefined;
+
       box.appendChild(miniRow(
         line,
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
+        { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
         { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
       ));
     }
@@ -2076,6 +2109,25 @@ function renderProps() {
               return;
             }
 
+            if (kind === "ToolBarImageButton") {
+              const idRaw = prompt("Button id", e.idRaw ?? "");
+              if (idRaw === null) return;
+              const iconRaw = prompt("Icon raw", e.iconRaw ?? "ImageID(#ImgOpen)");
+              if (iconRaw === null) return;
+              const toggleRaw = prompt("Toggle (#PB_ToolBar_Toggle or blank)", e.toggle ? "#PB_ToolBar_Toggle" : "");
+              if (toggleRaw === null) return;
+              vscode.postMessage({
+                type: "updateToolBarEntry",
+                toolBarId: t.id,
+                sourceLine: e.source!.line,
+                kind,
+                idRaw: idRaw.trim(),
+                iconRaw: iconRaw.trim(),
+                toggle: toggleRaw.trim().length > 0
+              });
+              return;
+            }
+
             // ToolBarSeparator has no editable fields.
           }
         : undefined;
@@ -2111,11 +2163,28 @@ function renderProps() {
       const toolBarImage = findImageEntryById(e.iconId);
       const toolBarImageTitle = getImageReferenceHint(e.iconId, "toolbar");
 
+      const toolBarSetImageFn = e.kind === "ToolBarImageButton" && canPatch
+        ? () => {
+            const iconRaw = prompt("Icon raw", e.iconRaw ?? "ImageID(#ImgOpen)");
+            if (iconRaw === null) return;
+            post({
+              type: "updateToolBarEntry",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              iconRaw: iconRaw.trim(),
+              toggle: e.toggle
+            });
+          }
+        : undefined;
+
       box.appendChild(miniRow(
         line,
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
+        { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
       ));
     }
@@ -2213,11 +2282,25 @@ function renderProps() {
         : undefined;
       const statusImage = findImageEntryById(f.imageId);
       const statusImageTitle = getImageReferenceHint(f.imageId, "statusbar");
+      const statusSetImageFn = canPatch
+        ? () => {
+            const imageRaw = prompt("Image raw (blank clears)", f.imageRaw ?? "");
+            if (imageRaw === null) return;
+            post({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              imageRaw: imageRaw.trim() || undefined
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         label,
         editFn,
         delFn,
+        { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Patch the raw StatusBarImage argument while preserving the field width." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
       ));
     });

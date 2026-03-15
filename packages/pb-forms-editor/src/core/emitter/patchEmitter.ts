@@ -2343,6 +2343,21 @@ function mapStatusBarArgsToField(args: StatusBarFieldArgs): FormStatusBarField {
   };
 }
 
+function mergeStatusBarFieldArgs(field: FormStatusBarField, args: StatusBarFieldArgs): FormStatusBarField {
+  const next: FormStatusBarField = {
+    ...field,
+    widthRaw: args.widthRaw,
+  };
+
+  if (args.textRaw !== undefined) next.textRaw = args.textRaw;
+  if (args.imageRaw !== undefined) next.imageRaw = args.imageRaw;
+  if (args.flagsRaw !== undefined) next.flagsRaw = args.flagsRaw;
+  if (args.progressBar !== undefined) next.progressBar = args.progressBar;
+  if (args.progressRaw !== undefined) next.progressRaw = args.progressRaw;
+
+  return next;
+}
+
 function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarField, index: number): string | undefined {
   const flags = field.flagsRaw?.trim();
   const flagsSuffix = flags ? `, ${flags}` : "";
@@ -2580,10 +2595,7 @@ export function applyStatusBarFieldUpdate(
     fields => {
       const index = fields.findIndex(field => field.source?.line === sourceLine);
       if (index < 0) return false;
-      fields[index] = {
-        ...fields[index],
-        ...mapStatusBarArgsToField(args),
-      };
+      fields[index] = mergeStatusBarFieldArgs(fields[index], args);
       return true;
     },
     scanRange

@@ -150,6 +150,33 @@ test("roundtrips menu entry update", () => {
   assert.match(patchedText, /MenuItem\(#MnuOpen, "Open File"\)/);
 });
 
+
+test("roundtrips menu entry update with preserved shortcut and icon", () => {
+  const { text, menu } = parseFixture();
+  const sourceLine = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for existing menu item.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MnuOpen",
+    textRaw: '"Open Project"',
+    shortcut: "Ctrl+O",
+    iconRaw: "ImageID(#ImgOpen)",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, "#MenuMain", sourceLine!, args)
+  );
+
+  const updatedMenu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const updatedItem = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.ok(updatedItem, "Expected updated menu item.");
+  assert.equal(updatedItem?.text, "Open Project");
+  assert.equal(updatedItem?.shortcut, "Ctrl+O");
+  assert.equal(updatedItem?.iconId, "#ImgOpen");
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open Project""Ctrl\+O", ImageID\(#ImgOpen\)\)/);
+});
+
 test("roundtrips menu entry delete", () => {
   const { text, menu } = parseFixture();
   const target = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
@@ -210,6 +237,36 @@ test("roundtrips toolbar tooltip update", () => {
   assert.ok(updatedTip, "Expected updated toolbar tooltip.");
   assert.equal(updatedTip?.text, "Refresh all data");
   assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbRefresh, "Refresh all data"\)/);
+});
+
+
+test("roundtrips toolbar image button update", () => {
+  const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
+  const parsedFixture = parseFormDocument(text);
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+
+  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
+
+  const args: ToolBarEntryArgs = {
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+    idRaw: "#TbSave",
+    iconRaw: "ImageID(#ImgSaveAlt)",
+    toggle: false,
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryUpdate(document, "#TbMain", sourceLine!, args)
+  );
+
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.ok(updatedButton, "Expected updated toolbar image button.");
+  assert.equal(updatedButton?.idRaw, "#TbSave");
+  assert.equal(updatedButton?.iconId, "#ImgSaveAlt");
+  assert.equal(updatedButton?.toggle, false);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSaveAlt\)\)/);
 });
 
 test("roundtrips toolbar entry delete", () => {
@@ -276,6 +333,29 @@ test("roundtrips statusbar field update while preserving later field decorations
   assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "35");
   assert.equal(updatedStatusBar!.fields[2]?.imageId, "#ImgState");
   assert.match(patchedText, /StatusBarProgress\(#SbMain, 1, 35, #PB_StatusBar_Raised\)/);
+  assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+});
+
+
+test("roundtrips statusbar width-only update without clearing image fields", () => {
+  const { text, statusBar } = parseStatusFixture();
+  const sourceLine = statusBar.fields[2]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for image statusbar field.");
+
+  const args: StatusBarFieldArgs = {
+    widthRaw: "96",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, args)
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[2]?.widthRaw, "96");
+  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#ImgState");
+  assert.equal(updatedStatusBar!.fields[2]?.flagsRaw, "#PB_StatusBar_BorderLess");
+  assert.match(patchedText, /AddStatusBarField\(96\)/);
   assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
 });
 
