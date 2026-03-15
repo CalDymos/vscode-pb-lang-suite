@@ -18,6 +18,10 @@ export function normalizePbPath(value: string): string {
   return value.replace(/\\/g, "/");
 }
 
+export function toPbFilePathLiteral(filePath: string): string {
+  return toPbStringLiteral(normalizePbPath(filePath));
+}
+
 function splitPathRoot(value: string): { root: string; rest: string } {
   const normalized = normalizePbPath(value);
   const driveMatch = /^([A-Za-z]:)(\/.*)?$/.exec(normalized);

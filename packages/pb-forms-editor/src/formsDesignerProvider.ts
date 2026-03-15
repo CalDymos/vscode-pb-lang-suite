@@ -35,7 +35,7 @@ import {
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
-import { relativizeImagePath } from "./core/imagePathUtils";
+import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -91,6 +91,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   updateImage: "updateImage",
   deleteImage: "deleteImage",
   relativizeImagePath: "relativizeImagePath",
+  chooseImageFileForEntry: "chooseImageFileForEntry",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
@@ -132,6 +133,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -262,6 +264,19 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
         await vscode.workspace.applyEdit(edit);
         return true;
+      };
+
+      const pickImageFileRaw = async (): Promise<string | undefined> => {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          openLabel: "Select Image"
+        });
+
+        const fileUri = picked?.[0];
+        if (!fileUri) return undefined;
+        return toPbFilePathLiteral(fileUri.fsPath);
       };
 
       const buildCreatedImageReference = (idRaw: string, assignedVar?: string): string | undefined => {
@@ -556,6 +571,27 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             inline: msg.inline,
             idRaw: msg.idRaw,
             imageRaw: relativeImageRaw,
+            assignedVar: msg.assignedVar
+          }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry: {
+          if (msg.inline) {
+            postError(`Could not choose a file for this image entry. CatchImage entries do not use a file path${rangeInfo}.`);
+            return;
+          }
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const edit = applyImageUpdate(document, msg.sourceLine, {
+            inline: false,
+            idRaw: msg.idRaw,
+            imageRaw: pickedImageRaw,
             assignedVar: msg.assignedVar
           }, sr);
           await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);

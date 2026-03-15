@@ -189,6 +189,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   updateImage: "updateImage",
   deleteImage: "deleteImage",
   relativizeImagePath: "relativizeImagePath",
+  chooseImageFileForEntry: "chooseImageFileForEntry",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
@@ -237,6 +238,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -427,6 +429,10 @@ function isPbStringLiteral(raw?: string): boolean {
 
 function canRelativizeImageEntry(entry?: ImageEntry): boolean {
   return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
+}
+
+function canChooseFileImageEntry(entry?: ImageEntry): boolean {
+  return Boolean(entry && !entry.inline);
 }
 
 function normalizeImageReference(raw?: string): { imageRaw?: string; imageId?: string } {
@@ -2591,6 +2597,23 @@ function renderProps() {
       });
     };
 
+    const chooseFileBtn = document.createElement("button");
+    chooseFileBtn.textContent = "Choose File";
+    chooseFileBtn.disabled = !(canPatch && canChooseFileImageEntry(img));
+    chooseFileBtn.title = canChooseFileImageEntry(img)
+      ? "Select a file for this LoadImage entry."
+      : "Only LoadImage entries can select a file path.";
+    chooseFileBtn.onclick = () => {
+      if (!(canPatch && canChooseFileImageEntry(img))) return;
+      post({
+        type: "chooseImageFileForEntry",
+        sourceLine: img.source!.line,
+        inline: img.inline,
+        idRaw: img.firstParam,
+        assignedVar: img.variable
+      });
+    };
+
     const relativeBtn = document.createElement("button");
     relativeBtn.textContent = "Make Relative";
     relativeBtn.disabled = !(canPatch && canRelativizeImageEntry(img));
@@ -2619,6 +2642,7 @@ function renderProps() {
     };
 
     actions.appendChild(editBtn);
+    actions.appendChild(chooseFileBtn);
     actions.appendChild(relativeBtn);
     actions.appendChild(delBtn);
     propsEl.appendChild(actions);
@@ -2656,6 +2680,24 @@ function renderProps() {
                 post({ type: "deleteImage", sourceLine: img.source!.line });
               }
             : undefined,
+          {
+            label: "Choose",
+            onClick: canPatch && canChooseFileImageEntry(img)
+              ? () => {
+                  post({
+                    type: "chooseImageFileForEntry",
+                    sourceLine: img.source!.line,
+                    inline: img.inline,
+                    idRaw: img.firstParam,
+                    assignedVar: img.variable
+                  });
+                }
+              : undefined,
+            disabled: !(canPatch && canChooseFileImageEntry(img)),
+            title: canChooseFileImageEntry(img)
+              ? "Select a file for this LoadImage entry."
+              : "Only LoadImage entries can select a file path."
+          },
           {
             label: "Relative",
             onClick: canPatch && canRelativizeImageEntry(img)

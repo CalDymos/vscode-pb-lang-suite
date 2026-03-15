@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPbStringLiteral, parsePbStringLiteral, relativizeImagePath, toPbStringLiteral } from "../src/core/imagePathUtils";
+import { isPbStringLiteral, parsePbStringLiteral, relativizeImagePath, toPbFilePathLiteral, toPbStringLiteral } from "../src/core/imagePathUtils";
 
 test("parsePbStringLiteral supports doubled quotes", () => {
   assert.equal(parsePbStringLiteral('"icons/""open"".png"'), 'icons/"open".png');
@@ -31,4 +31,13 @@ test("relativizeImagePath normalizes existing relative paths against the form fi
 test("relativizeImagePath returns undefined for non-string image expressions", () => {
   assert.equal(relativizeImagePath('/workspace/project/forms/main.pbf', '?ImgData'), undefined);
   assert.equal(relativizeImagePath('/workspace/project/forms/main.pbf', 'ImageID(#ImgOpen)'), undefined);
+});
+
+
+test("toPbFilePathLiteral normalizes backslashes for file dialog paths", () => {
+  assert.equal(toPbFilePathLiteral(String.raw`C:\workspace\project\images\logo.png`), '"C:/workspace/project/images/logo.png"');
+});
+
+test("toPbFilePathLiteral escapes embedded quotes", () => {
+  assert.equal(toPbFilePathLiteral('/workspace/project/images/quote"logo.png'), '"/workspace/project/images/quote""logo.png"');
 });
