@@ -1,3 +1,15 @@
+import {
+  type PreviewChromeMetrics,
+  type PreviewRect,
+  getScrollAreaBarSize,
+  getScrollAreaHorizontalBarRect,
+  getScrollAreaVerticalBarRect,
+  getSplitterBarRect,
+  intersectRect,
+  isPointOnRectBorder,
+  rectContainsPoint
+} from "../core/previewChromeUtils";
+
 type SourceRange = { line: number };
 
 type GadgetItem = {
@@ -322,8 +334,10 @@ type PbfdSymbols = {
   enumNames?: { windows: string; gadgets: string };
 };
 
-interface Window {
-  __PBFD_SYMBOLS__?: PbfdSymbols;
+declare global {
+  interface Window {
+    __PBFD_SYMBOLS__?: PbfdSymbols;
+  }
 }
 
 if (!window.__PBFD_SYMBOLS__) {
@@ -879,6 +893,12 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
     if (!layout.visible) continue;
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
+    if (g.kind === "SplitterGadget") {
+      const splitterBarRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
+      if (!isPointOnRectBorder(layout.rect, lx, ly) && !rectContainsPoint(splitterBarRect, lx, ly)) {
+        continue;
+      }
+    }
     return g;
   }
   return null;
@@ -1056,6 +1076,50 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
+  const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
+  if (chromeHit) {
+    const g = chromeHit.gadget;
+    selection = { kind: "gadget", id: g.id };
+
+    const h = hitHandleGadget(g, mx, my);
+    if (h) {
+      drag = {
+        target: "gadget",
+        mode: "resize",
+        id: g.id,
+        handle: h,
+        startMx: mx,
+        startMy: my,
+        startX: g.x,
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
+      };
+      canvas.style.cursor = getHandleCursor(h);
+    } else if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader") {
+      drag = {
+        target: "gadget",
+        mode: "move",
+        id: g.id,
+        startMx: mx,
+        startMy: my,
+        startX: g.x,
+        startY: g.y
+      };
+      canvas.style.cursor = "move";
+    } else {
+      drag = null;
+      if (chromeHit.zone === "splitterBar") {
+        canvas.style.cursor = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical") ? "ew-resize" : "ns-resize";
+      } else {
+        canvas.style.cursor = "default";
+      }
+    }
+
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
   const g = hitTestGadget(mx, my);
   if (g) {
     selection = { kind: "gadget", id: g.id };
@@ -1171,6 +1235,18 @@ window.addEventListener("mousemove", (e) => {
       }
     }
 
+    const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
+    if (chromeHit) {
+      if (chromeHit.zone === "splitterBar") {
+        canvas.style.cursor = hasPbFlag(chromeHit.gadget.flagsExpr, "#PB_Splitter_Vertical") ? "ew-resize" : "ns-resize";
+      } else if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader") {
+        canvas.style.cursor = "move";
+      } else {
+        canvas.style.cursor = "default";
+      }
+      return;
+    }
+
     const g = hitTestGadget(mx, my);
     canvas.style.cursor = g ? "move" : "default";
     return;
@@ -1281,12 +1357,6 @@ window.addEventListener("mouseup", () => {
   drag = null;
 });
 
-type PreviewChromeMetrics = {
-  panelHeight: number;
-  scrollAreaWidth: number;
-  splitterWidth: number;
-};
-
 function getPreviewChromeMetrics(): PreviewChromeMetrics {
   const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
 
@@ -1316,8 +1386,6 @@ function unquotePbString(raw: string | undefined): string {
   return trimmed;
 }
 
-type PreviewRect = { x: number; y: number; w: number; h: number };
-
 type GadgetPreviewLayout = {
   rect: PreviewRect;
   clip: PreviewRect;
@@ -1331,26 +1399,16 @@ type PanelTabRect = {
   active: boolean;
 };
 
+type PreviewChromeHitZone = "containerBorder" | "panelHeader" | "scrollAreaVBar" | "scrollAreaHBar" | "splitterBar";
+
+type PreviewChromeHit = {
+  gadget: Gadget;
+  zone: PreviewChromeHitZone;
+};
+
 function getGadgetById(id: string | undefined): Gadget | undefined {
   if (!id) return undefined;
   return model.gadgets.find((g) => g.id === id);
-}
-
-function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
-  const x = Math.max(a.x, b.x);
-  const y = Math.max(a.y, b.y);
-  const right = Math.min(a.x + a.w, b.x + b.w);
-  const bottom = Math.min(a.y + a.h, b.y + b.h);
-  return {
-    x,
-    y,
-    w: Math.max(0, right - x),
-    h: Math.max(0, bottom - y)
-  };
-}
-
-function rectContainsPoint(rect: PreviewRect, x: number, y: number): boolean {
-  return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
 function rectIntersects(a: PreviewRect, b: PreviewRect): boolean {
@@ -1405,10 +1463,6 @@ function getPanelTabRects(
   }
 
   return tabRects;
-}
-
-function getScrollAreaBarSize(rect: PreviewRect, metrics: PreviewChromeMetrics): number {
-  return Math.min(metrics.scrollAreaWidth, Math.max(12, Math.min(rect.w, rect.h) - 4));
 }
 
 function getContentRectForGadget(
@@ -1512,6 +1566,59 @@ function getGadgetPreviewLayout(
   visiting.delete(g.id);
   cache.set(g.id, layout);
   return layout;
+}
+
+function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {
+  if (!hitWindow(mx, my)) return null;
+
+  const { lx, ly } = toLocal(mx, my);
+  const cache = new Map<string, GadgetPreviewLayout>();
+
+  for (let i = model.gadgets.length - 1; i >= 0; i--) {
+    const g = model.gadgets[i];
+    const layout = getGadgetPreviewLayout(g, metrics, cache);
+    if (!layout.visible) continue;
+    if (!rectContainsPoint(layout.rect, lx, ly)) continue;
+    if (!rectContainsPoint(layout.clip, lx, ly)) continue;
+
+    if (g.kind === "SplitterGadget") {
+      if (isPointOnRectBorder(layout.rect, lx, ly)) {
+        return { gadget: g, zone: "containerBorder" };
+      }
+      const barRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
+      if (rectContainsPoint(barRect, lx, ly)) {
+        return { gadget: g, zone: "splitterBar" };
+      }
+      continue;
+    }
+
+    if (g.kind === "PanelGadget") {
+      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, layout.rect.h));
+      const headerRect = intersectRect({ x: layout.rect.x, y: layout.rect.y, w: layout.rect.w, h: panelHeight }, layout.clip);
+      if (rectContainsPoint(headerRect, lx, ly)) {
+        return { gadget: g, zone: "panelHeader" };
+      }
+    }
+
+    if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget" || g.kind === "FrameGadget") {
+      if (isPointOnRectBorder(layout.rect, lx, ly)) {
+        return { gadget: g, zone: "containerBorder" };
+      }
+    }
+
+    if (g.kind === "ScrollAreaGadget") {
+      const verticalBar = intersectRect(getScrollAreaVerticalBarRect(layout.rect, metrics), layout.clip);
+      if (rectContainsPoint(verticalBar, lx, ly)) {
+        return { gadget: g, zone: "scrollAreaVBar" };
+      }
+      const horizontalBar = intersectRect(getScrollAreaHorizontalBarRect(layout.rect, metrics), layout.clip);
+      if (rectContainsPoint(horizontalBar, lx, ly)) {
+        return { gadget: g, zone: "scrollAreaHBar" };
+      }
+    }
+  }
+
+  return null;
 }
 
 function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics): { panel: Gadget; index: number } | null {
