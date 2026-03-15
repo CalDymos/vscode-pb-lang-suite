@@ -11,13 +11,16 @@ EndEnumeration
 
 Enumeration FormGadget
   #ImgPreview
+  #BtnApply
 EndEnumeration
 
 OpenWindow(#FrmImages, 0, 0, 320, 180, "Images")
 LoadImage(#ImgOpen, "open.png")
+LoadImage(#ImgRelative, "./icons/apply.png")
 imgSave = LoadImage(#PB_Any, "save.png")
 CatchImage(#ImgState, ?ImgState)
 ImageGadget(#ImgPreview, 10, 10, 32, 32, ImageID(#ImgOpen))
+ButtonImageGadget(#BtnApply, 52, 10, 96, 28, ImageID(#ImgRelative), #PB_Button_Default)
 CreateMenu(#MenuMain, WindowID(#FrmImages))
 MenuItem(#MenuOpen, "Open", ImageID(#ImgOpen))
 CreateToolBar(#TbMain, WindowID(#FrmImages))

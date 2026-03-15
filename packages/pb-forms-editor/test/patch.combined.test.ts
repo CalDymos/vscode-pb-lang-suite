@@ -582,6 +582,30 @@ test("roundtrips choose-file gadget workflow with auto-resize patch sequence", (
   assert.match(patchedText, /LoadImage\(#ImgChosen, "chosen\.png"\)/);
 });
 
+test("roundtrips choose-file button image gadget workflow with auto-resize patch sequence", () => {
+  const { text } = parseImageFixture();
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "#BtnApply", { imageRaw: "ImageID(#ImgBtnChosen)" }),
+    (document) => applyRectPatch(document, "#BtnApply", 52, 10, 128, 36),
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgBtnChosen", imageRaw: '"toolbar/apply-selected.png"' })
+  );
+
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#BtnApply");
+  const image = parsed.images.find((entry) => entry.id === "#ImgBtnChosen");
+
+  assert.equal(gadget?.kind, "ButtonImageGadget");
+  assert.equal(gadget?.imageRaw, "ImageID(#ImgBtnChosen)");
+  assert.equal(gadget?.imageId, "#ImgBtnChosen");
+  assert.equal(gadget?.w, 128);
+  assert.equal(gadget?.h, 36);
+  assert.ok(image, "Expected inserted file-backed image entry for button image gadget.");
+  assert.equal(image?.imageRaw, '"toolbar/apply-selected.png"');
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 128, 36, ImageID\(#ImgBtnChosen\)\)/);
+  assert.match(patchedText, /LoadImage\(#ImgBtnChosen, "toolbar\/apply-selected\.png"\)/);
+});
+
 test("roundtrips create-and-assign workflow for image gadget", () => {
   const { text } = parseImageFixture();
 

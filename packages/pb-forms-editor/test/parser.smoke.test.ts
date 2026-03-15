@@ -712,13 +712,19 @@ test("parses fixtures/smoke/11-images-crossrefs.pbf", () => {
   const text = loadFixture("fixtures/smoke/11-images-crossrefs.pbf");
   const doc = parseFormDocument(text);
 
-  assert.equal(doc.images.length, 3);
+  assert.equal(doc.images.length, 4);
 
   const openImg = doc.images.find((img) => img.id === "#ImgOpen");
   assert.ok(openImg, "Expected #ImgOpen image.");
   assert.equal(openImg?.inline, false);
   assert.equal(openImg?.imageRaw, '"open.png"');
   assert.equal(openImg?.image, "open.png");
+
+  const relativeImg = doc.images.find((img) => img.id === "#ImgRelative");
+  assert.ok(relativeImg, "Expected #ImgRelative image.");
+  assert.equal(relativeImg?.inline, false);
+  assert.equal(relativeImg?.imageRaw, '"./icons/apply.png"');
+  assert.equal(relativeImg?.image, "./icons/apply.png");
 
   const saveImg = doc.images.find((img) => img.id === "imgSave");
   assert.ok(saveImg, "Expected pbAny image assignment.");
@@ -735,6 +741,10 @@ test("parses fixtures/smoke/11-images-crossrefs.pbf", () => {
   const imageGadget = doc.gadgets.find((g) => g.id === "#ImgPreview");
   assert.ok(imageGadget, "Expected image gadget.");
   assert.equal(imageGadget?.imageId, "#ImgOpen");
+
+  const buttonImageGadget = doc.gadgets.find((g) => g.id === "#BtnApply");
+  assert.ok(buttonImageGadget, "Expected button image gadget.");
+  assert.equal(buttonImageGadget?.imageId, "#ImgRelative");
 
   const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
   assert.equal(menuItem?.iconId, "#ImgOpen");
