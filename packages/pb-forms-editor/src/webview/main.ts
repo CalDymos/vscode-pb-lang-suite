@@ -187,7 +187,12 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   insertImage: "insertImage",
   updateImage: "updateImage",
-  deleteImage: "deleteImage"
+  deleteImage: "deleteImage",
+
+  createAndAssignGadgetImage: "createAndAssignGadgetImage",
+  createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
+  createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
+  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage"
 } as const;
 
 // Backwards compatible:
@@ -229,7 +234,11 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -476,6 +485,25 @@ function promptImageReferenceFromModel(currentImageId?: string): { imageId: stri
   return {
     imageId: selected.id,
     imageRaw: `ImageID(${selected.id})`
+  };
+}
+
+function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imageId: string; imageRaw: string } | undefined {
+  const trimmedId = idRaw.trim();
+  if (!trimmedId.length) return undefined;
+
+  if (trimmedId.toLowerCase() === "#pb_any") {
+    const variableName = assignedVar?.trim();
+    if (!variableName) return undefined;
+    return {
+      imageId: variableName,
+      imageRaw: `ImageID(${variableName})`
+    };
+  }
+
+  return {
+    imageId: trimmedId,
+    imageRaw: `ImageID(${trimmedId})`
   };
 }
 
@@ -1689,7 +1717,8 @@ function renderProps() {
     extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
     extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
     extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra4?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    extra4?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
+    extra5?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
@@ -1735,6 +1764,13 @@ function renderProps() {
     b6.title = extra4?.title ?? "";
     b6.onclick = () => extra4?.onClick?.();
 
+    const b7 = document.createElement("button");
+    b7.textContent = extra5?.label ?? "";
+    b7.disabled = extra5 ? Boolean(extra5.disabled) || !extra5.onClick : true;
+    b7.hidden = !extra5;
+    b7.title = extra5?.title ?? "";
+    b7.onclick = () => extra5?.onClick?.();
+
     r.appendChild(l);
     r.appendChild(b1);
     r.appendChild(b2);
@@ -1742,6 +1778,7 @@ function renderProps() {
     r.appendChild(b4);
     r.appendChild(b5);
     r.appendChild(b6);
+    r.appendChild(b7);
     return r;
   };
 
@@ -1773,6 +1810,23 @@ function renderProps() {
     if (!imageRaw.length) return undefined;
 
     return { inline, idRaw, imageRaw, assignedVar };
+  };
+
+  const promptCreateAndAssignImageArgs = (current?: ImageEntry): ({ inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } & { imageId: string; imageRefRaw: string }) | undefined => {
+    const next = promptImageArgs(current);
+    if (!next) return undefined;
+
+    const reference = buildCreatedImageReference(next.idRaw, next.assignedVar);
+    if (!reference) {
+      alert("#PB_Any requires an assigned variable name.");
+      return undefined;
+    }
+
+    return {
+      ...next,
+      imageId: reference.imageId,
+      imageRefRaw: reference.imageRaw,
+    };
   };
 
   if (sel.kind === "window") {
@@ -2018,7 +2072,7 @@ function renderProps() {
               sourceLine: e.source!.line,
               kind: e.kind,
               idRaw: e.idRaw,
-              textRaw: toPbString(e.text ?? ""),
+              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
               shortcut: e.shortcut,
               iconRaw: iconRaw.trim() || undefined
             });
@@ -2034,9 +2088,28 @@ function renderProps() {
               sourceLine: e.source!.line,
               kind: e.kind,
               idRaw: e.idRaw,
-              textRaw: toPbString(e.text ?? ""),
+              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
               shortcut: e.shortcut,
               iconRaw: selected.imageRaw
+            });
+          }
+        : undefined;
+      const menuCreateImageFn = e.kind === "MenuItem" && canPatch
+        ? () => {
+            const next = promptCreateAndAssignImageArgs();
+            if (!next) return;
+            post({
+              type: "createAndAssignMenuEntryImage",
+              menuId: m.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
+              shortcut: e.shortcut,
+              newInline: next.inline,
+              newImageIdRaw: next.idRaw,
+              newImageRaw: next.imageRaw,
+              newAssignedVar: next.assignedVar,
             });
           }
         : undefined;
@@ -2048,6 +2121,7 @@ function renderProps() {
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
         { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
         { label: "Use Existing", onClick: menuPickImageFn, disabled: !menuPickImageFn, title: e.kind === "MenuItem" ? "Select an image from the form image list." : "Only MenuItem supports a parsed image argument." },
+        { label: "Create New", onClick: menuCreateImageFn, disabled: !menuCreateImageFn, title: e.kind === "MenuItem" ? "Create a new form image entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
       ));
     }
@@ -2257,6 +2331,24 @@ function renderProps() {
             });
           }
         : undefined;
+      const toolBarCreateImageFn = e.kind === "ToolBarImageButton" && canPatch
+        ? () => {
+            const next = promptCreateAndAssignImageArgs();
+            if (!next) return;
+            post({
+              type: "createAndAssignToolBarEntryImage",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              kind: e.kind,
+              idRaw: e.idRaw,
+              toggle: e.toggle,
+              newInline: next.inline,
+              newImageIdRaw: next.idRaw,
+              newImageRaw: next.imageRaw,
+              newAssignedVar: next.assignedVar,
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         line,
@@ -2265,6 +2357,7 @@ function renderProps() {
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
         { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
+        { label: "Create New", onClick: toolBarCreateImageFn, disabled: !toolBarCreateImageFn, title: e.kind === "ToolBarImageButton" ? "Create a new form image entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
       ));
     }
@@ -2388,6 +2481,22 @@ function renderProps() {
             });
           }
         : undefined;
+      const statusCreateImageFn = canPatch
+        ? () => {
+            const next = promptCreateAndAssignImageArgs();
+            if (!next) return;
+            post({
+              type: "createAndAssignStatusBarFieldImage",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              newInline: next.inline,
+              newImageIdRaw: next.idRaw,
+              newImageRaw: next.imageRaw,
+              newAssignedVar: next.assignedVar,
+            });
+          }
+        : undefined;
 
       box.appendChild(miniRow(
         label,
@@ -2395,6 +2504,7 @@ function renderProps() {
         delFn,
         { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Patch the raw StatusBarImage argument while preserving the field width." },
         { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list." },
+        { label: "Create New", onClick: statusCreateImageFn, disabled: !statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
       ));
     });
@@ -2607,6 +2717,26 @@ function renderProps() {
       renderProps();
     };
     gadgetImageActions.appendChild(gadgetPickImageBtn);
+
+    const gadgetCreateImageBtn = document.createElement("button");
+    gadgetCreateImageBtn.textContent = "Create New Image";
+    gadgetCreateImageBtn.title = "Create a new form image entry and assign it to this gadget.";
+    gadgetCreateImageBtn.onclick = () => {
+      const next = promptCreateAndAssignImageArgs();
+      if (!next) return;
+      g.imageRaw = next.imageRefRaw;
+      g.imageId = next.imageId;
+      post({
+        type: "createAndAssignGadgetImage",
+        id: g.id,
+        newInline: next.inline,
+        newImageIdRaw: next.idRaw,
+        newImageRaw: next.imageRaw,
+        newAssignedVar: next.assignedVar,
+      });
+      renderProps();
+    };
+    gadgetImageActions.appendChild(gadgetCreateImageBtn);
   }
 
   const gadgetImageBtn = document.createElement("button");

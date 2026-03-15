@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
 import {
+  applyGadgetOpenArgsUpdate,
   applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
@@ -58,6 +59,55 @@ function patchAndReparse(
   const edit = editFactory(document.asTextDocument());
   assert.ok(edit, "Expected a WorkspaceEdit result.");
   const patchedText = applyWorkspaceEditToText(text, edit!);
+  return {
+    patchedText,
+    parsed: parseFormDocument(patchedText),
+  };
+}
+
+function patchTwiceAndReparse(
+  text: string,
+  firstEditFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetOpenArgsUpdate>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
+    | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryUpdate>
+    | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarFieldInsert>
+    | ReturnType<typeof applyStatusBarFieldUpdate>
+    | ReturnType<typeof applyStatusBarFieldDelete>,
+  secondEditFactory: (document: TextDocument) =>
+    | ReturnType<typeof applyGadgetOpenArgsUpdate>
+    | ReturnType<typeof applyGadgetPropertyUpdate>
+    | ReturnType<typeof applyImageInsert>
+    | ReturnType<typeof applyImageUpdate>
+    | ReturnType<typeof applyImageDelete>
+    | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryUpdate>
+    | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarFieldInsert>
+    | ReturnType<typeof applyStatusBarFieldUpdate>
+    | ReturnType<typeof applyStatusBarFieldDelete>
+) {
+  const firstDocument = new FakeTextDocument(text);
+  const firstEdit = firstEditFactory(firstDocument.asTextDocument());
+  assert.ok(firstEdit, "Expected first WorkspaceEdit result.");
+  const firstPatchedText = applyWorkspaceEditToText(text, firstEdit!);
+
+  const secondDocument = new FakeTextDocument(firstPatchedText);
+  const secondEdit = secondEditFactory(secondDocument.asTextDocument());
+  assert.ok(secondEdit, "Expected second WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(firstPatchedText, secondEdit!);
+
   return {
     patchedText,
     parsed: parseFormDocument(patchedText),
@@ -434,6 +484,108 @@ test("roundtrips image delete", () => {
 
   assert.equal(updated.images.some((image) => image.id === "#ImgState"), false);
   assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
+});
+
+test("roundtrips create-and-assign workflow for image gadget", () => {
+  const { text } = parseImageFixture();
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyGadgetOpenArgsUpdate(document, "#ImgPreview", { imageRaw: "ImageID(#ImgNewLogo)" }),
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgNewLogo", imageRaw: '"new-logo.png"' })
+  );
+
+  const gadget = parsed.gadgets.find((entry) => entry.id === "#ImgPreview");
+  const image = parsed.images.find((entry) => entry.id === "#ImgNewLogo");
+
+  assert.equal(gadget?.imageRaw, "ImageID(#ImgNewLogo)");
+  assert.equal(gadget?.imageId, "#ImgNewLogo");
+  assert.ok(image, "Expected inserted image entry.");
+  assert.equal(image?.imageRaw, '"new-logo.png"');
+  assert.match(patchedText, /LoadImage\(#ImgNewLogo, "new-logo\.png"\)/);
+});
+
+test("roundtrips create-and-assign workflow for menu item", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const menu = initial.menus.find((entry) => entry.id === "#MenuMain");
+  assert.ok(menu, "Expected #MenuMain menu.");
+  const openItem = menu!.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+  assert.equal(typeof openItem?.source?.line, "number", "Expected menu entry source line.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyMenuEntryUpdate(document, "#MenuMain", openItem!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: openItem!.idRaw,
+      textRaw: openItem!.textRaw,
+      shortcut: openItem!.shortcut,
+      iconRaw: "ImageID(#ImgMenuNew)",
+    }),
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgMenuNew", imageRaw: '"menu-new.png"' })
+  );
+
+  const updatedMenu = parsed.menus.find((entry) => entry.id === "#MenuMain");
+  const updatedOpen = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+  const image = parsed.images.find((entry) => entry.id === "#ImgMenuNew");
+
+  assert.equal(updatedOpen?.iconRaw, "ImageID(#ImgMenuNew)");
+  assert.equal(updatedOpen?.iconId, "#ImgMenuNew");
+  assert.ok(image, "Expected inserted menu image entry.");
+  assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(#ImgMenuNew\)\)/);
+});
+
+test("roundtrips create-and-assign workflow for toolbar image button with pbAny image", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === "#TbMain");
+  assert.ok(toolBar, "Expected #TbMain toolbar.");
+  const imageButton = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  assert.equal(typeof imageButton?.source?.line, "number", "Expected toolbar entry source line.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, "#TbMain", imageButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: imageButton!.idRaw,
+      iconRaw: "ImageID(imgToolbarNew)",
+      toggle: imageButton!.toggle,
+    }),
+    (document) => applyImageInsert(document, { inline: true, idRaw: "#PB_Any", imageRaw: "?TbImgNew", assignedVar: "imgToolbarNew" })
+  );
+
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === "#TbMain");
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const image = parsed.images.find((entry) => entry.id === "imgToolbarNew");
+
+  assert.equal(updatedButton?.iconRaw, "ImageID(imgToolbarNew)");
+  assert.equal(updatedButton?.iconId, "imgToolbarNew");
+  assert.ok(image, "Expected inserted pbAny toolbar image entry.");
+  assert.match(patchedText, /imgToolbarNew = CatchImage\(#PB_Any, \?TbImgNew\)/);
+});
+
+test("roundtrips create-and-assign workflow for statusbar field", () => {
+  const { text, parsed: initial } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === "#SbMain");
+  assert.ok(statusBar, "Expected #SbMain statusbar.");
+  const imageField = statusBar!.fields.find((field) => field.imageRaw);
+  assert.equal(typeof imageField?.source?.line, "number", "Expected statusbar field source line.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, "#SbMain", imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(#ImgStatusNew)",
+    }),
+    (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgStatusNew", imageRaw: '"status-new.png"' })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === "#SbMain");
+  const updatedField = updatedStatusBar?.fields.find((field) => field.widthRaw === imageField!.widthRaw && field.imageRaw === "ImageID(#ImgStatusNew)");
+  const image = parsed.images.find((entry) => entry.id === "#ImgStatusNew");
+
+  assert.ok(updatedField, "Expected updated statusbar image field.");
+  assert.equal(updatedField?.imageId, "#ImgStatusNew");
+  assert.ok(image, "Expected inserted statusbar image entry.");
+  assert.match(patchedText, /StatusBarImage\(#SbMain, 0, ImageID\(#ImgStatusNew\)\)/);
 });
 
 test("roundtrips gadget property update for visibility tooltip colors", () => {

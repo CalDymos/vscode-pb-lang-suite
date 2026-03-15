@@ -88,7 +88,12 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   insertImage: "insertImage",
   updateImage: "updateImage",
-  deleteImage: "deleteImage"
+  deleteImage: "deleteImage",
+
+  createAndAssignGadgetImage: "createAndAssignGadgetImage",
+  createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
+  createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
+  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage"
 } as const;
 
 type WebviewToExtensionMessage =
@@ -123,7 +128,11 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string };
 
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
@@ -250,6 +259,18 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
         await vscode.workspace.applyEdit(edit);
         return true;
+      };
+
+      const buildCreatedImageReference = (idRaw: string, assignedVar?: string): string | undefined => {
+        const trimmedId = idRaw.trim();
+        if (!trimmedId.length) return undefined;
+
+        if (trimmedId.toLowerCase() === "#pb_any") {
+          const variableName = assignedVar?.trim();
+          return variableName ? `ImageID(${variableName})` : undefined;
+        }
+
+        return `ImageID(${trimmedId})`;
       };
 
       const ensureMenuEntryKind = (kind: string): boolean => {
@@ -513,6 +534,90 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteImage: {
           const edit = applyImageDelete(document, msg.sourceLine, sr);
           await applyEditOrError(edit, `Could not delete image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyMenuEntryUpdate(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            sr
+          );
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyToolBarEntryUpdate(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            sr
+          );
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
+          if (!await applyEditOrError(assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`)) {
+            return;
+          }
+
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyEditOrError(insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
