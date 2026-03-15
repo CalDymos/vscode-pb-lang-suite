@@ -188,6 +188,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertImage: "insertImage",
   updateImage: "updateImage",
   deleteImage: "deleteImage",
+  relativizeImagePath: "relativizeImagePath",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
@@ -235,6 +236,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -418,6 +420,14 @@ function selectImageById(imageId: string): void {
 }
 
 const IMAGE_CAPABLE_GADGET_KINDS = new Set(["ImageGadget", "ButtonImageGadget"]);
+
+function isPbStringLiteral(raw?: string): boolean {
+  return /^"(?:[^"]|"")*"$/.test(raw?.trim() ?? "");
+}
+
+function canRelativizeImageEntry(entry?: ImageEntry): boolean {
+  return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
+}
 
 function normalizeImageReference(raw?: string): { imageRaw?: string; imageId?: string } {
   const imageRaw = raw?.trim();
@@ -2581,6 +2591,24 @@ function renderProps() {
       });
     };
 
+    const relativeBtn = document.createElement("button");
+    relativeBtn.textContent = "Make Relative";
+    relativeBtn.disabled = !(canPatch && canRelativizeImageEntry(img));
+    relativeBtn.title = canRelativizeImageEntry(img)
+      ? "Rewrite the LoadImage file path relative to the current form file."
+      : "Only quoted LoadImage file paths can be made relative.";
+    relativeBtn.onclick = () => {
+      if (!(canPatch && canRelativizeImageEntry(img))) return;
+      post({
+        type: "relativizeImagePath",
+        sourceLine: img.source!.line,
+        inline: img.inline,
+        idRaw: img.firstParam,
+        imageRaw: img.imageRaw,
+        assignedVar: img.variable
+      });
+    };
+
     const delBtn = document.createElement("button");
     delBtn.textContent = "Delete Image";
     delBtn.disabled = !canPatch;
@@ -2591,6 +2619,7 @@ function renderProps() {
     };
 
     actions.appendChild(editBtn);
+    actions.appendChild(relativeBtn);
     actions.appendChild(delBtn);
     propsEl.appendChild(actions);
     return;
@@ -2626,7 +2655,26 @@ function renderProps() {
                 if (!confirm("Delete this image entry?")) return;
                 post({ type: "deleteImage", sourceLine: img.source!.line });
               }
-            : undefined
+            : undefined,
+          {
+            label: "Relative",
+            onClick: canPatch && canRelativizeImageEntry(img)
+              ? () => {
+                  post({
+                    type: "relativizeImagePath",
+                    sourceLine: img.source!.line,
+                    inline: img.inline,
+                    idRaw: img.firstParam,
+                    imageRaw: img.imageRaw,
+                    assignedVar: img.variable
+                  });
+                }
+              : undefined,
+            disabled: !(canPatch && canRelativizeImageEntry(img)),
+            title: canRelativizeImageEntry(img)
+              ? "Rewrite the LoadImage file path relative to the current form file."
+              : "Only quoted LoadImage file paths can be made relative."
+          }
         )
       );
     }

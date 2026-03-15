@@ -35,6 +35,7 @@ import {
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
+import { relativizeImagePath } from "./core/imagePathUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -89,6 +90,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   insertImage: "insertImage",
   updateImage: "updateImage",
   deleteImage: "deleteImage",
+  relativizeImagePath: "relativizeImagePath",
 
   createAndAssignGadgetImage: "createAndAssignGadgetImage",
   createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
@@ -129,6 +131,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
@@ -534,6 +537,28 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.deleteImage: {
           const edit = applyImageDelete(document, msg.sourceLine, sr);
           await applyEditOrError(edit, `Could not delete image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath: {
+          if (msg.inline) {
+            postError(`Could not make image path relative. CatchImage entries do not use a file path${rangeInfo}.`);
+            return;
+          }
+
+          const relativeImageRaw = relativizeImagePath(document.uri.fsPath, msg.imageRaw);
+          if (!relativeImageRaw) {
+            postError(`Could not make image path relative. Save the form first and use a quoted LoadImage file path${rangeInfo}.`);
+            return;
+          }
+
+          const edit = applyImageUpdate(document, msg.sourceLine, {
+            inline: msg.inline,
+            idRaw: msg.idRaw,
+            imageRaw: relativeImageRaw,
+            assignedVar: msg.assignedVar
+          }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
           return;
         }
 
