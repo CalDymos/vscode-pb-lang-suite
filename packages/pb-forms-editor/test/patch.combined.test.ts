@@ -258,6 +258,24 @@ test("roundtrips menu entry insert with shortcut and icon", () => {
   assert.match(patchedText, /MenuItem\(#MnuSave, "Save""Ctrl\+S", ImageID\(#ImgSave\)\)/);
 });
 
+test("roundtrips root menu title insert", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuTitle,
+    textRaw: '"View"',
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "#MenuMain", args)
+  );
+
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(menu, "Expected menu after root title insert.");
+  assert.equal(menu!.entries.at(-1)?.kind, MENU_ENTRY_KIND.MenuTitle);
+  assert.equal(menu!.entries.at(-1)?.text, "View");
+  assert.match(patchedText, /MenuTitle\("View"\)\r?\nEndProcedure/);
+});
+
 test("roundtrips nested menu entry insert into submenu footer", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const parsed = parseFormDocument(text);

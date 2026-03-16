@@ -512,6 +512,7 @@ const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
 type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
 type PreviewMenuFooterRect = PreviewRect & { menuId: string; parentIndex: number };
+type PreviewMenuAddRect = PreviewRect & { menuId: string };
 type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 type MenuEntryMoveTarget = {
@@ -523,6 +524,7 @@ type MenuEntryMoveTarget = {
 
 let menuEntryPreviewRects: PreviewEntryRect[] = [];
 let menuFooterPreviewRects: PreviewMenuFooterRect[] = [];
+let menuAddPreviewRect: PreviewMenuAddRect | null = null;
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
@@ -816,6 +818,33 @@ function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imag
 function toPbString(v: string): string {
   const esc = (v ?? "").replace(/"/g, '""');
   return `"${esc}"`;
+}
+
+function getMenuInsertLevel(menu: MenuModel, parentSourceLine?: number): number {
+  if (typeof parentSourceLine !== "number") return 0;
+  const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
+  if (!parentEntry) return 0;
+  return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
+}
+
+function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
+  const preferredIndex = Math.max(0, menu.entries?.length ?? 0);
+  pendingMenuEntrySelection = {
+    menuId: menu.id,
+    preferredIndex,
+    kind: args.kind,
+    level: getMenuInsertLevel(menu, parentSourceLine),
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+  };
+  vscode.postMessage({
+    type: "insertMenuEntry",
+    menuId: menu.id,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    textRaw: args.textRaw,
+    parentSourceLine
+  });
 }
 
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
@@ -1452,6 +1481,19 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
+  const menuAddHit = hitTestMenuAddButton(mx, my);
+  if (menuAddHit) {
+    const menu = (model.menus ?? []).find(entry => entry.id === menuAddHit.menuId);
+    if (menu) {
+      postInsertMenuEntry(menu, { kind: "MenuTitle", textRaw: toPbString("MenuTitle") });
+      selection = { kind: "menu", id: menu.id };
+      drag = null;
+      canvas.style.cursor = "default";
+      renderSelectionUiWithoutParentSelector();
+      return;
+    }
+  }
+
   const footerHit = hitTestMenuFooter(mx, my, getPreviewChromeMetrics());
   if (footerHit) {
     const menu = (model.menus ?? []).find(entry => entry.id === footerHit.menuId);
@@ -1459,14 +1501,11 @@ canvas.addEventListener("mousedown", (e) => {
     const parentSourceLine = parentEntry?.source?.line;
     if (menu && typeof parentSourceLine === "number") {
       const nextArgs = getDefaultMenuItemInsertArgs(menu);
-      vscode.postMessage({
-        type: "insertMenuEntry",
-        menuId: menu.id,
+      postInsertMenuEntry(menu, {
         kind: "MenuItem",
         idRaw: nextArgs.idRaw,
         textRaw: nextArgs.textRaw,
-        parentSourceLine
-      });
+      }, parentSourceLine);
       selection = { kind: "menuEntry", menuId: menu.id, entryIndex: footerHit.parentIndex };
       drag = null;
       canvas.style.cursor = "default";
@@ -2186,6 +2225,10 @@ function hitTestMenuFooter(mx: number, my: number, metrics: PreviewChromeMetrics
   return menuFooterPreviewRects.find(entry => rectContainsPoint(entry, mx, my)) ?? null;
 }
 
+function hitTestMenuAddButton(mx: number, my: number): PreviewMenuAddRect | null {
+  return menuAddPreviewRect && rectContainsPoint(menuAddPreviewRect, mx, my) ? menuAddPreviewRect : null;
+}
+
 function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {
   if (!hitWindow(mx, my)) return null;
 
@@ -2867,6 +2910,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   const menu = getPrimaryMenu();
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
+  menuAddPreviewRect = null;
   if (!menu || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";
@@ -2915,6 +2959,33 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     x += itemW + 3;
     if (x >= rect.x + rect.w - 20) break;
   }
+
+  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRect: PreviewMenuAddRect = {
+    menuId: menu.id,
+    x: addRectX,
+    y: rect.y + Math.max(2, Math.trunc((rect.h - 16) / 2)),
+    w: 16,
+    h: 16
+  };
+  menuAddPreviewRect = addRect;
+
+  ctx.save();
+  ctx.strokeStyle = border;
+  ctx.globalAlpha = 0.55;
+  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = fg;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
+  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
+  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
+  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
+  ctx.stroke();
+  ctx.restore();
 
   if (!selection || selection.kind !== "menuEntry" || selection.menuId !== menu.id) {
     return;
@@ -3091,6 +3162,8 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 
 function render() {
   menuEntryPreviewRects = [];
+  menuFooterPreviewRects = [];
+  menuAddPreviewRect = null;
   toolBarEntryPreviewRects = [];
   statusBarFieldPreviewRects = [];
 
@@ -4279,19 +4352,19 @@ function renderProps() {
         if (idRaw === null) return;
         const txt = prompt("Menu text", "");
         if (txt === null) return;
-        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
+        postInsertMenuEntry(m, { kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
         return;
       }
 
       if (k === "MenuTitle" || k === "OpenSubMenu") {
         const txt = prompt("Title", "");
         if (txt === null) return;
-        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k, textRaw: toPbString(txt) });
+        postInsertMenuEntry(m, { kind: k, textRaw: toPbString(txt) });
         return;
       }
 
       if (k === "MenuBar" || k === "CloseSubMenu") {
-        vscode.postMessage({ type: "insertMenuEntry", menuId: m.id, kind: k });
+        postInsertMenuEntry(m, { kind: k });
       }
     };
 
