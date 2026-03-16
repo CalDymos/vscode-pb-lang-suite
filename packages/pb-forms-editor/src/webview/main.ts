@@ -2717,6 +2717,37 @@ function getDefaultMenuItemInsertArgs(menu: MenuModel): { idRaw: string; textRaw
   };
 }
 
+function isBoundToolBarTooltipEntry(toolBar: ToolbarModel, entryIndex: number): boolean {
+  const entry = toolBar.entries?.[entryIndex];
+  if (!entry || entry.kind !== "ToolBarToolTip") return false;
+  const entryId = entry.idRaw?.trim();
+  if (!entryId) return false;
+
+  for (let i = entryIndex - 1; i >= 0; i--) {
+    const candidate = toolBar.entries?.[i];
+    if (!candidate || candidate.kind === "ToolBarToolTip") continue;
+    if ((candidate.idRaw?.trim() ?? "") === entryId) return true;
+  }
+
+  return false;
+}
+
+function shouldShowToolBarStructureEntry(toolBar: ToolbarModel, entryIndex: number): boolean {
+  const entry = toolBar.entries?.[entryIndex];
+  if (!entry) return false;
+  if (entry.kind !== "ToolBarToolTip") return true;
+  return !isBoundToolBarTooltipEntry(toolBar, entryIndex);
+}
+
+function getVisibleToolBarEntryCount(toolBar: ToolbarModel): number {
+  let count = 0;
+  for (let i = 0; i < (toolBar.entries?.length ?? 0); i++) {
+    if (!shouldShowToolBarStructureEntry(toolBar, i)) continue;
+    count += 1;
+  }
+  return count;
+}
+
 function getDefaultToolBarInsertId(toolBar: ToolbarModel): string {
   let logicalCount = 0;
   for (const entry of toolBar.entries ?? []) {
@@ -3927,22 +3958,23 @@ function renderList() {
   });
 
   const toolbarNodes: Node[] = (model.toolbars ?? []).map(t => {
-    const entries = (t.entries ?? []).map((e, idx) => {
+    const entries = (t.entries ?? []).flatMap((e, idx) => {
+      if (!shouldShowToolBarStructureEntry(t, idx)) return [];
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
-      return {
+      return [{
         kind: "toolBarEntry" as const,
         id: `${t.id}:${idx}`,
         label: `${e.kind}${idPart}${text ? `  ${text}` : ""}${e.iconRaw ? `  ${e.iconRaw}` : ""}`,
         selectable: true,
         children: []
-      };
+      }];
     });
 
     return {
       kind: "toolbar" as const,
       id: t.id,
-      label: `ToolBar  ${t.id}  entries:${t.entries?.length ?? 0}`,
+      label: `ToolBar  ${t.id}  entries:${getVisibleToolBarEntryCount(t)}`,
       selectable: true,
       children: entries
     };
@@ -4687,7 +4719,7 @@ function renderProps() {
     }
 
     propsEl.appendChild(row("Id", readonlyInput(t.id)));
-    propsEl.appendChild(row("Entries", readonlyInput(String(t.entries?.length ?? 0))));
+    propsEl.appendChild(row("Entries", readonlyInput(String(getVisibleToolBarEntryCount(t)))));
     const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
     const hasEntriesWithoutEventIds = (t.entries ?? []).some(e => !e.idRaw);
     if (!hasEventMenuBlock) {
@@ -4698,6 +4730,7 @@ function renderProps() {
     }
     const box = miniList();
     for (const [entryIndex, e] of (t.entries ?? []).entries()) {
+      if (!shouldShowToolBarStructureEntry(t, entryIndex)) continue;
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
