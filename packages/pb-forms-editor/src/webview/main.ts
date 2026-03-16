@@ -504,7 +504,18 @@ type PendingMenuEntrySelection = {
   iconRaw?: string;
 };
 
+type PendingToolBarEntrySelection = {
+  toolBarId: string;
+  preferredIndex: number;
+  kind: string;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  toggle?: boolean;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
+let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -513,6 +524,7 @@ const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
 type PreviewMenuFooterRect = PreviewRect & { menuId: string; parentIndex: number };
 type PreviewMenuAddRect = PreviewRect & { menuId: string };
+type PreviewToolBarAddRect = PreviewRect & { toolBarId: string };
 type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 type MenuEntryMoveTarget = {
@@ -525,6 +537,7 @@ type MenuEntryMoveTarget = {
 let menuEntryPreviewRects: PreviewEntryRect[] = [];
 let menuFooterPreviewRects: PreviewMenuFooterRect[] = [];
 let menuAddPreviewRect: PreviewMenuAddRect | null = null;
+let toolBarAddPreviewRect: PreviewToolBarAddRect | null = null;
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
@@ -847,6 +860,27 @@ function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: stri
   });
 }
 
+function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
+  const preferredIndex = Math.max(0, toolBar.entries?.length ?? 0);
+  pendingToolBarEntrySelection = {
+    toolBarId: toolBar.id,
+    preferredIndex,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+    toggle: args.toggle,
+  };
+  vscode.postMessage({
+    type: "insertToolBarEntry",
+    toolBarId: toolBar.id,
+    kind: args.kind,
+    idRaw: args.idRaw,
+    iconRaw: args.iconRaw,
+    textRaw: args.textRaw,
+  });
+}
+
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
 const HANDLE_SIZE = 6;
@@ -916,6 +950,35 @@ function resolvePendingMenuEntrySelection() {
   const matchIndex = (menu.entries ?? []).findIndex(entry => menuEntryMatchesPendingSelection(entry, pending));
   if (matchIndex >= 0) {
     selection = { kind: "menuEntry", menuId: pending.menuId, entryIndex: matchIndex };
+  }
+}
+
+function toolBarEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && Boolean(entry.toggle) === Boolean(pending.toggle);
+}
+
+function resolvePendingToolBarEntrySelection() {
+  const pending = pendingToolBarEntrySelection;
+  if (!pending) return;
+
+  const toolBar = (model.toolbars ?? []).find(entry => entry.id === pending.toolBarId);
+  pendingToolBarEntrySelection = null;
+  if (!toolBar) return;
+
+  const preferredEntry = toolBar.entries?.[pending.preferredIndex];
+  if (toolBarEntryMatchesPendingSelection(preferredEntry, pending)) {
+    selection = { kind: "toolBarEntry", toolBarId: pending.toolBarId, entryIndex: pending.preferredIndex };
+    return;
+  }
+
+  const matchIndex = (toolBar.entries ?? []).findIndex(entry => toolBarEntryMatchesPendingSelection(entry, pending));
+  if (matchIndex >= 0) {
+    selection = { kind: "toolBarEntry", toolBarId: pending.toolBarId, entryIndex: matchIndex };
   }
 }
 
@@ -1125,6 +1188,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
       applySettings(msg.settings);
     }
     resolvePendingMenuEntrySelection();
+    resolvePendingToolBarEntrySelection();
     // Validate selection after model refresh
     sanitizeSelectionAfterModelUpdate();
 
@@ -1490,6 +1554,22 @@ canvas.addEventListener("mousedown", (e) => {
       drag = null;
       canvas.style.cursor = "default";
       renderSelectionUiWithoutParentSelector();
+      return;
+    }
+  }
+
+  const toolBarAddHit = hitTestToolBarAddButton(mx, my);
+  if (toolBarAddHit) {
+    const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarAddHit.toolBarId);
+    if (toolBar) {
+      const nextArgs = promptToolBarPreviewInsertArgs(toolBar);
+      if (nextArgs) {
+        postInsertToolBarEntry(toolBar, nextArgs);
+        selection = { kind: "toolbar", id: toolBar.id };
+        drag = null;
+        canvas.style.cursor = "default";
+        renderSelectionUiWithoutParentSelector();
+      }
       return;
     }
   }
@@ -2229,6 +2309,10 @@ function hitTestMenuAddButton(mx: number, my: number): PreviewMenuAddRect | null
   return menuAddPreviewRect && rectContainsPoint(menuAddPreviewRect, mx, my) ? menuAddPreviewRect : null;
 }
 
+function hitTestToolBarAddButton(mx: number, my: number): PreviewToolBarAddRect | null {
+  return toolBarAddPreviewRect && rectContainsPoint(toolBarAddPreviewRect, mx, my) ? toolBarAddPreviewRect : null;
+}
+
 function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {
   if (!hitWindow(mx, my)) return null;
 
@@ -2522,6 +2606,41 @@ function getDefaultMenuItemInsertArgs(menu: MenuModel): { idRaw: string; textRaw
     idRaw: `#MenuItem_${nextIndex}`,
     textRaw: toPbString(`MenuItem${nextIndex}`)
   };
+}
+
+function getDefaultToolBarInsertId(toolBar: ToolbarModel): string {
+  let logicalCount = 0;
+  for (const entry of toolBar.entries ?? []) {
+    if (entry.kind === "ToolBarToolTip") continue;
+    logicalCount += 1;
+  }
+
+  return `#Toolbar_${logicalCount}`;
+}
+
+function promptToolBarPreviewInsertArgs(toolBar: ToolbarModel): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } | undefined {
+  const choice = prompt("Toolbar add action (AddButton/AddToggle/AddSeparator)", "AddButton");
+  if (choice === null) return undefined;
+
+  const normalized = choice.trim().toLowerCase();
+  const idRaw = getDefaultToolBarInsertId(toolBar);
+
+  switch (normalized) {
+    case "addbutton":
+    case "button":
+    case "toolbarimagebutton":
+      return { kind: "ToolBarImageButton", idRaw, iconRaw: "0" };
+    case "addtoggle":
+    case "toggle":
+      return { kind: "ToolBarImageButton", idRaw, iconRaw: "0", toggle: true };
+    case "addseparator":
+    case "separator":
+    case "toolbarseparator":
+      return { kind: "ToolBarSeparator" };
+    default:
+      alert(`Unsupported toolbar add action '${choice.trim()}'. Use AddButton, AddToggle or AddSeparator.`);
+      return undefined;
+  }
 }
 
 function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
@@ -3013,6 +3132,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const toolbar = getPrimaryToolbar();
   toolBarEntryPreviewRects = [];
+  toolBarAddPreviewRect = null;
   if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
@@ -3072,6 +3192,33 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     x += 22;
     if (x >= rect.x + rect.w - 18) break;
   }
+
+  const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
+  const addRect: PreviewToolBarAddRect = {
+    toolBarId: toolbar.id,
+    x: addRectX,
+    y,
+    w: 16,
+    h: 16
+  };
+  toolBarAddPreviewRect = addRect;
+
+  ctx.save();
+  ctx.strokeStyle = border;
+  ctx.globalAlpha = 0.55;
+  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = fg;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
+  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
+  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
+  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function parseStatusbarWidth(widthRaw: string | undefined): number | null {
@@ -3164,6 +3311,7 @@ function render() {
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
+  toolBarAddPreviewRect = null;
   toolBarEntryPreviewRects = [];
   statusBarFieldPreviewRects = [];
 

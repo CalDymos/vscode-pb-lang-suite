@@ -543,6 +543,27 @@ test("roundtrips toolbar image button insert", () => {
   assert.match(patchedText, /ToolBarImageButton\(#TbSync, ImageID\(#ImgSync\), #PB_ToolBar_Toggle\)/);
 });
 
+test("roundtrips toolbar image button insert without image", () => {
+  const { text } = parseFixture();
+  const args: ToolBarEntryArgs = {
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+    idRaw: "#Toolbar_2",
+    iconRaw: "0",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryInsert(document, "#TbMain", args)
+  );
+
+  const toolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(toolBar, "Expected toolbar after insert.");
+  const inserted = toolBar!.entries.at(-1);
+  assert.equal(inserted?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.equal(inserted?.idRaw, "#Toolbar_2");
+  assert.equal(inserted?.iconRaw, "0");
+  assert.match(patchedText, /ToolBarImageButton\(#Toolbar_2, 0\)/);
+});
+
 test("roundtrips toolbar tooltip update", () => {
   const { text, toolBar } = parseFixture();
   const sourceLine = toolBar.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip)?.source?.line;
