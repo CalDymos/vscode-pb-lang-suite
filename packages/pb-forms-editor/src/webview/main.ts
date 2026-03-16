@@ -4998,6 +4998,104 @@ function renderProps() {
       const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
       const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
 
+      const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
+      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "toolbar");
+      const selectedImageActions = document.createElement("div");
+      selectedImageActions.className = "row-actions";
+      const selectedUseExistingBtn = document.createElement("button");
+      selectedUseExistingBtn.textContent = "Use Existing";
+      selectedUseExistingBtn.disabled = !canEditSelectedImage;
+      selectedUseExistingBtn.title = canEditSelectedImage
+        ? "Select an image from the form image list and assign it to this toolbar button."
+        : "Only ToolBarImageButton supports a parsed image reference.";
+      selectedUseExistingBtn.onclick = () => {
+        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+        const picked = promptImageReferenceFromModel(selectedEntry.iconId);
+        if (!picked) return;
+        post({
+          type: "updateToolBarEntry",
+          toolBarId: t.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          iconRaw: picked.imageRaw,
+          toggle: selectedEntry.toggle,
+        });
+      };
+      selectedImageActions.appendChild(selectedUseExistingBtn);
+      const selectedChooseFileBtn = document.createElement("button");
+      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.disabled = !canEditSelectedImage;
+      selectedChooseFileBtn.title = canEditSelectedImage
+        ? "Select a file, create a new LoadImage entry and assign it to this toolbar button."
+        : "Only ToolBarImageButton supports a parsed image reference.";
+      selectedChooseFileBtn.onclick = () => {
+        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+        const next = promptCreateAndAssignLoadImageArgs();
+        if (!next) return;
+        post({
+          type: "chooseFileAndAssignToolBarEntryImage",
+          toolBarId: t.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          toggle: selectedEntry.toggle,
+          newImageIdRaw: next.idRaw,
+          newAssignedVar: next.assignedVar,
+        });
+      };
+      selectedImageActions.appendChild(selectedChooseFileBtn);
+      const selectedCreateNewBtn = document.createElement("button");
+      selectedCreateNewBtn.textContent = "Create New";
+      selectedCreateNewBtn.disabled = !canEditSelectedImage;
+      selectedCreateNewBtn.title = canEditSelectedImage
+        ? "Create a new form image entry and assign it to this toolbar button."
+        : "Only ToolBarImageButton supports a parsed image reference.";
+      selectedCreateNewBtn.onclick = () => {
+        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+        const next = promptCreateAndAssignImageArgs();
+        if (!next) return;
+        post({
+          type: "createAndAssignToolBarEntryImage",
+          toolBarId: t.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          toggle: selectedEntry.toggle,
+          newInline: next.inline,
+          newImageIdRaw: next.idRaw,
+          newImageRaw: next.imageRaw,
+          newAssignedVar: next.assignedVar,
+        });
+      };
+      selectedImageActions.appendChild(selectedCreateNewBtn);
+      const selectedClearBtn = document.createElement("button");
+      selectedClearBtn.textContent = "Clear";
+      selectedClearBtn.disabled = !canEditSelectedImage;
+      selectedClearBtn.title = canEditSelectedImage
+        ? "Remove the parsed image reference from this toolbar button."
+        : "Only ToolBarImageButton supports a parsed image reference.";
+      selectedClearBtn.onclick = () => {
+        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+        post({
+          type: "updateToolBarEntry",
+          toolBarId: t.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          iconRaw: "",
+          toggle: selectedEntry.toggle,
+        });
+      };
+      selectedImageActions.appendChild(selectedClearBtn);
+      if (selectedImage) {
+        const selectedJumpImageBtn = document.createElement("button");
+        selectedJumpImageBtn.textContent = "Image";
+        selectedJumpImageBtn.title = selectedImageTitle;
+        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
+        selectedImageActions.appendChild(selectedJumpImageBtn);
+      }
+
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row("Variable", readonlyInput(selectedEntry.idRaw ?? "")));
       propsEl.appendChild(row(
@@ -5023,6 +5121,7 @@ function renderProps() {
         )
       ));
       propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")));
+      propsEl.appendChild(row("ChangeImage", selectedImageActions));
       propsEl.appendChild(row(
         "ToggleButton",
         checkboxInput(
