@@ -251,6 +251,56 @@ test("roundtrips menu entry insert with shortcut and icon", () => {
   assert.match(patchedText, /MenuItem\(#MnuSave, "Save""Ctrl\+S", ImageID\(#ImgSave\)\)/);
 });
 
+test("roundtrips nested menu entry insert into submenu footer", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const openSubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu);
+  const parentSourceLine = openSubMenu?.source?.line;
+
+  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for OpenSubMenu entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent2",
+    textRaw: '"Pinned file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "#MenuMain", args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(updatedMenu, "Expected menu after submenu insert.");
+
+  const closeIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+  const insertedIndex = updatedMenu!.entries.findIndex((entry) => entry.idRaw === "#MenuRecent2");
+  assert.ok(insertedIndex >= 0, "Expected inserted submenu entry.");
+  assert.ok(closeIndex > insertedIndex, "Expected inserted submenu entry before CloseSubMenu.");
+  assert.equal(updatedMenu!.entries[insertedIndex]?.level, 2);
+  assert.match(patchedText, /MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
+});
+
+test("roundtrips submenu insert with generated closing line", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.OpenSubMenu,
+    textRaw: '"Tools"',
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "#MenuMain", args)
+  );
+
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(menu, "Expected menu after submenu insert.");
+  assert.equal(menu!.entries.at(-2)?.kind, MENU_ENTRY_KIND.OpenSubMenu);
+  assert.equal(menu!.entries.at(-2)?.text, "Tools");
+  assert.equal(menu!.entries.at(-1)?.kind, MENU_ENTRY_KIND.CloseSubMenu);
+  assert.match(patchedText, /OpenSubMenu\("Tools"\)\r?\n\s*CloseSubMenu\(\)/);
+});
+
 test("roundtrips menu entry update", () => {
   const { text, menu } = parseFixture();
   const sourceLine = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.source?.line;

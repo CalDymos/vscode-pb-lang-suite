@@ -433,7 +433,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
@@ -496,8 +496,10 @@ const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
 type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
+type PreviewMenuFooterRect = PreviewRect & { menuId: string; parentIndex: number };
 
 let menuEntryPreviewRects: PreviewEntryRect[] = [];
+let menuFooterPreviewRects: PreviewMenuFooterRect[] = [];
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
@@ -1385,6 +1387,29 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
+  const footerHit = hitTestMenuFooter(mx, my, getPreviewChromeMetrics());
+  if (footerHit) {
+    const menu = (model.menus ?? []).find(entry => entry.id === footerHit.menuId);
+    const parentEntry = menu?.entries?.[footerHit.parentIndex];
+    const parentSourceLine = parentEntry?.source?.line;
+    if (menu && typeof parentSourceLine === "number") {
+      const nextArgs = getDefaultMenuItemInsertArgs(menu);
+      vscode.postMessage({
+        type: "insertMenuEntry",
+        menuId: menu.id,
+        kind: "MenuItem",
+        idRaw: nextArgs.idRaw,
+        textRaw: nextArgs.textRaw,
+        parentSourceLine
+      });
+      selection = { kind: "menuEntry", menuId: menu.id, entryIndex: footerHit.parentIndex };
+      drag = null;
+      canvas.style.cursor = "default";
+      renderSelectionUiWithoutParentSelector();
+      return;
+    }
+  }
+
   const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
   if (topLevelChromeHit) {
     selection = topLevelChromeHit.selection;
@@ -2031,6 +2056,17 @@ function getGadgetPreviewLayout(
   return layout;
 }
 
+function hitTestMenuFooter(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewMenuFooterRect | null {
+  const wr = getWinRect();
+  if (!wr || !hitWindow(mx, my)) return null;
+
+  const menu = getPrimaryMenu();
+  const menuRect = getMenuBarRectGlobal(wr, metrics);
+  if (!menu || !menuRect) return null;
+
+  return menuFooterPreviewRects.find(entry => rectContainsPoint(entry, mx, my)) ?? null;
+}
+
 function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {
   if (!hitWindow(mx, my)) return null;
 
@@ -2308,6 +2344,24 @@ function getMenuEntryRect(menuId: string, entryIndex: number): PreviewEntryRect 
   return menuEntryPreviewRects.find(entry => entry.ownerId === menuId && entry.index === entryIndex);
 }
 
+function getMenuFooterRect(menuId: string, parentIndex: number): PreviewMenuFooterRect | undefined {
+  return menuFooterPreviewRects.find(entry => entry.menuId === menuId && entry.parentIndex === parentIndex);
+}
+
+function getDefaultMenuItemInsertArgs(menu: MenuModel): { idRaw: string; textRaw: string } {
+  let logicalCount = 0;
+  for (const entry of menu.entries ?? []) {
+    if (entry.kind === "CloseSubMenu") continue;
+    logicalCount += 1;
+  }
+
+  const nextIndex = logicalCount + 1;
+  return {
+    idRaw: `#MenuItem_${nextIndex}`,
+    textRaw: toPbString(`MenuItem${nextIndex}`)
+  };
+}
+
 function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
   const entries = menu.entries ?? [];
   if (parentIndex < 0 || parentIndex >= entries.length) return [];
@@ -2476,16 +2530,20 @@ function drawMenuFlyoutPanelPreview(
     posY += 20;
   }
 
+  const footerRect: PreviewMenuFooterRect = { menuId: menu.id, parentIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
+  menuFooterPreviewRects.push(footerRect);
+
   ctx.save();
   ctx.globalAlpha = 0.92;
   ctx.fillStyle = fg;
-  ctx.fillText("Add Item...", panelRect.x + 5, posY + 14);
+  ctx.fillText("Add Item...", footerRect.x + 5, footerRect.y + 14);
   ctx.restore();
 }
 
 function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const menu = getPrimaryMenu();
   menuEntryPreviewRects = [];
+  menuFooterPreviewRects = [];
   if (!menu || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";

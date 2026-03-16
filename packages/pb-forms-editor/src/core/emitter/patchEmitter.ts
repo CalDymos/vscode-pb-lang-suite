@@ -205,6 +205,10 @@ export interface MenuEntryArgs {
   iconRaw?: string;
 }
 
+export interface MenuEntryInsertOptions {
+  parentSourceLine?: number;
+}
+
 export interface ToolBarEntryArgs {
   kind: ToolBarEntryKind;
   idRaw?: string;
@@ -2293,6 +2297,53 @@ function applySectionEntryInsert(
   return edit;
 }
 
+function findAnchoredMenuEntryInsert(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  parentSourceLine: number
+): { insertLine: number; indent: string } | undefined {
+  const create = findCreateCallById(calls, "createmenu", menuId);
+  if (!create) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  const parentIndex = menu.entries.findIndex(entry => entry.source?.line === parentSourceLine);
+  if (parentIndex < 0) return undefined;
+
+  const parentEntry = menu.entries[parentIndex];
+  if (parentEntry.kind !== MENU_ENTRY_KIND.MenuTitle && parentEntry.kind !== MENU_ENTRY_KIND.OpenSubMenu) {
+    return undefined;
+  }
+
+  const parentLevel = Math.max(0, parentEntry.level ?? 0);
+  let insertLine: number | undefined;
+
+  for (let i = parentIndex + 1; i < menu.entries.length; i++) {
+    const entry = menu.entries[i];
+    const level = Math.max(0, entry.level ?? 0);
+    if (level <= parentLevel) {
+      insertLine = entry.source?.line;
+      break;
+    }
+  }
+
+  if (typeof insertLine !== "number") {
+    const startIdx = calls.indexOf(create);
+    const endIdx = findSectionEndIndex(calls, startIdx);
+    const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, MENU_ENTRY_NAMES);
+    return {
+      insertLine: Math.min(document.lineCount, insertAfterLine + 1),
+      indent: getLineIndent(document, insertAfterLine)
+    };
+  }
+
+  if (!isLineInCreateSection(calls, insertLine, "createmenu", menuId)) return undefined;
+  return { insertLine, indent: getLineIndent(document, insertLine) };
+}
+
 function applySectionEntryUpdate(
   document: vscode.TextDocument,
   calls: PbCall[],
@@ -2462,16 +2513,32 @@ export function applyMenuEntryInsert(
   document: vscode.TextDocument,
   menuId: string,
   args: MenuEntryArgs,
-  scanRange?: ScanRange
+  scanRange?: ScanRange,
+  insertOptions?: MenuEntryInsertOptions
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
+  const insertText = args.kind === MENU_ENTRY_KIND.OpenSubMenu
+    ? (indent: string) => `${indent}${buildMenuEntryLine(args)}
+${indent}CloseSubMenu()`
+    : (indent: string) => `${indent}${buildMenuEntryLine(args)}`;
+
+  if (typeof insertOptions?.parentSourceLine === "number") {
+    const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, insertOptions.parentSourceLine);
+    if (!anchored) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}
+`);
+    return edit;
+  }
+
   return applySectionEntryInsert(
     document,
     calls,
     "createmenu",
     menuId,
     MENU_ENTRY_NAMES,
-    indent => `${indent}${buildMenuEntryLine(args)}`
+    insertText
   );
 }
 
