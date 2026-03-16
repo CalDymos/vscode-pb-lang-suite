@@ -4491,6 +4491,215 @@ function renderProps() {
     if (hasEntriesWithoutEventIds) {
       propsEl.appendChild(mutedNote(EVENT_UI_HINT.menuIdRequired));
     }
+
+    const selectedEntry = sel.kind === "menuEntry" && typeof selectedEntryIndex === "number"
+      ? m.entries?.[selectedEntryIndex]
+      : undefined;
+    if (selectedEntry) {
+      const selectedCanPatch = typeof selectedEntry.source?.line === "number";
+      const selectedCanEditId = selectedCanPatch && selectedEntry.kind === "MenuItem";
+      const selectedCanEditName = selectedCanPatch && (selectedEntry.kind === "MenuItem" || selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu");
+      const selectedCanEditShortcut = selectedCanPatch && selectedEntry.kind === "MenuItem";
+      const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
+      const selectedCanEditEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock;
+      const selectedImage = findImageEntryById(selectedEntry.iconId);
+      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "menu");
+      const hasOwn = (obj: object, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
+      const postSelectedMenuUpdate = (updates: { idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }) => {
+        if (!selectedCanPatch || typeof selectedEntry.source?.line !== "number") return;
+        if (selectedEntry.kind === "MenuItem") {
+          const nextIdRaw = hasOwn(updates, "idRaw") ? updates.idRaw : (selectedEntry.idRaw ?? "");
+          const nextTextRaw = hasOwn(updates, "textRaw") ? updates.textRaw : (selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : '""'));
+          const nextShortcut = hasOwn(updates, "shortcut") ? updates.shortcut : selectedEntry.shortcut;
+          const nextIconRaw = hasOwn(updates, "iconRaw") ? updates.iconRaw : selectedEntry.iconRaw;
+          post({
+            type: "updateMenuEntry",
+            menuId: m.id,
+            sourceLine: selectedEntry.source.line,
+            kind: selectedEntry.kind,
+            idRaw: nextIdRaw,
+            textRaw: nextTextRaw,
+            shortcut: nextShortcut,
+            iconRaw: nextIconRaw,
+          });
+          return;
+        }
+
+        if (selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu") {
+          const nextTextRaw = hasOwn(updates, "textRaw") ? updates.textRaw : (selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : '""'));
+          post({
+            type: "updateMenuEntry",
+            menuId: m.id,
+            sourceLine: selectedEntry.source.line,
+            kind: selectedEntry.kind,
+            textRaw: nextTextRaw,
+          });
+        }
+      };
+      const selectedImageActions = document.createElement("div");
+      selectedImageActions.className = "row-actions";
+      const selectedUseExistingBtn = document.createElement("button");
+      selectedUseExistingBtn.textContent = "Use Existing";
+      selectedUseExistingBtn.disabled = !selectedCanEditImage;
+      selectedUseExistingBtn.title = selectedCanEditImage
+        ? "Select an image from the form image list and assign it to this menu entry."
+        : "Only MenuItem supports a parsed image argument.";
+      selectedUseExistingBtn.onclick = () => {
+        if (!selectedCanEditImage) return;
+        const picked = promptImageReferenceFromModel(selectedEntry.iconId);
+        if (!picked) return;
+        postSelectedMenuUpdate({ iconRaw: picked.imageRaw });
+      };
+      selectedImageActions.appendChild(selectedUseExistingBtn);
+      const selectedChooseFileBtn = document.createElement("button");
+      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.disabled = !selectedCanEditImage;
+      selectedChooseFileBtn.title = selectedCanEditImage
+        ? "Select a file, create a new LoadImage entry and assign it to this menu entry."
+        : "Only MenuItem supports a parsed image argument.";
+      selectedChooseFileBtn.onclick = () => {
+        if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
+        const next = promptCreateAndAssignLoadImageArgs();
+        if (!next) return;
+        post({
+          type: "chooseFileAndAssignMenuEntryImage",
+          menuId: m.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          textRaw: selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : undefined),
+          shortcut: selectedEntry.shortcut,
+          newImageIdRaw: next.idRaw,
+          newAssignedVar: next.assignedVar,
+        });
+      };
+      selectedImageActions.appendChild(selectedChooseFileBtn);
+      const selectedCreateNewBtn = document.createElement("button");
+      selectedCreateNewBtn.textContent = "Create New";
+      selectedCreateNewBtn.disabled = !selectedCanEditImage;
+      selectedCreateNewBtn.title = selectedCanEditImage
+        ? "Create a new form image entry and assign it to this menu entry."
+        : "Only MenuItem supports a parsed image argument.";
+      selectedCreateNewBtn.onclick = () => {
+        if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
+        const next = promptCreateAndAssignImageArgs();
+        if (!next) return;
+        post({
+          type: "createAndAssignMenuEntryImage",
+          menuId: m.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: selectedEntry.idRaw,
+          textRaw: selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : undefined),
+          shortcut: selectedEntry.shortcut,
+          newInline: next.inline,
+          newImageIdRaw: next.idRaw,
+          newImageRaw: next.imageRaw,
+          newAssignedVar: next.assignedVar,
+        });
+      };
+      selectedImageActions.appendChild(selectedCreateNewBtn);
+      const selectedClearBtn = document.createElement("button");
+      selectedClearBtn.textContent = "Clear";
+      selectedClearBtn.disabled = !selectedCanEditImage;
+      selectedClearBtn.title = selectedCanEditImage
+        ? "Remove the parsed image reference from this menu entry."
+        : "Only MenuItem supports a parsed image argument.";
+      selectedClearBtn.onclick = () => {
+        if (!selectedCanEditImage) return;
+        postSelectedMenuUpdate({ iconRaw: "" });
+      };
+      selectedImageActions.appendChild(selectedClearBtn);
+      if (selectedImage) {
+        const selectedJumpImageBtn = document.createElement("button");
+        selectedJumpImageBtn.textContent = "Image";
+        selectedJumpImageBtn.title = selectedImageTitle;
+        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
+        selectedImageActions.appendChild(selectedJumpImageBtn);
+      }
+
+      propsEl.appendChild(section("Selected Entry"));
+      propsEl.appendChild(row(
+        "Constant",
+        textInput(
+          selectedEntry.idRaw ?? "",
+          v => {
+            if (!selectedCanEditId) return;
+            postSelectedMenuUpdate({ idRaw: v.trim() });
+          },
+          {
+            disabled: !selectedCanEditId,
+            title: selectedEntry.kind === "MenuItem"
+              ? "Patch the raw MenuItem id token for the selected entry."
+              : "Only MenuItem exposes an editable constant in the current parsed model."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Name",
+        textInput(
+          selectedEntry.text ?? "",
+          v => {
+            if (!selectedCanEditName) return;
+            postSelectedMenuUpdate({ textRaw: toPbString(v) });
+          },
+          {
+            disabled: !selectedCanEditName,
+            title: selectedCanEditName
+              ? "Patch the menu caption/title for the selected entry."
+              : "MenuBar and CloseSubMenu are structural entries without an editable name field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Shortcut",
+        textInput(
+          selectedEntry.shortcut ?? "",
+          v => {
+            if (!selectedCanEditShortcut) return;
+            postSelectedMenuUpdate({ shortcut: v.trim() || undefined });
+          },
+          {
+            disabled: !selectedCanEditShortcut,
+            title: selectedEntry.kind === "MenuItem"
+              ? "Patch the optional MenuItem shortcut suffix."
+              : "Only MenuItem supports the parsed shortcut field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Separator",
+        checkboxInput(
+          selectedEntry.kind === "MenuBar",
+          () => {},
+          { disabled: true, title: "Menu separators are represented structurally as MenuBar entries in the parsed model." }
+        )
+      ));
+      propsEl.appendChild(row(
+        "CurrentImage",
+        readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")
+      ));
+      propsEl.appendChild(row("ChangeImage", selectedImageActions));
+      propsEl.appendChild(row(
+        "SelectProc",
+        textInput(
+          selectedEntry.event ?? "",
+          v => {
+            if (!selectedEntry.idRaw) return;
+            post({
+              type: "setMenuEntryEvent",
+              entryIdRaw: selectedEntry.idRaw,
+              eventProc: v.trim().length ? v.trim() : undefined
+            });
+          },
+          {
+            disabled: !selectedCanEditEvent,
+            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "menu")
+          }
+        )
+      ));
+    }
+
     const box = miniList();
     for (const [entryIndex, e] of (m.entries ?? []).entries()) {
       const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
