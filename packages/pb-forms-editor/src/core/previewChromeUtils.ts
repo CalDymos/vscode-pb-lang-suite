@@ -4,6 +4,9 @@ export type PreviewChromeMetrics = {
   panelHeight: number;
   scrollAreaWidth: number;
   splitterWidth: number;
+  menuHeight: number;
+  toolBarHeight: number;
+  statusBarHeight: number;
 };
 
 export function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
@@ -140,4 +143,60 @@ export function getSplitterBarRect(
   return vertical
     ? { x: splitterRect.x + pos, y: splitterRect.y, w: bar, h: splitterRect.h }
     : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };
+}
+
+export function getMenuBarRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, titleBarHeight),
+    w: windowRect.w,
+    h: metrics.menuHeight
+  };
+}
+
+export function getToolBarRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
+    w: windowRect.w,
+    h: metrics.toolBarHeight
+  };
+}
+
+export function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, windowRect.h - metrics.statusBarHeight),
+    w: windowRect.w,
+    h: Math.min(metrics.statusBarHeight, Math.max(0, windowRect.h))
+  };
+}
+
+export function getWindowContentRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  hasToolbar: boolean,
+  hasStatusbar: boolean,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  const top = Math.max(0, titleBarHeight)
+    + (hasMenu ? metrics.menuHeight : 0)
+    + (hasToolbar ? metrics.toolBarHeight : 0);
+  const bottom = hasStatusbar ? metrics.statusBarHeight : 0;
+  return {
+    x: windowRect.x,
+    y: windowRect.y + top,
+    w: windowRect.w,
+    h: Math.max(0, windowRect.h - top - bottom)
+  };
 }

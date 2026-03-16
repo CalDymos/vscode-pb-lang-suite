@@ -4,6 +4,9 @@ type PreviewChromeMetrics = {
   panelHeight: number;
   scrollAreaWidth: number;
   splitterWidth: number;
+  menuHeight: number;
+  toolBarHeight: number;
+  statusBarHeight: number;
 };
 
 function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
@@ -132,6 +135,58 @@ function getSplitterBarRect(
   return vertical
     ? { x: splitterRect.x + pos, y: splitterRect.y, w: bar, h: splitterRect.h }
     : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };
+}
+
+function getMenuBarRect(windowRect: PreviewRect, titleBarHeight: number, metrics: PreviewChromeMetrics): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, titleBarHeight),
+    w: windowRect.w,
+    h: metrics.menuHeight
+  };
+}
+
+function getToolBarRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
+    w: windowRect.w,
+    h: metrics.toolBarHeight
+  };
+}
+
+function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  return {
+    x: windowRect.x,
+    y: windowRect.y + Math.max(0, windowRect.h - metrics.statusBarHeight),
+    w: windowRect.w,
+    h: Math.min(metrics.statusBarHeight, Math.max(0, windowRect.h))
+  };
+}
+
+function getWindowContentRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  hasToolbar: boolean,
+  hasStatusbar: boolean,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  const top = Math.max(0, titleBarHeight)
+    + (hasMenu ? metrics.menuHeight : 0)
+    + (hasToolbar ? metrics.toolBarHeight : 0);
+  const bottom = hasStatusbar ? metrics.statusBarHeight : 0;
+  return {
+    x: windowRect.x,
+    y: windowRect.y + top,
+    w: windowRect.w,
+    h: Math.max(0, windowRect.h - top - bottom)
+  };
 }
 
 type SourceRange = { line: number };
@@ -998,6 +1053,66 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   };
 }
 
+
+function getPrimaryMenu(): MenuModel | undefined {
+  return model.menus?.[0];
+}
+
+function getPrimaryToolbar(): ToolbarModel | undefined {
+  return model.toolbars?.[0];
+}
+
+function getPrimaryStatusbar(): StatusbarModel | undefined {
+  return model.statusbars?.[0];
+}
+
+function hasParsedMenuChrome(): boolean {
+  return !!getPrimaryMenu();
+}
+
+function hasParsedToolbarChrome(): boolean {
+  return !!getPrimaryToolbar();
+}
+
+function hasParsedStatusbarChrome(): boolean {
+  return !!getPrimaryStatusbar();
+}
+
+function getWindowLocalRect(): PreviewRect {
+  return {
+    x: 0,
+    y: 0,
+    w: Math.max(0, model.window?.w ?? 0),
+    h: Math.max(0, model.window?.h ?? 0)
+  };
+}
+
+function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect {
+  return getWindowContentRect(
+    getWindowLocalRect(),
+    Math.max(0, asInt(settings.titleBarHeight)),
+    hasParsedMenuChrome(),
+    hasParsedToolbarChrome(),
+    hasParsedStatusbarChrome(),
+    metrics
+  );
+}
+
+function getMenuBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
+  if (!hasParsedMenuChrome()) return null;
+  return getMenuBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, wr.tbH, metrics);
+}
+
+function getToolBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
+  if (!hasParsedToolbarChrome()) return null;
+  return getToolBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, wr.tbH, hasParsedMenuChrome(), metrics);
+}
+
+function getStatusBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
+  if (!hasParsedStatusbarChrome()) return null;
+  return getStatusBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, metrics);
+}
+
 function hitWindow(mx: number, my: number): boolean {
   const wr = getWinRect();
   if (!wr) return false;
@@ -1214,6 +1329,15 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
+  const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
+  if (topLevelChromeHit) {
+    selection = topLevelChromeHit.selection;
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    return;
+  }
+
   const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
   if (chromeHit) {
     const g = chromeHit.gadget;
@@ -1397,6 +1521,12 @@ window.addEventListener("mousemove", (e) => {
       }
     }
 
+    const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
+    if (topLevelChromeHit) {
+      canvas.style.cursor = "default";
+      return;
+    }
+
     const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
     if (chromeHit) {
       if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader" || chromeHit.zone === "splitterBar") {
@@ -1545,14 +1675,35 @@ function getPreviewChromeMetrics(): PreviewChromeMetrics {
   const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
 
   if (ua.includes("mac")) {
-    return { panelHeight: 31, scrollAreaWidth: 14, splitterWidth: 12 };
+    return {
+      panelHeight: 31,
+      scrollAreaWidth: 14,
+      splitterWidth: 12,
+      menuHeight: 23,
+      toolBarHeight: 36,
+      statusBarHeight: 24
+    };
   }
 
   if (ua.includes("linux")) {
-    return { panelHeight: 29, scrollAreaWidth: 20, splitterWidth: 9 };
+    return {
+      panelHeight: 29,
+      scrollAreaWidth: 20,
+      splitterWidth: 9,
+      menuHeight: 28,
+      toolBarHeight: 38,
+      statusBarHeight: 26
+    };
   }
 
-  return { panelHeight: 22, scrollAreaWidth: 20, splitterWidth: 9 };
+  return {
+    panelHeight: 22,
+    scrollAreaWidth: 20,
+    splitterWidth: 9,
+    menuHeight: 22,
+    toolBarHeight: 24,
+    statusBarHeight: 23
+  };
 }
 
 function hasPbFlag(flagsExpr: string | undefined, flag: string): boolean {
@@ -1589,6 +1740,36 @@ type PreviewChromeHit = {
   gadget: Gadget;
   zone: PreviewChromeHitZone;
 };
+
+type TopLevelChromeHit =
+  | { selection: { kind: "menu"; id: string }; rect: PreviewRect }
+  | { selection: { kind: "toolbar"; id: string }; rect: PreviewRect }
+  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRect };
+
+function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMetrics): TopLevelChromeHit | null {
+  const wr = getWinRect();
+  if (!wr || !hitWindow(mx, my)) return null;
+
+  const statusbar = getPrimaryStatusbar();
+  const statusbarRect = getStatusBarRectGlobal(wr, metrics);
+  if (statusbar && statusbarRect && rectContainsPoint(statusbarRect, mx, my)) {
+    return { selection: { kind: "statusbar", id: statusbar.id }, rect: statusbarRect };
+  }
+
+  const menu = getPrimaryMenu();
+  const menuRect = getMenuBarRectGlobal(wr, metrics);
+  if (menu && menuRect && rectContainsPoint(menuRect, mx, my)) {
+    return { selection: { kind: "menu", id: menu.id }, rect: menuRect };
+  }
+
+  const toolbar = getPrimaryToolbar();
+  const toolbarRect = getToolBarRectGlobal(wr, metrics);
+  if (toolbar && toolbarRect && rectContainsPoint(toolbarRect, mx, my)) {
+    return { selection: { kind: "toolbar", id: toolbar.id }, rect: toolbarRect };
+  }
+
+  return null;
+}
 
 function getGadgetById(id: string | undefined): Gadget | undefined {
   if (!id) return undefined;
@@ -1732,12 +1913,8 @@ function getGadgetPreviewLayout(
   }
 
   visiting.add(g.id);
-  const windowRect: PreviewRect = {
-    x: 0,
-    y: 0,
-    w: Math.max(0, model.window?.w ?? 0),
-    h: Math.max(0, model.window?.h ?? 0)
-  };
+  const windowRect = getWindowLocalRect();
+  const windowContentRect = getWindowContentPreviewRect(metrics);
 
   let rect: PreviewRect = { x: g.x, y: g.y, w: g.w, h: g.h };
   let clip = windowRect;
@@ -1772,7 +1949,8 @@ function getGadgetPreviewLayout(
       }
     }
   } else {
-    clip = intersectRect(windowRect, rect);
+    rect = { x: windowContentRect.x + g.x, y: windowContentRect.y + g.y, w: g.w, h: g.h };
+    clip = intersectRect(windowContentRect, rect);
     visible = clip.w > 0 && clip.h > 0;
   }
 
@@ -2046,6 +2224,206 @@ function drawSplitterChrome(
   ctx.restore();
 }
 
+function getMenuPreviewLabel(entry: MenuEntry): string {
+  if (entry.kind === "MenuBar" || entry.kind === "CloseSubMenu") return "";
+  return (entry.text ?? unquotePbString(entry.textRaw) ?? entry.idRaw ?? entry.kind).trim();
+}
+
+function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+  const menu = getPrimaryMenu();
+  if (!menu || rect.h <= 0 || rect.w <= 0) return;
+
+  const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";
+  const border = getCssVar("--vscode-panel-border") || fg;
+  const itemHover = getCssVar("--vscode-toolbar-hoverBackground") || getCssVar("--vscode-list-hoverBackground") || "rgba(127,127,127,0.15)";
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = border;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  ctx.restore();
+
+  let x = rect.x + 7;
+  const baseline = rect.y + Math.min(rect.h - 6, 15);
+  for (const entry of menu.entries) {
+    if ((entry.level ?? 0) !== 0) continue;
+    if (entry.kind === "MenuBar") {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = border;
+      ctx.beginPath();
+      ctx.moveTo(x + 2.5, rect.y + 4);
+      ctx.lineTo(x + 2.5, rect.y + rect.h - 4);
+      ctx.stroke();
+      ctx.restore();
+      x += 9;
+      continue;
+    }
+
+    const label = getMenuPreviewLabel(entry);
+    if (!label.length) continue;
+    const itemW = Math.max(24, Math.ceil(ctx.measureText(label).width) + 14);
+
+    ctx.save();
+    ctx.fillStyle = itemHover;
+    ctx.globalAlpha = 0.22;
+    ctx.fillRect(x, rect.y + 2, itemW, Math.max(0, rect.h - 4));
+    ctx.restore();
+
+    ctx.fillStyle = fg;
+    ctx.fillText(label, x + 7, baseline);
+    x += itemW + 3;
+    if (x >= rect.x + rect.w - 20) break;
+  }
+}
+
+function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+  const toolbar = getPrimaryToolbar();
+  if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
+
+  const bg = getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
+  const border = getCssVar("--vscode-panel-border") || fg;
+  const buttonBg = getCssVar("--vscode-button-secondaryBackground") || getCssVar("--vscode-toolbar-hoverBackground") || "rgba(127,127,127,0.15)";
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.globalAlpha = 0.92;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = border;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  ctx.restore();
+
+  let x = rect.x + 6;
+  const y = rect.y + Math.max(3, Math.trunc((rect.h - 16) / 2));
+  for (const entry of toolbar.entries) {
+    if (entry.kind === "ToolBarToolTip") continue;
+    if (entry.kind === "ToolBarSeparator") {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = border;
+      ctx.beginPath();
+      ctx.moveTo(x + 2.5, y);
+      ctx.lineTo(x + 2.5, y + 16);
+      ctx.stroke();
+      ctx.restore();
+      x += 10;
+      continue;
+    }
+
+    ctx.save();
+    ctx.fillStyle = buttonBg;
+    ctx.globalAlpha = 0.28;
+    ctx.fillRect(x, y, 16, 16);
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = border;
+    ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
+    ctx.restore();
+
+    if (entry.iconId || entry.iconRaw) {
+      ctx.save();
+      ctx.fillStyle = fg;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x + 4, y + 4, 8, 8);
+      ctx.restore();
+    } else {
+      const label = ((entry.text ?? entry.idRaw ?? entry.kind).replace(/^#/, "").trim().slice(0, 1) || "•").toUpperCase();
+      ctx.fillStyle = fg;
+      ctx.fillText(label, x + 4, y + 12);
+    }
+
+    x += 22;
+    if (x >= rect.x + rect.w - 18) break;
+  }
+}
+
+function parseStatusbarWidth(widthRaw: string | undefined): number | null {
+  const trimmed = (widthRaw ?? "").trim();
+  if (!trimmed.length || trimmed === "#PB_Ignore") return null;
+  const width = Number(trimmed);
+  if (!Number.isFinite(width) || width < 0) return null;
+  return Math.trunc(width);
+}
+
+function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+  const statusbar = getPrimaryStatusbar();
+  if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
+
+  const bg = getCssVar("--vscode-statusBar-background") || getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
+  const border = getCssVar("--vscode-panel-border") || fg;
+  const accent = getCssVar("--vscode-progressBar-background") || fg;
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.globalAlpha = 0.92;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = border;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  ctx.restore();
+
+  let fixedWidth = 0;
+  let flexibleCount = 0;
+  for (const field of statusbar.fields) {
+    const parsed = parseStatusbarWidth(field.widthRaw);
+    if (parsed === null) flexibleCount++;
+    else fixedWidth += parsed;
+  }
+  const remainingWidth = Math.max(0, rect.w - fixedWidth);
+  const flexibleWidth = flexibleCount > 0 ? Math.max(1, Math.floor(remainingWidth / flexibleCount)) : 0;
+
+  let x = rect.x;
+  const innerY = rect.y + 4;
+  const innerH = Math.max(8, rect.h - 8);
+  for (let i = 0; i < statusbar.fields.length; i++) {
+    const field = statusbar.fields[i];
+    const parsedWidth = parseStatusbarWidth(field.widthRaw);
+    const fieldW = Math.max(18, parsedWidth ?? flexibleWidth);
+
+    if (i > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = border;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, rect.y + 1);
+      ctx.lineTo(x + 0.5, rect.y + rect.h - 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (field.progressBar) {
+      const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = border;
+      ctx.strokeRect(x + 4.5, innerY + 0.5, Math.max(8, fieldW - 8), innerH - 1);
+      ctx.fillStyle = accent;
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(x + 5, innerY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 10) * progress) / 100)), Math.max(4, innerH - 2));
+      ctx.restore();
+    } else if (field.imageId || field.imageRaw) {
+      ctx.save();
+      ctx.fillStyle = fg;
+      ctx.globalAlpha = 0.55;
+      const size = Math.max(10, Math.min(16, innerH - 2));
+      ctx.fillRect(x + 6, rect.y + Math.max(3, Math.trunc((rect.h - size) / 2)), size, size);
+      ctx.restore();
+    } else {
+      const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
+      if (textLabel.length) {
+        ctx.fillStyle = fg;
+        ctx.fillText(textLabel, x + 6, rect.y + Math.min(rect.h - 6, 15));
+      }
+    }
+
+    x += fieldW;
+    if (x >= rect.x + rect.w) break;
+  }
+}
+
 function render() {
   const ctx = canvas.getContext("2d")!;
   const rect = canvas.getBoundingClientRect();
@@ -2088,9 +2466,25 @@ function render() {
     ctx.clearRect(winX, winY, winW, winH);
   }
 
-  // Grid only inside window
+  const chromeMetrics = getPreviewChromeMetrics();
+  const windowContentRect = getWindowContentPreviewRect(chromeMetrics);
+  const menuBarRect = getMenuBarRectGlobal(wr, chromeMetrics);
+  const toolBarRect = getToolBarRectGlobal(wr, chromeMetrics);
+  const statusBarRect = getStatusBarRectGlobal(wr, chromeMetrics);
+
+  // Grid only inside the client/content area.
   if (settings.showGrid) {
-    drawGrid(ctx, winX, winY, winW, winH, settings.gridSize, settings.gridOpacity, settings.gridMode, fg);
+    drawGrid(
+      ctx,
+      winX + windowContentRect.x,
+      winY + windowContentRect.y,
+      windowContentRect.w,
+      windowContentRect.h,
+      settings.gridSize,
+      settings.gridOpacity,
+      settings.gridMode,
+      fg
+    );
   }
 
   // Optional title bar
@@ -2111,6 +2505,39 @@ function render() {
     ctx.fillText(winTitle, winX + 8, winY + Math.min(tbH - 8, 18));
   }
 
+  if (menuBarRect) {
+    drawMenuBarPreview(ctx, menuBarRect, fg);
+    if (selection?.kind === "menu" && selection.id === getPrimaryMenu()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(menuBarRect.x + 0.5, menuBarRect.y + 0.5, menuBarRect.w - 1, menuBarRect.h - 1);
+      ctx.restore();
+    }
+  }
+
+  if (toolBarRect) {
+    drawToolBarPreview(ctx, toolBarRect, fg);
+    if (selection?.kind === "toolbar" && selection.id === getPrimaryToolbar()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(toolBarRect.x + 0.5, toolBarRect.y + 0.5, toolBarRect.w - 1, toolBarRect.h - 1);
+      ctx.restore();
+    }
+  }
+
+  if (statusBarRect) {
+    drawStatusBarPreview(ctx, statusBarRect, fg);
+    if (selection?.kind === "statusbar" && selection.id === getPrimaryStatusbar()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(statusBarRect.x + 0.5, statusBarRect.y + 0.5, statusBarRect.w - 1, statusBarRect.h - 1);
+      ctx.restore();
+    }
+  }
+
   // Window border
   ctx.save();
   ctx.globalAlpha = 0.35;
@@ -2129,7 +2556,6 @@ function render() {
     drawHandles(ctx, winX, winY, winW, winH, focus);
   }
 
-  const chromeMetrics = getPreviewChromeMetrics();
   const layoutCache = new Map<string, GadgetPreviewLayout>();
 
   // Gadgets (offset by window origin)
