@@ -2344,6 +2344,68 @@ function findAnchoredMenuEntryInsert(
   return { insertLine, indent: getLineIndent(document, insertLine) };
 }
 
+function findMenuEntryDeleteRange(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  sourceLine: number,
+  entryNameLower: string
+): { startLine: number; endLine: number } | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  const entryIndex = menu.entries.findIndex(entry => {
+    const entryLine = entry.source?.line;
+    return entryLine === sourceLine && entry.kind.toLowerCase() === entryNameLower;
+  });
+  if (entryIndex < 0) return undefined;
+
+  const entry = menu.entries[entryIndex];
+  const startLine = entry.source?.line;
+  if (typeof startLine !== "number") return undefined;
+
+  if (entry.kind !== MENU_ENTRY_KIND.MenuTitle && entry.kind !== MENU_ENTRY_KIND.OpenSubMenu) {
+    return { startLine, endLine: startLine };
+  }
+
+  if (entry.kind === MENU_ENTRY_KIND.OpenSubMenu) {
+    const targetLevel = Math.max(0, entry.level ?? 0);
+    for (let i = entryIndex + 1; i < menu.entries.length; i++) {
+      const nextEntry = menu.entries[i];
+      if (nextEntry.kind !== MENU_ENTRY_KIND.CloseSubMenu) continue;
+      if (Math.max(0, nextEntry.level ?? 0) !== targetLevel) continue;
+
+      const endLine = nextEntry.source?.line;
+      if (typeof endLine === "number") {
+        return { startLine, endLine };
+      }
+      break;
+    }
+  }
+
+  const targetLevel = Math.max(0, entry.level ?? 0);
+  let endLine = startLine;
+
+  for (let i = entryIndex + 1; i < menu.entries.length; i++) {
+    const nextEntry = menu.entries[i];
+    const nextLine = nextEntry.source?.line;
+    if (typeof nextLine !== "number") continue;
+
+    const nextLevel = Math.max(0, nextEntry.level ?? 0);
+    if (nextLevel <= targetLevel && nextEntry.kind !== MENU_ENTRY_KIND.CloseSubMenu) {
+      break;
+    }
+
+    endLine = nextLine;
+  }
+
+  return { startLine, endLine };
+}
+
 function applySectionEntryUpdate(
   document: vscode.TextDocument,
   calls: PbCall[],
@@ -2569,14 +2631,18 @@ export function applyMenuEntryDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryDelete(
-    document,
-    calls,
-    "createmenu",
-    menuId,
-    sourceLine,
-    kind.toLowerCase()
+  const deleteRange = findMenuEntryDeleteRange(document, calls, menuId, sourceLine, kind.toLowerCase());
+  if (!deleteRange) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(deleteRange.startLine, 0),
+      document.lineAt(deleteRange.endLine).rangeIncludingLineBreak.end
+    )
   );
+  return edit;
 }
 
 export function applyToolBarEntryInsert(

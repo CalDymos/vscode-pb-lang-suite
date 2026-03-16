@@ -367,6 +367,70 @@ test("roundtrips menu entry delete", () => {
   assert.doesNotMatch(patchedText, /MenuItem\(#MnuOpen, "Open"\)/);
 });
 
+
+test("roundtrips submenu delete removes matching CloseSubMenu and descendants", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const target = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const sourceLine = target?.source?.line;
+
+  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.equal(typeof sourceLine, "number", "Expected source line for existing OpenSubMenu entry.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryDelete(document, "#MenuMain", sourceLine!, MENU_ENTRY_KIND.OpenSubMenu)
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(updatedMenu, "Expected menu after submenu delete.");
+  assert.equal(updatedMenu!.entries.some((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu), false);
+  assert.equal(updatedMenu!.entries.some((entry) => entry.idRaw === "#MenuRecent1"), false);
+  assert.equal(updatedMenu!.entries.some((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu), false);
+  assert.doesNotMatch(patchedText, /OpenSubMenu\("Recent"\)/);
+  assert.doesNotMatch(patchedText, /MenuItem\(#MenuRecent1, "Last file"\)/);
+  assert.doesNotMatch(patchedText, /CloseSubMenu\(\)/);
+});
+
+test("roundtrips menu title delete removes nested submenu block until next title", () => {
+  const text = [
+    'Procedure OpenFrmMain()',
+    '  CreateMenu(#MenuMain, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  MenuItem(#MenuOpen, "Open")',
+    '  OpenSubMenu("Recent")',
+    '  MenuItem(#MenuRecent1, "Last file")',
+    '  CloseSubMenu()',
+    '  MenuTitle("Help")',
+    '  MenuItem(#MenuAbout, "About")',
+    'EndProcedure',
+    ''
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const title = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuTitle && entry.text === "File");
+  const sourceLine = title?.source?.line;
+
+  assert.ok(menu, "Expected menu for title delete test.");
+  assert.equal(typeof sourceLine, "number", "Expected source line for root MenuTitle.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryDelete(document, "#MenuMain", sourceLine!, MENU_ENTRY_KIND.MenuTitle)
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(updatedMenu, "Expected menu after title delete.");
+  assert.equal(updatedMenu!.entries.length, 2);
+  assert.equal(updatedMenu!.entries[0]?.kind, MENU_ENTRY_KIND.MenuTitle);
+  assert.equal(updatedMenu!.entries[0]?.text, "Help");
+  assert.equal(updatedMenu!.entries[1]?.idRaw, "#MenuAbout");
+  assert.doesNotMatch(patchedText, /MenuTitle\("File"\)/);
+  assert.doesNotMatch(patchedText, /OpenSubMenu\("Recent"\)/);
+  assert.doesNotMatch(patchedText, /CloseSubMenu\(\)/);
+  assert.match(patchedText, /MenuTitle\("Help"\)/);
+});
+
 test("roundtrips toolbar image button insert", () => {
   const { text } = parseFixture();
   const args: ToolBarEntryArgs = {
