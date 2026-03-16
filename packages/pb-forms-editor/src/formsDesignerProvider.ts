@@ -1143,6 +1143,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         align-items: center;
         margin: 4px 0;
         font-size: 12px;
+        border-radius: 6px;
+        padding: 4px 6px;
+      }
+
+      .miniRow.selected {
+        background: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-activeSelectionForeground);
       }
 
       .miniRow button {

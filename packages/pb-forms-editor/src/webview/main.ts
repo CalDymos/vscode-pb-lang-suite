@@ -481,8 +481,11 @@ type DesignerSelection =
   | { kind: "gadget"; id: string }
   | { kind: "window" }
   | { kind: "menu"; id: string }
+  | { kind: "menuEntry"; menuId: string; entryIndex: number }
   | { kind: "toolbar"; id: string }
+  | { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }
   | { kind: "statusbar"; id: string }
+  | { kind: "statusBarField"; statusBarId: string; fieldIndex: number }
   | { kind: "images" }
   | { kind: "image"; id: string }
   | null;
@@ -491,6 +494,12 @@ let selection: DesignerSelection = null;
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
+
+type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
+
+let menuEntryPreviewRects: PreviewEntryRect[] = [];
+let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
+let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
 let settings: DesignerSettings = {
   showGrid: true,
@@ -564,6 +573,38 @@ type ImageUsage = {
   select: DesignerSelection;
 };
 
+function getSelectionParentId(sel: DesignerSelection): string | undefined {
+  if (!sel) return undefined;
+  switch (sel.kind) {
+    case "menu": return sel.id;
+    case "menuEntry": return sel.menuId;
+    case "toolbar": return sel.id;
+    case "toolBarEntry": return sel.toolBarId;
+    case "statusbar": return sel.id;
+    case "statusBarField": return sel.statusBarId;
+    default: return undefined;
+  }
+}
+
+function setSelectionAndRefresh(next: DesignerSelection): void {
+  selection = next;
+  render();
+  renderListAndParentSelector();
+  renderProps();
+}
+
+function isMenuEntrySelection(sel: DesignerSelection, menuId: string, entryIndex: number): boolean {
+  return Boolean(sel && sel.kind === "menuEntry" && sel.menuId === menuId && sel.entryIndex === entryIndex);
+}
+
+function isToolBarEntrySelection(sel: DesignerSelection, toolBarId: string, entryIndex: number): boolean {
+  return Boolean(sel && sel.kind === "toolBarEntry" && sel.toolBarId === toolBarId && sel.entryIndex === entryIndex);
+}
+
+function isStatusBarFieldSelection(sel: DesignerSelection, statusBarId: string, fieldIndex: number): boolean {
+  return Boolean(sel && sel.kind === "statusBarField" && sel.statusBarId === statusBarId && sel.fieldIndex === fieldIndex);
+}
+
 function collectImageUsages(imageId: string): ImageUsage[] {
   const usages: ImageUsage[] = [];
 
@@ -592,7 +633,7 @@ function collectImageUsages(imageId: string): ImageUsage[] {
         const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
         usages.push({
           label: `Menu ${m.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "menu", id: m.id }
+          select: { kind: "menuEntry", menuId: m.id, entryIndex: idx }
         });
       }
     });
@@ -604,7 +645,7 @@ function collectImageUsages(imageId: string): ImageUsage[] {
         const entryName = e.idRaw ?? e.text ?? e.textRaw ?? `entry ${idx}`;
         usages.push({
           label: `ToolBar ${t.id} :: ${e.kind} ${entryName}`,
-          select: { kind: "toolbar", id: t.id }
+          select: { kind: "toolBarEntry", toolBarId: t.id, entryIndex: idx }
         });
       }
     });
@@ -615,7 +656,7 @@ function collectImageUsages(imageId: string): ImageUsage[] {
       if (f.imageId === imageId) {
         usages.push({
           label: `StatusBar ${sb.id} :: Field ${idx}`,
-          select: { kind: "statusbar", id: sb.id }
+          select: { kind: "statusBarField", statusBarId: sb.id, fieldIndex: idx }
         });
       }
     });
@@ -634,10 +675,7 @@ function findImageEntryById(imageId?: string): ImageEntry | undefined {
 }
 
 function selectImageById(imageId: string): void {
-  selection = { kind: "image", id: imageId };
-  render();
-  renderListAndParentSelector();
-  renderProps();
+  setSelectionAndRefresh({ kind: "image", id: imageId });
 }
 
 const IMAGE_CAPABLE_GADGET_KINDS = new Set(["ImageGadget", "ButtonImageGadget"]);
@@ -818,15 +856,33 @@ function sanitizeSelectionAfterModelUpdate() {
     return;
   }
 
+  if (sel && sel.kind === "menuEntry") {
+    const menu = (model.menus ?? []).find(m => m.id === sel.menuId);
+    if (!menu || sel.entryIndex < 0 || sel.entryIndex >= (menu.entries?.length ?? 0)) selection = null;
+    return;
+  }
+
   if (sel && sel.kind === "toolbar") {
     const toolbars = model.toolbars ?? [];
     if (!toolbars.some(t => t.id === sel.id)) selection = null;
     return;
   }
 
+  if (sel && sel.kind === "toolBarEntry") {
+    const toolBar = (model.toolbars ?? []).find(t => t.id === sel.toolBarId);
+    if (!toolBar || sel.entryIndex < 0 || sel.entryIndex >= (toolBar.entries?.length ?? 0)) selection = null;
+    return;
+  }
+
   if (sel && sel.kind === "statusbar") {
     const statusbars = model.statusbars ?? [];
     if (!statusbars.some(sb => sb.id === sel.id)) selection = null;
+    return;
+  }
+
+  if (sel && sel.kind === "statusBarField") {
+    const statusBar = (model.statusbars ?? []).find(sb => sb.id === sel.statusBarId);
+    if (!statusBar || sel.fieldIndex < 0 || sel.fieldIndex >= (statusBar.fields?.length ?? 0)) selection = null;
     return;
   }
 
@@ -1743,8 +1799,11 @@ type PreviewChromeHit = {
 
 type TopLevelChromeHit =
   | { selection: { kind: "menu"; id: string }; rect: PreviewRect }
+  | { selection: { kind: "menuEntry"; menuId: string; entryIndex: number }; rect: PreviewRect }
   | { selection: { kind: "toolbar"; id: string }; rect: PreviewRect }
-  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRect };
+  | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewRect }
+  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRect }
+  | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewRect };
 
 function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMetrics): TopLevelChromeHit | null {
   const wr = getWinRect();
@@ -1753,18 +1812,30 @@ function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMet
   const statusbar = getPrimaryStatusbar();
   const statusbarRect = getStatusBarRectGlobal(wr, metrics);
   if (statusbar && statusbarRect && rectContainsPoint(statusbarRect, mx, my)) {
+    const fieldHit = statusBarFieldPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
+    if (fieldHit) {
+      return { selection: { kind: "statusBarField", statusBarId: fieldHit.ownerId, fieldIndex: fieldHit.index }, rect: fieldHit };
+    }
     return { selection: { kind: "statusbar", id: statusbar.id }, rect: statusbarRect };
   }
 
   const menu = getPrimaryMenu();
   const menuRect = getMenuBarRectGlobal(wr, metrics);
   if (menu && menuRect && rectContainsPoint(menuRect, mx, my)) {
+    const entryHit = menuEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
+    if (entryHit) {
+      return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
+    }
     return { selection: { kind: "menu", id: menu.id }, rect: menuRect };
   }
 
   const toolbar = getPrimaryToolbar();
   const toolbarRect = getToolBarRectGlobal(wr, metrics);
   if (toolbar && toolbarRect && rectContainsPoint(toolbarRect, mx, my)) {
+    const entryHit = toolBarEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
+    if (entryHit) {
+      return { selection: { kind: "toolBarEntry", toolBarId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
+    }
     return { selection: { kind: "toolbar", id: toolbar.id }, rect: toolbarRect };
   }
 
@@ -2231,6 +2302,7 @@ function getMenuPreviewLabel(entry: MenuEntry): string {
 
 function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const menu = getPrimaryMenu();
+  menuEntryPreviewRects = [];
   if (!menu || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";
@@ -2248,7 +2320,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   let x = rect.x + 7;
   const baseline = rect.y + Math.min(rect.h - 6, 15);
-  for (const entry of menu.entries) {
+  for (const [entryIndex, entry] of menu.entries.entries()) {
     if ((entry.level ?? 0) !== 0) continue;
     if (entry.kind === "MenuBar") {
       ctx.save();
@@ -2266,6 +2338,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     const label = getMenuPreviewLabel(entry);
     if (!label.length) continue;
     const itemW = Math.max(24, Math.ceil(ctx.measureText(label).width) + 14);
+    menuEntryPreviewRects.push({ ownerId: menu.id, index: entryIndex, x, y: rect.y + 2, w: itemW, h: Math.max(0, rect.h - 4) });
 
     ctx.save();
     ctx.fillStyle = itemHover;
@@ -2282,6 +2355,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
 function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const toolbar = getPrimaryToolbar();
+  toolBarEntryPreviewRects = [];
   if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
@@ -2299,9 +2373,10 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   let x = rect.x + 6;
   const y = rect.y + Math.max(3, Math.trunc((rect.h - 16) / 2));
-  for (const entry of toolbar.entries) {
+  for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
+      toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 6, h: 16 });
       ctx.save();
       ctx.globalAlpha = 0.35;
       ctx.strokeStyle = border;
@@ -2313,6 +2388,8 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       x += 10;
       continue;
     }
+
+    toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 });
 
     ctx.save();
     ctx.fillStyle = buttonBg;
@@ -2350,6 +2427,7 @@ function parseStatusbarWidth(widthRaw: string | undefined): number | null {
 
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const statusbar = getPrimaryStatusbar();
+  statusBarFieldPreviewRects = [];
   if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-statusBar-background") || getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
@@ -2382,6 +2460,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     const field = statusbar.fields[i];
     const parsedWidth = parseStatusbarWidth(field.widthRaw);
     const fieldW = Math.max(18, parsedWidth ?? flexibleWidth);
+    statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
 
     if (i > 0) {
       ctx.save();
@@ -2425,6 +2504,10 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 }
 
 function render() {
+  menuEntryPreviewRects = [];
+  toolBarEntryPreviewRects = [];
+  statusBarFieldPreviewRects = [];
+
   const ctx = canvas.getContext("2d")!;
   const rect = canvas.getBoundingClientRect();
   ctx.clearRect(0, 0, rect.width, rect.height);
@@ -2514,6 +2597,17 @@ function render() {
       ctx.strokeRect(menuBarRect.x + 0.5, menuBarRect.y + 0.5, menuBarRect.w - 1, menuBarRect.h - 1);
       ctx.restore();
     }
+    if (selection?.kind === "menuEntry") {
+      const sel = selection;
+      const entryRect = menuEntryPreviewRects.find(entry => entry.ownerId === sel.menuId && entry.index === sel.entryIndex);
+      if (entryRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
+        ctx.restore();
+      }
+    }
   }
 
   if (toolBarRect) {
@@ -2525,6 +2619,17 @@ function render() {
       ctx.strokeRect(toolBarRect.x + 0.5, toolBarRect.y + 0.5, toolBarRect.w - 1, toolBarRect.h - 1);
       ctx.restore();
     }
+    if (selection?.kind === "toolBarEntry") {
+      const sel = selection;
+      const entryRect = toolBarEntryPreviewRects.find(entry => entry.ownerId === sel.toolBarId && entry.index === sel.entryIndex);
+      if (entryRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
+        ctx.restore();
+      }
+    }
   }
 
   if (statusBarRect) {
@@ -2535,6 +2640,17 @@ function render() {
       ctx.lineWidth = 2;
       ctx.strokeRect(statusBarRect.x + 0.5, statusBarRect.y + 0.5, statusBarRect.w - 1, statusBarRect.h - 1);
       ctx.restore();
+    }
+    if (selection?.kind === "statusBarField") {
+      const sel = selection;
+      const fieldRect = statusBarFieldPreviewRects.find(entry => entry.ownerId === sel.statusBarId && entry.index === sel.fieldIndex);
+      if (fieldRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, fieldRect.w - 1, fieldRect.h - 1);
+        ctx.restore();
+      }
     }
   }
 
@@ -2712,7 +2828,7 @@ function renderList() {
   listEl.innerHTML = "";
 
   type Node = {
-    kind: "window" | "gadget" | "menu" | "toolbar" | "statusbar" | "images" | "image" | "menuEntry";
+    kind: "window" | "gadget" | "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" | "images" | "image";
     id: string;
     label: string;
     selectable: boolean;
@@ -2727,8 +2843,11 @@ function renderList() {
     if (n.kind === "window") return sel.kind === "window";
     if (n.kind === "gadget") return sel.kind === "gadget" && sel.id === n.id;
     if (n.kind === "menu") return sel.kind === "menu" && sel.id === n.id;
+    if (n.kind === "menuEntry") return sel.kind === "menuEntry" && `${sel.menuId}:${sel.entryIndex}` === n.id;
     if (n.kind === "toolbar") return sel.kind === "toolbar" && sel.id === n.id;
+    if (n.kind === "toolBarEntry") return sel.kind === "toolBarEntry" && `${sel.toolBarId}:${sel.entryIndex}` === n.id;
     if (n.kind === "statusbar") return sel.kind === "statusbar" && sel.id === n.id;
+    if (n.kind === "statusBarField") return sel.kind === "statusBarField" && `${sel.statusBarId}:${sel.fieldIndex}` === n.id;
     if (n.kind === "images") return sel.kind === "images";
     if (n.kind === "image") return sel.kind === "image" && sel.id === n.id;
     return false;
@@ -2770,7 +2889,7 @@ function renderList() {
         kind: "menuEntry" as const,
         id: `${m.id}:${idx}`,
         label: `${prefix}${e.kind}${idPart}${text ? `  ${text}` : ""}`,
-        selectable: false,
+        selectable: true,
         children: []
       };
     });
@@ -2789,10 +2908,10 @@ function renderList() {
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       return {
-        kind: "menuEntry" as const,
+        kind: "toolBarEntry" as const,
         id: `${t.id}:${idx}`,
         label: `${e.kind}${idPart}${text ? `  ${text}` : ""}${e.iconRaw ? `  ${e.iconRaw}` : ""}`,
-        selectable: false,
+        selectable: true,
         children: []
       };
     });
@@ -2808,10 +2927,10 @@ function renderList() {
 
   const statusbarNodes: Node[] = (model.statusbars ?? []).map(sb => {
     const fields = (sb.fields ?? []).map((f, idx) => ({
-      kind: "menuEntry" as const,
-      id: `${sb.id}:field:${idx}`,
+      kind: "statusBarField" as const,
+      id: `${sb.id}:${idx}`,
       label: `Field  ${idx}  width:${f.widthRaw}`,
-      selectable: false,
+      selectable: true,
       children: []
     }));
 
@@ -2858,7 +2977,11 @@ function renderList() {
     const k = keyOf(n);
     if (!expanded.has(k)) {
       // Expand container gadgets and the window by default.
-      const defaultExpanded = n.kind === "window" || (n.kind === "gadget" && CONTAINER_KINDS.has(gadgetMap.get(n.id)?.kind ?? ""));
+      const defaultExpanded = n.kind === "window"
+        || n.kind === "menu"
+        || n.kind === "toolbar"
+        || n.kind === "statusbar"
+        || (n.kind === "gadget" && CONTAINER_KINDS.has(gadgetMap.get(n.id)?.kind ?? ""));
       expanded.set(k, defaultExpanded);
     }
     return expanded.get(k)!;
@@ -2894,8 +3017,20 @@ function renderList() {
       if (n.kind === "window") selection = { kind: "window" };
       else if (n.kind === "gadget") selection = { kind: "gadget", id: n.id };
       else if (n.kind === "menu") selection = { kind: "menu", id: n.id };
+      else if (n.kind === "menuEntry") {
+        const [menuId, entryIndexRaw] = n.id.split(":");
+        selection = { kind: "menuEntry", menuId, entryIndex: Number(entryIndexRaw) };
+      }
       else if (n.kind === "toolbar") selection = { kind: "toolbar", id: n.id };
+      else if (n.kind === "toolBarEntry") {
+        const [toolBarId, entryIndexRaw] = n.id.split(":");
+        selection = { kind: "toolBarEntry", toolBarId, entryIndex: Number(entryIndexRaw) };
+      }
       else if (n.kind === "statusbar") selection = { kind: "statusbar", id: n.id };
+      else if (n.kind === "statusBarField") {
+        const [statusBarId, fieldIndexRaw] = n.id.split(":");
+        selection = { kind: "statusBarField", statusBarId, fieldIndex: Number(fieldIndexRaw) };
+      }
       else if (n.kind === "images") selection = { kind: "images" };
       else if (n.kind === "image") selection = { kind: "image", id: n.id };
       render();
@@ -3331,8 +3466,10 @@ function renderProps() {
     return;
   }
 
-  if (sel.kind === "menu") {
-    const m = (model.menus ?? []).find(x => x.id === sel.id);
+  if (sel.kind === "menu" || sel.kind === "menuEntry") {
+    const menuId = sel.kind === "menu" ? sel.id : sel.menuId;
+    const selectedEntryIndex = sel.kind === "menuEntry" ? sel.entryIndex : undefined;
+    const m = (model.menus ?? []).find(x => x.id === menuId);
     if (!m) {
       propsEl.innerHTML = "<div class='muted'>Menu not found</div>";
       return;
@@ -3349,7 +3486,7 @@ function renderProps() {
       propsEl.appendChild(mutedNote(EVENT_UI_HINT.menuIdRequired));
     }
     const box = miniList();
-    for (const e of m.entries ?? []) {
+    for (const [entryIndex, e] of (m.entries ?? []).entries()) {
       const prefix = " ".repeat(Math.max(0, (e.level ?? 0)) * 2);
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
@@ -3497,7 +3634,7 @@ function renderProps() {
           }
         : undefined;
 
-      box.appendChild(miniRow(
+      const rowEl = miniRow(
         line,
         editFn,
         delFn,
@@ -3507,7 +3644,13 @@ function renderProps() {
         { label: "Choose File", onClick: menuChooseFileImageFn, disabled: !menuChooseFileImageFn, title: e.kind === "MenuItem" ? "Select a file, create a new LoadImage entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Create New", onClick: menuCreateImageFn, disabled: !menuCreateImageFn, title: e.kind === "MenuItem" ? "Create a new form image entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Image", onClick: menuImage ? () => selectImageById(menuImage.id) : undefined, disabled: !menuImage, title: menuImageTitle }
-      ));
+      );
+      if (selectedEntryIndex === entryIndex) rowEl.classList.add("selected");
+      rowEl.onclick = (ev) => {
+        if (ev.target instanceof HTMLButtonElement) return;
+        setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
+      };
+      box.appendChild(rowEl);
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -3551,8 +3694,10 @@ function renderProps() {
     return;
   }
 
-  if (sel.kind === "toolbar") {
-    const t = (model.toolbars ?? []).find(x => x.id === sel.id);
+  if (sel.kind === "toolbar" || sel.kind === "toolBarEntry") {
+    const toolBarId = sel.kind === "toolbar" ? sel.id : sel.toolBarId;
+    const selectedEntryIndex = sel.kind === "toolBarEntry" ? sel.entryIndex : undefined;
+    const t = (model.toolbars ?? []).find(x => x.id === toolBarId);
     if (!t) {
       propsEl.innerHTML = "<div class='muted'>ToolBar not found</div>";
       return;
@@ -3569,7 +3714,7 @@ function renderProps() {
       propsEl.appendChild(mutedNote(EVENT_UI_HINT.toolBarIdRequired));
     }
     const box = miniList();
-    for (const e of t.entries ?? []) {
+    for (const [entryIndex, e] of (t.entries ?? []).entries()) {
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
@@ -3750,7 +3895,7 @@ function renderProps() {
           }
         : undefined;
 
-      box.appendChild(miniRow(
+      const rowEl = miniRow(
         line,
         editFn,
         delFn,
@@ -3760,7 +3905,13 @@ function renderProps() {
         { label: "Choose File", onClick: toolBarChooseFileImageFn, disabled: !toolBarChooseFileImageFn, title: e.kind === "ToolBarImageButton" ? "Select a file, create a new LoadImage entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Create New", onClick: toolBarCreateImageFn, disabled: !toolBarCreateImageFn, title: e.kind === "ToolBarImageButton" ? "Create a new form image entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Image", onClick: toolBarImage ? () => selectImageById(toolBarImage.id) : undefined, disabled: !toolBarImage, title: toolBarImageTitle }
-      ));
+      );
+      if (selectedEntryIndex === entryIndex) rowEl.classList.add("selected");
+      rowEl.onclick = (ev) => {
+        if (ev.target instanceof HTMLButtonElement) return;
+        setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
+      };
+      box.appendChild(rowEl);
     }
     propsEl.appendChild(section("Structure"));
     propsEl.appendChild(box);
@@ -3817,8 +3968,10 @@ function renderProps() {
     return;
   }
 
-  if (sel.kind === "statusbar") {
-    const sb = (model.statusbars ?? []).find(x => x.id === sel.id);
+  if (sel.kind === "statusbar" || sel.kind === "statusBarField") {
+    const statusBarId = sel.kind === "statusbar" ? sel.id : sel.statusBarId;
+    const selectedFieldIndex = sel.kind === "statusBarField" ? sel.fieldIndex : undefined;
+    const sb = (model.statusbars ?? []).find(x => x.id === statusBarId);
     if (!sb) {
       propsEl.innerHTML = "<div class='muted'>StatusBar not found</div>";
       return;
@@ -3913,7 +4066,7 @@ function renderProps() {
           }
         : undefined;
 
-      box.appendChild(miniRow(
+      const rowEl = miniRow(
         label,
         editFn,
         delFn,
@@ -3922,7 +4075,13 @@ function renderProps() {
         { label: "Choose File", onClick: statusChooseFileImageFn, disabled: !statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
         { label: "Create New", onClick: statusCreateImageFn, disabled: !statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
-      ));
+      );
+      if (selectedFieldIndex === idx) rowEl.classList.add("selected");
+      rowEl.onclick = (ev) => {
+        if (ev.target instanceof HTMLButtonElement) return;
+        setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: idx });
+      };
+      box.appendChild(rowEl);
     });
     propsEl.appendChild(section("Fields"));
     propsEl.appendChild(box);
@@ -3967,10 +4126,7 @@ function renderProps() {
         refsBox.appendChild(miniRow(usage.label, undefined, undefined, {
           label: "Go",
           onClick: () => {
-            selection = usage.select;
-            render();
-            renderListAndParentSelector();
-            renderProps();
+            setSelectionAndRefresh(usage.select);
           }
         }));
       }
