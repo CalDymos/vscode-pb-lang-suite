@@ -763,6 +763,35 @@ test("roundtrips statusbar width-only update without clearing image fields", () 
   assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
 });
 
+
+test("roundtrips statusbar field switch from progress to label and clears old progress decoration", () => {
+  const { text, statusBar } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
+
+  const args: StatusBarFieldArgs = {
+    widthRaw: statusBar.fields[1]!.widthRaw,
+    textRaw: '"Done"',
+    imageRaw: "",
+    flagsRaw: "#PB_StatusBar_Right",
+    progressBar: false,
+    progressRaw: "",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, args)
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.text, "Done");
+  assert.equal(Boolean(updatedStatusBar!.fields[1]?.progressBar), false);
+  assert.equal(updatedStatusBar!.fields[1]?.imageRaw ?? "", "");
+  assert.equal(updatedStatusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Right");
+  assert.doesNotMatch(patchedText, /StatusBarProgress\(#SbMain, 1,/);
+  assert.match(patchedText, /StatusBarText\(#SbMain, 1, "Done", #PB_StatusBar_Right\)/);
+});
+
 test("roundtrips statusbar field delete reindexes later decoration lines", () => {
   const { text, statusBar } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;

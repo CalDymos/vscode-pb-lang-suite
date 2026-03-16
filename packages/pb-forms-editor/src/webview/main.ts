@@ -449,7 +449,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
@@ -2759,6 +2759,27 @@ function promptStatusBarPreviewInsertArgs(): { widthRaw: string; textRaw?: strin
   }
 }
 
+function getStatusBarFieldDisplayKind(field: StatusbarField): string {
+  if (field.progressBar) return "Progress";
+  if ((field.imageRaw ?? "").trim().length) return "Image";
+  if ((field.textRaw ?? "").trim().length) return "Label";
+  return "Empty";
+}
+
+function getStatusBarFieldDisplaySummary(field: StatusbarField): string {
+  const kind = getStatusBarFieldDisplayKind(field);
+  switch (kind) {
+    case "Progress":
+      return `${kind} ${field.progressRaw ?? "0"}`;
+    case "Image":
+      return `${kind} ${field.imageId ?? field.imageRaw ?? ""}`.trim();
+    case "Label":
+      return `${kind} ${field.text ?? field.textRaw ?? ""}`.trim();
+    default:
+      return kind;
+  }
+}
+
 function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
   const entries = menu.entries ?? [];
   if (parentIndex < 0 || parentIndex >= entries.length) return [];
@@ -4138,80 +4159,31 @@ function renderProps() {
     label: string,
     onEdit?: () => void,
     onDelete?: () => void,
-    extra?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra2?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra3?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra4?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra5?: { label: string; onClick?: () => void; disabled?: boolean; title?: string },
-    extra6?: { label: string; onClick?: () => void; disabled?: boolean; title?: string }
+    ...extras: { label: string; onClick?: () => void; disabled?: boolean; title?: string }[]
   ) => {
     const r = document.createElement("div");
     r.className = "miniRow";
 
     const l = document.createElement("div");
     l.textContent = label;
-
-    const b1 = document.createElement("button");
-    b1.textContent = "Edit";
-    b1.disabled = !onEdit;
-    b1.onclick = () => onEdit?.();
-
-    const b2 = document.createElement("button");
-    b2.textContent = "Del";
-    b2.disabled = !onDelete;
-    b2.onclick = () => onDelete?.();
-
-    const b3 = document.createElement("button");
-    b3.textContent = extra?.label ?? "";
-    b3.disabled = extra ? Boolean(extra.disabled) || !extra.onClick : true;
-    b3.hidden = !extra;
-    b3.title = extra?.title ?? "";
-    b3.onclick = () => extra?.onClick?.();
-
-    const b4 = document.createElement("button");
-    b4.textContent = extra2?.label ?? "";
-    b4.disabled = extra2 ? Boolean(extra2.disabled) || !extra2.onClick : true;
-    b4.hidden = !extra2;
-    b4.title = extra2?.title ?? "";
-    b4.onclick = () => extra2?.onClick?.();
-
-    const b5 = document.createElement("button");
-    b5.textContent = extra3?.label ?? "";
-    b5.disabled = extra3 ? Boolean(extra3.disabled) || !extra3.onClick : true;
-    b5.hidden = !extra3;
-    b5.title = extra3?.title ?? "";
-    b5.onclick = () => extra3?.onClick?.();
-
-    const b6 = document.createElement("button");
-    b6.textContent = extra4?.label ?? "";
-    b6.disabled = extra4 ? Boolean(extra4.disabled) || !extra4.onClick : true;
-    b6.hidden = !extra4;
-    b6.title = extra4?.title ?? "";
-    b6.onclick = () => extra4?.onClick?.();
-
-    const b7 = document.createElement("button");
-    b7.textContent = extra5?.label ?? "";
-    b7.disabled = extra5 ? Boolean(extra5.disabled) || !extra5.onClick : true;
-    b7.hidden = !extra5;
-    b7.title = extra5?.title ?? "";
-    b7.onclick = () => extra5?.onClick?.();
-
-    const b8 = document.createElement("button");
-    b8.textContent = extra6?.label ?? "";
-    b8.disabled = extra6 ? Boolean(extra6.disabled) || !extra6.onClick : true;
-    b8.hidden = !extra6;
-    b8.title = extra6?.title ?? "";
-    b8.onclick = () => extra6?.onClick?.();
-
     r.appendChild(l);
-    r.appendChild(b1);
-    r.appendChild(b2);
-    r.appendChild(b3);
-    r.appendChild(b4);
-    r.appendChild(b5);
-    r.appendChild(b6);
-    r.appendChild(b7);
-    r.appendChild(b8);
+
+    const actions: ({ label: string; onClick?: () => void; disabled?: boolean; title?: string } | undefined)[] = [
+      { label: "Edit", onClick: onEdit, disabled: !onEdit },
+      { label: "Del", onClick: onDelete, disabled: !onDelete },
+      ...extras,
+    ];
+
+    for (const action of actions) {
+      const button = document.createElement("button");
+      button.textContent = action?.label ?? "";
+      button.disabled = !action || Boolean(action.disabled) || !action.onClick;
+      button.hidden = !action;
+      button.title = action?.title ?? "";
+      button.onclick = () => action?.onClick?.();
+      r.appendChild(button);
+    }
+
     return r;
   };
 
@@ -4971,17 +4943,20 @@ function renderProps() {
     const box = miniList();
     (sb.fields ?? []).forEach((f, idx) => {
       const canPatch = typeof f.source?.line === "number";
-      const label = `Field ${idx}  width:${f.widthRaw}`;
+      const label = `Field ${idx}  ${getStatusBarFieldDisplaySummary(f)}  width:${f.widthRaw}`;
 
       const editFn = canPatch
         ? () => {
             const width = prompt("Width raw", f.widthRaw ?? "0");
             if (width === null) return;
+            const flags = prompt("Flags raw (blank clears)", f.flagsRaw ?? "");
+            if (flags === null) return;
             vscode.postMessage({
               type: "updateStatusBarField",
               statusBarId: sb.id,
               sourceLine: f.source!.line,
-              widthRaw: width.trim()
+              widthRaw: width.trim(),
+              flagsRaw: flags.trim()
             });
           }
         : undefined;
@@ -5002,12 +4977,18 @@ function renderProps() {
         ? () => {
             const imageRaw = prompt("Image raw (blank clears)", f.imageRaw ?? "");
             if (imageRaw === null) return;
+            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            if (flags === null) return;
             post({
               type: "updateStatusBarField",
               statusBarId: sb.id,
               sourceLine: f.source!.line,
               widthRaw: f.widthRaw,
-              imageRaw: imageRaw.trim() || undefined
+              textRaw: "",
+              imageRaw: imageRaw.trim(),
+              flagsRaw: flags.trim(),
+              progressBar: false,
+              progressRaw: ""
             });
           }
         : undefined;
@@ -5020,7 +5001,65 @@ function renderProps() {
               statusBarId: sb.id,
               sourceLine: f.source!.line,
               widthRaw: f.widthRaw,
-              imageRaw: selected.imageRaw
+              textRaw: "",
+              imageRaw: selected.imageRaw,
+              flagsRaw: f.flagsRaw ?? "",
+              progressBar: false,
+              progressRaw: ""
+            });
+          }
+        : undefined;
+      const statusTextFn = canPatch
+        ? () => {
+            const textRaw = prompt("Text raw (blank clears)", f.textRaw ?? toPbString(f.text ?? "Label"));
+            if (textRaw === null) return;
+            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            if (flags === null) return;
+            post({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              textRaw: textRaw.trim(),
+              imageRaw: "",
+              flagsRaw: flags.trim(),
+              progressBar: false,
+              progressRaw: ""
+            });
+          }
+        : undefined;
+      const statusProgressFn = canPatch
+        ? () => {
+            const progressRaw = prompt("Progress raw", f.progressRaw ?? "0");
+            if (progressRaw === null) return;
+            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            if (flags === null) return;
+            post({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              textRaw: "",
+              imageRaw: "",
+              flagsRaw: flags.trim(),
+              progressBar: true,
+              progressRaw: progressRaw.trim() || "0"
+            });
+          }
+        : undefined;
+      const statusClearFn = canPatch
+        ? () => {
+            if (!confirm("Clear this statusbar field decoration?")) return;
+            post({
+              type: "updateStatusBarField",
+              statusBarId: sb.id,
+              sourceLine: f.source!.line,
+              widthRaw: f.widthRaw,
+              textRaw: "",
+              imageRaw: "",
+              flagsRaw: "",
+              progressBar: false,
+              progressRaw: ""
             });
           }
         : undefined;
@@ -5059,8 +5098,11 @@ function renderProps() {
         label,
         editFn,
         delFn,
-        { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Patch the raw StatusBarImage argument while preserving the field width." },
-        { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list." },
+        { label: "Label", onClick: statusTextFn, disabled: !statusTextFn, title: "Switch this field to a StatusBarText decoration." },
+        { label: "Progress", onClick: statusProgressFn, disabled: !statusProgressFn, title: "Switch this field to a StatusBarProgress decoration." },
+        { label: "Clear", onClick: statusClearFn, disabled: !statusClearFn, title: "Remove text/image/progress decoration from this field." },
+        { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Switch this field to a StatusBarImage decoration while preserving the field width." },
+        { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list and assign it to this field." },
         { label: "Choose File", onClick: statusChooseFileImageFn, disabled: !statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
         { label: "Create New", onClick: statusCreateImageFn, disabled: !statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
         { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
