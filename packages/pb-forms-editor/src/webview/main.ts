@@ -2359,10 +2359,9 @@ function getMenuFlyoutPanelRect(
   anchorRect: PreviewRect
 ): PreviewRect | null {
   const childIndices = getDirectMenuChildIndices(menu, parentIndex);
-  if (!childIndices.length) return null;
 
   let innerWidth = 0;
-  let height = 0;
+  let height = 20;
   for (const childIndex of childIndices) {
     const entry = menu.entries[childIndex];
     if (entry.kind === "MenuBar") {
@@ -2398,7 +2397,7 @@ function drawMenuFlyoutPanelPreview(
   itemHover: string
 ): void {
   const childIndices = getDirectMenuChildIndices(menu, parentIndex);
-  if (!childIndices.length || panelRect.w <= 0 || panelRect.h <= 0) return;
+  if (panelRect.w <= 0 || panelRect.h <= 0) return;
 
   const bg = getCssVar("--vscode-menu-background")
     || getCssVar("--vscode-sideBar-background")
@@ -2476,6 +2475,12 @@ function drawMenuFlyoutPanelPreview(
 
     posY += 20;
   }
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = fg;
+  ctx.fillText("Add Item...", panelRect.x + 5, posY + 14);
+  ctx.restore();
 }
 
 function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
