@@ -224,7 +224,8 @@ export function parseFormDocument(text: string): FormDocument {
         if (!curMenu) break;
         const p = splitParams(c.args);
         const textRaw = p[0]?.trim();
-        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuTitle, level: menuLevel, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        addMenuEntry({ kind: MENU_ENTRY_KIND.MenuTitle, level: 0, textRaw, text: unquoteString(textRaw ?? ""), source: c.range });
+        menuLevel = 1;
         break;
       }
 

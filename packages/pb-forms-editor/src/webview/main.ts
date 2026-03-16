@@ -2300,6 +2300,184 @@ function getMenuPreviewLabel(entry: MenuEntry): string {
   return (entry.text ?? unquotePbString(entry.textRaw) ?? entry.idRaw ?? entry.kind).trim();
 }
 
+function getMenuEntryLevel(entry: MenuEntry | undefined): number {
+  return Math.max(0, entry?.level ?? 0);
+}
+
+function getMenuEntryRect(menuId: string, entryIndex: number): PreviewEntryRect | undefined {
+  return menuEntryPreviewRects.find(entry => entry.ownerId === menuId && entry.index === entryIndex);
+}
+
+function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
+  const entries = menu.entries ?? [];
+  if (parentIndex < 0 || parentIndex >= entries.length) return [];
+
+  const childLevel = getMenuEntryLevel(entries[parentIndex]) + 1;
+  const result: number[] = [];
+  for (let i = parentIndex + 1; i < entries.length; i++) {
+    const entry = entries[i];
+    const level = getMenuEntryLevel(entry);
+    if (level < childLevel) break;
+    if (level !== childLevel) continue;
+    if (entry.kind === "CloseSubMenu") continue;
+    result.push(i);
+  }
+  return result;
+}
+
+function getMenuAncestorChain(menu: MenuModel, entryIndex: number): number[] {
+  const entries = menu.entries ?? [];
+  if (entryIndex < 0 || entryIndex >= entries.length) return [];
+
+  const chain = [entryIndex];
+  let searchIndex = entryIndex - 1;
+  let level = getMenuEntryLevel(entries[entryIndex]);
+
+  while (searchIndex >= 0 && level > 0) {
+    let foundIndex = -1;
+    for (let i = searchIndex; i >= 0; i--) {
+      const candidateLevel = getMenuEntryLevel(entries[i]);
+      if (candidateLevel < level) {
+        foundIndex = i;
+        break;
+      }
+    }
+    if (foundIndex < 0) break;
+    chain.push(foundIndex);
+    level = getMenuEntryLevel(entries[foundIndex]);
+    searchIndex = foundIndex - 1;
+  }
+
+  chain.reverse();
+  return chain;
+}
+
+function getMenuFlyoutPanelRect(
+  ctx: CanvasRenderingContext2D,
+  menu: MenuModel,
+  parentIndex: number,
+  anchorRect: PreviewRect
+): PreviewRect | null {
+  const childIndices = getDirectMenuChildIndices(menu, parentIndex);
+  if (!childIndices.length) return null;
+
+  let innerWidth = 0;
+  let height = 0;
+  for (const childIndex of childIndices) {
+    const entry = menu.entries[childIndex];
+    if (entry.kind === "MenuBar") {
+      height += 12;
+      continue;
+    }
+
+    let textWidth = Math.ceil(ctx.measureText(getMenuPreviewLabel(entry)).width);
+    if (entry.shortcut) {
+      textWidth += Math.ceil(ctx.measureText(entry.shortcut).width);
+    }
+    textWidth += 24;
+    innerWidth = Math.max(innerWidth, textWidth);
+    height += 20;
+  }
+
+  const width = Math.max(100, innerWidth + 40);
+  return {
+    x: anchorRect.x,
+    y: anchorRect.y,
+    w: width,
+    h: Math.max(0, height)
+  };
+}
+
+function drawMenuFlyoutPanelPreview(
+  ctx: CanvasRenderingContext2D,
+  menu: MenuModel,
+  parentIndex: number,
+  panelRect: PreviewRect,
+  fg: string,
+  border: string,
+  itemHover: string
+): void {
+  const childIndices = getDirectMenuChildIndices(menu, parentIndex);
+  if (!childIndices.length || panelRect.w <= 0 || panelRect.h <= 0) return;
+
+  const bg = getCssVar("--vscode-menu-background")
+    || getCssVar("--vscode-sideBar-background")
+    || getCssVar("--vscode-editor-background")
+    || "rgba(255,255,255,0.96)";
+
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.globalAlpha = 0.96;
+  ctx.fillRect(panelRect.x, panelRect.y, panelRect.w, panelRect.h);
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = border;
+  ctx.strokeRect(panelRect.x + 0.5, panelRect.y + 0.5, panelRect.w - 1, panelRect.h - 1);
+  ctx.restore();
+
+  let posY = panelRect.y;
+  for (const childIndex of childIndices) {
+    const entry = menu.entries[childIndex];
+    if (entry.kind === "MenuBar") {
+      menuEntryPreviewRects.push({ ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 12 });
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = border;
+      ctx.beginPath();
+      ctx.moveTo(panelRect.x + 0.5, posY + 6.5);
+      ctx.lineTo(panelRect.x + panelRect.w - 0.5, posY + 6.5);
+      ctx.stroke();
+      ctx.restore();
+      posY += 12;
+      continue;
+    }
+
+    const entryRect: PreviewEntryRect = { ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
+    menuEntryPreviewRects.push(entryRect);
+
+    ctx.save();
+    ctx.fillStyle = itemHover;
+    ctx.globalAlpha = 0.08;
+    ctx.fillRect(entryRect.x + 1, entryRect.y + 1, Math.max(0, entryRect.w - 2), Math.max(0, entryRect.h - 2));
+    ctx.restore();
+
+    if (entry.iconId || entry.iconRaw) {
+      ctx.save();
+      ctx.fillStyle = fg;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(entryRect.x + 6, entryRect.y + 5, 10, 10);
+      ctx.restore();
+    }
+
+    const label = getMenuPreviewLabel(entry);
+    ctx.fillStyle = fg;
+    ctx.fillText(label, entryRect.x + 24, entryRect.y + 14);
+
+    if (entry.shortcut) {
+      const shortcutWidth = Math.ceil(ctx.measureText(entry.shortcut).width);
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.fillStyle = fg;
+      ctx.fillText(entry.shortcut, entryRect.x + entryRect.w - 10 - shortcutWidth, entryRect.y + 14);
+      ctx.restore();
+    }
+
+    if (getDirectMenuChildIndices(menu, childIndex).length) {
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(entryRect.x + entryRect.w - 16, entryRect.y + 6);
+      ctx.lineTo(entryRect.x + entryRect.w - 10, entryRect.y + 10);
+      ctx.lineTo(entryRect.x + entryRect.w - 16, entryRect.y + 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    posY += 20;
+  }
+}
+
 function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const menu = getPrimaryMenu();
   menuEntryPreviewRects = [];
@@ -2321,7 +2499,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   let x = rect.x + 7;
   const baseline = rect.y + Math.min(rect.h - 6, 15);
   for (const [entryIndex, entry] of menu.entries.entries()) {
-    if ((entry.level ?? 0) !== 0) continue;
+    if (getMenuEntryLevel(entry) !== 0) continue;
     if (entry.kind === "MenuBar") {
       ctx.save();
       ctx.globalAlpha = 0.35;
@@ -2350,6 +2528,28 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     ctx.fillText(label, x + 7, baseline);
     x += itemW + 3;
     if (x >= rect.x + rect.w - 20) break;
+  }
+
+  if (!selection || selection.kind !== "menuEntry" || selection.menuId !== menu.id) {
+    return;
+  }
+
+  const chain = getMenuAncestorChain(menu, selection.entryIndex);
+  if (!chain.length) return;
+
+  let previousPanelRect: PreviewRect | null = null;
+  for (const parentIndex of chain) {
+    const parentRect = getMenuEntryRect(menu.id, parentIndex);
+    if (!parentRect) continue;
+
+    const anchorRect: PreviewRect = previousPanelRect
+      ? { x: previousPanelRect.x + previousPanelRect.w, y: parentRect.y, w: 0, h: 0 }
+      : { x: parentRect.x, y: rect.y + rect.h - 2, w: 0, h: 0 };
+
+    const panelRect = getMenuFlyoutPanelRect(ctx, menu, parentIndex, anchorRect);
+    if (!panelRect) continue;
+    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, itemHover);
+    previousPanelRect = panelRect;
   }
 }
 

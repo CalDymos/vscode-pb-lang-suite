@@ -58,16 +58,26 @@ test("parses fixtures/smoke/08-menu-basic.pbf", () => {
   assert.equal(menu?.id, "#MenuMain");
   assert.equal(menu?.entries.length, 6);
 
+  const fileTitle = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuTitle);
+  assert.ok(fileTitle, "Expected a root menu title.");
+  assert.equal(fileTitle?.level, 0);
+  assert.equal(fileTitle?.text, "File");
+
   const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
   assert.ok(openItem, "Expected a menu item with icon and shortcut.");
+  assert.equal(openItem?.level, 1);
   assert.equal(openItem?.text, "Open");
   assert.equal(openItem?.shortcut, "Ctrl+O");
   assert.equal(openItem?.iconRaw, "ImageID(#ImgOpen)");
   assert.equal(openItem?.iconId, "#ImgOpen");
 
+  const recentSubmenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  assert.ok(recentSubmenu, "Expected an opened submenu entry.");
+  assert.equal(recentSubmenu?.level, 1);
+
   const recentItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuRecent1");
   assert.ok(recentItem, "Expected submenu item.");
-  assert.equal(recentItem?.level, 1);
+  assert.equal(recentItem?.level, 2);
   assert.equal(recentItem?.text, "Last file");
 });
 
