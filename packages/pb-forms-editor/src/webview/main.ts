@@ -4728,6 +4728,94 @@ function renderProps() {
     if (hasEntriesWithoutEventIds) {
       propsEl.appendChild(mutedNote(EVENT_UI_HINT.toolBarIdRequired));
     }
+
+    const selectedEntry = sel.kind === "toolBarEntry" && typeof selectedEntryIndex === "number"
+      ? t.entries?.[selectedEntryIndex]
+      : undefined;
+    if (selectedEntry) {
+      const selectedCanPatch = typeof selectedEntry.source?.line === "number";
+      const selectedImage = findImageEntryById(selectedEntry.iconId);
+      const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
+      const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
+      const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
+
+      propsEl.appendChild(section("Selected Entry"));
+      propsEl.appendChild(row("Variable", readonlyInput(selectedEntry.idRaw ?? "")));
+      propsEl.appendChild(row(
+        "Caption",
+        textInput(
+          selectedEntry.tooltip ?? "",
+          v => {
+            if (!selectedEntry.idRaw || typeof selectedEntry.source?.line !== "number") return;
+            post({
+              type: "setToolBarEntryTooltip",
+              toolBarId: t.id,
+              sourceLine: selectedEntry.source.line,
+              entryIdRaw: selectedEntry.idRaw,
+              textRaw: v.trim().length ? toPbString(v) : ""
+            });
+          },
+          {
+            disabled: !canEditSelectedTooltip,
+            title: canEditToolBarTooltip(selectedEntry)
+              ? "Patch the tooltip linked to this toolbar entry."
+              : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field."
+          }
+        )
+      ));
+      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")));
+      propsEl.appendChild(row(
+        "ToggleButton",
+        checkboxInput(
+          Boolean(selectedEntry.toggle),
+          v => {
+            if (selectedEntry.kind !== "ToolBarImageButton" || typeof selectedEntry.source?.line !== "number") return;
+            post({
+              type: "updateToolBarEntry",
+              toolBarId: t.id,
+              sourceLine: selectedEntry.source.line,
+              kind: selectedEntry.kind,
+              idRaw: selectedEntry.idRaw,
+              iconRaw: selectedEntry.iconRaw,
+              toggle: v,
+            });
+          },
+          {
+            disabled: !canEditSelectedToggle,
+            title: selectedEntry.kind === "ToolBarImageButton"
+              ? "Toggle the #PB_ToolBar_Toggle flag for this toolbar image button."
+              : "Only ToolBarImageButton supports the toggle flag."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Separator",
+        checkboxInput(
+          selectedEntry.kind === "ToolBarSeparator",
+          () => {},
+          { disabled: true, title: "Toolbar separators are structural entries in the original designer." }
+        )
+      ));
+      propsEl.appendChild(row(
+        "SelectProc",
+        textInput(
+          selectedEntry.event ?? "",
+          v => {
+            if (!selectedEntry.idRaw) return;
+            post({
+              type: "setToolBarEntryEvent",
+              entryIdRaw: selectedEntry.idRaw,
+              eventProc: v.trim().length ? v.trim() : undefined
+            });
+          },
+          {
+            disabled: !canEditSelectedEvent,
+            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "toolbar")
+          }
+        )
+      ));
+    }
+
     const box = miniList();
     for (const [entryIndex, e] of (t.entries ?? []).entries()) {
       if (!shouldShowToolBarStructureEntry(t, entryIndex)) continue;
