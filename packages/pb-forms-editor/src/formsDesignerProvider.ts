@@ -29,6 +29,7 @@ import {
   applyToolBarEntryDelete,
   applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
+  applyToolBarEntryTooltipSet,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
   applyWindowEventProcUpdate,
@@ -92,6 +93,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteToolBarEntry: "deleteToolBarEntry",
   deleteToolBar: "deleteToolBar",
   setToolBarEntryEvent: "setToolBarEntryEvent",
+  setToolBarEntryTooltip: "setToolBarEntryTooltip",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
@@ -146,6 +148,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
@@ -457,6 +460,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent: {
           const edit = applyToolBarEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
           await applyEditOrError(edit, `Could not patch event proc for toolbar entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip: {
+          const edit = applyToolBarEntryTooltipSet(document, msg.toolBarId, msg.sourceLine, msg.entryIdRaw, msg.textRaw, sr);
+          await applyEditOrError(edit, `Could not patch toolbar tooltip for entry '${msg.entryIdRaw}'. No matching toolbar entry found${rangeInfo}.`);
           return;
         }
 

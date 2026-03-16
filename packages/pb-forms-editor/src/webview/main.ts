@@ -279,9 +279,22 @@ type MenuModel = {
   entries: MenuEntry[];
 };
 
+type ToolBarEntry = {
+  kind: string;
+  idRaw?: string;
+  iconRaw?: string;
+  iconId?: string;
+  textRaw?: string;
+  text?: string;
+  tooltip?: string;
+  toggle?: boolean;
+  event?: string;
+  source?: SourceRange;
+};
+
 type ToolbarModel = {
   id: string;
-  entries: MenuEntry[];
+  entries: ToolBarEntry[];
 };
 
 type StatusbarField = {
@@ -387,6 +400,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteToolBarEntry: "deleteToolBarEntry",
   deleteToolBar: "deleteToolBar",
   setToolBarEntryEvent: "setToolBarEntryEvent",
+  setToolBarEntryTooltip: "setToolBarEntryTooltip",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
@@ -448,6 +462,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
@@ -2712,6 +2727,22 @@ function getDefaultToolBarInsertId(toolBar: ToolbarModel): string {
   return `#Toolbar_${logicalCount}`;
 }
 
+function canEditToolBarTooltip(entry: ToolBarEntry): boolean {
+  return entry.kind !== "ToolBarSeparator"
+    && entry.kind !== "ToolBarToolTip"
+    && typeof entry.idRaw === "string"
+    && entry.idRaw.trim().length > 0;
+}
+
+function promptToolBarTooltipRaw(entry: ToolBarEntry): string | undefined | null {
+  const currentValue = entry.tooltip ?? entry.text ?? "";
+  const nextValue = prompt("Tooltip (blank clears)", currentValue);
+  if (nextValue === null) return null;
+
+  const trimmed = nextValue.trim();
+  return trimmed.length ? toPbString(nextValue) : undefined;
+}
+
 function promptToolBarPreviewInsertArgs(toolBar: ToolbarModel): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } | undefined {
   const choice = prompt("Toolbar add action (AddButton/AddToggle/AddSeparator)", "AddButton");
   if (choice === null) return undefined;
@@ -4489,7 +4520,7 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock
+      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
         ? () => {
             const cur = e.event ?? "";
             const value = prompt("Event proc (blank clears)", cur);
@@ -4670,8 +4701,9 @@ function renderProps() {
       const text = e.text ?? e.textRaw ?? "";
       const idPart = e.idRaw ? ` ${e.idRaw}` : "";
       const extra = e.iconRaw ? `  ${e.iconRaw}` : "";
+      const tooltipPart = e.kind !== "ToolBarToolTip" && e.tooltip ? `  tooltip:${e.tooltip}` : "";
       const eventPart = e.event ? `  -> ${e.event}` : "";
-      const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}${eventPart}`;
+      const line = `${e.kind}${idPart}${text ? `  ${text}` : ""}${extra}${tooltipPart}${eventPart}`;
 
       const canPatch = typeof e.source?.line === "number";
       const editFn = canPatch
@@ -4763,7 +4795,7 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock
+      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
         ? () => {
             const cur = e.event ?? "";
             const value = prompt("Event proc (blank clears)", cur);
@@ -4776,6 +4808,19 @@ function renderProps() {
               eventProc: trimmed.length ? trimmed : undefined
             });
             renderProps();
+          }
+        : undefined;
+      const toolBarTooltipFn = canPatch && canEditToolBarTooltip(e)
+        ? () => {
+            const nextTextRaw = promptToolBarTooltipRaw(e);
+            if (nextTextRaw === null || !e.idRaw) return;
+            post({
+              type: "setToolBarEntryTooltip",
+              toolBarId: t.id,
+              sourceLine: e.source!.line,
+              entryIdRaw: e.idRaw,
+              textRaw: nextTextRaw,
+            });
           }
         : undefined;
       const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
@@ -4852,6 +4897,7 @@ function renderProps() {
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
+        { label: "Tooltip", onClick: toolBarTooltipFn, disabled: !toolBarTooltipFn, title: canEditToolBarTooltip(e) ? "Patch the tooltip linked to this toolbar entry." : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field." },
         { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Choose File", onClick: toolBarChooseFileImageFn, disabled: !toolBarChooseFileImageFn, title: e.kind === "ToolBarImageButton" ? "Select a file, create a new LoadImage entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },

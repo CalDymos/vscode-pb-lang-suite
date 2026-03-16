@@ -2800,6 +2800,57 @@ export function applyToolBarEntryDelete(
   );
 }
 
+export function applyToolBarEntryTooltipSet(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  sourceLine: number,
+  entryIdRaw: string,
+  textRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+
+  const normalizedEntryId = entryIdRaw.trim();
+  if (!normalizedEntryId.length) return undefined;
+
+  const tipCall = calls.find(call => {
+    if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
+    if (!isLineInCreateSection(calls, call.range.line, "createtoolbar", toolBarId)) return false;
+    const parts = splitParams(call.args);
+    const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
+    return buttonIdRaw === normalizedEntryId;
+  });
+
+  const normalizedText = textRaw?.trim();
+  if (!normalizedText?.length) {
+    if (!tipCall) return undefined;
+    const edit = new vscode.WorkspaceEdit();
+    edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    return edit;
+  }
+
+  const rebuiltLine = buildToolBarEntryLine({
+    kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+    idRaw: normalizedEntryId,
+    textRaw: normalizedText,
+  }, toolBarId);
+
+  if (tipCall) {
+    const indent = getLineIndent(document, tipCall.range.line);
+    return replaceCallLinePreserveSuffix(document, tipCall, `${indent}${rebuiltLine}`);
+  }
+
+  const indent = getLineIndent(document, sourceLine);
+  const insertPos = new vscode.Position(Math.min(document.lineCount, sourceLine + 1), 0);
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, `${indent}${rebuiltLine}
+`);
+  return edit;
+}
+
 export function applyMenuDelete(
   document: vscode.TextDocument,
   menuId: string,

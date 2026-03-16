@@ -21,6 +21,7 @@ import {
   applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
+  applyToolBarEntryTooltipSet,
   applyToolBarEntryUpdate,
   type GadgetPropertyArgs,
   type ImageArgs,
@@ -57,6 +58,7 @@ function patchAndReparse(
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryTooltipSet>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
     | ReturnType<typeof applyStatusBarDelete>
@@ -90,6 +92,7 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryTooltipSet>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
     | ReturnType<typeof applyStatusBarDelete>
@@ -109,6 +112,7 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
+    | ReturnType<typeof applyToolBarEntryTooltipSet>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
     | ReturnType<typeof applyStatusBarDelete>
@@ -600,6 +604,77 @@ test("roundtrips toolbar tooltip update", () => {
   assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbRefresh, "Refresh all data"\)/);
 });
 
+
+test("roundtrips toolbar tooltip set via toolbar entry source line", () => {
+  const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
+  const parsedFixture = parseFormDocument(text);
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+
+  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", '"Save active form"')
+  );
+
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const updatedTip = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
+  assert.ok(updatedButton, "Expected updated toolbar image button.");
+  assert.equal(updatedButton?.tooltip, "Save active form");
+  assert.ok(updatedTip, "Expected linked toolbar tooltip entry.");
+  assert.equal(updatedTip?.text, "Save active form");
+  assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbSave, "Save active form"\)/);
+});
+
+test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
+  const text = [
+    'Procedure OpenFrmMain()',
+    '  OpenWindow(#FrmMain, 0, 0, 320, 220, "Toolbar")',
+    '  CreateToolBar(#TbMain, WindowID(#FrmMain))',
+    '  ToolBarImageButton(#TbSave, ImageID(#ImgSave))',
+    '  ToolBarSeparator()',
+    'EndProcedure',
+    ''
+  ].join("\n");
+
+  const parsedFixture = parseFormDocument(text);
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(toolBar, "Expected #TbMain toolbar.");
+  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for toolbar button.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", '"Save current form"')
+  );
+
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(updatedToolBar, "Expected updated toolbar.");
+  assert.equal(updatedToolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.tooltip, "Save current form");
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)[\s\S]*ToolBarToolTip\(#TbMain, #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
+});
+
+test("roundtrips toolbar tooltip clear removes linked tooltip line", () => {
+  const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
+  const parsedFixture = parseFormDocument(text);
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+
+  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", undefined)
+  );
+
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.ok(updatedButton, "Expected updated toolbar image button.");
+  assert.equal(updatedButton?.tooltip, undefined);
+  assert.equal(updatedToolBar?.entries.some((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip), false);
+  assert.doesNotMatch(patchedText, /ToolBarToolTip\(#TbMain, #TbSave,/);
+});
 
 test("roundtrips toolbar image button update", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
