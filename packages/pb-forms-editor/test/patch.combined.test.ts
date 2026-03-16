@@ -8,14 +8,17 @@ import {
   applyImageDelete,
   applyImageInsert,
   applyImageUpdate,
+  applyMenuDelete,
   applyMenuEntryDelete,
   applyMenuEntryInsert,
   applyMenuEntryMove,
   applyMenuEntryUpdate,
   applyRectPatch,
+  applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
+  applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryInsert,
   applyToolBarEntryUpdate,
@@ -50,10 +53,14 @@ function patchAndReparse(
     | ReturnType<typeof applyMenuEntryInsert>
     | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuDelete>
     | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarDelete>
+    | ReturnType<typeof applyStatusBarDelete>
     | ReturnType<typeof applyStatusBarFieldInsert>
     | ReturnType<typeof applyStatusBarFieldUpdate>
     | ReturnType<typeof applyStatusBarFieldDelete>
@@ -79,10 +86,13 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyMenuEntryInsert>
     | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuDelete>
     | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarDelete>
     | ReturnType<typeof applyStatusBarFieldInsert>
     | ReturnType<typeof applyStatusBarFieldUpdate>
     | ReturnType<typeof applyStatusBarFieldDelete>,
@@ -95,10 +105,13 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyMenuEntryInsert>
     | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
+    | ReturnType<typeof applyMenuDelete>
     | ReturnType<typeof applyMenuEntryDelete>
+    | ReturnType<typeof applyToolBarDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarDelete>
     | ReturnType<typeof applyStatusBarFieldInsert>
     | ReturnType<typeof applyStatusBarFieldUpdate>
     | ReturnType<typeof applyStatusBarFieldDelete>
@@ -169,6 +182,7 @@ function patchThriceAndReparse(
     | ReturnType<typeof applyToolBarEntryInsert>
     | ReturnType<typeof applyToolBarEntryUpdate>
     | ReturnType<typeof applyToolBarEntryDelete>
+    | ReturnType<typeof applyStatusBarDelete>
     | ReturnType<typeof applyStatusBarFieldInsert>
     | ReturnType<typeof applyStatusBarFieldUpdate>
     | ReturnType<typeof applyStatusBarFieldDelete>
@@ -1248,4 +1262,43 @@ test("roundtrips image pbAny toggle updates button image gadget references", () 
   assert.equal(gadget?.imageId, "ImgRelative");
   assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
   assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 96, 28, ImageID\(ImgRelative\), #PB_Button_Default\)/);
+});
+
+
+test("deletes full menu section", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuDelete(document, "#MenuMain")
+  );
+
+  assert.equal(parsed.menus.length, 0);
+  assert.doesNotMatch(patchedText, /CreateMenu\(#MenuMain,/);
+  assert.doesNotMatch(patchedText, /MenuTitle\(/);
+  assert.doesNotMatch(patchedText, /OpenSubMenu\(/);
+});
+
+test("deletes full toolbar section", () => {
+  const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyToolBarDelete(document, "#TbMain")
+  );
+
+  assert.equal(parsed.toolbars.length, 0);
+  assert.doesNotMatch(patchedText, /CreateToolBar\(#TbMain,/);
+  assert.doesNotMatch(patchedText, /ToolBar(ImageButton|Separator|ToolTip|Button|StandardButton)\(/);
+});
+
+test("deletes full statusbar section", () => {
+  const text = loadFixture("fixtures/smoke/10-statusbar-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyStatusBarDelete(document, "#SbMain")
+  );
+
+  assert.equal(parsed.statusbars.length, 0);
+  assert.doesNotMatch(patchedText, /CreateStatusBar\(#SbMain,/);
+  assert.doesNotMatch(patchedText, /AddStatusBarField\(/);
+  assert.doesNotMatch(patchedText, /StatusBar(Text|Image|Progress)\(/);
 });

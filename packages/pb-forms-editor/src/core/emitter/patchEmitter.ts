@@ -2454,6 +2454,32 @@ function applySectionEntryDelete(
   return edit;
 }
 
+function applySectionDelete(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string
+): vscode.WorkspaceEdit | undefined {
+  const create = findCreateCallById(calls, createNameLower, sectionId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const endLine = endIdx > startIdx + 1
+    ? calls[endIdx - 1].range.line
+    : create.range.line;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(create.range.line, 0),
+      document.lineAt(endLine).rangeIncludingLineBreak.end
+    )
+  );
+  return edit;
+}
+
 function mapStatusBarArgsToField(args: StatusBarFieldArgs): FormStatusBarField {
   return {
     widthRaw: args.widthRaw,
@@ -2772,6 +2798,33 @@ export function applyToolBarEntryDelete(
     sourceLine,
     kind.toLowerCase()
   );
+}
+
+export function applyMenuDelete(
+  document: vscode.TextDocument,
+  menuId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, "createmenu", menuId);
+}
+
+export function applyToolBarDelete(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, "createtoolbar", toolBarId);
+}
+
+export function applyStatusBarDelete(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, "createstatusbar", statusBarId);
 }
 
 export function applyStatusBarFieldInsert(

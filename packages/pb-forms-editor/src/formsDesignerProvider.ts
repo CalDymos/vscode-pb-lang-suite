@@ -13,6 +13,7 @@ import {
   applyGadgetItemDelete,
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
+  applyMenuDelete,
   applyMenuEntryDelete,
   applyMenuEntryEventUpdate,
   applyMenuEntryInsert,
@@ -20,9 +21,11 @@ import {
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
+  applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
+  applyToolBarDelete,
   applyToolBarEntryDelete,
   applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
@@ -81,16 +84,19 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
+  deleteMenu: "deleteMenu",
   setMenuEntryEvent: "setMenuEntryEvent",
 
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
+  deleteToolBar: "deleteToolBar",
   setToolBarEntryEvent: "setToolBarEntryEvent",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
   deleteStatusBarField: "deleteStatusBarField",
+  deleteStatusBar: "deleteStatusBar",
 
   insertImage: "insertImage",
   updateImage: "updateImage",
@@ -133,14 +139,17 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
@@ -601,6 +610,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar: {
+          const edit = applyToolBarDelete(document, msg.toolBarId, sr);
+          await applyEditOrError(edit, `Could not delete toolbar '${msg.toolBarId}'. No matching CreateToolBar section found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField: {
           const edit = applyStatusBarFieldInsert(document, msg.statusBarId, {
             widthRaw: msg.widthRaw,
@@ -628,6 +643,15 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           await applyEditOrError(
             edit,
             `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar: {
+          const edit = applyStatusBarDelete(document, msg.statusBarId, sr);
+          await applyEditOrError(
+            edit,
+            `Could not delete statusbar '${msg.statusBarId}'. No matching CreateStatusBar section found${rangeInfo}.`
           );
           return;
         }

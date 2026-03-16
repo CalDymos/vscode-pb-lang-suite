@@ -379,16 +379,19 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
+  deleteMenu: "deleteMenu",
   setMenuEntryEvent: "setMenuEntryEvent",
 
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
+  deleteToolBar: "deleteToolBar",
   setToolBarEntryEvent: "setToolBarEntryEvent",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
   deleteStatusBarField: "deleteStatusBarField",
+  deleteStatusBar: "deleteStatusBar",
 
   insertImage: "insertImage",
   updateImage: "updateImage",
@@ -438,14 +441,17 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
@@ -4655,6 +4661,15 @@ function renderProps() {
     const actions = document.createElement("div");
     actions.className = "miniActions";
     actions.appendChild(addBtn);
+    if (sel.kind === "menu") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete Menu";
+      deleteBtn.onclick = () => {
+        if (!confirm(`Delete menu '${m.id}'?`)) return;
+        post({ type: "deleteMenu", menuId: m.id });
+      };
+      actions.appendChild(deleteBtn);
+    }
     propsEl.appendChild(actions);
     return;
   }
@@ -4929,6 +4944,15 @@ function renderProps() {
     const actions = document.createElement("div");
     actions.className = "miniActions";
     actions.appendChild(addBtn);
+    if (sel.kind === "toolbar") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete Toolbar";
+      deleteBtn.onclick = () => {
+        if (!confirm(`Delete toolbar '${t.id}'?`)) return;
+        post({ type: "deleteToolBar", toolBarId: t.id });
+      };
+      actions.appendChild(deleteBtn);
+    }
     propsEl.appendChild(actions);
     return;
   }
@@ -5062,6 +5086,15 @@ function renderProps() {
     const actions = document.createElement("div");
     actions.className = "miniActions";
     actions.appendChild(addBtn);
+    if (sel.kind === "statusbar") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete StatusBar";
+      deleteBtn.onclick = () => {
+        if (!confirm(`Delete statusbar '${sb.id}'?`)) return;
+        post({ type: "deleteStatusBar", statusBarId: sb.id });
+      };
+      actions.appendChild(deleteBtn);
+    }
     propsEl.appendChild(actions);
     return;
   }
