@@ -655,6 +655,49 @@ test("roundtrips statusbar field insert with text decoration", () => {
   assert.match(patchedText, /StatusBarText\(#SbMain, 1, "State", #PB_StatusBar_Center\)/);
 });
 
+test("roundtrips statusbar image-style field insert without decoration", () => {
+  const { text } = parseFixture();
+  const args: StatusBarFieldArgs = {
+    widthRaw: "50",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldInsert(document, "#SbMain", args)
+  );
+
+  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  assert.ok(statusBar, "Expected statusbar after insert.");
+  assert.equal(statusBar!.fields.length, 2);
+  assert.equal(statusBar!.fields[1]?.widthRaw, "50");
+  assert.equal(statusBar!.fields[1]?.textRaw, undefined);
+  assert.equal(statusBar!.fields[1]?.progressBar, undefined);
+  assert.equal(statusBar!.fields[1]?.imageRaw, undefined);
+  assert.match(patchedText, /AddStatusBarField\(50\)/);
+  assert.doesNotMatch(patchedText, /StatusBar(Image|Text|Progress)\(#SbMain, 1,/);
+});
+
+test("roundtrips statusbar field insert with progress decoration", () => {
+  const { text } = parseFixture();
+  const args: StatusBarFieldArgs = {
+    widthRaw: "50",
+    progressBar: true,
+    progressRaw: "0",
+  };
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldInsert(document, "#SbMain", args)
+  );
+
+  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  assert.ok(statusBar, "Expected statusbar after insert.");
+  assert.equal(statusBar!.fields.length, 2);
+  assert.equal(statusBar!.fields[1]?.widthRaw, "50");
+  assert.equal(statusBar!.fields[1]?.progressBar, true);
+  assert.equal(statusBar!.fields[1]?.progressRaw, "0");
+  assert.match(patchedText, /AddStatusBarField\(50\)/);
+  assert.match(patchedText, /StatusBarProgress\(#SbMain, 1, 0\)/);
+});
+
 test("roundtrips statusbar field update while preserving later field decorations", () => {
   const { text, statusBar } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;

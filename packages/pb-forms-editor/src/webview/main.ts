@@ -443,7 +443,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
@@ -514,8 +514,20 @@ type PendingToolBarEntrySelection = {
   toggle?: boolean;
 };
 
+type PendingStatusBarFieldSelection = {
+  statusBarId: string;
+  preferredIndex: number;
+  widthRaw: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
+let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -525,6 +537,7 @@ type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
 type PreviewMenuFooterRect = PreviewRect & { menuId: string; parentIndex: number };
 type PreviewMenuAddRect = PreviewRect & { menuId: string };
 type PreviewToolBarAddRect = PreviewRect & { toolBarId: string };
+type PreviewStatusBarAddRect = PreviewRect & { statusBarId: string };
 type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 type MenuEntryMoveTarget = {
@@ -538,6 +551,7 @@ let menuEntryPreviewRects: PreviewEntryRect[] = [];
 let menuFooterPreviewRects: PreviewMenuFooterRect[] = [];
 let menuAddPreviewRect: PreviewMenuAddRect | null = null;
 let toolBarAddPreviewRect: PreviewToolBarAddRect | null = null;
+let statusBarAddPreviewRect: PreviewStatusBarAddRect | null = null;
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
@@ -881,6 +895,30 @@ function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idR
   });
 }
 
+function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
+  const preferredIndex = Math.max(0, statusBar.fields?.length ?? 0);
+  pendingStatusBarFieldSelection = {
+    statusBarId: statusBar.id,
+    preferredIndex,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+  vscode.postMessage({
+    type: "insertStatusBarField",
+    statusBarId: statusBar.id,
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  });
+}
+
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
 const HANDLE_SIZE = 6;
@@ -979,6 +1017,36 @@ function resolvePendingToolBarEntrySelection() {
   const matchIndex = (toolBar.entries ?? []).findIndex(entry => toolBarEntryMatchesPendingSelection(entry, pending));
   if (matchIndex >= 0) {
     selection = { kind: "toolBarEntry", toolBarId: pending.toolBarId, entryIndex: matchIndex };
+  }
+}
+
+function statusBarFieldMatchesPendingSelection(field: StatusbarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
+  if (!field) return false;
+  return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
+    && (field.textRaw ?? "") === (pending.textRaw ?? "")
+    && (field.imageRaw ?? "") === (pending.imageRaw ?? "")
+    && (field.flagsRaw ?? "") === (pending.flagsRaw ?? "")
+    && Boolean(field.progressBar) === Boolean(pending.progressBar)
+    && (field.progressRaw ?? "") === (pending.progressRaw ?? "");
+}
+
+function resolvePendingStatusBarFieldSelection() {
+  const pending = pendingStatusBarFieldSelection;
+  if (!pending) return;
+
+  const statusBar = (model.statusbars ?? []).find(entry => entry.id === pending.statusBarId);
+  pendingStatusBarFieldSelection = null;
+  if (!statusBar) return;
+
+  const preferredField = statusBar.fields?.[pending.preferredIndex];
+  if (statusBarFieldMatchesPendingSelection(preferredField, pending)) {
+    selection = { kind: "statusBarField", statusBarId: pending.statusBarId, fieldIndex: pending.preferredIndex };
+    return;
+  }
+
+  const matchIndex = (statusBar.fields ?? []).findIndex(field => statusBarFieldMatchesPendingSelection(field, pending));
+  if (matchIndex >= 0) {
+    selection = { kind: "statusBarField", statusBarId: pending.statusBarId, fieldIndex: matchIndex };
   }
 }
 
@@ -1566,6 +1634,22 @@ canvas.addEventListener("mousedown", (e) => {
       if (nextArgs) {
         postInsertToolBarEntry(toolBar, nextArgs);
         selection = { kind: "toolbar", id: toolBar.id };
+        drag = null;
+        canvas.style.cursor = "default";
+        renderSelectionUiWithoutParentSelector();
+      }
+      return;
+    }
+  }
+
+  const statusBarAddHit = hitTestStatusBarAddButton(mx, my);
+  if (statusBarAddHit) {
+    const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarAddHit.statusBarId);
+    if (statusBar) {
+      const nextArgs = promptStatusBarPreviewInsertArgs();
+      if (nextArgs) {
+        postInsertStatusBarField(statusBar, nextArgs);
+        selection = { kind: "statusbar", id: statusBar.id };
         drag = null;
         canvas.style.cursor = "default";
         renderSelectionUiWithoutParentSelector();
@@ -2313,6 +2397,10 @@ function hitTestToolBarAddButton(mx: number, my: number): PreviewToolBarAddRect 
   return toolBarAddPreviewRect && rectContainsPoint(toolBarAddPreviewRect, mx, my) ? toolBarAddPreviewRect : null;
 }
 
+function hitTestStatusBarAddButton(mx: number, my: number): PreviewStatusBarAddRect | null {
+  return statusBarAddPreviewRect && rectContainsPoint(statusBarAddPreviewRect, mx, my) ? statusBarAddPreviewRect : null;
+}
+
 function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {
   if (!hitWindow(mx, my)) return null;
 
@@ -2639,6 +2727,28 @@ function promptToolBarPreviewInsertArgs(toolBar: ToolbarModel): { kind: string; 
       return { kind: "ToolBarSeparator" };
     default:
       alert(`Unsupported toolbar add action '${choice.trim()}'. Use AddButton, AddToggle or AddSeparator.`);
+      return undefined;
+  }
+}
+
+function promptStatusBarPreviewInsertArgs(): { widthRaw: string; textRaw?: string; progressBar?: boolean; progressRaw?: string } | undefined {
+  const choice = prompt("StatusBar add action (AddImage/AddLabel/AddProgressBar)", "AddImage");
+  if (choice === null) return undefined;
+
+  const normalized = choice.trim().toLowerCase();
+  switch (normalized) {
+    case "addimage":
+    case "image":
+      return { widthRaw: "50" };
+    case "addlabel":
+    case "label":
+      return { widthRaw: "50", textRaw: toPbString("Label") };
+    case "addprogressbar":
+    case "progressbar":
+    case "progress":
+      return { widthRaw: "50", progressBar: true, progressRaw: "0" };
+    default:
+      alert(`Unsupported statusbar add action '${choice.trim()}'. Use AddImage, AddLabel or AddProgressBar.`);
       return undefined;
   }
 }
@@ -3232,6 +3342,7 @@ function parseStatusbarWidth(widthRaw: string | undefined): number | null {
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const statusbar = getPrimaryStatusbar();
   statusBarFieldPreviewRects = [];
+  statusBarAddPreviewRect = null;
   if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
 
   const bg = getCssVar("--vscode-statusBar-background") || getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
@@ -3277,7 +3388,11 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.restore();
     }
 
-    if (field.progressBar) {
+    const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
+    if (textLabel.length) {
+      ctx.fillStyle = fg;
+      ctx.fillText(textLabel, x + 6, rect.y + Math.min(rect.h - 6, 15));
+    } else if (field.progressBar) {
       const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
       ctx.save();
       ctx.globalAlpha = 0.22;
@@ -3287,24 +3402,44 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.globalAlpha = 0.45;
       ctx.fillRect(x + 5, innerY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 10) * progress) / 100)), Math.max(4, innerH - 2));
       ctx.restore();
-    } else if (field.imageId || field.imageRaw) {
+    } else {
       ctx.save();
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.55;
       const size = Math.max(10, Math.min(16, innerH - 2));
       ctx.fillRect(x + 6, rect.y + Math.max(3, Math.trunc((rect.h - size) / 2)), size, size);
       ctx.restore();
-    } else {
-      const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
-      if (textLabel.length) {
-        ctx.fillStyle = fg;
-        ctx.fillText(textLabel, x + 6, rect.y + Math.min(rect.h - 6, 15));
-      }
     }
 
     x += fieldW;
     if (x >= rect.x + rect.w) break;
   }
+
+  const addRect: PreviewStatusBarAddRect = {
+    statusBarId: statusbar.id,
+    x,
+    y: rect.y + Math.max(0, Math.trunc((rect.h - 16) / 2)),
+    w: 16,
+    h: 16
+  };
+  statusBarAddPreviewRect = addRect;
+
+  ctx.save();
+  ctx.strokeStyle = border;
+  ctx.globalAlpha = 0.55;
+  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = fg;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
+  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
+  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
+  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function render() {
@@ -3312,6 +3447,7 @@ function render() {
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
   toolBarAddPreviewRect = null;
+  statusBarAddPreviewRect = null;
   toolBarEntryPreviewRects = [];
   statusBarFieldPreviewRects = [];
 
