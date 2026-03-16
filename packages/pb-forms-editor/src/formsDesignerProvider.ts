@@ -16,6 +16,7 @@ import {
   applyMenuEntryDelete,
   applyMenuEntryEventUpdate,
   applyMenuEntryInsert,
+  applyMenuEntryMove,
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
@@ -77,6 +78,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteGadgetColumn: "deleteGadgetColumn",
 
   insertMenuEntry: "insertMenuEntry",
+  moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
   setMenuEntryEvent: "setMenuEntryEvent",
@@ -128,6 +130,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
@@ -529,6 +532,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { parentSourceLine: msg.parentSourceLine }
           );
           await applyEditOrError(edit, `Could not insert menu entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuEntryMove(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            msg.kind as any,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
+          await applyEditOrError(edit, `Could not move menu entry for menu '${msg.menuId}'. No matching structural move target found${rangeInfo}.`);
           return;
         }
 

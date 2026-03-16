@@ -376,6 +376,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteGadgetColumn: "deleteGadgetColumn",
 
   insertMenuEntry: "insertMenuEntry",
+  moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
   setMenuEntryEvent: "setMenuEntryEvent",
@@ -434,6 +435,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
@@ -497,6 +499,14 @@ const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
 
 type PreviewEntryRect = PreviewRect & { ownerId: string; index: number };
 type PreviewMenuFooterRect = PreviewRect & { menuId: string; parentIndex: number };
+type MenuEntryMovePlacement = "before" | "after" | "appendChild";
+
+type MenuEntryMoveTarget = {
+  targetSourceLine: number;
+  placement: MenuEntryMovePlacement;
+  indicatorRect: PreviewRect;
+  indicatorOrientation: "horizontal" | "vertical";
+};
 
 let menuEntryPreviewRects: PreviewEntryRect[] = [];
 let menuFooterPreviewRects: PreviewMenuFooterRect[] = [];
@@ -951,6 +961,17 @@ function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
 
 type DragState =
   | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number }
+  | {
+      target: "menuEntry";
+      menuId: string;
+      entryIndex: number;
+      sourceLine: number;
+      kind: string;
+      startMx: number;
+      startMy: number;
+      moved: boolean;
+      moveTarget: MenuEntryMoveTarget | null;
+    }
   | {
       target: "scrollArea";
       axis: "x" | "y";
@@ -1413,6 +1434,29 @@ canvas.addEventListener("mousedown", (e) => {
   const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
   if (topLevelChromeHit) {
     selection = topLevelChromeHit.selection;
+    if (topLevelChromeHit.selection.kind === "menuEntry") {
+      const menuSel = topLevelChromeHit.selection;
+      const menu = (model.menus ?? []).find(entry => entry.id === menuSel.menuId);
+      const entry = menu?.entries?.[menuSel.entryIndex];
+      const sourceLine = entry?.source?.line;
+      if (menu && entry && typeof sourceLine === "number") {
+        drag = {
+          target: "menuEntry",
+          menuId: menu.id,
+          entryIndex: menuSel.entryIndex,
+          sourceLine,
+          kind: entry.kind,
+          startMx: mx,
+          startMy: my,
+          moved: false,
+          moveTarget: null
+        };
+        canvas.style.cursor = "move";
+        renderSelectionUiWithoutParentSelector();
+        return;
+      }
+    }
+
     drag = null;
     canvas.style.cursor = "default";
     renderSelectionUiWithoutParentSelector();
@@ -1646,6 +1690,16 @@ window.addEventListener("mousemove", (e) => {
     return;
   }
 
+  if (d.target === "menuEntry") {
+    const moved = Math.abs(dx) > 3 || Math.abs(dy) > 3;
+    d.moved = moved;
+    d.moveTarget = moved ? getMenuEntryMoveTarget(d.menuId, d.entryIndex, mx, my) : null;
+    canvas.style.cursor = moved ? "move" : "default";
+    render();
+    renderProps();
+    return;
+  }
+
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (!g) return;
@@ -1733,6 +1787,24 @@ window.addEventListener("mouseup", () => {
 
   if (d.target === "scrollArea") {
     drag = null;
+    return;
+  }
+
+  if (d.target === "menuEntry") {
+    if (d.moved && d.moveTarget) {
+      post({
+        type: "moveMenuEntry",
+        menuId: d.menuId,
+        sourceLine: d.sourceLine,
+        kind: d.kind,
+        targetSourceLine: d.moveTarget.targetSourceLine,
+        placement: d.moveTarget.placement
+      });
+      selection = null;
+    }
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
     return;
   }
 
@@ -2406,6 +2478,127 @@ function getMenuAncestorChain(menu: MenuModel, entryIndex: number): number[] {
   return chain;
 }
 
+function getMenuVisibleEntries(menu: MenuModel): Array<{ index: number; entry: MenuEntry; rect: PreviewEntryRect }> {
+  const result: Array<{ index: number; entry: MenuEntry; rect: PreviewEntryRect }> = [];
+
+  for (const [index, entry] of menu.entries.entries()) {
+    const rect = getMenuEntryRect(menu.id, index);
+    if (!rect) continue;
+    result.push({ index, entry, rect });
+  }
+
+  return result;
+}
+
+function getMenuEntrySourceLine(menu: MenuModel, entryIndex: number): number | undefined {
+  return menu.entries?.[entryIndex]?.source?.line;
+}
+
+function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: number, my: number): MenuEntryMoveTarget | null {
+  const menu = (model.menus ?? []).find(entry => entry.id === menuId);
+  if (!menu) return null;
+
+  const visibleEntries = getMenuVisibleEntries(menu);
+  if (!visibleEntries.length) return null;
+
+  const firstVisibleRoot = visibleEntries.find(item => getMenuEntryLevel(item.entry) === 0);
+  if (
+    firstVisibleRoot
+    && firstVisibleRoot.index !== sourceEntryIndex
+    && mx <= firstVisibleRoot.rect.x
+    && my >= firstVisibleRoot.rect.y
+    && my < firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+  ) {
+    const targetSourceLine = getMenuEntrySourceLine(menu, firstVisibleRoot.index);
+    if (typeof targetSourceLine === "number") {
+      return {
+        targetSourceLine,
+        placement: "before",
+        indicatorRect: {
+          x: firstVisibleRoot.rect.x - 1,
+          y: firstVisibleRoot.rect.y,
+          w: 2,
+          h: firstVisibleRoot.rect.h
+        },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  let previousLevel = 0;
+  for (const visibleEntry of visibleEntries) {
+    const level = getMenuEntryLevel(visibleEntry.entry);
+    const rect = visibleEntry.rect;
+    const targetSourceLine = getMenuEntrySourceLine(menu, visibleEntry.index);
+
+    if (
+      typeof targetSourceLine === "number"
+      && visibleEntry.index !== sourceEntryIndex
+      && level > previousLevel
+      && my >= rect.y - 1
+      && my < rect.y + 1
+      && mx > rect.x
+      && mx <= rect.x + rect.w
+    ) {
+      return {
+        targetSourceLine,
+        placement: "before",
+        indicatorRect: {
+          x: rect.x,
+          y: rect.y - 1,
+          w: rect.w,
+          h: 2
+        },
+        indicatorOrientation: "horizontal"
+      };
+    }
+
+    if (
+      typeof targetSourceLine === "number"
+      && mx > rect.x
+      && mx <= rect.x + rect.w
+      && my > rect.y + 1
+      && my <= rect.y + rect.h
+    ) {
+      return {
+        targetSourceLine,
+        placement: "after",
+        indicatorRect: level === 0
+          ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
+          : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
+        indicatorOrientation: level === 0 ? "vertical" : "horizontal"
+      };
+    }
+
+    if (visibleEntry.entry.kind === "OpenSubMenu") {
+      const footerRect = getMenuFooterRect(menu.id, visibleEntry.index);
+      const childIndices = getDirectMenuChildIndices(menu, visibleEntry.index);
+      if (
+        footerRect
+        && childIndices.length === 0
+        && typeof targetSourceLine === "number"
+        && rectContainsPoint(footerRect, mx, my)
+      ) {
+        return {
+          targetSourceLine,
+          placement: "appendChild",
+          indicatorRect: {
+            x: footerRect.x,
+            y: footerRect.y,
+            w: footerRect.w,
+            h: 2
+          },
+          indicatorOrientation: "horizontal"
+        };
+      }
+    }
+
+    previousLevel = level;
+  }
+
+  return null;
+}
+
 function getMenuFlyoutPanelRect(
   ctx: CanvasRenderingContext2D,
   menu: MenuModel,
@@ -2870,6 +3063,28 @@ function render() {
         ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
         ctx.restore();
       }
+    }
+
+    if (drag?.target === "menuEntry" && drag.moved && drag.moveTarget) {
+      const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+      const indicator = drag.moveTarget.indicatorRect;
+      ctx.save();
+      ctx.strokeStyle = indicatorColor;
+      ctx.lineWidth = 2;
+      if (drag.moveTarget.indicatorOrientation === "vertical") {
+        const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, indicator.y);
+        ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+        ctx.stroke();
+      } else {
+        const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+        ctx.beginPath();
+        ctx.moveTo(indicator.x, y + 0.5);
+        ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
