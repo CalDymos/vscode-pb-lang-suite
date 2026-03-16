@@ -3428,6 +3428,45 @@ function parseStatusbarWidth(widthRaw: string | undefined): number | null {
   return Math.trunc(width);
 }
 
+const STATUSBAR_KNOWN_FLAGS = [
+  "#PB_StatusBar_Raised",
+  "#PB_StatusBar_BorderLess",
+  "#PB_StatusBar_Center",
+  "#PB_StatusBar_Right"
+] as const;
+
+function splitPbFlags(flagsRaw: string | undefined): string[] {
+  return (flagsRaw ?? "")
+    .split("|")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function buildStatusBarFlagsRaw(existingRaw: string | undefined, updates: Partial<Record<(typeof STATUSBAR_KNOWN_FLAGS)[number], boolean>>): string | undefined {
+  const current = splitPbFlags(existingRaw);
+  const currentSet = new Set(current);
+  for (const flag of STATUSBAR_KNOWN_FLAGS) {
+    const next = updates[flag];
+    if (typeof next !== "boolean") continue;
+    if (next) currentSet.add(flag);
+    else currentSet.delete(flag);
+  }
+  const unknown = current.filter(flag => !STATUSBAR_KNOWN_FLAGS.includes(flag as (typeof STATUSBAR_KNOWN_FLAGS)[number]));
+  const orderedKnown = STATUSBAR_KNOWN_FLAGS.filter(flag => currentSet.has(flag));
+  const merged = [...orderedKnown, ...unknown];
+  return merged.length ? merged.join(" | ") : undefined;
+}
+
+function getStatusBarAlignedX(fieldX: number, fieldW: number, contentW: number, flagsRaw: string | undefined, leftPad = 6): number {
+  if (hasPbFlag(flagsRaw, "#PB_StatusBar_Center")) {
+    return fieldX + Math.max(0, Math.trunc((fieldW - contentW) / 2));
+  }
+  if (hasPbFlag(flagsRaw, "#PB_StatusBar_Right")) {
+    return fieldX + Math.max(0, fieldW - contentW - 4);
+  }
+  return fieldX + leftPad;
+}
+
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const statusbar = getPrimaryStatusbar();
   statusBarFieldPreviewRects = [];
@@ -3480,7 +3519,9 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
     if (textLabel.length) {
       ctx.fillStyle = fg;
-      ctx.fillText(textLabel, x + 6, rect.y + Math.min(rect.h - 6, 15));
+      const textWidth = Math.ceil(ctx.measureText(textLabel).width);
+      const textX = getStatusBarAlignedX(x, fieldW, textWidth, field.flagsRaw);
+      ctx.fillText(textLabel, textX, rect.y + Math.min(rect.h - 6, 15));
     } else if (field.progressBar) {
       const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
       ctx.save();
@@ -3496,7 +3537,8 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.55;
       const size = Math.max(10, Math.min(16, innerH - 2));
-      ctx.fillRect(x + 6, rect.y + Math.max(3, Math.trunc((rect.h - size) / 2)), size, size);
+      const imageX = getStatusBarAlignedX(x, fieldW, size, field.flagsRaw);
+      ctx.fillRect(imageX, rect.y + Math.max(3, Math.trunc((rect.h - size) / 2)), size, size);
       ctx.restore();
     }
 
@@ -5563,20 +5605,26 @@ function renderProps() {
           }
         )
       ));
-      propsEl.appendChild(row(
-        "Flags",
-        textInput(
-          selectedField.flagsRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({ flagsRaw: v.trim() });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Raw statusbar flags. The original designer exposes these as per-flag checkboxes."
-          }
-        )
-      ));
+      const statusBarFlagActions = document.createElement("div");
+      statusBarFlagActions.className = "row-actions";
+      for (const flag of STATUSBAR_KNOWN_FLAGS) {
+        const wrap = document.createElement("label");
+        wrap.className = "check";
+        const boxInput = document.createElement("input");
+        boxInput.type = "checkbox";
+        boxInput.checked = hasPbFlag(selectedField.flagsRaw, flag);
+        boxInput.disabled = !selectedUi.canPatch;
+        boxInput.onchange = () => {
+          if (!selectedUi.canPatch) return;
+          selectedUi.postFieldUpdate({ flagsRaw: buildStatusBarFlagsRaw(selectedField.flagsRaw, { [flag]: boxInput.checked }) ?? "" });
+        };
+        const caption = document.createElement("span");
+        caption.textContent = flag.replace("#PB_StatusBar_", "");
+        wrap.appendChild(boxInput);
+        wrap.appendChild(caption);
+        statusBarFlagActions.appendChild(wrap);
+      }
+      propsEl.appendChild(row("Flags", statusBarFlagActions));
     }
 
     const box = miniList();
