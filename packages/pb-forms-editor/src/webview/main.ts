@@ -5069,23 +5069,39 @@ function renderProps() {
       return;
     }
 
-    propsEl.appendChild(row("Id", readonlyInput(sb.id)));
-    propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
-    const box = miniList();
-    (sb.fields ?? []).forEach((f, idx) => {
-      const canPatch = typeof f.source?.line === "number";
-      const label = `Field ${idx}  ${getStatusBarFieldDisplaySummary(f)}  width:${f.widthRaw}`;
+    const getStatusBarFieldUi = (field: StatusbarField) => {
+      const canPatch = typeof field.source?.line === "number";
+      const statusImage = findImageEntryById(field.imageId);
+      const statusImageTitle = getImageReferenceHint(field.imageId, "statusbar");
+      const postFieldUpdate = (patch: {
+        widthRaw?: string;
+        textRaw?: string;
+        imageRaw?: string;
+        flagsRaw?: string;
+        progressBar?: boolean;
+        progressRaw?: string;
+      }) => {
+        if (!canPatch) return;
+        post({
+          type: "updateStatusBarField",
+          statusBarId: sb.id,
+          sourceLine: field.source!.line,
+          widthRaw: patch.widthRaw ?? field.widthRaw,
+          textRaw: patch.textRaw ?? field.textRaw ?? "",
+          imageRaw: patch.imageRaw ?? field.imageRaw ?? "",
+          flagsRaw: patch.flagsRaw ?? field.flagsRaw ?? "",
+          progressBar: patch.progressBar ?? Boolean(field.progressBar),
+          progressRaw: patch.progressRaw ?? field.progressRaw ?? ""
+        });
+      };
 
       const editFn = canPatch
         ? () => {
-            const width = prompt("Width raw", f.widthRaw ?? "0");
+            const width = prompt("Width raw", field.widthRaw ?? "0");
             if (width === null) return;
-            const flags = prompt("Flags raw (blank clears)", f.flagsRaw ?? "");
+            const flags = prompt("Flags raw (blank clears)", field.flagsRaw ?? "");
             if (flags === null) return;
-            vscode.postMessage({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
+            postFieldUpdate({
               widthRaw: width.trim(),
               flagsRaw: flags.trim()
             });
@@ -5095,26 +5111,21 @@ function renderProps() {
       const delFn = canPatch
         ? () => {
             if (!confirm("Delete this statusbar field?")) return;
-            vscode.postMessage({
+            post({
               type: "deleteStatusBarField",
               statusBarId: sb.id,
-              sourceLine: f.source!.line
+              sourceLine: field.source!.line
             });
           }
         : undefined;
-      const statusImage = findImageEntryById(f.imageId);
-      const statusImageTitle = getImageReferenceHint(f.imageId, "statusbar");
+
       const statusSetImageFn = canPatch
         ? () => {
-            const imageRaw = prompt("Image raw (blank clears)", f.imageRaw ?? "");
+            const imageRaw = prompt("Image raw (blank clears)", field.imageRaw ?? "");
             if (imageRaw === null) return;
-            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
             if (flags === null) return;
-            post({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+            postFieldUpdate({
               textRaw: "",
               imageRaw: imageRaw.trim(),
               flagsRaw: flags.trim(),
@@ -5123,34 +5134,28 @@ function renderProps() {
             });
           }
         : undefined;
+
       const statusPickImageFn = canPatch
         ? () => {
-            const selected = promptImageReferenceFromModel(f.imageId);
+            const selected = promptImageReferenceFromModel(field.imageId);
             if (!selected) return;
-            post({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+            postFieldUpdate({
               textRaw: "",
               imageRaw: selected.imageRaw,
-              flagsRaw: f.flagsRaw ?? "",
+              flagsRaw: field.flagsRaw ?? "",
               progressBar: false,
               progressRaw: ""
             });
           }
         : undefined;
+
       const statusTextFn = canPatch
         ? () => {
-            const textRaw = prompt("Text raw (blank clears)", f.textRaw ?? toPbString(f.text ?? "Label"));
+            const textRaw = prompt("Text raw (blank clears)", field.textRaw ?? toPbString(field.text ?? "Label"));
             if (textRaw === null) return;
-            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
             if (flags === null) return;
-            post({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+            postFieldUpdate({
               textRaw: textRaw.trim(),
               imageRaw: "",
               flagsRaw: flags.trim(),
@@ -5159,17 +5164,14 @@ function renderProps() {
             });
           }
         : undefined;
+
       const statusProgressFn = canPatch
         ? () => {
-            const progressRaw = prompt("Progress raw", f.progressRaw ?? "0");
+            const progressRaw = prompt("Progress raw", field.progressRaw ?? "0");
             if (progressRaw === null) return;
-            const flags = prompt("Flags raw (optional)", f.flagsRaw ?? "");
+            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
             if (flags === null) return;
-            post({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+            postFieldUpdate({
               textRaw: "",
               imageRaw: "",
               flagsRaw: flags.trim(),
@@ -5178,14 +5180,11 @@ function renderProps() {
             });
           }
         : undefined;
+
       const statusClearFn = canPatch
         ? () => {
             if (!confirm("Clear this statusbar field decoration?")) return;
-            post({
-              type: "updateStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+            postFieldUpdate({
               textRaw: "",
               imageRaw: "",
               flagsRaw: "",
@@ -5194,6 +5193,7 @@ function renderProps() {
             });
           }
         : undefined;
+
       const statusChooseFileImageFn = canPatch
         ? () => {
             const next = promptCreateAndAssignLoadImageArgs();
@@ -5201,13 +5201,14 @@ function renderProps() {
             post({
               type: "chooseFileAndAssignStatusBarFieldImage",
               statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+              sourceLine: field.source!.line,
+              widthRaw: field.widthRaw,
               newImageIdRaw: next.idRaw,
               newAssignedVar: next.assignedVar,
             });
           }
         : undefined;
+
       const statusCreateImageFn = canPatch
         ? () => {
             const next = promptCreateAndAssignImageArgs();
@@ -5215,8 +5216,8 @@ function renderProps() {
             post({
               type: "createAndAssignStatusBarFieldImage",
               statusBarId: sb.id,
-              sourceLine: f.source!.line,
-              widthRaw: f.widthRaw,
+              sourceLine: field.source!.line,
+              widthRaw: field.widthRaw,
               newInline: next.inline,
               newImageIdRaw: next.idRaw,
               newImageRaw: next.imageRaw,
@@ -5225,18 +5226,154 @@ function renderProps() {
           }
         : undefined;
 
-      const rowEl = miniRow(
-        label,
+      return {
+        canPatch,
+        statusImage,
+        statusImageTitle,
         editFn,
         delFn,
-        { label: "Label", onClick: statusTextFn, disabled: !statusTextFn, title: "Switch this field to a StatusBarText decoration." },
-        { label: "Progress", onClick: statusProgressFn, disabled: !statusProgressFn, title: "Switch this field to a StatusBarProgress decoration." },
-        { label: "Clear", onClick: statusClearFn, disabled: !statusClearFn, title: "Remove text/image/progress decoration from this field." },
-        { label: "Set Image", onClick: statusSetImageFn, disabled: !statusSetImageFn, title: "Switch this field to a StatusBarImage decoration while preserving the field width." },
-        { label: "Use Existing", onClick: statusPickImageFn, disabled: !statusPickImageFn, title: "Select an image from the form image list and assign it to this field." },
-        { label: "Choose File", onClick: statusChooseFileImageFn, disabled: !statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
-        { label: "Create New", onClick: statusCreateImageFn, disabled: !statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
-        { label: "Image", onClick: statusImage ? () => selectImageById(statusImage.id) : undefined, disabled: !statusImage, title: statusImageTitle }
+        statusSetImageFn,
+        statusPickImageFn,
+        statusTextFn,
+        statusProgressFn,
+        statusClearFn,
+        statusChooseFileImageFn,
+        statusCreateImageFn,
+        postFieldUpdate,
+      };
+    };
+
+    propsEl.appendChild(row("Id", readonlyInput(sb.id)));
+    propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
+
+    const selectedField = sel.kind === "statusBarField" && typeof selectedFieldIndex === "number"
+      ? sb.fields?.[selectedFieldIndex]
+      : undefined;
+    if (selectedField) {
+      const selectedUi = getStatusBarFieldUi(selectedField);
+      const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
+
+      propsEl.appendChild(section("Selected Field"));
+      propsEl.appendChild(row(
+        "Width",
+        textInput(
+          selectedField.widthRaw ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({ widthRaw: v.trim() || selectedField.widthRaw });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Patch the raw AddStatusBarField width for the selected field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Text",
+        textInput(
+          selectedField.text ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({
+              textRaw: v.trim().length ? toPbString(v) : "",
+              imageRaw: "",
+              progressBar: false,
+              progressRaw: ""
+            });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Match the original statusbar text field for the current selection."
+          }
+        )
+      ));
+      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImagePath)));
+      const selectedImageActions = document.createElement("div");
+      selectedImageActions.className = "row-actions";
+      const useExistingBtn = document.createElement("button");
+      useExistingBtn.textContent = "Use Existing";
+      useExistingBtn.disabled = !selectedUi.statusPickImageFn;
+      useExistingBtn.title = "Select an image from the form image list and assign it to this statusbar field.";
+      useExistingBtn.onclick = () => selectedUi.statusPickImageFn?.();
+      selectedImageActions.appendChild(useExistingBtn);
+      const chooseFileBtn = document.createElement("button");
+      chooseFileBtn.textContent = "Choose File";
+      chooseFileBtn.disabled = !selectedUi.statusChooseFileImageFn;
+      chooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this statusbar field.";
+      chooseFileBtn.onclick = () => selectedUi.statusChooseFileImageFn?.();
+      selectedImageActions.appendChild(chooseFileBtn);
+      const createNewBtn = document.createElement("button");
+      createNewBtn.textContent = "Create New";
+      createNewBtn.disabled = !selectedUi.statusCreateImageFn;
+      createNewBtn.title = "Create a new form image entry and assign it to this statusbar field.";
+      createNewBtn.onclick = () => selectedUi.statusCreateImageFn?.();
+      selectedImageActions.appendChild(createNewBtn);
+      const clearImageBtn = document.createElement("button");
+      clearImageBtn.textContent = "Clear";
+      clearImageBtn.disabled = !selectedUi.statusClearFn;
+      clearImageBtn.title = "Remove text/image/progress decoration from this field.";
+      clearImageBtn.onclick = () => selectedUi.statusClearFn?.();
+      selectedImageActions.appendChild(clearImageBtn);
+      if (selectedUi.statusImage) {
+        const jumpImageBtn = document.createElement("button");
+        jumpImageBtn.textContent = "Image";
+        jumpImageBtn.title = selectedUi.statusImageTitle;
+        jumpImageBtn.onclick = () => selectImageById(selectedUi.statusImage!.id);
+        selectedImageActions.appendChild(jumpImageBtn);
+      }
+      propsEl.appendChild(row("ChangeImage", selectedImageActions));
+      propsEl.appendChild(row(
+        "ProgressBar",
+        checkboxInput(
+          Boolean(selectedField.progressBar),
+          checked => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({
+              textRaw: checked ? "" : selectedField.textRaw ?? "",
+              imageRaw: checked ? "" : selectedField.imageRaw ?? "",
+              progressBar: checked,
+              progressRaw: checked ? (selectedField.progressRaw?.trim() || "0") : ""
+            });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Match the original ProgressBar checkbox for the selected statusbar field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Flags",
+        textInput(
+          selectedField.flagsRaw ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({ flagsRaw: v.trim() });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Raw statusbar flags. The original designer exposes these as per-flag checkboxes."
+          }
+        )
+      ));
+    }
+
+    const box = miniList();
+    (sb.fields ?? []).forEach((f, idx) => {
+      const fieldUi = getStatusBarFieldUi(f);
+      const label = `Field ${idx}  ${getStatusBarFieldDisplaySummary(f)}  width:${f.widthRaw}`;
+
+      const rowEl = miniRow(
+        label,
+        fieldUi.editFn,
+        fieldUi.delFn,
+        { label: "Label", onClick: fieldUi.statusTextFn, disabled: !fieldUi.statusTextFn, title: "Switch this field to a StatusBarText decoration." },
+        { label: "Progress", onClick: fieldUi.statusProgressFn, disabled: !fieldUi.statusProgressFn, title: "Switch this field to a StatusBarProgress decoration." },
+        { label: "Clear", onClick: fieldUi.statusClearFn, disabled: !fieldUi.statusClearFn, title: "Remove text/image/progress decoration from this field." },
+        { label: "Set Image", onClick: fieldUi.statusSetImageFn, disabled: !fieldUi.statusSetImageFn, title: "Switch this field to a StatusBarImage decoration while preserving the field width." },
+        { label: "Use Existing", onClick: fieldUi.statusPickImageFn, disabled: !fieldUi.statusPickImageFn, title: "Select an image from the form image list and assign it to this field." },
+        { label: "Choose File", onClick: fieldUi.statusChooseFileImageFn, disabled: !fieldUi.statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
+        { label: "Create New", onClick: fieldUi.statusCreateImageFn, disabled: !fieldUi.statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
+        { label: "Image", onClick: fieldUi.statusImage ? () => selectImageById(fieldUi.statusImage!.id) : undefined, disabled: !fieldUi.statusImage, title: fieldUi.statusImageTitle }
       );
       if (selectedFieldIndex === idx) rowEl.classList.add("selected");
       rowEl.onclick = (ev) => {
