@@ -1262,13 +1262,20 @@ canvas.addEventListener("mousedown", (e) => {
           : Math.max(1, getScrollAreaVerticalBarRect(layout.rect, metrics).h)
       };
       canvas.style.cursor = "default";
+    } else if (chromeHit.zone === "splitterBar") {
+      drag = {
+        target: "gadget",
+        mode: "move",
+        id: g.id,
+        startMx: mx,
+        startMy: my,
+        startX: g.x,
+        startY: g.y
+      };
+      canvas.style.cursor = "move";
     } else {
       drag = null;
-      if (chromeHit.zone === "splitterBar") {
-        canvas.style.cursor = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical") ? "ew-resize" : "ns-resize";
-      } else {
-        canvas.style.cursor = "default";
-      }
+      canvas.style.cursor = "default";
     }
 
     renderSelectionUiWithoutParentSelector();
@@ -1392,9 +1399,7 @@ window.addEventListener("mousemove", (e) => {
 
     const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
     if (chromeHit) {
-      if (chromeHit.zone === "splitterBar") {
-        canvas.style.cursor = hasPbFlag(chromeHit.gadget.flagsExpr, "#PB_Splitter_Vertical") ? "ew-resize" : "ns-resize";
-      } else if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader") {
+      if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader" || chromeHit.zone === "splitterBar") {
         canvas.style.cursor = "move";
       } else {
         canvas.style.cursor = "default";
