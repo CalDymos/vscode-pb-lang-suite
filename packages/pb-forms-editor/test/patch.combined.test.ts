@@ -10,6 +10,7 @@ import {
   applyImageUpdate,
   applyMenuEntryDelete,
   applyMenuEntryInsert,
+  applyMenuEntryMove,
   applyMenuEntryUpdate,
   applyRectPatch,
   applyStatusBarFieldDelete,
@@ -47,6 +48,7 @@ function patchAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
@@ -75,6 +77,7 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
@@ -90,6 +93,7 @@ function patchTwiceAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyToolBarEntryInsert>
@@ -124,6 +128,7 @@ function patchThriceAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyRectPatch>
@@ -140,6 +145,7 @@ function patchThriceAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyRectPatch>
@@ -156,6 +162,7 @@ function patchThriceAndReparse(
     | ReturnType<typeof applyImageUpdate>
     | ReturnType<typeof applyImageDelete>
     | ReturnType<typeof applyMenuEntryInsert>
+    | ReturnType<typeof applyMenuEntryMove>
     | ReturnType<typeof applyMenuEntryUpdate>
     | ReturnType<typeof applyMenuEntryDelete>
     | ReturnType<typeof applyRectPatch>
@@ -348,6 +355,70 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
   assert.equal(updatedItem?.shortcut, "Ctrl+O");
   assert.equal(updatedItem?.iconId, "#ImgOpen");
   assert.match(patchedText, /MenuItem\(#MnuOpen, "Open Project""Ctrl\+O", ImageID\(#ImgOpen\)\)/);
+});
+
+test("roundtrips menu subtree move before sibling entry", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const separator = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuBar);
+
+  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.equal(typeof subMenu?.source?.line, "number", "Expected source line for submenu entry.");
+  assert.equal(typeof separator?.source?.line, "number", "Expected source line for separator entry.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryMove(document, "#MenuMain", subMenu!.source!.line, MENU_ENTRY_KIND.OpenSubMenu, {
+      targetSourceLine: separator!.source!.line,
+      placement: "before",
+    })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(updatedMenu, "Expected menu after submenu move.");
+
+  const subMenuIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const separatorIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.MenuBar);
+  const childIndex = updatedMenu!.entries.findIndex((entry) => entry.idRaw === "#MenuRecent1");
+  const closeIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+
+  assert.ok(subMenuIndex >= 0, "Expected submenu entry after move.");
+  assert.ok(separatorIndex > subMenuIndex, "Expected submenu block before separator after move.");
+  assert.ok(childIndex > subMenuIndex, "Expected submenu child after submenu entry.");
+  assert.ok(closeIndex > childIndex, "Expected CloseSubMenu after submenu child.");
+  assert.match(patchedText, /OpenSubMenu\("Recent"\)[\s\S]*MenuItem\(#MenuRecent1, "Last file"\)[\s\S]*CloseSubMenu\(\)[\s\S]*MenuBar\(\)/);
+});
+
+test("roundtrips menu entry move into submenu as child block", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const openItem = menu?.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+
+  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.equal(typeof openItem?.source?.line, "number", "Expected source line for root menu item.");
+  assert.equal(typeof subMenu?.source?.line, "number", "Expected source line for submenu entry.");
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryMove(document, "#MenuMain", openItem!.source!.line, MENU_ENTRY_KIND.MenuItem, {
+      targetSourceLine: subMenu!.source!.line,
+      placement: "appendChild",
+    })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  assert.ok(updatedMenu, "Expected menu after child move.");
+
+  const movedItem = updatedMenu!.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  const closeIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+
+  assert.ok(movedItem, "Expected moved menu item after patch.");
+  assert.equal(movedItem!.level, 2);
+  assert.ok((movedItem!.source!.line ?? -1) > (subMenu?.source!.line ?? -1), "Expected moved item inside submenu block.");
+  assert.ok((movedItem!.source!.line ?? -1) < (updatedMenu!.entries[closeIndex]?.source?.line ?? Number.MAX_SAFE_INTEGER), "Expected moved item before CloseSubMenu.");
+  assert.match(patchedText, /OpenSubMenu\("Recent"\)[\s\S]*MenuItem\(#MenuOpen, "Open""Ctrl\+O", ImageID\(#ImgOpen\)\)[\s\S]*CloseSubMenu\(\)/);
 });
 
 test("roundtrips menu entry delete", () => {

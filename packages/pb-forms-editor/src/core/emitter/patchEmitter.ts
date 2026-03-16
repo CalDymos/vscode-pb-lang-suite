@@ -209,6 +209,13 @@ export interface MenuEntryInsertOptions {
   parentSourceLine?: number;
 }
 
+export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
+
+export interface MenuEntryMoveOptions {
+  targetSourceLine: number;
+  placement: MenuEntryMovePlacement;
+}
+
 export interface ToolBarEntryArgs {
   kind: ToolBarEntryKind;
   idRaw?: string;
@@ -2344,7 +2351,7 @@ function findAnchoredMenuEntryInsert(
   return { insertLine, indent: getLineIndent(document, insertLine) };
 }
 
-function findMenuEntryDeleteRange(
+function findMenuEntryBlockRange(
   document: vscode.TextDocument,
   calls: PbCall[],
   menuId: string,
@@ -2631,7 +2638,7 @@ export function applyMenuEntryDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  const deleteRange = findMenuEntryDeleteRange(document, calls, menuId, sourceLine, kind.toLowerCase());
+  const deleteRange = findMenuEntryBlockRange(document, calls, menuId, sourceLine, kind.toLowerCase());
   if (!deleteRange) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -2642,6 +2649,73 @@ export function applyMenuEntryDelete(
       document.lineAt(deleteRange.endLine).rangeIncludingLineBreak.end
     )
   );
+  return edit;
+}
+
+export function applyMenuEntryMove(
+  document: vscode.TextDocument,
+  menuId: string,
+  sourceLine: number,
+  kind: MenuEntryKind,
+  options: MenuEntryMoveOptions,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const blockRange = findMenuEntryBlockRange(document, calls, menuId, sourceLine, kind.toLowerCase());
+  if (!blockRange) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  let insertLine: number | undefined;
+
+  if (options.placement === "appendChild") {
+    const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, options.targetSourceLine);
+    if (!anchored) return undefined;
+    insertLine = anchored.insertLine;
+  } else {
+    const targetEntry = menu.entries.find(entry => entry.source?.line === options.targetSourceLine);
+    if (!targetEntry) return undefined;
+
+    const targetRange = findMenuEntryBlockRange(
+      document,
+      calls,
+      menuId,
+      options.targetSourceLine,
+      targetEntry.kind.toLowerCase()
+    );
+    if (!targetRange) return undefined;
+
+    insertLine = options.placement === "before"
+      ? targetRange.startLine
+      : Math.min(document.lineCount, targetRange.endLine + 1);
+  }
+
+  if (typeof insertLine !== "number") return undefined;
+  if (insertLine >= blockRange.startLine && insertLine <= blockRange.endLine + 1) {
+    return undefined;
+  }
+
+  const blockTextRange = new vscode.Range(
+    new vscode.Position(blockRange.startLine, 0),
+    document.lineAt(blockRange.endLine).rangeIncludingLineBreak.end
+  );
+  let blockText = "";
+  for (let line = blockRange.startLine; line <= blockRange.endLine; line++) {
+    const textLine = document.lineAt(line);
+    blockText += textLine.text;
+    if (textLine.rangeIncludingLineBreak.end.line > textLine.range.end.line) {
+      blockText += "\n";
+    }
+  }
+  if (insertLine < document.lineCount && !blockText.endsWith("\n") && !blockText.endsWith("\r\n")) {
+    blockText += "\n";
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, blockTextRange);
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), blockText);
   return edit;
 }
 
