@@ -493,6 +493,19 @@ type DesignerSelection =
   | null;
 let selection: DesignerSelection = null;
 
+type PendingMenuEntrySelection = {
+  menuId: string;
+  preferredIndex: number;
+  kind: string;
+  level: number;
+  idRaw?: string;
+  textRaw?: string;
+  shortcut?: string;
+  iconRaw?: string;
+};
+
+let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
+
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
@@ -847,6 +860,36 @@ function renderAfterInit() {
   renderDiagnostics();
 }
 
+function menuEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
+  if (!entry) return false;
+  return entry.kind === pending.kind
+    && getMenuEntryLevel(entry) === pending.level
+    && (entry.idRaw ?? "") === (pending.idRaw ?? "")
+    && (entry.textRaw ?? "") === (pending.textRaw ?? "")
+    && (entry.shortcut ?? "") === (pending.shortcut ?? "")
+    && (entry.iconRaw ?? "") === (pending.iconRaw ?? "");
+}
+
+function resolvePendingMenuEntrySelection() {
+  const pending = pendingMenuEntrySelection;
+  if (!pending) return;
+
+  const menu = (model.menus ?? []).find(entry => entry.id === pending.menuId);
+  pendingMenuEntrySelection = null;
+  if (!menu) return;
+
+  const preferredEntry = menu.entries?.[pending.preferredIndex];
+  if (menuEntryMatchesPendingSelection(preferredEntry, pending)) {
+    selection = { kind: "menuEntry", menuId: pending.menuId, entryIndex: pending.preferredIndex };
+    return;
+  }
+
+  const matchIndex = (menu.entries ?? []).findIndex(entry => menuEntryMatchesPendingSelection(entry, pending));
+  if (matchIndex >= 0) {
+    selection = { kind: "menuEntry", menuId: pending.menuId, entryIndex: matchIndex };
+  }
+}
+
 function sanitizeSelectionAfterModelUpdate() {
   const sel = selection;
   if (sel && sel.kind === "gadget") {
@@ -1052,6 +1095,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
     if (msg.settings) {
       applySettings(msg.settings);
     }
+    resolvePendingMenuEntrySelection();
     // Validate selection after model refresh
     sanitizeSelectionAfterModelUpdate();
 
@@ -1792,6 +1836,10 @@ window.addEventListener("mouseup", () => {
 
   if (d.target === "menuEntry") {
     if (d.moved && d.moveTarget) {
+      const menu = (model.menus ?? []).find(entry => entry.id === d.menuId);
+      pendingMenuEntrySelection = menu
+        ? buildPendingMenuEntrySelection(menu, d.entryIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
+        : null;
       post({
         type: "moveMenuEntry",
         menuId: d.menuId,
@@ -1800,7 +1848,6 @@ window.addEventListener("mouseup", () => {
         targetSourceLine: d.moveTarget.targetSourceLine,
         placement: d.moveTarget.placement
       });
-      selection = null;
     }
     drag = null;
     canvas.style.cursor = "default";
@@ -2492,6 +2539,75 @@ function getMenuVisibleEntries(menu: MenuModel): Array<{ index: number; entry: M
 
 function getMenuEntrySourceLine(menu: MenuModel, entryIndex: number): number | undefined {
   return menu.entries?.[entryIndex]?.source?.line;
+}
+
+function getMenuEntryBlockEndIndex(entries: MenuEntry[], entryIndex: number): number {
+  if (entryIndex < 0 || entryIndex >= entries.length) return entryIndex;
+
+  const entryLevel = getMenuEntryLevel(entries[entryIndex]);
+  let endIndex = entryIndex;
+  for (let i = entryIndex + 1; i < entries.length; i++) {
+    if (getMenuEntryLevel(entries[i]) <= entryLevel) {
+      break;
+    }
+    endIndex = i;
+  }
+
+  return endIndex;
+}
+
+function getPredictedMenuEntryMoveIndex(
+  menu: MenuModel,
+  sourceEntryIndex: number,
+  targetEntryIndex: number,
+  placement: MenuEntryMovePlacement
+): number | null {
+  const entries = menu.entries ?? [];
+  if (sourceEntryIndex < 0 || sourceEntryIndex >= entries.length) return null;
+  if (targetEntryIndex < 0 || targetEntryIndex >= entries.length) return null;
+
+  const sourceEndIndex = getMenuEntryBlockEndIndex(entries, sourceEntryIndex);
+  let insertIndex = placement === "before"
+    ? targetEntryIndex
+    : getMenuEntryBlockEndIndex(entries, targetEntryIndex) + 1;
+
+  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) {
+    return null;
+  }
+
+  const blockLength = sourceEndIndex - sourceEntryIndex + 1;
+  if (sourceEntryIndex < insertIndex) {
+    insertIndex -= blockLength;
+  }
+
+  return Math.max(0, insertIndex);
+}
+
+function buildPendingMenuEntrySelection(
+  menu: MenuModel,
+  sourceEntryIndex: number,
+  targetSourceLine: number,
+  placement: MenuEntryMovePlacement
+): PendingMenuEntrySelection | null {
+  const sourceEntry = menu.entries?.[sourceEntryIndex];
+  if (!sourceEntry) return null;
+
+  const targetEntryIndex = (menu.entries ?? []).findIndex(entry => entry.source?.line === targetSourceLine);
+  if (targetEntryIndex < 0) return null;
+
+  const preferredIndex = getPredictedMenuEntryMoveIndex(menu, sourceEntryIndex, targetEntryIndex, placement);
+  if (preferredIndex === null) return null;
+
+  return {
+    menuId: menu.id,
+    preferredIndex,
+    kind: sourceEntry.kind,
+    level: getMenuEntryLevel(sourceEntry),
+    idRaw: sourceEntry.idRaw,
+    textRaw: sourceEntry.textRaw,
+    shortcut: sourceEntry.shortcut,
+    iconRaw: sourceEntry.iconRaw
+  };
 }
 
 function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: number, my: number): MenuEntryMoveTarget | null {
