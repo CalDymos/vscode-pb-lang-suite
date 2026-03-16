@@ -2614,6 +2614,11 @@ function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: nu
   const menu = (model.menus ?? []).find(entry => entry.id === menuId);
   if (!menu) return null;
 
+  const winRect = getWinRect();
+  const metrics = getPreviewChromeMetrics();
+  const menuBarRect = winRect ? getMenuBarRectGlobal(winRect, metrics) : null;
+  const menuBarBottom = menuBarRect ? menuBarRect.y + menuBarRect.h : 0;
+
   const visibleEntries = getMenuVisibleEntries(menu);
   if (!visibleEntries.length) return null;
 
@@ -2689,18 +2694,27 @@ function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: nu
     if (visibleEntry.entry.kind === "OpenSubMenu") {
       const footerRect = getMenuFooterRect(menu.id, visibleEntry.index);
       const childIndices = getDirectMenuChildIndices(menu, visibleEntry.index);
+      const isSelectedEmptyOpenSubmenu = Boolean(
+        selection
+        && selection.kind === "menuEntry"
+        && selection.menuId === menu.id
+        && selection.entryIndex === visibleEntry.index
+      );
       if (
         footerRect
         && childIndices.length === 0
         && typeof targetSourceLine === "number"
-        && rectContainsPoint(footerRect, mx, my)
+        && visibleEntry.index !== sourceEntryIndex
+        && isSelectedEmptyOpenSubmenu
+        && mx > rect.x + rect.w
+        && my > menuBarBottom
       ) {
         return {
           targetSourceLine,
           placement: "appendChild",
           indicatorRect: {
-            x: footerRect.x,
-            y: footerRect.y,
+            x: rect.x + rect.w,
+            y: rect.y,
             w: footerRect.w,
             h: 2
           },
