@@ -3457,14 +3457,14 @@ function buildStatusBarFlagsRaw(existingRaw: string | undefined, updates: Partia
   return merged.length ? merged.join(" | ") : undefined;
 }
 
-function getStatusBarAlignedX(fieldX: number, fieldW: number, contentW: number, flagsRaw: string | undefined, leftPad = 6): number {
+function getStatusBarAlignedX(fieldX: number, fieldW: number, contentW: number, flagsRaw: string | undefined): number {
   if (hasPbFlag(flagsRaw, "#PB_StatusBar_Center")) {
     return fieldX + Math.max(0, Math.trunc((fieldW - contentW) / 2));
   }
   if (hasPbFlag(flagsRaw, "#PB_StatusBar_Right")) {
-    return fieldX + Math.max(0, fieldW - contentW - 4);
+    return fieldX + Math.max(0, fieldW - contentW);
   }
-  return fieldX + leftPad;
+  return fieldX;
 }
 
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
@@ -3497,8 +3497,9 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const flexibleWidth = flexibleCount > 0 ? Math.max(1, Math.floor(remainingWidth / flexibleCount)) : 0;
 
   let x = rect.x;
-  const innerY = rect.y + 4;
-  const innerH = Math.max(8, rect.h - 8);
+  const progressY = rect.y + 5;
+  const progressH = Math.max(4, rect.h - 10);
+  const imageY = rect.y + 4;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const parsedWidth = parseStatusbarWidth(field.widthRaw);
@@ -3527,18 +3528,18 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.save();
       ctx.globalAlpha = 0.22;
       ctx.strokeStyle = border;
-      ctx.strokeRect(x + 4.5, innerY + 0.5, Math.max(8, fieldW - 8), innerH - 1);
+      ctx.strokeRect(x + 0.5, progressY + 0.5, Math.max(8, fieldW - 1), progressH - 1);
       ctx.fillStyle = accent;
       ctx.globalAlpha = 0.45;
-      ctx.fillRect(x + 5, innerY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 10) * progress) / 100)), Math.max(4, innerH - 2));
+      ctx.fillRect(x + 1, progressY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 3) * progress) / 100)), Math.max(2, progressH - 2));
       ctx.restore();
     } else {
       ctx.save();
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.55;
-      const size = Math.max(10, Math.min(16, innerH - 2));
+      const size = Math.max(10, Math.min(16, rect.h - 8));
       const imageX = getStatusBarAlignedX(x, fieldW, size, field.flagsRaw);
-      ctx.fillRect(imageX, rect.y + Math.max(3, Math.trunc((rect.h - size) / 2)), size, size);
+      ctx.fillRect(imageX, imageY, size, size);
       ctx.restore();
     }
 
