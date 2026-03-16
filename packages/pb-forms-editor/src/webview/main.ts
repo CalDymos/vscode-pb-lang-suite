@@ -4916,47 +4916,11 @@ function renderProps() {
 
     const addBtn = document.createElement("button");
     addBtn.textContent = "Add Entry";
+    addBtn.title = "Match the original toolbar add popup: AddButton, AddToggle or AddSeparator.";
     addBtn.onclick = () => {
-      const kind = prompt(
-        toolBarEntryKindHint(),
-        "ToolBarButton"
-      );
-      if (kind === null) return;
-      const k = kind.trim();
-      if (!k.length) return;
-
-      if (k === "ToolBarSeparator") {
-        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k });
-        return;
-      }
-
-      if (k === "ToolBarStandardButton") {
-        const idRaw = prompt("Button id", "");
-        if (idRaw === null) return;
-        const iconRaw = prompt("Icon raw", "0");
-        if (iconRaw === null) return;
-        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), iconRaw: iconRaw.trim() });
-        return;
-      }
-
-      if (k === "ToolBarButton") {
-        const idRaw = prompt("Button id", "");
-        if (idRaw === null) return;
-        const iconRaw = prompt("Icon raw", "0");
-        if (iconRaw === null) return;
-        const txt = prompt("Text", "");
-        if (txt === null) return;
-        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), iconRaw: iconRaw.trim(), textRaw: toPbString(txt) });
-        return;
-      }
-
-      if (k === "ToolBarToolTip") {
-        const idRaw = prompt("Button id", "");
-        if (idRaw === null) return;
-        const txt = prompt("Tooltip", "");
-        if (txt === null) return;
-        vscode.postMessage({ type: "insertToolBarEntry", toolBarId: t.id, kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
-      }
+      const nextArgs = promptToolBarPreviewInsertArgs(t);
+      if (!nextArgs) return;
+      postInsertToolBarEntry(t, nextArgs);
     };
 
     const actions = document.createElement("div");
@@ -5165,10 +5129,11 @@ function renderProps() {
 
     const addBtn = document.createElement("button");
     addBtn.textContent = "Add Field";
+    addBtn.title = "Match the original statusbar add popup: AddImage, AddLabel or AddProgressBar.";
     addBtn.onclick = () => {
-      const width = prompt("Width raw", "0");
-      if (width === null) return;
-      vscode.postMessage({ type: "insertStatusBarField", statusBarId: sb.id, widthRaw: width.trim() });
+      const nextArgs = promptStatusBarPreviewInsertArgs();
+      if (!nextArgs) return;
+      postInsertStatusBarField(sb, nextArgs);
     };
 
     const actions = document.createElement("div");
