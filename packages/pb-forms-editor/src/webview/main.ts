@@ -4481,15 +4481,18 @@ function renderProps() {
       return;
     }
 
-    propsEl.appendChild(row("Id", readonlyInput(m.id)));
-    propsEl.appendChild(row("Entries", readonlyInput(String(m.entries?.length ?? 0))));
+    const showMenuRootInspector = sel.kind === "menu";
     const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
     const hasEntriesWithoutEventIds = (m.entries ?? []).some(e => !e.idRaw);
-    if (!hasEventMenuBlock) {
-      propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
-    }
-    if (hasEntriesWithoutEventIds) {
-      propsEl.appendChild(mutedNote(EVENT_UI_HINT.menuIdRequired));
+    if (showMenuRootInspector) {
+      propsEl.appendChild(row("Id", readonlyInput(m.id)));
+      propsEl.appendChild(row("Entries", readonlyInput(String(m.entries?.length ?? 0))));
+      if (!hasEventMenuBlock) {
+        propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
+      }
+      if (hasEntriesWithoutEventIds) {
+        propsEl.appendChild(mutedNote(EVENT_UI_HINT.menuIdRequired));
+      }
     }
 
     const selectedEntry = sel.kind === "menuEntry" && typeof selectedEntryIndex === "number"
@@ -4867,19 +4870,20 @@ function renderProps() {
       };
       box.appendChild(rowEl);
     }
-    propsEl.appendChild(section("Structure"));
-    propsEl.appendChild(box);
+    if (showMenuRootInspector) {
+      propsEl.appendChild(section("Structure"));
+      propsEl.appendChild(box);
 
-    const addBtn = document.createElement("button");
-    addBtn.textContent = "Add Entry";
-    addBtn.onclick = () => {
-      const kind = prompt(
-        menuEntryKindHint(),
-        "MenuItem"
-      );
-      if (kind === null) return;
-      const k = kind.trim();
-      if (!k.length) return;
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "Add Entry";
+      addBtn.onclick = () => {
+        const kind = prompt(
+          menuEntryKindHint(),
+          "MenuItem"
+        );
+        if (kind === null) return;
+        const k = kind.trim();
+        if (!k.length) return;
 
       if (k === "MenuItem") {
         const idRaw = prompt("Menu id", "");
@@ -4902,19 +4906,20 @@ function renderProps() {
       }
     };
 
-    const actions = document.createElement("div");
-    actions.className = "miniActions";
-    actions.appendChild(addBtn);
-    if (sel.kind === "menu") {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete Menu";
-      deleteBtn.onclick = () => {
-        if (!confirm(`Delete menu '${m.id}'?`)) return;
-        post({ type: "deleteMenu", menuId: m.id });
-      };
-      actions.appendChild(deleteBtn);
+      const actions = document.createElement("div");
+      actions.className = "miniActions";
+      actions.appendChild(addBtn);
+      if (sel.kind === "menu") {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "Delete Menu";
+        deleteBtn.onclick = () => {
+          if (!confirm(`Delete menu '${m.id}'?`)) return;
+          post({ type: "deleteMenu", menuId: m.id });
+        };
+        actions.appendChild(deleteBtn);
+      }
+      propsEl.appendChild(actions);
     }
-    propsEl.appendChild(actions);
     return;
   }
 
@@ -4927,15 +4932,18 @@ function renderProps() {
       return;
     }
 
-    propsEl.appendChild(row("Id", readonlyInput(t.id)));
-    propsEl.appendChild(row("Entries", readonlyInput(String(getVisibleToolBarEntryCount(t)))));
+    const showToolBarRootInspector = sel.kind === "toolbar";
     const hasEventMenuBlock = Boolean(model.window?.hasEventMenuBlock);
     const hasEntriesWithoutEventIds = (t.entries ?? []).some(e => !e.idRaw);
-    if (!hasEventMenuBlock) {
-      propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
-    }
-    if (hasEntriesWithoutEventIds) {
-      propsEl.appendChild(mutedNote(EVENT_UI_HINT.toolBarIdRequired));
+    if (showToolBarRootInspector) {
+      propsEl.appendChild(row("Id", readonlyInput(t.id)));
+      propsEl.appendChild(row("Entries", readonlyInput(String(getVisibleToolBarEntryCount(t)))));
+      if (!hasEventMenuBlock) {
+        propsEl.appendChild(mutedNote(EVENT_UI_HINT.eventMenuMissing));
+      }
+      if (hasEntriesWithoutEventIds) {
+        propsEl.appendChild(mutedNote(EVENT_UI_HINT.toolBarIdRequired));
+      }
     }
 
     const selectedEntry = sel.kind === "toolBarEntry" && typeof selectedEntryIndex === "number"
@@ -5241,31 +5249,33 @@ function renderProps() {
       };
       box.appendChild(rowEl);
     }
-    propsEl.appendChild(section("Structure"));
-    propsEl.appendChild(box);
+    if (showToolBarRootInspector) {
+      propsEl.appendChild(section("Structure"));
+      propsEl.appendChild(box);
 
-    const addBtn = document.createElement("button");
-    addBtn.textContent = "Add Entry";
-    addBtn.title = "Match the original toolbar add popup: AddButton, AddToggle or AddSeparator.";
-    addBtn.onclick = () => {
-      const nextArgs = promptToolBarPreviewInsertArgs(t);
-      if (!nextArgs) return;
-      postInsertToolBarEntry(t, nextArgs);
-    };
-
-    const actions = document.createElement("div");
-    actions.className = "miniActions";
-    actions.appendChild(addBtn);
-    if (sel.kind === "toolbar") {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete Toolbar";
-      deleteBtn.onclick = () => {
-        if (!confirm(`Delete toolbar '${t.id}'?`)) return;
-        post({ type: "deleteToolBar", toolBarId: t.id });
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "Add Entry";
+      addBtn.title = "Match the original toolbar add popup: AddButton, AddToggle or AddSeparator.";
+      addBtn.onclick = () => {
+        const nextArgs = promptToolBarPreviewInsertArgs(t);
+        if (!nextArgs) return;
+        postInsertToolBarEntry(t, nextArgs);
       };
-      actions.appendChild(deleteBtn);
+
+      const actions = document.createElement("div");
+      actions.className = "miniActions";
+      actions.appendChild(addBtn);
+      if (sel.kind === "toolbar") {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "Delete Toolbar";
+        deleteBtn.onclick = () => {
+          if (!confirm(`Delete toolbar '${t.id}'?`)) return;
+          post({ type: "deleteToolBar", toolBarId: t.id });
+        };
+        actions.appendChild(deleteBtn);
+      }
+      propsEl.appendChild(actions);
     }
-    propsEl.appendChild(actions);
     return;
   }
 
@@ -5452,8 +5462,11 @@ function renderProps() {
       };
     };
 
-    propsEl.appendChild(row("Id", readonlyInput(sb.id)));
-    propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
+    const showStatusBarRootInspector = sel.kind === "statusbar";
+    if (showStatusBarRootInspector) {
+      propsEl.appendChild(row("Id", readonlyInput(sb.id)));
+      propsEl.appendChild(row("Fields", readonlyInput(String(sb.fields?.length ?? 0))));
+    }
 
     const selectedField = sel.kind === "statusBarField" && typeof selectedFieldIndex === "number"
       ? sb.fields?.[selectedFieldIndex]
@@ -5591,31 +5604,33 @@ function renderProps() {
       };
       box.appendChild(rowEl);
     });
-    propsEl.appendChild(section("Fields"));
-    propsEl.appendChild(box);
+    if (showStatusBarRootInspector) {
+      propsEl.appendChild(section("Fields"));
+      propsEl.appendChild(box);
 
-    const addBtn = document.createElement("button");
-    addBtn.textContent = "Add Field";
-    addBtn.title = "Match the original statusbar add popup: AddImage, AddLabel or AddProgressBar.";
-    addBtn.onclick = () => {
-      const nextArgs = promptStatusBarPreviewInsertArgs();
-      if (!nextArgs) return;
-      postInsertStatusBarField(sb, nextArgs);
-    };
-
-    const actions = document.createElement("div");
-    actions.className = "miniActions";
-    actions.appendChild(addBtn);
-    if (sel.kind === "statusbar") {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.textContent = "Delete StatusBar";
-      deleteBtn.onclick = () => {
-        if (!confirm(`Delete statusbar '${sb.id}'?`)) return;
-        post({ type: "deleteStatusBar", statusBarId: sb.id });
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "Add Field";
+      addBtn.title = "Match the original statusbar add popup: AddImage, AddLabel or AddProgressBar.";
+      addBtn.onclick = () => {
+        const nextArgs = promptStatusBarPreviewInsertArgs();
+        if (!nextArgs) return;
+        postInsertStatusBarField(sb, nextArgs);
       };
-      actions.appendChild(deleteBtn);
+
+      const actions = document.createElement("div");
+      actions.className = "miniActions";
+      actions.appendChild(addBtn);
+      if (sel.kind === "statusbar") {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "Delete StatusBar";
+        deleteBtn.onclick = () => {
+          if (!confirm(`Delete statusbar '${sb.id}'?`)) return;
+          post({ type: "deleteStatusBar", statusBarId: sb.id });
+        };
+        actions.appendChild(deleteBtn);
+      }
+      propsEl.appendChild(actions);
     }
-    propsEl.appendChild(actions);
     return;
   }
 
