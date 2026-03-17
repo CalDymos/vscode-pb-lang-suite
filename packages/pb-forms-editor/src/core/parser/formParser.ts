@@ -207,7 +207,8 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
-      case "CreateMenu": {
+      case "CreateMenu":
+      case "CreateImageMenu": {
         const p = splitParams(c.args);
         const id = (p[0] ?? "").trim();
         if (id.length) {
@@ -272,7 +273,8 @@ export function parseFormDocument(text: string): FormDocument {
         break;
       }
 
-      case "CreateToolBar": {
+      case "CreateToolBar":
+      case "CreateToolbar": {
         const p = splitParams(c.args);
         const id = (p[0] ?? "").trim();
         if (id.length) {
@@ -1131,23 +1133,120 @@ function parseMenuItemText(textRaw: string | undefined): { text?: string; shortc
   const raw = textRaw?.trim();
   if (!raw) return {};
 
-  const unescaped = raw.startsWith('~"') ? raw.slice(1) : raw;
-  if (unescaped.length < 2 || !unescaped.startsWith('"') || !unescaped.endsWith('"')) {
-    return { text: undefined, shortcut: undefined };
+  const literal = parsePbStringLiteral(raw);
+  if (literal !== undefined) {
+    const shortcutPos = literal.indexOf('"');
+    if (shortcutPos < 0) {
+      return { text: literal.length ? literal : undefined };
+    }
+
+    const text = literal.slice(0, shortcutPos);
+    const shortcut = literal.slice(shortcutPos + 1);
+    return {
+      text: text.length ? text : undefined,
+      shortcut: shortcut.length ? shortcut : undefined
+    };
   }
 
-  const inner = unescaped.slice(1, -1);
-  const shortcutPos = inner.indexOf('""');
-  if (shortcutPos < 0) {
-    return { text: inner.replace(/""/g, '"') || undefined };
+  const expr = parseMenuItemTextExpression(raw);
+  if (expr) return expr;
+
+  return { text: undefined, shortcut: undefined };
+}
+
+function parsePbStringLiteral(raw: string): string | undefined {
+  const value = raw.trim();
+  const unescaped = value.startsWith('~"') ? value.slice(1) : value;
+  if (unescaped.length < 2 || !unescaped.startsWith('"')) {
+    return undefined;
   }
 
-  const text = inner.slice(0, shortcutPos).replace(/""/g, '"');
-  const shortcut = inner.slice(shortcutPos + 2).replace(/""/g, '"');
+  let i = 1;
+  while (i < unescaped.length) {
+    const ch = unescaped[i];
+    if (ch === '"' && unescaped[i + 1] === '"') {
+      i += 2;
+      continue;
+    }
+    if (ch === '"') {
+      if (i !== unescaped.length - 1) return undefined;
+      return unescaped.slice(1, -1).replace(/""/g, '"');
+    }
+    i++;
+  }
+
+  return undefined;
+}
+
+function parseMenuItemTextExpression(raw: string): { text?: string; shortcut?: string } | undefined {
+  const parts = splitConcatenation(raw);
+  if (parts.length < 3) return undefined;
+
+  const tabIndex = parts.findIndex((part) => /^Chr\(\s*9\s*\)$/i.test(part));
+  if (tabIndex <= 0 || tabIndex === parts.length - 1) return undefined;
+
+  const text = parseConcatenatedStringParts(parts.slice(0, tabIndex));
+  const shortcut = parseConcatenatedStringParts(parts.slice(tabIndex + 1));
+  if (text === undefined || shortcut === undefined) return undefined;
+
   return {
     text: text.length ? text : undefined,
     shortcut: shortcut.length ? shortcut : undefined
   };
+}
+
+function parseConcatenatedStringParts(parts: string[]): string | undefined {
+  let out = '';
+  for (const part of parts) {
+    const literal = parsePbStringLiteral(part);
+    if (literal === undefined) return undefined;
+    out += literal;
+  }
+  return out;
+}
+
+function splitConcatenation(raw: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let inStr = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inStr) {
+      if (ch === '"' && raw[i + 1] === '"') {
+        i++;
+        continue;
+      }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+
+    if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (ch === '+' && depth === 0) {
+      const part = raw.slice(start, i).trim();
+      if (part.length) parts.push(part);
+      start = i + 1;
+    }
+  }
+
+  const tail = raw.slice(start).trim();
+  if (tail.length) parts.push(tail);
+  return parts;
 }
 
 function parseImageReference(raw: string | undefined): { imageRaw?: string; imageId?: string } {

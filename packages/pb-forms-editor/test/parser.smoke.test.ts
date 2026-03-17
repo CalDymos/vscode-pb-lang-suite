@@ -48,6 +48,71 @@ test("parses fixtures/smoke/03-gadgets-basic.pbf", () => {
 
 
 
+
+
+test("parses original PB 6.30 menu syntax with CreateImageMenu and Chr(9) shortcut concatenation", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  If OpenWindow(#FrmMain, x, y, width, height, "Menu", #PB_Window_SystemMenu)
+    CreateImageMenu(0, WindowID(#FrmMain))
+    MenuTitle("File")
+    MenuItem(#MenuOpen, "Open" + Chr(9) + "Ctrl+O", ImageID(#ImgOpen))
+  EndIf
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+
+  assert.equal(doc.menus.length, 1);
+  const menu = doc.menus[0];
+  assert.ok(menu);
+  assert.equal(menu?.entries.length, 2);
+
+  const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
+  assert.ok(openItem);
+  assert.equal(openItem?.text, "Open");
+  assert.equal(openItem?.shortcut, "Ctrl+O");
+  assert.equal(openItem?.iconRaw, "ImageID(#ImgOpen)");
+  assert.equal(openItem?.iconId, "#ImgOpen");
+});
+
+test("parses original PB 6.30 toolbar syntax with CreateToolbar", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  If OpenWindow(#FrmMain, x, y, width, height, "Toolbar", #PB_Window_SystemMenu)
+    CreateToolbar(0, WindowID(#FrmMain))
+    ToolBarImageButton(#TbSave, ImageID(#ImgSave), #PB_ToolBar_Toggle)
+    ToolBarToolTip(0, #TbSave, "Save current form")
+  EndIf
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+
+  assert.equal(doc.toolbars.length, 1);
+  const toolBar = doc.toolbars[0];
+  assert.ok(toolBar);
+
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.ok(imageButton);
+  assert.equal(imageButton?.idRaw, "#TbSave");
+  assert.equal(imageButton?.iconRaw, "ImageID(#ImgSave)");
+  assert.equal(imageButton?.iconId, "#ImgSave");
+  assert.equal(imageButton?.toggle, true);
+  assert.equal(imageButton?.tooltip, "Save current form");
+});
 test("parses fixtures/smoke/08-menu-basic.pbf", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const doc = parseFormDocument(text);
