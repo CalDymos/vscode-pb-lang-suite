@@ -2422,6 +2422,69 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
   };
 }
 
+const IMAGE_DECODER_ORDER = [
+  { name: "UseJPEGImageDecoder", pattern: /(?:jpg|jpeg)/i },
+  { name: "UsePNGImageDecoder", pattern: /png/i },
+  { name: "UseJTAImageDecoder", pattern: /tga/i },
+  { name: "UseTIFFImageDecoder", pattern: /tiff/i },
+] as const;
+
+function getRequiredImageDecoders(images: FormImage[]): string[] {
+  const result: string[] = [];
+
+  for (const decoder of IMAGE_DECODER_ORDER) {
+    const hasMatch = images.some(image => !image.inline && decoder.pattern.test(image.image ?? image.imageRaw));
+    if (hasMatch) {
+      result.push(decoder.name);
+    }
+  }
+
+  return result;
+}
+
+function isImageDecoderLine(text: string): boolean {
+  const trimmed = text.trim();
+  return IMAGE_DECODER_ORDER.some(decoder => trimmed === `${decoder.name}()`);
+}
+
+function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text.trim();
+    if (/^Enumeration\s+FormFont\b/i.test(text)) return i;
+    if (/^LoadFont\s*\(/i.test(text)) return i;
+    if (/^Procedure(?:\.\w+)?\s+/i.test(text)) return i;
+  }
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    if (/^\s*;\s*IDE Options\b/i.test(text)) {
+      return i;
+    }
+  }
+
+  return document.lineCount;
+}
+
+function buildImageBlock(images: FormImage[], indent: string): string {
+  if (!images.length) return "";
+
+  const decoderLines = getRequiredImageDecoders(images).map(name => `${indent}${name}()`);
+  const imageLines = images.map(image => `${indent}${buildImageLine({
+    inline: image.inline,
+    idRaw: image.firstParam,
+    imageRaw: image.imageRaw,
+    assignedVar: image.pbAny ? image.id : undefined,
+  })}`);
+
+  const parts: string[] = [];
+  if (decoderLines.length) {
+    parts.push(...decoderLines, "");
+  }
+  parts.push(...imageLines, "");
+  return `${parts.join("\n")}
+`;
+}
+
 function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
   let insertAfterLine = -1;
 
@@ -2433,18 +2496,7 @@ function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): nu
   }
 
   if (insertAfterLine >= 0) return insertAfterLine;
-
-  const windowCall = calls.find(c => c.name.toLowerCase() === "openwindow");
-  if (windowCall) return windowCall.range.line;
-
-  for (let i = 0; i < document.lineCount; i++) {
-    const text = document.lineAt(i).text;
-    if (/^\s*;\s*IDE Options\b/i.test(text)) {
-      return i - 1;
-    }
-  }
-
-  return document.lineCount - 1;
+  return findImageBlockInsertLine(document, calls) - 1;
 }
 
 function applyImageMutation(
@@ -2458,23 +2510,30 @@ function applyImageMutation(
 
   const calls = scanDocumentCalls(document, scanRange);
   const imageCalls = calls.filter(c => IMAGE_ENTRY_NAMES.has(c.name.toLowerCase()));
-  const anchorLine = findImageInsertLine(document, calls);
-  const indentLine = imageCalls.length ? imageCalls[0].range.line : Math.max(anchorLine, 0);
-  const indent = getLineIndent(document, indentLine);
-  const rebuilt = nextImages.length
-    ? `${nextImages.map(image => `${indent}${buildImageLine({
-        inline: image.inline,
-        idRaw: image.firstParam,
-        imageRaw: image.imageRaw,
-        assignedVar: image.pbAny ? image.id : undefined,
-      })}`).join("\n")}\n`
-    : "";
+  const decoderLines: number[] = [];
+  for (let i = 0; i < document.lineCount; i++) {
+    if (isImageDecoderLine(document.lineAt(i).text)) {
+      decoderLines.push(i);
+    }
+  }
+
+  const anchorLine = imageCalls.length
+    ? imageCalls[0].range.line
+    : (decoderLines.length ? decoderLines[0] : findImageBlockInsertLine(document, calls));
+  const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, document.lineCount - 1)) : "";
+  const rebuilt = buildImageBlock(nextImages, indent);
 
   const edit = new vscode.WorkspaceEdit();
 
-  if (imageCalls.length) {
-    const firstLine = imageCalls[0].range.line;
-    const lastLine = imageCalls[imageCalls.length - 1].range.line;
+  if (imageCalls.length || decoderLines.length) {
+    const firstLine = Math.min(
+      imageCalls.length ? imageCalls[0].range.line : Number.MAX_SAFE_INTEGER,
+      decoderLines.length ? decoderLines[0] : Number.MAX_SAFE_INTEGER
+    );
+    const lastLine = Math.max(
+      imageCalls.length ? imageCalls[imageCalls.length - 1].range.line : -1,
+      decoderLines.length ? decoderLines[decoderLines.length - 1] : -1
+    );
     edit.replace(
       document.uri,
       new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
@@ -2485,8 +2544,7 @@ function applyImageMutation(
 
   if (!rebuilt) return undefined;
 
-  const insertPos = new vscode.Position(Math.min(document.lineCount, anchorLine + 1), 0);
-  edit.insert(document.uri, insertPos, rebuilt);
+  edit.insert(document.uri, new vscode.Position(findImageBlockInsertLine(document, calls), 0), rebuilt);
   return edit;
 }
 
