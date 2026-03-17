@@ -348,32 +348,83 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
   }
 }
 
-function buildToolBarEntryLine(args: ToolBarEntryArgs, toolBarId?: string): string {
+function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
+  const id = (args.idRaw ?? "0").trim();
+  const icon = (args.iconRaw ?? "0").trim();
+  const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
+  return `ToolBarImageButton(${id}, ${icon}${toggle})`;
+}
+
+function buildToolBarToolTipLine(toolBarId: string | undefined, args: ToolBarEntryArgs): string {
+  const id = (args.idRaw ?? "0").trim();
+  const text = (args.textRaw ?? "\"\"").trim();
+  return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
+}
+
+function buildToolBarEntryLines(args: ToolBarEntryArgs, toolBarId?: string): string[] {
   switch (args.kind) {
     case TOOLBAR_ENTRY_KIND.ToolBarStandardButton:
-      return `ToolBarStandardButton(${(args.idRaw ?? "0").trim()}, ${(args.iconRaw ?? "0").trim()})`;
+      return [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton })];
     case TOOLBAR_ENTRY_KIND.ToolBarButton: {
-      const id = (args.idRaw ?? "0").trim();
-      const icon = (args.iconRaw ?? "0").trim();
-      const text = (args.textRaw ?? "\"\"").trim();
-      return `ToolBarButton(${id}, ${icon}, ${text})`;
+      const lines = [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, toggle: false })];
+      const text = args.textRaw?.trim();
+      if (text?.length) {
+        lines.push(buildToolBarToolTipLine(toolBarId, {
+          kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+          idRaw: args.idRaw,
+          textRaw: text,
+        }));
+      }
+      return lines;
     }
-    case TOOLBAR_ENTRY_KIND.ToolBarImageButton: {
-      const id = (args.idRaw ?? "0").trim();
-      const icon = (args.iconRaw ?? "0").trim();
-      const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
-      return `ToolBarImageButton(${id}, ${icon}${toggle})`;
-    }
+    case TOOLBAR_ENTRY_KIND.ToolBarImageButton:
+      return [buildToolBarImageButtonLine(args)];
     case TOOLBAR_ENTRY_KIND.ToolBarSeparator:
-      return "ToolBarSeparator()";
-    case TOOLBAR_ENTRY_KIND.ToolBarToolTip: {
-      const id = (args.idRaw ?? "0").trim();
-      const text = (args.textRaw ?? "\"\"").trim();
-      return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
-    }
+      return ["ToolBarSeparator()"];
+    case TOOLBAR_ENTRY_KIND.ToolBarToolTip:
+      return [buildToolBarToolTipLine(toolBarId, args)];
     default:
-      return "";
+      return [];
   }
+}
+
+function buildToolBarEntryText(args: ToolBarEntryArgs, toolBarId: string | undefined, indent = ""): string {
+  return buildToolBarEntryLines(args, toolBarId)
+    .map(line => `${indent}${line}`)
+    .join("\n");
+}
+
+function buildToolBarEntryLine(args: ToolBarEntryArgs, toolBarId?: string): string {
+  return buildToolBarEntryText(args, toolBarId);
+}
+
+function isToolBarButtonKind(kind: ToolBarEntryKind): boolean {
+  return kind === TOOLBAR_ENTRY_KIND.ToolBarStandardButton
+    || kind === TOOLBAR_ENTRY_KIND.ToolBarButton
+    || kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton;
+}
+
+function getToolBarEntryIdFromCall(call: PbCall): string | undefined {
+  const params = splitParams(call.args);
+  return params[0]?.trim();
+}
+
+function findToolBarToolTipCall(
+  calls: PbCall[],
+  toolBarId: string,
+  entryIdRaw: string | undefined
+): PbCall | undefined {
+  const normalizedEntryId = entryIdRaw?.trim();
+  if (!normalizedEntryId?.length) return undefined;
+
+  return calls.find(call => {
+    if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
+    if (!isLineInCreateSection(calls, call.range.line, "createtoolbar", toolBarId)) return false;
+
+    const parts = splitParams(call.args);
+    const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
+    return buttonIdRaw === normalizedEntryId;
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -2786,7 +2837,7 @@ export function applyToolBarEntryInsert(
     "createtoolbar",
     toolBarId,
     TOOLBAR_ENTRY_NAMES,
-    indent => `${indent}${buildToolBarEntryLine(args, toolBarId)}`
+    indent => buildToolBarEntryText(args, toolBarId, indent)
   );
 }
 
@@ -2798,16 +2849,42 @@ export function applyToolBarEntryUpdate(
   args: ToolBarEntryArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryUpdate(
-    document,
-    calls,
-    "createtoolbar",
-    toolBarId,
-    sourceLine,
-    args.kind.toLowerCase(),
-    buildToolBarEntryLine(args, toolBarId)
-  );
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase());
+  if (!call) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = buildToolBarEntryText(args, toolBarId, indent);
+  const lineText = document.lineAt(sourceLine).text;
+  const endInLine = Math.max(0, call.range.end - call.range.lineStart);
+  const suffix = lineText.slice(endInLine);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(sourceLine).range, rebuilt + suffix);
+
+  const previousEntryId = getToolBarEntryIdFromCall(call);
+  const nextEntryId = args.idRaw?.trim() || previousEntryId;
+  const tipCall = findToolBarToolTipCall(calls, toolBarId, previousEntryId);
+
+  if (tipCall && tipCall.range.line !== sourceLine) {
+    if (args.kind === TOOLBAR_ENTRY_KIND.ToolBarButton) {
+      edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    } else if (args.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && previousEntryId && nextEntryId && previousEntryId !== nextEntryId) {
+      const tipParts = splitParams(tipCall.args);
+      const textRaw = (tipParts.length >= 3 ? tipParts[2] : tipParts[1])?.trim() ?? '""';
+      const rebuiltTipLine = buildToolBarEntryText({
+        kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+        idRaw: nextEntryId,
+        textRaw,
+      }, toolBarId, getLineIndent(document, tipCall.range.line));
+      edit.replace(document.uri, document.lineAt(tipCall.range.line).range, rebuiltTipLine);
+    }
+  }
+
+  return edit;
 }
 
 export function applyToolBarEntryDelete(
@@ -2818,14 +2895,24 @@ export function applyToolBarEntryDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryDelete(
-    document,
-    calls,
-    "createtoolbar",
-    toolBarId,
-    sourceLine,
-    kind.toLowerCase()
-  );
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase());
+  if (!call) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+
+  if (isToolBarButtonKind(kind)) {
+    const entryId = getToolBarEntryIdFromCall(call);
+    const tipCall = findToolBarToolTipCall(calls, toolBarId, entryId);
+    if (tipCall && tipCall.range.line !== sourceLine) {
+      edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    }
+  }
+
+  return edit;
 }
 
 export function applyToolBarEntryTooltipSet(
