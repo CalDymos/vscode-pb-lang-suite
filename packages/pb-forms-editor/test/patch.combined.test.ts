@@ -273,7 +273,7 @@ test("roundtrips menu entry insert with shortcut and icon", () => {
   assert.equal(menu!.entries[3]?.text, "Save");
   assert.equal(menu!.entries[3]?.shortcut, "Ctrl+S");
   assert.equal(menu!.entries[3]?.iconId, "#ImgSave");
-  assert.match(patchedText, /MenuItem\(#MnuSave, "Save""Ctrl\+S", ImageID\(#ImgSave\)\)/);
+  assert.match(patchedText, /MenuItem\(#MnuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S", ImageID\(#ImgSave\)\)/);
 });
 
 test("roundtrips root menu title insert", () => {
@@ -390,7 +390,35 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
   assert.equal(updatedItem?.text, "Open Project");
   assert.equal(updatedItem?.shortcut, "Ctrl+O");
   assert.equal(updatedItem?.iconId, "#ImgOpen");
-  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open Project""Ctrl\+O", ImageID\(#ImgOpen\)\)/);
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open Project" \+ Chr\(9\) \+ "Ctrl\+O", ImageID\(#ImgOpen\)\)/);
+});
+
+
+test("patches menu entries inside CreateImageMenu sections", () => {
+  const text = [
+    'Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)',
+    '  OpenWindow(#FrmMain, x, y, width, height, "Menu")',
+    '  CreateImageMenu(0, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  MenuItem(#MenuOpen, "Open" + Chr(9) + "Ctrl+O")',
+    'EndProcedure',
+    ''
+  ].join("\n");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, '0', {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: '#MenuSave',
+      textRaw: '"Save"',
+      shortcut: 'Ctrl+S',
+    })
+  );
+
+  const menu = parsed.menus.find((m) => m.id === '0');
+  assert.ok(menu, 'Expected CreateImageMenu section after insert.');
+  assert.equal(menu!.entries.at(-1)?.idRaw, '#MenuSave');
+  assert.equal(menu!.entries.at(-1)?.shortcut, 'Ctrl+S');
+  assert.match(patchedText, /CreateImageMenu\(0, WindowID\(#FrmMain\)\)[\s\S]*MenuItem\(#MenuSave, "Save" \+ Chr\(9\) \+ "Ctrl\+S"\)/);
 });
 
 test("roundtrips menu subtree move before sibling entry", () => {
@@ -836,6 +864,26 @@ test("roundtrips statusbar width-only update without clearing image fields", () 
   assert.equal(updatedStatusBar!.fields[2]?.flagsRaw, "#PB_StatusBar_BorderLess");
   assert.match(patchedText, /AddStatusBarField\(96\)/);
   assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+});
+
+
+test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", () => {
+  const { text, statusBar } = parseStatusFixture();
+  const sourceLine = statusBar.fields[0]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for first statusbar field.");
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, {
+      widthRaw: "120",
+      textRaw: '"Ready"',
+      flagsRaw: "#PB_StatusBar_Center",
+    })
+  );
+
+  assert.match(
+    patchedText,
+    /CreateStatusBar\(#SbMain, WindowID\(#FrmMain\)\)\r?\n\s*AddStatusBarField\(120\)\r?\n\s*StatusBarText\(#SbMain, 0, "Ready", #PB_StatusBar_Center\)\r?\n\s*AddStatusBarField\(90\)\r?\n\s*StatusBarProgress\(#SbMain, 1, 35, #PB_StatusBar_Raised\)\r?\n\s*AddStatusBarField\(#PB_Ignore\)\r?\n\s*StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/
+  );
 });
 
 

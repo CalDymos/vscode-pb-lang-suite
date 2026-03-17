@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
-import { splitParams } from "../parser/tokenizer";
+import { splitParams, unquoteString } from "../parser/tokenizer";
 import { FormImage, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
@@ -264,10 +264,22 @@ export interface GadgetOpenArgs {
 function isCreateBoundary(nameLower: string): boolean {
   return (
     nameLower === "createmenu" ||
+    nameLower === "createimagemenu" ||
     nameLower === "createtoolbar" ||
     nameLower === "createstatusbar" ||
     nameLower === "openwindow"
   );
+}
+
+function getCreateNameVariants(createNameLower: string): readonly string[] {
+  if (createNameLower === "createmenu") {
+    return ["createmenu", "createimagemenu"];
+  }
+  return [createNameLower];
+}
+
+function matchesCreateCallName(callNameLower: string, createNameLower: string): boolean {
+  return getCreateNameVariants(createNameLower).includes(callNameLower);
 }
 
 function findNearestCreateAbove(
@@ -277,24 +289,42 @@ function findNearestCreateAbove(
 ) {
   let best: (typeof calls)[number] | undefined;
   for (const c of calls) {
-    if (c.name.toLowerCase() !== createNameLower) continue;
+    if (!matchesCreateCallName(c.name.toLowerCase(), createNameLower)) continue;
     if (c.range.line <= line) best = c;
     else break;
   }
   return best;
 }
 
+function quotePbString(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function normalizeMenuTextForShortcut(textRaw: string): string {
+  const raw = textRaw.trim();
+  const tabConcat = /^(.*)\+\s*Chr\(\s*9\s*\)\s*\+\s*(.*)$/i.exec(raw);
+  if (tabConcat) {
+    const literal = unquoteString(tabConcat[1].trim());
+    if (literal !== undefined) {
+      return quotePbString(literal);
+    }
+  }
+
+  const literal = unquoteString(raw);
+  if (literal !== undefined) {
+    const shortcutPos = literal.indexOf('"');
+    const text = shortcutPos >= 0 ? literal.slice(0, shortcutPos) : literal;
+    return quotePbString(text);
+  }
+
+  return raw;
+}
+
 function appendMenuShortcut(textRaw: string, shortcut: string | undefined): string {
   const shortcutText = shortcut?.trim();
   if (!shortcutText) return textRaw;
-
-  const match = /^(~)?"([\s\S]*)"$/.exec(textRaw);
-  if (!match) return textRaw;
-
-  const prefix = match[1] ?? "";
-  const inner = match[2] ?? "";
-  const escapedShortcut = shortcutText.replace(/"/g, '""');
-  return `${prefix}"${inner}""${escapedShortcut}"`;
+  const baseText = normalizeMenuTextForShortcut(textRaw);
+  return `${baseText} + Chr(9) + ${quotePbString(shortcutText)}`;
 }
 
 function buildMenuEntryLine(args: MenuEntryArgs): string {
@@ -2248,7 +2278,7 @@ function applyImageMutation(
 }
 
 function findCreateCallById(calls: PbCall[], createNameLower: string, id: string): PbCall | undefined {
-  return calls.find(c => c.name.toLowerCase() === createNameLower && firstParamOfCall(c.args) === id);
+  return calls.find(c => matchesCreateCallName(c.name.toLowerCase(), createNameLower) && firstParamOfCall(c.args) === id);
 }
 
 function findSectionEndIndex(calls: PbCall[], startIdx: number): number {
@@ -2531,11 +2561,9 @@ function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarF
 function buildStatusBarSectionText(statusBarId: string, fields: FormStatusBarField[], indent: string): string {
   const lines: string[] = [];
 
-  for (const field of fields) {
-    lines.push(`${indent}AddStatusBarField(${field.widthRaw.trim()})`);
-  }
-
   fields.forEach((field, index) => {
+    lines.push(`${indent}AddStatusBarField(${field.widthRaw.trim()})`);
+
     const decoration = buildStatusBarDecorationLine(statusBarId, field, index);
     if (decoration) {
       lines.push(`${indent}${decoration}`);
