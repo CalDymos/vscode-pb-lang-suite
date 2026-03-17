@@ -31,6 +31,7 @@ Procedure OpenFrmStyleProps(x = 0, y = 0, width = 320, height = 180)
   SetGadgetColor(#TxtName, #PB_Gadget_FrontColor,RGB(51,34,17))
   SetGadgetColor(#TxtName, #PB_Gadget_BackColor,RGB(10,20,30))
   SetGadgetFont(#TxtName, FontID(#Font_FrmStyleProps_0))
+  DisableGadget(#TxtName, 1)
   CheckBoxGadget(#ChkActive, 10, 46, 120, 20, "Active")
   SetGadgetState(#ChkActive, #PB_Checkbox_Checked)
 EndProcedure
