@@ -1,4 +1,4 @@
-; Form Designer for PureBasic - 6.30
+﻿; Form Designer for PureBasic - 6.30
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -17,10 +17,10 @@ Enumeration FormGadget
 EndEnumeration
 
 Enumeration FormFont
-  #FontBody
+  #Font_FrmStyleProps_0
 EndEnumeration
 
-LoadFont(#FontBody, "Arial", 12, #PB_Font_Bold | #PB_Font_Italic)
+LoadFont(#Font_FrmStyleProps_0,"Arial", 12, #PB_Font_Bold | #PB_Font_Italic)
 
 
 Procedure OpenFrmStyleProps(x = 0, y = 0, width = 320, height = 180)
@@ -28,10 +28,10 @@ Procedure OpenFrmStyleProps(x = 0, y = 0, width = 320, height = 180)
   StringGadget(#TxtName, 10, 10, 180, 24, Value$)
   HideGadget(#TxtName, 1)
   GadgetToolTip(#TxtName, Tooltip$)
-  SetGadgetColor(#TxtName, #PB_Gadget_BackColor, RGB(10, 20, 30))
-  SetGadgetColor(#TxtName, #PB_Gadget_FrontColor, $112233)
-  SetGadgetFont(#TxtName, FontID(#FontBody))
-  DisableGadget(#TxtName, 0)
+  SetGadgetColor(#TxtName, #PB_Gadget_FrontColor,RGB(51,34,17))
+  SetGadgetColor(#TxtName, #PB_Gadget_BackColor,RGB(10,20,30))
+  SetGadgetFont(#TxtName, FontID(#Font_FrmStyleProps_0))
   CheckBoxGadget(#ChkActive, 10, 46, 120, 20, "Active")
-  SetGadgetState(#ChkActive, #PB_CheckBox_Checked)
+  SetGadgetState(#ChkActive, #PB_Checkbox_Checked)
 EndProcedure
+
