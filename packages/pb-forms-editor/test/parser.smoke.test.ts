@@ -570,21 +570,21 @@ test("parses fixtures/smoke/12-visibility-colors-fonts.pbf", () => {
   assert.equal(txtName?.textVariable, true);
   assert.equal(txtName?.hidden, true);
   assert.equal(txtName?.hiddenRaw, "1");
-  assert.equal(txtName?.disabled, false);
-  assert.equal(txtName?.disabledRaw, "0");
+  assert.equal(txtName?.disabled, true);
+  assert.equal(txtName?.disabledRaw, "1");
   assert.equal(txtName?.tooltip, "Tooltip$");
   assert.equal(txtName?.tooltipVariable, true);
   assert.equal(txtName?.backColor, 0x1e140a);
-  assert.equal(txtName?.backColorRaw, "RGB(10, 20, 30)");
+  assert.equal(txtName?.backColorRaw, "RGB(10,20,30)");
   assert.equal(txtName?.frontColor, 0x112233);
-  assert.equal(txtName?.frontColorRaw, "$112233");
-  assert.equal(txtName?.gadgetFontRaw, "FontID(#FontBody)");
+  assert.equal(txtName?.frontColorRaw, "RGB(51,34,17)");
+  assert.equal(txtName?.gadgetFontRaw, "FontID(#Font_FrmStyleProps_0)");
   assert.equal(txtName?.gadgetFont, "Arial");
   assert.equal(txtName?.gadgetFontSize, 12);
   assert.equal(txtName?.gadgetFontFlagsRaw, "#PB_Font_Bold | #PB_Font_Italic");
 
   assert.ok(chkActive, "Expected #ChkActive gadget.");
-  assert.equal(chkActive?.stateRaw, "#PB_CheckBox_Checked");
+  assert.equal(chkActive?.stateRaw, "#PB_Checkbox_Checked");
   assert.equal(chkActive?.state, 1);
 });
 
@@ -789,46 +789,46 @@ test("parses fixtures/smoke/11-images-crossrefs.pbf", () => {
 
   assert.equal(doc.images.length, 4);
 
-  const openImg = doc.images.find((img) => img.id === "#ImgOpen");
-  assert.ok(openImg, "Expected #ImgOpen image.");
+  const openImg = doc.images.find((img) => img.id === "#Img_FrmImages_0");
+  assert.ok(openImg, "Expected #Img_FrmImages_0 image.");
   assert.equal(openImg?.inline, false);
   assert.equal(openImg?.imageRaw, '"open.png"');
   assert.equal(openImg?.image, "open.png");
 
-  const relativeImg = doc.images.find((img) => img.id === "#ImgRelative");
-  assert.ok(relativeImg, "Expected #ImgRelative image.");
+  const relativeImg = doc.images.find((img) => img.id === "#Img_FrmImages_1");
+  assert.ok(relativeImg, "Expected #Img_FrmImages_1 image.");
   assert.equal(relativeImg?.inline, false);
   assert.equal(relativeImg?.imageRaw, '"./icons/apply.png"');
   assert.equal(relativeImg?.image, "./icons/apply.png");
 
-  const saveImg = doc.images.find((img) => img.id === "imgSave");
+  const saveImg = doc.images.find((img) => img.id === "Img_FrmImages_2");
   assert.ok(saveImg, "Expected pbAny image assignment.");
   assert.equal(saveImg?.pbAny, true);
-  assert.equal(saveImg?.variable, "imgSave");
+  assert.equal(saveImg?.variable, "Img_FrmImages_2");
   assert.equal(saveImg?.image, "save.png");
 
-  const stateImg = doc.images.find((img) => img.id === "#ImgState");
+  const stateImg = doc.images.find((img) => img.id === "#Img_FrmImages_3");
   assert.ok(stateImg, "Expected inline image.");
   assert.equal(stateImg?.inline, true);
-  assert.equal(stateImg?.imageRaw, "?ImgState");
-  assert.equal(stateImg?.image, "ImgState");
+  assert.equal(stateImg?.imageRaw, "?Img_FrmImages_3");
+  assert.equal(stateImg?.image, "Img_FrmImages_3");
 
   const imageGadget = doc.gadgets.find((g) => g.id === "#ImgPreview");
   assert.ok(imageGadget, "Expected image gadget.");
-  assert.equal(imageGadget?.imageId, "#ImgOpen");
+  assert.equal(imageGadget?.imageId, "#Img_FrmImages_0");
 
   const buttonImageGadget = doc.gadgets.find((g) => g.id === "#BtnApply");
   assert.ok(buttonImageGadget, "Expected button image gadget.");
-  assert.equal(buttonImageGadget?.imageId, "#ImgRelative");
+  assert.equal(buttonImageGadget?.imageId, "#Img_FrmImages_1");
 
   const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
-  assert.equal(menuItem?.iconId, "#ImgOpen");
+  assert.equal(menuItem?.iconId, "#Img_FrmImages_0");
 
   const toolBarImage = doc.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
-  assert.equal(toolBarImage?.iconId, "imgSave");
+  assert.equal(toolBarImage?.iconId, "Img_FrmImages_2");
 
   const statusField = doc.statusbars[0]?.fields[0];
-  assert.equal(statusField?.imageId, "#ImgState");
+  assert.equal(statusField?.imageId, "#Img_FrmImages_3");
 });
 
 

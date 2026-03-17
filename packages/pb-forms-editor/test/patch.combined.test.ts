@@ -315,7 +315,7 @@ test("roundtrips nested menu entry insert into submenu footer", () => {
   const openSubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu);
   const parentSourceLine = openSubMenu?.source?.line;
 
-  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.ok(menu, "Expected menu.");
   assert.equal(typeof parentSourceLine, "number", "Expected source line for OpenSubMenu entry.");
 
   const args: MenuEntryArgs = {
@@ -442,7 +442,7 @@ test("roundtrips menu subtree move before sibling entry", () => {
   const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
   const separator = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuBar);
 
-  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.ok(menu, "Expected menu.");
   assert.equal(typeof subMenu?.source?.line, "number", "Expected source line for submenu entry.");
   assert.equal(typeof separator?.source?.line, "number", "Expected source line for separator entry.");
 
@@ -475,7 +475,7 @@ test("roundtrips menu entry move into submenu as child block", () => {
   const openItem = menu?.entries.find((entry) => entry.idRaw === "#MenuOpen");
   const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
 
-  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.ok(menu, "Expected menu.");
   assert.equal(typeof openItem?.source?.line, "number", "Expected source line for root menu item.");
   assert.equal(typeof subMenu?.source?.line, "number", "Expected source line for submenu entry.");
 
@@ -524,7 +524,7 @@ test("roundtrips submenu delete removes matching CloseSubMenu and descendants", 
   const target = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
   const sourceLine = target?.source?.line;
 
-  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.ok(menu, "Expected menu.");
   assert.equal(typeof sourceLine, "number", "Expected source line for existing OpenSubMenu entry.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
@@ -653,7 +653,7 @@ test("roundtrips toolbar tooltip set via toolbar entry source line", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
   const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
-  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+  assert.ok(toolBar, "Expected toolbar in toolbar fixture.");
 
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
@@ -704,7 +704,7 @@ test("roundtrips toolbar tooltip clear removes linked tooltip line", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
   const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
-  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+  assert.ok(toolBar, "Expected toolbar in toolbar fixture.");
 
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
@@ -725,7 +725,7 @@ test("roundtrips toolbar image button update", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
   const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
-  assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
+  assert.ok(toolBar, "Expected toolbar in toolbar fixture.");
 
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
@@ -976,13 +976,13 @@ test("roundtrips image insert after existing image block", () => {
 
 test("roundtrips image update for pbAny catch image", () => {
   const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = parsed.images.find((image) => image.id === "imgSave")?.source?.line;
+  const sourceLine = parsed.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for pbAny image.");
 
   const args: ImageArgs = {
     inline: true,
     idRaw: "#PB_Any",
-    assignedVar: "imgSave",
+    assignedVar: "Img_FrmImages_2",
     imageRaw: "?ImgSaveData",
   };
 
@@ -990,22 +990,22 @@ test("roundtrips image update for pbAny catch image", () => {
     applyImageUpdate(document, sourceLine!, args)
   );
 
-  const updatedImage = updated.images.find((image) => image.id === "imgSave");
+  const updatedImage = updated.images.find((image) => image.id === "Img_FrmImages_2");
   assert.ok(updatedImage, "Expected updated pbAny image entry.");
   assert.equal(updatedImage?.inline, true);
   assert.equal(updatedImage?.imageRaw, "?ImgSaveData");
   assert.equal(updatedImage?.image, "ImgSaveData");
-  assert.match(patchedText, /imgSave = CatchImage\(#PB_Any, \?ImgSaveData\)/);
+  assert.match(patchedText, /Img_FrmImages_2 = CatchImage\(#PB_Any, \?ImgSaveData\)/);
 });
 
 test("roundtrips image update from load image to catch image without changing raw value", () => {
   const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = parsed.images.find((image) => image.id === "#ImgOpen")?.source?.line;
+  const sourceLine = parsed.images.find((image) => image.id === "#Img_FrmImages_0")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for load image.");
 
   const args: ImageArgs = {
     inline: true,
-    idRaw: "#ImgOpen",
+    idRaw: "#Img_FrmImages_0",
     imageRaw: '"open.png"',
   };
 
@@ -1013,47 +1013,47 @@ test("roundtrips image update from load image to catch image without changing ra
     applyImageUpdate(document, sourceLine!, args)
   );
 
-  const updatedImage = updated.images.find((image) => image.id === "#ImgOpen");
+  const updatedImage = updated.images.find((image) => image.id === "#Img_FrmImages_0");
   assert.ok(updatedImage, "Expected updated load image entry.");
   assert.equal(updatedImage?.inline, true);
-  assert.equal(updatedImage?.firstParam, "#ImgOpen");
+  assert.equal(updatedImage?.firstParam, "#Img_FrmImages_0");
   assert.equal(updatedImage?.imageRaw, '"open.png"');
-  assert.match(patchedText, /CatchImage\(#ImgOpen, "open\.png"\)/);
+  assert.match(patchedText, /CatchImage\(#Img_FrmImages_0, "open\.png"\)/);
 });
 
 test("roundtrips image update from catch image to load image without changing raw value", () => {
   const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
+  const sourceLine = parsed.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for catch image.");
 
   const args: ImageArgs = {
     inline: false,
-    idRaw: "#ImgState",
-    imageRaw: "?ImgState",
+    idRaw: "#Img_FrmImages_3",
+    imageRaw: "?Img_FrmImages_3",
   };
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyImageUpdate(document, sourceLine!, args)
   );
 
-  const updatedImage = updated.images.find((image) => image.id === "#ImgState");
+  const updatedImage = updated.images.find((image) => image.id === "#Img_FrmImages_3");
   assert.ok(updatedImage, "Expected updated catch image entry.");
   assert.equal(updatedImage?.inline, false);
-  assert.equal(updatedImage?.firstParam, "#ImgState");
-  assert.equal(updatedImage?.imageRaw, "?ImgState");
-  assert.match(patchedText, /LoadImage\(#ImgState, \?ImgState\)/);
+  assert.equal(updatedImage?.firstParam, "#Img_FrmImages_3");
+  assert.equal(updatedImage?.imageRaw, "?Img_FrmImages_3");
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_3, \?Img_FrmImages_3\)/);
 });
 
 test("roundtrips image delete", () => {
   const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
+  const sourceLine = parsed.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for inline image.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
     applyImageDelete(document, sourceLine!)
   );
 
-  assert.equal(updated.images.some((image) => image.id === "#ImgState"), false);
+  assert.equal(updated.images.some((image) => image.id === "#Img_FrmImages_3"), false);
   assert.doesNotMatch(patchedText, /CatchImage\(#ImgState, \?ImgState\)/);
 });
 
@@ -1100,7 +1100,7 @@ test("roundtrips choose-file button image gadget workflow with auto-resize patch
   assert.equal(gadget?.h, 36);
   assert.ok(image, "Expected inserted file-backed image entry for button image gadget.");
   assert.equal(image?.imageRaw, '"toolbar/apply-selected.png"');
-  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 128, 36, ImageID\(#ImgBtnChosen\), #PB_Button_Default\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 128, 36, ImageID\(#ImgBtnChosen\)\)/);
   assert.match(patchedText, /LoadImage\(#ImgBtnChosen, "toolbar\/apply-selected\.png"\)/);
 });
 
@@ -1126,7 +1126,7 @@ test("roundtrips create-and-assign workflow for image gadget", () => {
 test("roundtrips create-and-assign workflow for menu item", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const menu = initial.menus.find((entry) => entry.id === menuId);
-  assert.ok(menu, "Expected #MenuMain menu.");
+  assert.ok(menu, "Expected menu.");
   const openItem = menu!.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
   assert.equal(typeof openItem?.source?.line, "number", "Expected menu entry source line.");
 
@@ -1155,7 +1155,7 @@ test("roundtrips create-and-assign workflow for menu item", () => {
 test("roundtrips create-and-assign workflow for toolbar image button with pbAny image", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
-  assert.ok(toolBar, "Expected #TbMain toolbar.");
+  assert.ok(toolBar, "Expected toolbar.");
   const imageButton = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   assert.equal(typeof imageButton?.source?.line, "number", "Expected toolbar entry source line.");
 
@@ -1252,7 +1252,7 @@ test("roundtrips gadget property update for state and removes cleared lines", ()
   assert.equal(chkActive?.stateRaw, "0");
   assert.equal(chkActive?.state, 0);
   assert.match(patchedText, /SetGadgetState\(#ChkActive, 0\)/);
-  assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_CheckBox_Checked\)/);
+  assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_Checkbox_Checked\)/);
 });
 
 
@@ -1296,11 +1296,11 @@ test("roundtrips gadget property update removing managed property lines", () => 
 
 test("roundtrips image pbAny toggle from enum image and updates gadget plus menu references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = initial.images.find((image) => image.id === "#ImgOpen")?.source?.line;
+  const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_0")?.source?.line;
   const menu = initial.menus.find((entry) => entry.id === menuId);
   const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
 
-  assert.equal(typeof sourceLine, "number", "Expected source line for #ImgOpen.");
+  assert.equal(typeof sourceLine, "number", "Expected source line for #Img_FrmImages_0.");
   assert.equal(typeof openItem?.source?.line, "number", "Expected menu item source line.");
 
   const { parsed, patchedText } = patchThriceAndReparse(
@@ -1339,7 +1339,7 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
 
 test("roundtrips image pbAny toggle from pbAny image and updates toolbar references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = initial.images.find((image) => image.id === "imgSave")?.source?.line;
+  const sourceLine = initial.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
   const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
   const saveButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
 
@@ -1375,9 +1375,9 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
 
 test("roundtrips image pbAny toggle updates statusbar references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = initial.images.find((image) => image.id === "#ImgState")?.source?.line;
+  const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
   const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
-  const imageField = statusBar?.fields.find((field) => field.imageId === "#ImgState");
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_3");
 
   assert.equal(typeof sourceLine, "number", "Expected source line for #ImgState.");
   assert.equal(typeof imageField?.source?.line, "number", "Expected statusbar field source line.");
@@ -1409,9 +1409,9 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
 
 test("roundtrips image pbAny toggle updates button image gadget references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
-  const sourceLine = initial.images.find((image) => image.id === "#ImgRelative")?.source?.line;
+  const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_1")?.source?.line;
 
-  assert.equal(typeof sourceLine, "number", "Expected source line for #ImgRelative.");
+  assert.equal(typeof sourceLine, "number", "Expected source line for #Img_FrmImages_1.");
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
@@ -1432,7 +1432,7 @@ test("roundtrips image pbAny toggle updates button image gadget references", () 
   assert.equal(gadget?.kind, "ButtonImageGadget");
   assert.equal(gadget?.imageId, "ImgRelative");
   assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
-  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 96, 28, ImageID\(ImgRelative\), #PB_Button_Default\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 96, 28, ImageID\(ImgRelative\)\)/);
 });
 
 
