@@ -39,6 +39,11 @@ import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 // are accepted without additional casts at each call site.
 import type { TextDocument } from "vscode";
 
+const DEFAULT_SECTION_ID = "0";
+const menuId = DEFAULT_SECTION_ID;
+const toolBarId = DEFAULT_SECTION_ID;
+const statusBarId = DEFAULT_SECTION_ID;
+
 // NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
 // The VSCode Language Server resolves @types/vscode regardless of tsconfig.test.json,
 // so passing FakeTextDocument where TextDocument is expected causes TS2345.
@@ -215,32 +220,41 @@ function patchThriceAndReparse(
 function parseFixture() {
   const text = loadFixture("fixtures/roundtrip/14-combined-regression.pbf");
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
-  const toolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
-  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const menu = parsed.menus[0];
+  const toolBar = parsed.toolbars[0];
+  const statusBar = parsed.statusbars[0];
 
-  assert.ok(menu, "Expected #MenuMain menu.");
-  assert.ok(toolBar, "Expected #TbMain toolbar.");
-  assert.ok(statusBar, "Expected #SbMain statusbar.");
+  assert.ok(menu, "Expected menu section.");
+  assert.ok(toolBar, "Expected toolbar section.");
+  assert.ok(statusBar, "Expected statusbar section.");
 
-  return { text, parsed, menu: menu!, toolBar: toolBar!, statusBar: statusBar! };
+  return { text, parsed, menu: menu!, toolBar: toolBar!, statusBar: statusBar!, menuId: menu!.id, toolBarId: toolBar!.id, statusBarId: statusBar!.id };
 }
 
 function parseStatusFixture() {
   const text = loadFixture("fixtures/smoke/10-statusbar-basic.pbf");
   const parsed = parseFormDocument(text);
-  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const statusBar = parsed.statusbars[0];
 
-  assert.ok(statusBar, "Expected #SbMain statusbar in statusbar fixture.");
-  return { text, parsed, statusBar: statusBar! };
+  assert.ok(statusBar, "Expected statusbar in statusbar fixture.");
+  return { text, parsed, statusBar: statusBar!, statusBarId: statusBar!.id };
 }
 
 
 function parseImageFixture() {
   const text = loadFixture("fixtures/smoke/11-images-crossrefs.pbf");
   const parsed = parseFormDocument(text);
+  const menu = parsed.menus[0];
+  const toolBar = parsed.toolbars[0];
+  const statusBar = parsed.statusbars[0];
 
-  return { text, parsed };
+  return {
+    text,
+    parsed,
+    menuId: menu?.id ?? "0",
+    toolBarId: toolBar?.id ?? "0",
+    statusBarId: statusBar?.id ?? "0",
+  };
 }
 
 function parseGadgetFixture() {
@@ -252,7 +266,7 @@ function parseGadgetFixture() {
 
 
 test("roundtrips menu entry insert with shortcut and icon", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: MenuEntryArgs = {
     kind: MENU_ENTRY_KIND.MenuItem,
     idRaw: "#MnuSave",
@@ -262,10 +276,10 @@ test("roundtrips menu entry insert with shortcut and icon", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "#MenuMain", args)
+    applyMenuEntryInsert(document, menuId, args)
   );
 
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   assert.ok(menu, "Expected menu after insert.");
   assert.equal(menu!.entries.length, 4);
   assert.equal(menu!.entries[3]?.kind, MENU_ENTRY_KIND.MenuItem);
@@ -284,10 +298,10 @@ test("roundtrips root menu title insert", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "#MenuMain", args)
+    applyMenuEntryInsert(document, menuId, args)
   );
 
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   assert.ok(menu, "Expected menu after root title insert.");
   assert.equal(menu!.entries.at(-1)?.kind, MENU_ENTRY_KIND.MenuTitle);
   assert.equal(menu!.entries.at(-1)?.text, "View");
@@ -297,7 +311,7 @@ test("roundtrips root menu title insert", () => {
 test("roundtrips nested menu entry insert into submenu footer", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   const openSubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu);
   const parentSourceLine = openSubMenu?.source?.line;
 
@@ -311,10 +325,10 @@ test("roundtrips nested menu entry insert into submenu footer", () => {
   };
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "#MenuMain", args, undefined, { parentSourceLine: parentSourceLine! })
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
   );
 
-  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after submenu insert.");
 
   const closeIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
@@ -333,10 +347,10 @@ test("roundtrips submenu insert with generated closing line", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryInsert(document, "#MenuMain", args)
+    applyMenuEntryInsert(document, menuId, args)
   );
 
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   assert.ok(menu, "Expected menu after submenu insert.");
   assert.equal(menu!.entries.at(-2)?.kind, MENU_ENTRY_KIND.OpenSubMenu);
   assert.equal(menu!.entries.at(-2)?.text, "Tools");
@@ -345,7 +359,7 @@ test("roundtrips submenu insert with generated closing line", () => {
 });
 
 test("roundtrips menu entry update", () => {
-  const { text, menu } = parseFixture();
+  const { text, menu, menuId } = parseFixture();
   const sourceLine = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing menu item.");
 
@@ -356,10 +370,10 @@ test("roundtrips menu entry update", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryUpdate(document, "#MenuMain", sourceLine!, args)
+    applyMenuEntryUpdate(document, menuId, sourceLine!, args)
   );
 
-  const updatedMenu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = parsed.menus.find((m) => m.id === menuId);
   const updatedItem = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
   assert.ok(updatedItem, "Expected updated menu item.");
   assert.equal(updatedItem?.text, "Open File");
@@ -368,7 +382,7 @@ test("roundtrips menu entry update", () => {
 
 
 test("roundtrips menu entry update with preserved shortcut and icon", () => {
-  const { text, menu } = parseFixture();
+  const { text, menu, menuId } = parseFixture();
   const sourceLine = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing menu item.");
 
@@ -381,10 +395,10 @@ test("roundtrips menu entry update with preserved shortcut and icon", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryUpdate(document, "#MenuMain", sourceLine!, args)
+    applyMenuEntryUpdate(document, menuId, sourceLine!, args)
   );
 
-  const updatedMenu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = parsed.menus.find((m) => m.id === menuId);
   const updatedItem = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
   assert.ok(updatedItem, "Expected updated menu item.");
   assert.equal(updatedItem?.text, "Open Project");
@@ -424,7 +438,7 @@ test("patches menu entries inside CreateImageMenu sections", () => {
 test("roundtrips menu subtree move before sibling entry", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
   const separator = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuBar);
 
@@ -433,13 +447,13 @@ test("roundtrips menu subtree move before sibling entry", () => {
   assert.equal(typeof separator?.source?.line, "number", "Expected source line for separator entry.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryMove(document, "#MenuMain", subMenu!.source!.line, MENU_ENTRY_KIND.OpenSubMenu, {
+    applyMenuEntryMove(document, menuId, subMenu!.source!.line, MENU_ENTRY_KIND.OpenSubMenu, {
       targetSourceLine: separator!.source!.line,
       placement: "before",
     })
   );
 
-  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after submenu move.");
 
   const subMenuIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
@@ -457,7 +471,7 @@ test("roundtrips menu subtree move before sibling entry", () => {
 test("roundtrips menu entry move into submenu as child block", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   const openItem = menu?.entries.find((entry) => entry.idRaw === "#MenuOpen");
   const subMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
 
@@ -466,13 +480,13 @@ test("roundtrips menu entry move into submenu as child block", () => {
   assert.equal(typeof subMenu?.source?.line, "number", "Expected source line for submenu entry.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryMove(document, "#MenuMain", openItem!.source!.line, MENU_ENTRY_KIND.MenuItem, {
+    applyMenuEntryMove(document, menuId, openItem!.source!.line, MENU_ENTRY_KIND.MenuItem, {
       targetSourceLine: subMenu!.source!.line,
       placement: "appendChild",
     })
   );
 
-  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after child move.");
 
   const movedItem = updatedMenu!.entries.find((entry) => entry.idRaw === "#MenuOpen");
@@ -482,20 +496,20 @@ test("roundtrips menu entry move into submenu as child block", () => {
   assert.equal(movedItem!.level, 2);
   assert.ok((movedItem!.source!.line ?? -1) > (subMenu?.source!.line ?? -1), "Expected moved item inside submenu block.");
   assert.ok((movedItem!.source!.line ?? -1) < (updatedMenu!.entries[closeIndex]?.source?.line ?? Number.MAX_SAFE_INTEGER), "Expected moved item before CloseSubMenu.");
-  assert.match(patchedText, /OpenSubMenu\("Recent"\)[\s\S]*MenuItem\(#MenuOpen, "Open""Ctrl\+O", ImageID\(#ImgOpen\)\)[\s\S]*CloseSubMenu\(\)/);
+  assert.match(patchedText, /OpenSubMenu\("Recent"\)[\s\S]*MenuItem\(#MenuOpen, "Open" \+ Chr\(9\) \+ "Ctrl\+O", ImageID\(#Img_FrmMain_0\)\)[\s\S]*CloseSubMenu\(\)/);
 });
 
 test("roundtrips menu entry delete", () => {
-  const { text, menu } = parseFixture();
+  const { text, menu, menuId } = parseFixture();
   const target = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
   const sourceLine = target?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing menu item.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryDelete(document, "#MenuMain", sourceLine!, MENU_ENTRY_KIND.MenuItem)
+    applyMenuEntryDelete(document, menuId, sourceLine!, MENU_ENTRY_KIND.MenuItem)
   );
 
-  const updatedMenu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = parsed.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after delete.");
   assert.equal(updatedMenu!.entries.length, 2);
   assert.equal(updatedMenu!.entries.some((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem), false);
@@ -506,7 +520,7 @@ test("roundtrips menu entry delete", () => {
 test("roundtrips submenu delete removes matching CloseSubMenu and descendants", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menu = parsed.menus.find((m) => m.id === menuId);
   const target = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
   const sourceLine = target?.source?.line;
 
@@ -514,10 +528,10 @@ test("roundtrips submenu delete removes matching CloseSubMenu and descendants", 
   assert.equal(typeof sourceLine, "number", "Expected source line for existing OpenSubMenu entry.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryDelete(document, "#MenuMain", sourceLine!, MENU_ENTRY_KIND.OpenSubMenu)
+    applyMenuEntryDelete(document, menuId, sourceLine!, MENU_ENTRY_KIND.OpenSubMenu)
   );
 
-  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after submenu delete.");
   assert.equal(updatedMenu!.entries.some((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu), false);
   assert.equal(updatedMenu!.entries.some((entry) => entry.idRaw === "#MenuRecent1"), false);
@@ -543,7 +557,8 @@ test("roundtrips menu title delete removes nested submenu block until next title
   ].join("\n");
 
   const parsed = parseFormDocument(text);
-  const menu = parsed.menus.find((m) => m.id === "#MenuMain");
+  const menuId = parsed.menus[0]?.id;
+  const menu = parsed.menus.find((m) => m.id === menuId);
   const title = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuTitle && entry.text === "File");
   const sourceLine = title?.source?.line;
 
@@ -551,10 +566,10 @@ test("roundtrips menu title delete removes nested submenu block until next title
   assert.equal(typeof sourceLine, "number", "Expected source line for root MenuTitle.");
 
   const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
-    applyMenuEntryDelete(document, "#MenuMain", sourceLine!, MENU_ENTRY_KIND.MenuTitle)
+    applyMenuEntryDelete(document, menuId, sourceLine!, MENU_ENTRY_KIND.MenuTitle)
   );
 
-  const updatedMenu = updated.menus.find((m) => m.id === "#MenuMain");
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
   assert.ok(updatedMenu, "Expected menu after title delete.");
   assert.equal(updatedMenu!.entries.length, 2);
   assert.equal(updatedMenu!.entries[0]?.kind, MENU_ENTRY_KIND.MenuTitle);
@@ -567,7 +582,7 @@ test("roundtrips menu title delete removes nested submenu block until next title
 });
 
 test("roundtrips toolbar image button insert", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#TbSync",
@@ -576,21 +591,22 @@ test("roundtrips toolbar image button insert", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryInsert(document, "#TbMain", args)
+    applyToolBarEntryInsert(document, toolBarId, args)
   );
 
-  const toolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const toolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(toolBar, "Expected toolbar after insert.");
-  assert.equal(toolBar!.entries.length, 3);
-  assert.equal(toolBar!.entries[2]?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
-  assert.equal(toolBar!.entries[2]?.idRaw, "#TbSync");
-  assert.equal(toolBar!.entries[2]?.iconId, "#ImgSync");
-  assert.equal(toolBar!.entries[2]?.toggle, true);
+  assert.equal(toolBar!.entries.length, 4);
+  const inserted = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSync");
+  assert.equal(inserted?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  assert.equal(inserted?.idRaw, "#TbSync");
+  assert.equal(inserted?.iconId, "#ImgSync");
+  assert.equal(inserted?.toggle, true);
   assert.match(patchedText, /ToolBarImageButton\(#TbSync, ImageID\(#ImgSync\), #PB_ToolBar_Toggle\)/);
 });
 
 test("roundtrips toolbar image button insert without image", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: ToolBarEntryArgs = {
     kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
     idRaw: "#Toolbar_2",
@@ -598,10 +614,10 @@ test("roundtrips toolbar image button insert without image", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryInsert(document, "#TbMain", args)
+    applyToolBarEntryInsert(document, toolBarId, args)
   );
 
-  const toolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const toolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(toolBar, "Expected toolbar after insert.");
   const inserted = toolBar!.entries.at(-1);
   assert.equal(inserted?.kind, TOOLBAR_ENTRY_KIND.ToolBarImageButton);
@@ -611,7 +627,7 @@ test("roundtrips toolbar image button insert without image", () => {
 });
 
 test("roundtrips toolbar tooltip update", () => {
-  const { text, toolBar } = parseFixture();
+  const { text, toolBar, toolBarId } = parseFixture();
   const sourceLine = toolBar.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar tooltip.");
 
@@ -622,38 +638,38 @@ test("roundtrips toolbar tooltip update", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryUpdate(document, "#TbMain", sourceLine!, args)
+    applyToolBarEntryUpdate(document, toolBarId, sourceLine!, args)
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   const updatedTip = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
   assert.ok(updatedTip, "Expected updated toolbar tooltip.");
   assert.equal(updatedTip?.text, "Refresh all data");
-  assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbRefresh, "Refresh all data"\)/);
+  assert.match(patchedText, /ToolBarToolTip\(0, #TbRefresh, "Refresh all data"\)/);
 });
 
 
 test("roundtrips toolbar tooltip set via toolbar entry source line", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
-  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
 
-  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
+  const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", '"Save active form"')
+    applyToolBarEntryTooltipSet(document, toolBarId, sourceLine!, "#TbSave", '"Save active form"')
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
-  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   const updatedTip = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip);
   assert.ok(updatedButton, "Expected updated toolbar image button.");
   assert.equal(updatedButton?.tooltip, "Save active form");
   assert.ok(updatedTip, "Expected linked toolbar tooltip entry.");
   assert.equal(updatedTip?.text, "Save active form");
-  assert.match(patchedText, /ToolBarToolTip\(#TbMain, #TbSave, "Save active form"\)/);
+  assert.match(patchedText, /ToolBarToolTip\(0, #TbSave, "Save active form"\)/);
 });
 
 test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
@@ -668,46 +684,47 @@ test("roundtrips toolbar tooltip insert directly after toolbar entry", () => {
   ].join("\n");
 
   const parsedFixture = parseFormDocument(text);
-  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
-  assert.ok(toolBar, "Expected #TbMain toolbar.");
+  const toolBarId = parsedFixture.toolbars[0]?.id;
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
+  assert.ok(toolBar, "Expected toolbar.");
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for toolbar button.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", '"Save current form"')
+    applyToolBarEntryTooltipSet(document, toolBarId, sourceLine!, "#TbSave", '"Save current form"')
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(updatedToolBar, "Expected updated toolbar.");
   assert.equal(updatedToolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.tooltip, "Save current form");
-  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)[\s\S]*ToolBarToolTip\(#TbMain, #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)[\s\S]*ToolBarToolTip\((0|#TbMain), #TbSave, "Save current form"\)[\s\S]*ToolBarSeparator\(\)/);
 });
 
 test("roundtrips toolbar tooltip clear removes linked tooltip line", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
-  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
 
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar image button.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryTooltipSet(document, "#TbMain", sourceLine!, "#TbSave", undefined)
+    applyToolBarEntryTooltipSet(document, toolBarId, sourceLine!, "#TbSave", undefined)
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
   assert.ok(updatedButton, "Expected updated toolbar image button.");
   assert.equal(updatedButton?.tooltip, undefined);
   assert.equal(updatedToolBar?.entries.some((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip), false);
-  assert.doesNotMatch(patchedText, /ToolBarToolTip\(#TbMain, #TbSave,/);
+  assert.doesNotMatch(patchedText, /ToolBarToolTip\(0, #TbSave,/);
 });
 
 test("roundtrips toolbar image button update", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
   const parsedFixture = parseFormDocument(text);
-  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === "#TbMain");
+  const toolBar = parsedFixture.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(toolBar, "Expected #TbMain toolbar in toolbar fixture.");
 
   const sourceLine = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton)?.source?.line;
@@ -721,10 +738,10 @@ test("roundtrips toolbar image button update", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryUpdate(document, "#TbMain", sourceLine!, args)
+    applyToolBarEntryUpdate(document, toolBarId, sourceLine!, args)
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
   assert.ok(updatedButton, "Expected updated toolbar image button.");
   assert.equal(updatedButton?.idRaw, "#TbSave");
@@ -734,24 +751,26 @@ test("roundtrips toolbar image button update", () => {
 });
 
 test("roundtrips toolbar entry delete", () => {
-  const { text, toolBar } = parseFixture();
-  const target = toolBar.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarButton);
+  const { text, toolBar, toolBarId } = parseFixture();
+  const target = toolBar.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   const sourceLine = target?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for existing toolbar button.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyToolBarEntryDelete(document, "#TbMain", sourceLine!, TOOLBAR_ENTRY_KIND.ToolBarButton)
+    applyToolBarEntryDelete(document, toolBarId, sourceLine!, TOOLBAR_ENTRY_KIND.ToolBarImageButton)
   );
 
-  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((tb) => tb.id === toolBarId);
   assert.ok(updatedToolBar, "Expected toolbar after delete.");
   assert.equal(updatedToolBar!.entries.length, 1);
-  assert.equal(updatedToolBar!.entries.some((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarButton), false);
-  assert.doesNotMatch(patchedText, /ToolBarButton\(#TbRefresh, 0, "Refresh"\)/);
+  assert.equal(updatedToolBar!.entries.some((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave"), false);
+  assert.equal(updatedToolBar!.entries.some((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarToolTip && entry.idRaw === "#TbSave"), false);
+  assert.doesNotMatch(patchedText, /ToolBarImageButton\(#TbSave, ImageID\(#ImgSave\)\)/);
+  assert.doesNotMatch(patchedText, /ToolBarToolTip\(0, #TbSave, "Save current form"\)/);
 });
 
 test("roundtrips statusbar field insert with text decoration", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: StatusBarFieldArgs = {
     widthRaw: "240",
     textRaw: '"State"',
@@ -759,42 +778,42 @@ test("roundtrips statusbar field insert with text decoration", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldInsert(document, "#SbMain", args)
+    applyStatusBarFieldInsert(document, statusBarId, args)
   );
 
-  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const statusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(statusBar, "Expected statusbar after insert.");
-  assert.equal(statusBar!.fields.length, 2);
-  assert.equal(statusBar!.fields[1]?.widthRaw, "240");
-  assert.equal(statusBar!.fields[1]?.text, "State");
-  assert.equal(statusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Center");
+  assert.equal(statusBar!.fields.length, 4);
+  assert.equal(statusBar!.fields[3]?.widthRaw, "240");
+  assert.equal(statusBar!.fields[3]?.text, "State");
+  assert.equal(statusBar!.fields[3]?.flagsRaw, "#PB_StatusBar_Center");
   assert.match(patchedText, /AddStatusBarField\(240\)/);
-  assert.match(patchedText, /StatusBarText\(#SbMain, 1, "State", #PB_StatusBar_Center\)/);
+  assert.match(patchedText, /StatusBarText\(0, 3, "State", #PB_StatusBar_Center\)/);
 });
 
 test("roundtrips statusbar image-style field insert without decoration", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: StatusBarFieldArgs = {
     widthRaw: "50",
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldInsert(document, "#SbMain", args)
+    applyStatusBarFieldInsert(document, statusBarId, args)
   );
 
-  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const statusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(statusBar, "Expected statusbar after insert.");
-  assert.equal(statusBar!.fields.length, 2);
-  assert.equal(statusBar!.fields[1]?.widthRaw, "50");
-  assert.equal(statusBar!.fields[1]?.textRaw, undefined);
-  assert.equal(statusBar!.fields[1]?.progressBar, undefined);
-  assert.equal(statusBar!.fields[1]?.imageRaw, undefined);
+  assert.equal(statusBar!.fields.length, 4);
+  assert.equal(statusBar!.fields[3]?.widthRaw, "50");
+  assert.equal(statusBar!.fields[3]?.textRaw, undefined);
+  assert.equal(statusBar!.fields[3]?.progressBar, undefined);
+  assert.equal(statusBar!.fields[3]?.imageRaw, undefined);
   assert.match(patchedText, /AddStatusBarField\(50\)/);
-  assert.doesNotMatch(patchedText, /StatusBar(Image|Text|Progress)\(#SbMain, 1,/);
+  assert.doesNotMatch(patchedText, /StatusBar(Image|Text|Progress)\(0, 3,/);
 });
 
 test("roundtrips statusbar field insert with progress decoration", () => {
-  const { text } = parseFixture();
+  const { text, menuId, toolBarId, statusBarId } = parseFixture();
   const args: StatusBarFieldArgs = {
     widthRaw: "50",
     progressBar: true,
@@ -802,21 +821,21 @@ test("roundtrips statusbar field insert with progress decoration", () => {
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldInsert(document, "#SbMain", args)
+    applyStatusBarFieldInsert(document, statusBarId, args)
   );
 
-  const statusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const statusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(statusBar, "Expected statusbar after insert.");
-  assert.equal(statusBar!.fields.length, 2);
-  assert.equal(statusBar!.fields[1]?.widthRaw, "50");
-  assert.equal(statusBar!.fields[1]?.progressBar, true);
-  assert.equal(statusBar!.fields[1]?.progressRaw, "0");
+  assert.equal(statusBar!.fields.length, 4);
+  assert.equal(statusBar!.fields[3]?.widthRaw, "50");
+  assert.equal(statusBar!.fields[3]?.progressBar, true);
+  assert.equal(statusBar!.fields[3]?.progressRaw, "0");
   assert.match(patchedText, /AddStatusBarField\(50\)/);
-  assert.match(patchedText, /StatusBarProgress\(#SbMain, 1, 0\)/);
+  assert.match(patchedText, /StatusBarProgress\(0, 3, 0\)/);
 });
 
 test("roundtrips statusbar field update while preserving later field decorations", () => {
-  const { text, statusBar } = parseStatusFixture();
+  const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
 
@@ -827,25 +846,25 @@ test("roundtrips statusbar field update while preserving later field decorations
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, args)
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, args)
   );
 
-  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(updatedStatusBar, "Expected statusbar after update.");
   assert.equal(updatedStatusBar!.fields.length, 3);
   assert.equal(updatedStatusBar!.fields[0]?.widthRaw, "180");
   assert.equal(updatedStatusBar!.fields[0]?.text, "Ready now");
   assert.equal(updatedStatusBar!.fields[0]?.flagsRaw, "#PB_StatusBar_Right");
   assert.equal(updatedStatusBar!.fields[1]?.progressBar, true);
-  assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "35");
-  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#ImgState");
-  assert.match(patchedText, /StatusBarProgress\(#SbMain, 1, 35, #PB_StatusBar_Raised\)/);
-  assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+  assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "0");
+  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#Img_FrmMain_0");
+  assert.match(patchedText, /StatusBarProgress\(0, 1, 0, #PB_StatusBar_Raised\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 2, ImageID\(#Img_FrmMain_0\), #PB_StatusBar_BorderLess\)/);
 });
 
 
 test("roundtrips statusbar width-only update without clearing image fields", () => {
-  const { text, statusBar } = parseStatusFixture();
+  const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[2]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for image statusbar field.");
 
@@ -854,26 +873,26 @@ test("roundtrips statusbar width-only update without clearing image fields", () 
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, args)
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, args)
   );
 
-  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(updatedStatusBar, "Expected statusbar after update.");
   assert.equal(updatedStatusBar!.fields[2]?.widthRaw, "96");
-  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#ImgState");
+  assert.equal(updatedStatusBar!.fields[2]?.imageId, "#Img_FrmMain_0");
   assert.equal(updatedStatusBar!.fields[2]?.flagsRaw, "#PB_StatusBar_BorderLess");
   assert.match(patchedText, /AddStatusBarField\(96\)/);
-  assert.match(patchedText, /StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 2, ImageID\(#Img_FrmMain_0\), #PB_StatusBar_BorderLess\)/);
 });
 
 
 test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", () => {
-  const { text, statusBar } = parseStatusFixture();
+  const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for first statusbar field.");
 
   const { patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, {
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
       widthRaw: "120",
       textRaw: '"Ready"',
       flagsRaw: "#PB_StatusBar_Center",
@@ -882,13 +901,13 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 
   assert.match(
     patchedText,
-    /CreateStatusBar\(#SbMain, WindowID\(#FrmMain\)\)\r?\n\s*AddStatusBarField\(120\)\r?\n\s*StatusBarText\(#SbMain, 0, "Ready", #PB_StatusBar_Center\)\r?\n\s*AddStatusBarField\(90\)\r?\n\s*StatusBarProgress\(#SbMain, 1, 35, #PB_StatusBar_Raised\)\r?\n\s*AddStatusBarField\(#PB_Ignore\)\r?\n\s*StatusBarImage\(#SbMain, 2, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/
+    /CreateStatusBar\(0, WindowID\(#FrmMain\)\)\r?\n\s*AddStatusBarField\(120\)\r?\n\s*StatusBarText\(0, 0, "Ready", #PB_StatusBar_Center\)\r?\n\s*AddStatusBarField\(90\)\r?\n\s*StatusBarProgress\(0, 1, 0, #PB_StatusBar_Raised\)\r?\n\s*AddStatusBarField\(#PB_Ignore\)\r?\n\s*StatusBarImage\(0, 2, ImageID\(#Img_FrmMain_0\), #PB_StatusBar_BorderLess\)/
   );
 });
 
 
 test("roundtrips statusbar field switch from progress to label and clears old progress decoration", () => {
-  const { text, statusBar } = parseStatusFixture();
+  const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
 
@@ -902,37 +921,37 @@ test("roundtrips statusbar field switch from progress to label and clears old pr
   };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldUpdate(document, "#SbMain", sourceLine!, args)
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, args)
   );
 
-  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(updatedStatusBar, "Expected statusbar after update.");
   assert.equal(updatedStatusBar!.fields[1]?.text, "Done");
   assert.equal(Boolean(updatedStatusBar!.fields[1]?.progressBar), false);
   assert.equal(updatedStatusBar!.fields[1]?.imageRaw ?? "", "");
   assert.equal(updatedStatusBar!.fields[1]?.flagsRaw, "#PB_StatusBar_Right");
   assert.doesNotMatch(patchedText, /StatusBarProgress\(#SbMain, 1,/);
-  assert.match(patchedText, /StatusBarText\(#SbMain, 1, "Done", #PB_StatusBar_Right\)/);
+  assert.match(patchedText, /StatusBarText\(0, 1, "Done", #PB_StatusBar_Right\)/);
 });
 
 test("roundtrips statusbar field delete reindexes later decoration lines", () => {
-  const { text, statusBar } = parseStatusFixture();
+  const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[0]?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for statusbar field.");
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
-    applyStatusBarFieldDelete(document, "#SbMain", sourceLine!)
+    applyStatusBarFieldDelete(document, statusBarId, sourceLine!)
   );
 
-  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
   assert.ok(updatedStatusBar, "Expected statusbar after delete.");
   assert.equal(updatedStatusBar!.fields.length, 2);
   assert.equal(updatedStatusBar!.fields[0]?.progressBar, true);
-  assert.equal(updatedStatusBar!.fields[0]?.progressRaw, "35");
-  assert.equal(updatedStatusBar!.fields[1]?.imageId, "#ImgState");
-  assert.doesNotMatch(patchedText, /StatusBarText\(#SbMain, 0, "Ready", #PB_StatusBar_Center\)/);
-  assert.match(patchedText, /StatusBarProgress\(#SbMain, 0, 35, #PB_StatusBar_Raised\)/);
-  assert.match(patchedText, /StatusBarImage\(#SbMain, 1, ImageID\(#ImgState\), #PB_StatusBar_BorderLess\)/);
+  assert.equal(updatedStatusBar!.fields[0]?.progressRaw, "0");
+  assert.equal(updatedStatusBar!.fields[1]?.imageId, "#Img_FrmMain_0");
+  assert.doesNotMatch(patchedText, /StatusBarText\(0, 0, "Ready", #PB_StatusBar_Center\)/);
+  assert.match(patchedText, /StatusBarProgress\(0, 0, 0, #PB_StatusBar_Raised\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 1, ImageID\(#Img_FrmMain_0\), #PB_StatusBar_BorderLess\)/);
 });
 
 
@@ -956,7 +975,7 @@ test("roundtrips image insert after existing image block", () => {
 });
 
 test("roundtrips image update for pbAny catch image", () => {
-  const { text, parsed } = parseImageFixture();
+  const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = parsed.images.find((image) => image.id === "imgSave")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for pbAny image.");
 
@@ -980,7 +999,7 @@ test("roundtrips image update for pbAny catch image", () => {
 });
 
 test("roundtrips image update from load image to catch image without changing raw value", () => {
-  const { text, parsed } = parseImageFixture();
+  const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = parsed.images.find((image) => image.id === "#ImgOpen")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for load image.");
 
@@ -1003,7 +1022,7 @@ test("roundtrips image update from load image to catch image without changing ra
 });
 
 test("roundtrips image update from catch image to load image without changing raw value", () => {
-  const { text, parsed } = parseImageFixture();
+  const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for catch image.");
 
@@ -1026,7 +1045,7 @@ test("roundtrips image update from catch image to load image without changing ra
 });
 
 test("roundtrips image delete", () => {
-  const { text, parsed } = parseImageFixture();
+  const { text, parsed, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = parsed.images.find((image) => image.id === "#ImgState")?.source?.line;
   assert.equal(typeof sourceLine, "number", "Expected source line for inline image.");
 
@@ -1105,15 +1124,15 @@ test("roundtrips create-and-assign workflow for image gadget", () => {
 });
 
 test("roundtrips create-and-assign workflow for menu item", () => {
-  const { text, parsed: initial } = parseImageFixture();
-  const menu = initial.menus.find((entry) => entry.id === "#MenuMain");
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
+  const menu = initial.menus.find((entry) => entry.id === menuId);
   assert.ok(menu, "Expected #MenuMain menu.");
   const openItem = menu!.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
   assert.equal(typeof openItem?.source?.line, "number", "Expected menu entry source line.");
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
-    (document) => applyMenuEntryUpdate(document, "#MenuMain", openItem!.source!.line, {
+    (document) => applyMenuEntryUpdate(document, menuId, openItem!.source!.line, {
       kind: MENU_ENTRY_KIND.MenuItem,
       idRaw: openItem!.idRaw,
       textRaw: openItem!.textRaw,
@@ -1123,7 +1142,7 @@ test("roundtrips create-and-assign workflow for menu item", () => {
     (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgMenuNew", imageRaw: '"menu-new.png"' })
   );
 
-  const updatedMenu = parsed.menus.find((entry) => entry.id === "#MenuMain");
+  const updatedMenu = parsed.menus.find((entry) => entry.id === menuId);
   const updatedOpen = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
   const image = parsed.images.find((entry) => entry.id === "#ImgMenuNew");
 
@@ -1134,15 +1153,15 @@ test("roundtrips create-and-assign workflow for menu item", () => {
 });
 
 test("roundtrips create-and-assign workflow for toolbar image button with pbAny image", () => {
-  const { text, parsed: initial } = parseImageFixture();
-  const toolBar = initial.toolbars.find((entry) => entry.id === "#TbMain");
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
   assert.ok(toolBar, "Expected #TbMain toolbar.");
   const imageButton = toolBar!.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   assert.equal(typeof imageButton?.source?.line, "number", "Expected toolbar entry source line.");
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
-    (document) => applyToolBarEntryUpdate(document, "#TbMain", imageButton!.source!.line, {
+    (document) => applyToolBarEntryUpdate(document, toolBarId, imageButton!.source!.line, {
       kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
       idRaw: imageButton!.idRaw,
       iconRaw: "ImageID(imgToolbarNew)",
@@ -1151,7 +1170,7 @@ test("roundtrips create-and-assign workflow for toolbar image button with pbAny 
     (document) => applyImageInsert(document, { inline: true, idRaw: "#PB_Any", imageRaw: "?TbImgNew", assignedVar: "imgToolbarNew" })
   );
 
-  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
   const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   const image = parsed.images.find((entry) => entry.id === "imgToolbarNew");
 
@@ -1162,29 +1181,29 @@ test("roundtrips create-and-assign workflow for toolbar image button with pbAny 
 });
 
 test("roundtrips create-and-assign workflow for statusbar field", () => {
-  const { text, parsed: initial } = parseImageFixture();
-  const statusBar = initial.statusbars.find((entry) => entry.id === "#SbMain");
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
   assert.ok(statusBar, "Expected #SbMain statusbar.");
   const imageField = statusBar!.fields.find((field) => field.imageRaw);
   assert.equal(typeof imageField?.source?.line, "number", "Expected statusbar field source line.");
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
-    (document) => applyStatusBarFieldUpdate(document, "#SbMain", imageField!.source!.line, {
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
       widthRaw: imageField!.widthRaw,
       imageRaw: "ImageID(#ImgStatusNew)",
     }),
     (document) => applyImageInsert(document, { inline: false, idRaw: "#ImgStatusNew", imageRaw: '"status-new.png"' })
   );
 
-  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
   const updatedField = updatedStatusBar?.fields.find((field) => field.widthRaw === imageField!.widthRaw && field.imageRaw === "ImageID(#ImgStatusNew)");
   const image = parsed.images.find((entry) => entry.id === "#ImgStatusNew");
 
   assert.ok(updatedField, "Expected updated statusbar image field.");
   assert.equal(updatedField?.imageId, "#ImgStatusNew");
   assert.ok(image, "Expected inserted statusbar image entry.");
-  assert.match(patchedText, /StatusBarImage\(#SbMain, 0, ImageID\(#ImgStatusNew\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#ImgStatusNew\)\)/);
 });
 
 test("roundtrips gadget property update for visibility tooltip colors", () => {
@@ -1276,9 +1295,9 @@ test("roundtrips gadget property update removing managed property lines", () => 
 
 
 test("roundtrips image pbAny toggle from enum image and updates gadget plus menu references", () => {
-  const { text, parsed: initial } = parseImageFixture();
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#ImgOpen")?.source?.line;
-  const menu = initial.menus.find((entry) => entry.id === "#MenuMain");
+  const menu = initial.menus.find((entry) => entry.id === menuId);
   const openItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
 
   assert.equal(typeof sourceLine, "number", "Expected source line for #ImgOpen.");
@@ -1287,7 +1306,7 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
   const { parsed, patchedText } = patchThriceAndReparse(
     text,
     (document) => applyGadgetOpenArgsUpdate(document, "#ImgPreview", { imageRaw: "ImageID(ImgOpen)" }),
-    (document) => applyMenuEntryUpdate(document, "#MenuMain", openItem!.source!.line, {
+    (document) => applyMenuEntryUpdate(document, menuId, openItem!.source!.line, {
       kind: MENU_ENTRY_KIND.MenuItem,
       idRaw: openItem!.idRaw,
       textRaw: openItem!.textRaw,
@@ -1304,7 +1323,7 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
 
   const image = parsed.images.find((entry) => entry.id === "ImgOpen");
   const gadget = parsed.gadgets.find((entry) => entry.id === "#ImgPreview");
-  const updatedMenu = parsed.menus.find((entry) => entry.id === "#MenuMain");
+  const updatedMenu = parsed.menus.find((entry) => entry.id === menuId);
   const updatedOpen = updatedMenu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuOpen");
 
   assert.ok(image, "Expected pbAny image entry after toggle.");
@@ -1314,14 +1333,14 @@ test("roundtrips image pbAny toggle from enum image and updates gadget plus menu
   assert.equal(gadget?.imageId, "ImgOpen");
   assert.equal(updatedOpen?.iconId, "ImgOpen");
   assert.match(patchedText, /ImgOpen = LoadImage\(#PB_Any, "open\.png"\)/);
-  assert.match(patchedText, /ImageGadget\(#ImgPreview, 10, 10, 32, 32, ImageID\(ImgOpen\)\)/);
+  assert.match(patchedText, /ImageGadget\(#ImgPreview, 10, [^,]+, 32, 32, ImageID\(ImgOpen\)\)/);
   assert.match(patchedText, /MenuItem\(#MenuOpen, "Open", ImageID\(ImgOpen\)\)/);
 });
 
 test("roundtrips image pbAny toggle from pbAny image and updates toolbar references", () => {
-  const { text, parsed: initial } = parseImageFixture();
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "imgSave")?.source?.line;
-  const toolBar = initial.toolbars.find((entry) => entry.id === "#TbMain");
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
   const saveButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
 
   assert.equal(typeof sourceLine, "number", "Expected source line for imgSave.");
@@ -1329,7 +1348,7 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
-    (document) => applyToolBarEntryUpdate(document, "#TbMain", saveButton!.source!.line, {
+    (document) => applyToolBarEntryUpdate(document, toolBarId, saveButton!.source!.line, {
       kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
       idRaw: saveButton!.idRaw,
       iconRaw: "ImageID(#imgSave)",
@@ -1343,7 +1362,7 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
   );
 
   const image = parsed.images.find((entry) => entry.id === "#imgSave");
-  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === "#TbMain");
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
   const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
 
   assert.ok(image, "Expected enum image entry after toggle.");
@@ -1355,9 +1374,9 @@ test("roundtrips image pbAny toggle from pbAny image and updates toolbar referen
 });
 
 test("roundtrips image pbAny toggle updates statusbar references", () => {
-  const { text, parsed: initial } = parseImageFixture();
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#ImgState")?.source?.line;
-  const statusBar = initial.statusbars.find((entry) => entry.id === "#SbMain");
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
   const imageField = statusBar?.fields.find((field) => field.imageId === "#ImgState");
 
   assert.equal(typeof sourceLine, "number", "Expected source line for #ImgState.");
@@ -1365,7 +1384,7 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
 
   const { parsed, patchedText } = patchTwiceAndReparse(
     text,
-    (document) => applyStatusBarFieldUpdate(document, "#SbMain", imageField!.source!.line, {
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
       widthRaw: imageField!.widthRaw,
       imageRaw: "ImageID(ImgState)",
     }),
@@ -1378,18 +1397,18 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
   );
 
   const image = parsed.images.find((entry) => entry.id === "ImgState");
-  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === "#SbMain");
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
   const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "ImgState");
 
   assert.ok(image, "Expected pbAny status image entry after toggle.");
   assert.equal(image?.pbAny, true);
   assert.equal(updatedField?.imageId, "ImgState");
   assert.match(patchedText, /ImgState = CatchImage\(#PB_Any, \?ImgState\)/);
-  assert.match(patchedText, /StatusBarImage\(#SbMain, 0, ImageID\(ImgState\)\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(ImgState\)\)/);
 });
 
 test("roundtrips image pbAny toggle updates button image gadget references", () => {
-  const { text, parsed: initial } = parseImageFixture();
+  const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#ImgRelative")?.source?.line;
 
   assert.equal(typeof sourceLine, "number", "Expected source line for #ImgRelative.");
@@ -1413,7 +1432,7 @@ test("roundtrips image pbAny toggle updates button image gadget references", () 
   assert.equal(gadget?.kind, "ButtonImageGadget");
   assert.equal(gadget?.imageId, "ImgRelative");
   assert.match(patchedText, /ImgRelative = LoadImage\(#PB_Any, "\.\/icons\/apply\.png"\)/);
-  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, 10, 96, 28, ImageID\(ImgRelative\), #PB_Button_Default\)/);
+  assert.match(patchedText, /ButtonImageGadget\(#BtnApply, 52, [^,]+, 96, 28, ImageID\(ImgRelative\), #PB_Button_Default\)/);
 });
 
 
@@ -1421,11 +1440,11 @@ test("deletes full menu section", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyMenuDelete(document, "#MenuMain")
+    applyMenuDelete(document, menuId)
   );
 
   assert.equal(parsed.menus.length, 0);
-  assert.doesNotMatch(patchedText, /CreateMenu\(#MenuMain,/);
+  assert.doesNotMatch(patchedText, /Create(Image)?Menu\(0,/);
   assert.doesNotMatch(patchedText, /MenuTitle\(/);
   assert.doesNotMatch(patchedText, /OpenSubMenu\(/);
 });
@@ -1434,11 +1453,11 @@ test("deletes full toolbar section", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyToolBarDelete(document, "#TbMain")
+    applyToolBarDelete(document, toolBarId)
   );
 
   assert.equal(parsed.toolbars.length, 0);
-  assert.doesNotMatch(patchedText, /CreateToolBar\(#TbMain,/);
+  assert.doesNotMatch(patchedText, /CreateTool(bar|Bar)\(0,/);
   assert.doesNotMatch(patchedText, /ToolBar(ImageButton|Separator|ToolTip|Button|StandardButton)\(/);
 });
 
@@ -1446,11 +1465,11 @@ test("deletes full statusbar section", () => {
   const text = loadFixture("fixtures/smoke/10-statusbar-basic.pbf");
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyStatusBarDelete(document, "#SbMain")
+    applyStatusBarDelete(document, statusBarId)
   );
 
   assert.equal(parsed.statusbars.length, 0);
-  assert.doesNotMatch(patchedText, /CreateStatusBar\(#SbMain,/);
+  assert.doesNotMatch(patchedText, /CreateStatusBar\(0,/);
   assert.doesNotMatch(patchedText, /AddStatusBarField\(/);
   assert.doesNotMatch(patchedText, /StatusBar(Text|Image|Progress)\(/);
 });

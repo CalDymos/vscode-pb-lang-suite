@@ -1,4 +1,4 @@
-﻿; Form Designer for PureBasic - 6.30
+; Form Designer for PureBasic - 6.30
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -17,15 +17,27 @@ EndEnumeration
 
 Enumeration FormMenu
   #MenuOpen
+  #TbRefresh
 EndEnumeration
+
+Enumeration FormImage
+  #ImgRefresh
+EndEnumeration
+
+UsePNGImageDecoder()
+LoadImage(#ImgRefresh, "toolbar-refresh.png")
 
 Declare HandleMenuOpen(Event)
 Declare HandleApply(EventType)
+Declare HandleToolbarRefresh(Event)
 
 Procedure OpenFrmObjectEvents(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmObjectEvents, x, y, width, height, "Object Events")
   CreateMenu(0, WindowID(#FrmObjectEvents))
   MenuTitle("Open")
+  MenuItem(#MenuOpen, "Open")
+  CreateToolbar(0, WindowID(#FrmObjectEvents))
+  ToolBarImageButton(#TbRefresh, ImageID(#ImgRefresh))
   ButtonGadget(#BtnApply, 10, 10, 90, 25, "Apply")
 EndProcedure
 
@@ -38,14 +50,15 @@ Procedure FrmObjectEvents_Events(event)
       Select EventMenu()
         Case #MenuOpen
           HandleMenuOpen(EventMenu())
+        Case #TbRefresh
+          HandleToolbarRefresh(EventMenu())
       EndSelect
 
     Case #PB_Event_Gadget
       Select EventGadget()
         Case #BtnApply
-          HandleApply(EventType())          
+          HandleApply(EventType())
       EndSelect
   EndSelect
   ProcedureReturn #True
 EndProcedure
-

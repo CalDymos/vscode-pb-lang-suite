@@ -1,4 +1,4 @@
-﻿; Form Designer for PureBasic - 6.30
+; Form Designer for PureBasic - 6.30
 ; Warning: this file uses a strict syntax, if you edit it, make sure to respect the Form Designer limitation or it won't be opened again.
 
 ;
@@ -7,7 +7,7 @@
 ; Event procedures need to be put in another source file.
 ;
 
-Global Img_FrmImages_2
+Global imgSave
 
 Enumeration FormWindow
   #FrmImages
@@ -24,35 +24,36 @@ Enumeration FormMenu
 EndEnumeration
 
 Enumeration FormImage
-  #Img_FrmImages_0
-  #Img_FrmImages_1
-  #Img_FrmImages_3
+  #ImgOpen
+  #ImgRelative
+  #ImgState
 EndEnumeration
 
 UsePNGImageDecoder()
 
-LoadImage(#Img_FrmImages_0,"open.png")
-LoadImage(#Img_FrmImages_1,"./icons/apply.png")
-Img_FrmImages_2 = LoadImage(#PB_Any,"save.png")
-CatchImage(#Img_FrmImages_3,?Img_FrmImages_3)
+LoadImage(#ImgOpen, "open.png")
+LoadImage(#ImgRelative, "./icons/apply.png")
+imgSave = LoadImage(#PB_Any, "save.png")
+CatchImage(#ImgState, ?ImgState)
 
 
 Procedure OpenFrmImages(x = 0, y = 0, width = 320, height = 180)
   OpenWindow(#FrmImages, x, y, width, height, "Images")
-  CreateToolBar(0, WindowID(#FrmImages))
-  ToolBarImageButton(#TbSave,ImageID(Img_FrmImages_2))
+  CreateToolbar(0, WindowID(#FrmImages))
+  ToolBarImageButton(#TbSave, ImageID(imgSave))
   ToolBarToolTip(0, #TbSave, "Save")
   CreateStatusBar(0, WindowID(#FrmImages))
   AddStatusBarField(#PB_Ignore)
-  StatusBarImage(0, 0, ImageID(#Img_FrmImages_3))
+  StatusBarImage(0, 0, ImageID(#ImgState))
   CreateImageMenu(0, WindowID(#FrmImages))
   MenuTitle("Open")
-  ImageGadget(#ImgPreview, 10, ToolBarHeight(0) + 10, 32, 32, ImageID(#Img_FrmImages_0))
-  ButtonImageGadget(#BtnApply, 52, ToolBarHeight(0) + 10, 96, 28, ImageID(#Img_FrmImages_1))
+  MenuItem(#MenuOpen, "Open", ImageID(#ImgOpen))
+  ImageGadget(#ImgPreview, 10, ToolBarHeight(0) + 10, 32, 32, ImageID(#ImgOpen))
+  ButtonImageGadget(#BtnApply, 52, ToolBarHeight(0) + 10, 96, 28, ImageID(#ImgRelative), #PB_Button_Default)
 EndProcedure
 
 
 
 DataSection
-  Img_FrmImages_3: : IncludeBinary ""
+  ImgState: : IncludeBinary ""
 EndDataSection

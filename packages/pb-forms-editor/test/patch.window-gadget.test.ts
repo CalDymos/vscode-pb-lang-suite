@@ -386,7 +386,7 @@ test("roundtrips window event proc update inside existing Default branch", () =>
     applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParentUpdated")
   );
 
-  assert.match(patchedText, /Default\s+HandleFrmEventsParentUpdated\(\)/s);
+  assert.match(patchedText, /Default\s+HandleFrmEventsParentUpdated\(event, #FrmEventsParent\)/s);
   assert.equal(parsed.window?.eventProc, "HandleFrmEventsParentUpdated");
   assert.equal(parsed.window?.generateEventLoop, true);
 });
@@ -398,7 +398,7 @@ test("roundtrips window event proc removal while keeping event loop block", () =
     applyWindowEventProcUpdate(document, "#FrmEventsParent", undefined)
   );
 
-  assert.doesNotMatch(patchedText, /HandleFrmEventsParent\(\)/);
+  assert.doesNotMatch(patchedText, /HandleFrmEventsParent\(event, #FrmEventsParent\)/);
   assert.match(patchedText, /Select EventGadget\(\)/);
   assert.equal(parsed.window?.eventProc, undefined);
   assert.equal(parsed.window?.generateEventLoop, true);
@@ -503,7 +503,7 @@ test("roundtrips gadget event proc update inside existing EventGadget block", ()
     applyGadgetEventProcUpdate(document, "#BtnApply", "HandleApplyUpdated")
   );
 
-  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\(\)/s);
+  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\(EventType\(\)\)/s);
   const button = parsed.gadgets.find((g) => g.id === "#BtnApply");
   assert.equal(button?.eventProc, "HandleApplyUpdated");
 });
@@ -563,7 +563,7 @@ test("roundtrips menu entry event update inside existing EventMenu block", () =>
     applyMenuEntryEventUpdate(document, "#MenuOpen", "HandleMenuOpenUpdated")
   );
 
-  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpenUpdated\(\)/s);
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpenUpdated\(EventMenu\(\)\)/s);
   const menuItem = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
   assert.equal(menuItem?.event, "HandleMenuOpenUpdated");
 });
@@ -630,7 +630,7 @@ test("roundtrips toolbar entry event update inside existing EventMenu block", ()
     applyToolBarEntryEventUpdate(document, "#TbRefresh", "HandleToolbarRefreshUpdated")
   );
 
-  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(\)/s);
+  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
   const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
   assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
 });
@@ -643,7 +643,7 @@ test("roundtrips toolbar entry event removal without touching menu events", () =
   );
 
   assert.doesNotMatch(patchedText, /Case #TbRefresh/);
-  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpen\(\)/s);
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpen\(EventMenu\(\)\)/s);
   const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
   assert.equal(toolBarButton?.event, undefined);
   const menuItem = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");

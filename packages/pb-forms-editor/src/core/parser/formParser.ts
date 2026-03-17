@@ -997,6 +997,53 @@ function applyEventMetadata(lines: string[], doc: FormDocument): void {
       pendingGadgetCaseRaw = undefined;
     }
   }
+
+  let inWindowEventSelect = false;
+  let windowEventDepth = 0;
+  let pendingWindowEventProc = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\s+event\b/i.test(line)) {
+      inWindowEventSelect = true;
+      windowEventDepth = 1;
+      pendingWindowEventProc = false;
+      continue;
+    }
+
+    if (!inWindowEventSelect) continue;
+
+    if (/^Select\b/i.test(line)) {
+      windowEventDepth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      windowEventDepth--;
+      if (windowEventDepth <= 0) {
+        inWindowEventSelect = false;
+        pendingWindowEventProc = false;
+      }
+      continue;
+    }
+
+    if (windowEventDepth !== 1) continue;
+
+    if (/^Default\b/i.test(line)) {
+      pendingWindowEventProc = true;
+      continue;
+    }
+
+    if (!pendingWindowEventProc) continue;
+
+    const procMatch = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(line);
+    if (!procMatch) continue;
+
+    if (doc.window) doc.window.eventProc = procMatch[1];
+    pendingWindowEventProc = false;
+  }
 }
 
 function assignGadgetEvent(doc: FormDocument, rawCase: string, proc: string): void {

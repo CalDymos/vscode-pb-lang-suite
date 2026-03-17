@@ -105,7 +105,7 @@ EndProcedure
   const toolBar = doc.toolbars[0];
   assert.ok(toolBar);
 
-  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   assert.ok(imageButton);
   assert.equal(imageButton?.idRaw, "#TbSave");
   assert.equal(imageButton?.iconRaw, "ImageID(#ImgSave)");
@@ -120,7 +120,7 @@ test("parses fixtures/smoke/08-menu-basic.pbf", () => {
   assert.equal(doc.menus.length, 1);
   const menu = doc.menus[0];
   assert.ok(menu, "Expected a parsed menu.");
-  assert.equal(menu?.id, "#MenuMain");
+  assert.equal(menu?.id, "0");
   assert.equal(menu?.entries.length, 6);
 
   const fileTitle = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuTitle);
@@ -133,8 +133,8 @@ test("parses fixtures/smoke/08-menu-basic.pbf", () => {
   assert.equal(openItem?.level, 1);
   assert.equal(openItem?.text, "Open");
   assert.equal(openItem?.shortcut, "Ctrl+O");
-  assert.equal(openItem?.iconRaw, "ImageID(#ImgOpen)");
-  assert.equal(openItem?.iconId, "#ImgOpen");
+  assert.equal(openItem?.iconRaw, "ImageID(#Img_FrmMain_0)");
+  assert.equal(openItem?.iconId, "#Img_FrmMain_0");
 
   const recentSubmenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
   assert.ok(recentSubmenu, "Expected an opened submenu entry.");
@@ -153,13 +153,13 @@ test("parses fixtures/smoke/09-toolbar-basic.pbf", () => {
   assert.equal(doc.toolbars.length, 1);
   const toolBar = doc.toolbars[0];
   assert.ok(toolBar, "Expected a parsed toolbar.");
-  assert.equal(toolBar?.id, "#TbMain");
+  assert.equal(toolBar?.id, "0");
 
-  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
   assert.ok(imageButton, "Expected a toolbar image button.");
   assert.equal(imageButton?.idRaw, "#TbSave");
-  assert.equal(imageButton?.iconRaw, "ImageID(#ImgSave)");
-  assert.equal(imageButton?.iconId, "#ImgSave");
+  assert.equal(imageButton?.iconRaw, "ImageID(#Img_FrmMain_1)");
+  assert.equal(imageButton?.iconId, "#Img_FrmMain_1");
   assert.equal(imageButton?.toggle, true);
   assert.equal(imageButton?.tooltip, "Save current form");
 
@@ -176,7 +176,7 @@ test("parses fixtures/smoke/10-statusbar-basic.pbf", () => {
   assert.equal(doc.statusbars.length, 1);
   const statusBar = doc.statusbars[0];
   assert.ok(statusBar, "Expected a parsed status bar.");
-  assert.equal(statusBar?.id, "#SbMain");
+  assert.equal(statusBar?.id, "0");
   assert.equal(statusBar?.fields.length, 3);
 
   const textField = statusBar?.fields[0];
@@ -191,8 +191,8 @@ test("parses fixtures/smoke/10-statusbar-basic.pbf", () => {
 
   const imageField = statusBar?.fields[2];
   assert.equal(imageField?.widthRaw, "#PB_Ignore");
-  assert.equal(imageField?.imageRaw, "ImageID(#ImgState)");
-  assert.equal(imageField?.imageId, "#ImgState");
+  assert.equal(imageField?.imageRaw, "ImageID(#Img_FrmMain_0)");
+  assert.equal(imageField?.imageId, "#Img_FrmMain_0");
   assert.equal(imageField?.flagsRaw, "#PB_StatusBar_BorderLess");
 });
 
@@ -437,7 +437,7 @@ test("parses fixtures/smoke/13-events-and-parent-window.pbf", () => {
   assert.equal(doc.window?.generateEventLoop, true);
   assert.equal(doc.window?.hasEventGadgetBlock, true);
   assert.equal(doc.window?.hasEventGadgetCaseBranches, undefined);
-  assert.equal(doc.window?.hasEventMenuBlock, undefined);
+  assert.equal(doc.window?.hasEventMenuBlock, true);
   assert.equal(doc.window?.eventProc, "HandleFrmEventsParent");
   assert.deepEqual(doc.window?.knownFlags, ["#PB_Window_SystemMenu", "#PB_Window_SizeGadget"]);
   assert.deepEqual(doc.window?.customFlags, ["#PB_Window_CustomTag"]);
@@ -578,7 +578,7 @@ test("parses fixtures/smoke/12-visibility-colors-fonts.pbf", () => {
   assert.equal(txtName?.backColorRaw, "RGB(10, 20, 30)");
   assert.equal(txtName?.frontColor, 0x112233);
   assert.equal(txtName?.frontColorRaw, "$112233");
-  assert.equal(txtName?.gadgetFontRaw, "FontID(0)");
+  assert.equal(txtName?.gadgetFontRaw, "FontID(#FontBody)");
   assert.equal(txtName?.gadgetFont, "Arial");
   assert.equal(txtName?.gadgetFontSize, 12);
   assert.equal(txtName?.gadgetFontFlagsRaw, "#PB_Font_Bold | #PB_Font_Italic");
