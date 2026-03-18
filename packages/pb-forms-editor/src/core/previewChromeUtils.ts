@@ -130,6 +130,71 @@ export function getScrollAreaHorizontalThumbRect(
   return { x: thumbX, y: track.y, w: thumbWidth, h: track.h };
 }
 
+
+export function getGadgetContentRect(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  switch (kind) {
+    case "PanelGadget": {
+      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+      return {
+        x: rect.x,
+        y: rect.y + panelHeight,
+        w: rect.w,
+        h: Math.max(0, rect.h - panelHeight)
+      };
+    }
+
+    case "ScrollAreaGadget": {
+      const bar = getScrollAreaBarSize(rect, metrics);
+      return {
+        x: rect.x,
+        y: rect.y,
+        w: Math.max(0, rect.w - bar),
+        h: Math.max(0, rect.h - bar)
+      };
+    }
+
+    default:
+      return rect;
+  }
+}
+
+export function getSplitterPaneRect(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  splitterWidth: number,
+  state: number | undefined,
+  pane: "first" | "second"
+): PreviewRect {
+  const bar = splitterWidth;
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
+  const pos = Math.max(0, Math.min(rawPos, range));
+
+  if (pane === "first") {
+    return vertical
+      ? { x: splitterRect.x, y: splitterRect.y, w: pos, h: splitterRect.h }
+      : { x: splitterRect.x, y: splitterRect.y, w: splitterRect.w, h: pos };
+  }
+
+  return vertical
+    ? {
+      x: splitterRect.x + pos + bar,
+      y: splitterRect.y,
+      w: Math.max(0, splitterRect.w - pos - bar),
+      h: splitterRect.h
+    }
+    : {
+      x: splitterRect.x,
+      y: splitterRect.y + pos + bar,
+      w: splitterRect.w,
+      h: Math.max(0, splitterRect.h - pos - bar)
+    };
+}
+
 export function getSplitterBarRect(
   splitterRect: PreviewRect,
   vertical: boolean,

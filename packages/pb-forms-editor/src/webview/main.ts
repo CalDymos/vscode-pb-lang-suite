@@ -12,6 +12,8 @@ import {
   getScrollAreaVerticalThumbRect,
   getScrollAreaHorizontalThumbRect,
   getSplitterBarRect,
+  getSplitterPaneRect,
+  getGadgetContentRect,
   getMenuBarRect,
   getToolBarRect,
   getStatusBarRect,
@@ -2244,49 +2246,6 @@ function getPanelTabRects(
   return tabRects;
 }
 
-function getContentRectForGadget(
-  g: Gadget,
-  rect: PreviewRect,
-  metrics: PreviewChromeMetrics
-): PreviewRect {
-  switch (g.kind) {
-    case "PanelGadget": {
-      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
-      return { x: rect.x, y: rect.y + panelHeight, w: rect.w, h: Math.max(0, rect.h - panelHeight) };
-    }
-
-    case "ScrollAreaGadget": {
-      const bar = getScrollAreaBarSize(rect, metrics);
-      return { x: rect.x, y: rect.y, w: Math.max(0, rect.w - bar), h: Math.max(0, rect.h - bar) };
-    }
-
-    default:
-      return rect;
-  }
-}
-
-function getSplitterPaneRect(splitter: Gadget, splitterRect: PreviewRect, childId: string, metrics: PreviewChromeMetrics): PreviewRect {
-  const vertical = hasPbFlag(splitter.flagsExpr, "#PB_Splitter_Vertical");
-  const bar = metrics.splitterWidth;
-  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
-  const rawPos = typeof splitter.state === "number" ? Math.trunc(splitter.state) : Math.trunc(range / 2);
-  const pos = clamp(rawPos, 0, range);
-
-  if (childId === splitter.gadget1Id) {
-    return vertical
-      ? { x: splitterRect.x, y: splitterRect.y, w: pos, h: splitterRect.h }
-      : { x: splitterRect.x, y: splitterRect.y, w: splitterRect.w, h: pos };
-  }
-
-  if (childId === splitter.gadget2Id) {
-    return vertical
-      ? { x: splitterRect.x + pos + bar, y: splitterRect.y, w: Math.max(0, splitterRect.w - pos - bar), h: splitterRect.h }
-      : { x: splitterRect.x, y: splitterRect.y + pos + bar, w: splitterRect.w, h: Math.max(0, splitterRect.h - pos - bar) };
-  }
-
-  return splitterRect;
-}
-
 function getGadgetPreviewLayout(
   g: Gadget,
   metrics: PreviewChromeMetrics,
@@ -2314,7 +2273,11 @@ function getGadgetPreviewLayout(
     const splitter = getGadgetById(g.splitterId);
     if (splitter) {
       const splitterLayout = getGadgetPreviewLayout(splitter, metrics, cache, visiting);
-      const paneRect = getSplitterPaneRect(splitter, splitterLayout.rect, g.id, metrics);
+      const paneRect = g.id === splitter.gadget1Id
+        ? getSplitterPaneRect(splitterLayout.rect, hasPbFlag(splitter.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, splitter.state, "first")
+        : g.id === splitter.gadget2Id
+          ? getSplitterPaneRect(splitterLayout.rect, hasPbFlag(splitter.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, splitter.state, "second")
+          : splitterLayout.rect;
       rect = paneRect;
       clip = intersectRect(splitterLayout.clip, paneRect);
       visible = splitterLayout.visible && clip.w > 0 && clip.h > 0;
@@ -2323,7 +2286,7 @@ function getGadgetPreviewLayout(
     const parent = getGadgetById(g.parentId);
     if (parent) {
       const parentLayout = getGadgetPreviewLayout(parent, metrics, cache, visiting);
-      const parentContentRect = getContentRectForGadget(parent, parentLayout.rect, metrics);
+      const parentContentRect = getGadgetContentRect(parent.kind, parentLayout.rect, metrics);
       clip = intersectRect(parentLayout.clip, parentContentRect);
       let localX = g.x;
       let localY = g.y;

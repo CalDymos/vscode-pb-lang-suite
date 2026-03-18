@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  getGadgetContentRect,
   getMenuBarRect,
   getScrollAreaHorizontalBarRect,
   getScrollAreaHorizontalThumbRect,
@@ -9,6 +10,7 @@ import {
   getScrollAreaVerticalBarRect,
   getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
+  getSplitterPaneRect,
   getStatusBarRect,
   getToolBarRect,
   getWindowContentRect,
@@ -46,6 +48,12 @@ test("computes scrollarea chrome bars without overlapping the viewport corner", 
   assert.deepEqual(horizontal, { x: 10, y: 80, w: 100, h: 20 });
   assert.equal(overlap.w, 0);
   assert.equal(overlap.h, 0);
+});
+
+test("computes gadget content rects for panel and scrollarea containers", () => {
+  assert.deepEqual(getGadgetContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
+  assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
+  assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
 });
 
 test("computes a vertical splitter bar from state and width", () => {
@@ -87,4 +95,12 @@ test("computes the window content rect below title, menu and toolbar and above s
   const content = getWindowContentRect(windowRect, 26, true, true, true, METRICS);
 
   assert.deepEqual(content, { x: 0, y: 72, w: 320, h: 125 });
+});
+
+
+test("computes splitter pane rects for both child slots", () => {
+  assert.deepEqual(getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "first"), { x: 10, y: 20, w: 30, h: 80 });
+  assert.deepEqual(getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "second"), { x: 49, y: 20, w: 81, h: 80 });
+  assert.deepEqual(getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 25, "first"), { x: 10, y: 20, w: 120, h: 25 });
+  assert.deepEqual(getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 25, "second"), { x: 10, y: 54, w: 120, h: 46 });
 });
