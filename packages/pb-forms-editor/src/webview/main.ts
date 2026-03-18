@@ -4810,41 +4810,7 @@ function renderProps() {
       const canPatch = typeof e.source?.line === "number";
       const editFn = canPatch
         ? () => {
-            const kind = e.kind;
-            if (kind === "MenuItem") {
-              const idRaw = prompt("Menu id", e.idRaw ?? "");
-              if (idRaw === null) return;
-              const txt = prompt("Menu text", e.text ?? "");
-              if (txt === null) return;
-              const shortcut = prompt("Shortcut (blank clears)", e.shortcut ?? "");
-              if (shortcut === null) return;
-              vscode.postMessage({
-                type: "updateMenuEntry",
-                menuId: m.id,
-                sourceLine: e.source!.line,
-                kind,
-                idRaw: idRaw.trim(),
-                textRaw: toPbString(txt),
-                shortcut: shortcut.trim() || undefined,
-                iconRaw: e.iconRaw
-              });
-              return;
-            }
-
-            if (kind === "MenuTitle" || kind === "OpenSubMenu") {
-              const txt = prompt("Title", e.text ?? "");
-              if (txt === null) return;
-              vscode.postMessage({
-                type: "updateMenuEntry",
-                menuId: m.id,
-                sourceLine: e.source!.line,
-                kind,
-                textRaw: toPbString(txt)
-              });
-              return;
-            }
-
-            // MenuBar / CloseSubMenu are structural; no edit.
+            setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
         : undefined;
 
@@ -4862,17 +4828,7 @@ function renderProps() {
 
       const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
         ? () => {
-            const cur = e.event ?? "";
-            const value = prompt("Event proc (blank clears)", cur);
-            if (value === null) return;
-            const trimmed = value.trim();
-            e.event = trimmed || undefined;
-            post({
-              type: "setMenuEntryEvent",
-              entryIdRaw: e.idRaw!,
-              eventProc: trimmed.length ? trimmed : undefined
-            });
-            renderProps();
+            setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
         : undefined;
       const menuEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "menu");
@@ -4881,18 +4837,7 @@ function renderProps() {
 
       const menuSetImageFn = e.kind === "MenuItem" && canPatch
         ? () => {
-            const iconRaw = prompt("Image raw (blank clears)", e.iconRaw ?? "");
-            if (iconRaw === null) return;
-            post({
-              type: "updateMenuEntry",
-              menuId: m.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
-              shortcut: e.shortcut,
-              iconRaw: iconRaw.trim() || undefined
-            });
+            setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
         : undefined;
       const menuPickImageFn = e.kind === "MenuItem" && canPatch
@@ -4970,41 +4915,48 @@ function renderProps() {
       propsEl.appendChild(section("Structure"));
       propsEl.appendChild(box);
 
-      const addBtn = document.createElement("button");
-      addBtn.textContent = "Add Entry";
-      addBtn.onclick = () => {
-        const kind = prompt(
-          menuEntryKindHint(),
-          "MenuItem"
-        );
-        if (kind === null) return;
-        const k = kind.trim();
-        if (!k.length) return;
+      const addItemBtn = document.createElement("button");
+      addItemBtn.textContent = "Add Item";
+      addItemBtn.title = "Insert a new MenuItem with default id/text values and continue editing it in the inspector.";
+      addItemBtn.onclick = () => {
+        postInsertMenuEntry(m, { kind: "MenuItem", idRaw: "#MenuItemNew", textRaw: toPbString("Menu Item") });
+      };
 
-      if (k === "MenuItem") {
-        const idRaw = prompt("Menu id", "");
-        if (idRaw === null) return;
-        const txt = prompt("Menu text", "");
-        if (txt === null) return;
-        postInsertMenuEntry(m, { kind: k, idRaw: idRaw.trim(), textRaw: toPbString(txt) });
-        return;
-      }
+      const addTitleBtn = document.createElement("button");
+      addTitleBtn.textContent = "Add Title";
+      addTitleBtn.title = "Insert a new MenuTitle with a default caption and continue editing it in the inspector.";
+      addTitleBtn.onclick = () => {
+        postInsertMenuEntry(m, { kind: "MenuTitle", textRaw: toPbString("MenuTitle") });
+      };
 
-      if (k === "MenuTitle" || k === "OpenSubMenu") {
-        const txt = prompt("Title", "");
-        if (txt === null) return;
-        postInsertMenuEntry(m, { kind: k, textRaw: toPbString(txt) });
-        return;
-      }
+      const addSubMenuBtn = document.createElement("button");
+      addSubMenuBtn.textContent = "Add SubMenu";
+      addSubMenuBtn.title = "Insert a new OpenSubMenu entry with a default title and continue editing it in the inspector.";
+      addSubMenuBtn.onclick = () => {
+        postInsertMenuEntry(m, { kind: "OpenSubMenu", textRaw: toPbString("SubMenu") });
+      };
 
-      if (k === "MenuBar" || k === "CloseSubMenu") {
-        postInsertMenuEntry(m, { kind: k });
-      }
-    };
+      const addSeparatorBtn = document.createElement("button");
+      addSeparatorBtn.textContent = "Add Separator";
+      addSeparatorBtn.title = "Insert a new MenuBar separator entry.";
+      addSeparatorBtn.onclick = () => {
+        postInsertMenuEntry(m, { kind: "MenuBar" });
+      };
+
+      const addCloseBtn = document.createElement("button");
+      addCloseBtn.textContent = "Add Close";
+      addCloseBtn.title = "Insert a new CloseSubMenu entry.";
+      addCloseBtn.onclick = () => {
+        postInsertMenuEntry(m, { kind: "CloseSubMenu" });
+      };
 
       const actions = document.createElement("div");
       actions.className = "miniActions";
-      actions.appendChild(addBtn);
+      actions.appendChild(addItemBtn);
+      actions.appendChild(addTitleBtn);
+      actions.appendChild(addSubMenuBtn);
+      actions.appendChild(addSeparatorBtn);
+      actions.appendChild(addCloseBtn);
       if (sel.kind === "menu") {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete Menu";
