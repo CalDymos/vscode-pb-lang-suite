@@ -29,6 +29,10 @@ function patchAndReparse(
   };
 }
 
+function toLf(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
 test("inserts the first image block before the font block and injects the required decoder", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
@@ -138,4 +142,154 @@ EndProcedure
   assert.match(patchedText, /UseJPEGImageDecoder\(\)/);
   assert.doesNotMatch(patchedText, /UsePNGImageDecoder\(\)/);
   assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.jpg"\)/);
+});
+
+
+test("creates an Enumeration FormImage block when inserting the first enum image", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes(
+    [
+      'Enumeration FormMenu',
+      '  #MenuMain',
+      'EndEnumeration',
+      '',
+      'Enumeration FormImage',
+      '  #ImgMainLogo',
+      'EndEnumeration',
+      '',
+      'UsePNGImageDecoder()',
+      '',
+      'LoadImage(#ImgMainLogo, "logo.png")',
+    ].join("\n")
+  ));
+  assert.doesNotMatch(patchedText, /^Global\s+/m);
+});
+
+test("creates a Global image variable block when inserting the first pbAny image", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
+  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any, "logo\.png"\)/);
+  assert.doesNotMatch(patchedText, /Enumeration FormImage/);
+});
+
+test("moves image declarations from FormImage to Global when toggling the last enum image to pbAny", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo,"logo.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "ImgMainLogo",
+    imageRaw: '"logo.png"',
+  }));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes(['Global ImgMainLogo', '', 'Enumeration FormWindow'].join("\n")));
+  assert.ok(!normalized.includes(['Enumeration FormImage', '  #ImgMainLogo', 'EndEnumeration'].join("\n")));
+  assert.match(patchedText, /ImgMainLogo = LoadImage\(#PB_Any, "logo\.png"\)/);
+});
+
+test("moves image declarations from Global to FormImage when toggling the last pbAny image to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global ImgMainLogo
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+UsePNGImageDecoder()
+
+ImgMainLogo = LoadImage(#PB_Any,"logo.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "ImgMainLogo")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '"logo.png"',
+  }));
+  const normalized = toLf(patchedText);
+
+  assert.ok(!/^Global ImgMainLogo$/m.test(patchedText));
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormImage',
+    '  #ImgMainLogo',
+    'EndEnumeration',
+  ].join("\n")));
+  assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
 });

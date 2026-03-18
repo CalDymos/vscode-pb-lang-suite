@@ -2465,6 +2465,148 @@ function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]
   return document.lineCount;
 }
 
+function getImageGlobalVars(images: FormImage[]): string[] {
+  return images
+    .filter(image => image.pbAny)
+    .map(image => image.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getImageEnumSymbols(images: FormImage[]): string[] {
+  return images
+    .filter(image => !image.pbAny)
+    .map(image => image.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildImageGlobalBlock(images: FormImage[]): string {
+  const globals = getImageGlobalVars(images);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildImageEnumBlock(images: FormImage[]): string {
+  const symbols = getImageEnumSymbols(images);
+  if (!symbols.length) return "";
+  return `Enumeration FormImage
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function parseGlobalVarNames(line: string): string[] {
+  const match = /^\s*Global\s+(.+?)\s*$/.exec(line);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: LineBlock): LineBlock {
+  let endLine = block.endLine;
+  if (endLine + 1 < document.lineCount && document.lineAt(endLine + 1).text.trim() === "") {
+    endLine += 1;
+  }
+  return { startLine: block.startLine, endLine };
+}
+
+function findImageGlobalBlock(document: vscode.TextDocument, images: FormImage[]): LineBlock | undefined {
+  const imageGlobalNames = new Set(getImageGlobalVars(images));
+  if (!imageGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => imageGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findImageGlobalInsertLine(document: vscode.TextDocument): number {
+  let lastGlobal = -1;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (/^\s*Global\b/i.test(line)) lastGlobal = i;
+    if (firstAnchor === document.lineCount && (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line))) {
+      firstAnchor = i;
+    }
+  }
+
+  if (lastGlobal >= 0) {
+    let insertLine = lastGlobal + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+    return insertLine;
+  }
+
+  return firstAnchor;
+}
+
+function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  const preferredEnums = ["FormWindow", "FormGadget", "FormMenu"];
+  let lastBlock: LineBlock | undefined;
+
+  for (const enumName of preferredEnums) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) {
+      lastBlock = block;
+    }
+  }
+
+  if (lastBlock) {
+    let insertLine = lastBlock.endLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+    return insertLine;
+  }
+
+  return findImageBlockInsertLine(document, calls);
+}
+
+function applyOptionalBlockPatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  block: LineBlock | undefined,
+  insertLine: number,
+  rebuilt: string
+): void {
+  if (block) {
+    const range = new vscode.Range(
+      new vscode.Position(block.startLine, 0),
+      document.lineAt(block.endLine).rangeIncludingLineBreak.end
+    );
+    if (rebuilt.length) {
+      edit.replace(document.uri, range, rebuilt);
+    } else {
+      edit.delete(document.uri, range);
+    }
+    return;
+  }
+
+  if (rebuilt.length) {
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), rebuilt);
+  }
+}
+
 function buildImageBlock(images: FormImage[], indent: string): string {
   if (!images.length) return "";
 
@@ -2525,6 +2667,36 @@ function applyImageMutation(
 
   const edit = new vscode.WorkspaceEdit();
 
+  const imageGlobalBlock = findImageGlobalBlock(document, parsed.images);
+  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    imageGlobalBlock,
+    findImageGlobalInsertLine(document),
+    rebuiltGlobalBlock
+  );
+
+  const imageEnumBlock = findNamedEnumerationBlock(document, "FormImage");
+  const rebuiltEnumBlock = buildImageEnumBlock(nextImages);
+  const imageBlockInsertLine = findImageBlockInsertLine(document, calls);
+  const imageEnumInsertLine = findImageEnumInsertLine(document, calls);
+  const combineFreshEnumAndImageInsert = !imageCalls.length
+    && !decoderLines.length
+    && !imageEnumBlock
+    && !!rebuiltEnumBlock
+    && imageEnumInsertLine === imageBlockInsertLine;
+
+  if (!combineFreshEnumAndImageInsert) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      imageEnumBlock ? expandBlockWithTrailingBlank(document, imageEnumBlock) : undefined,
+      imageEnumInsertLine,
+      rebuiltEnumBlock
+    );
+  }
+
   if (imageCalls.length || decoderLines.length) {
     const firstLine = Math.min(
       imageCalls.length ? imageCalls[0].range.line : Number.MAX_SAFE_INTEGER,
@@ -2544,7 +2716,12 @@ function applyImageMutation(
 
   if (!rebuilt) return undefined;
 
-  edit.insert(document.uri, new vscode.Position(findImageBlockInsertLine(document, calls), 0), rebuilt);
+  if (combineFreshEnumAndImageInsert) {
+    edit.insert(document.uri, new vscode.Position(imageEnumInsertLine, 0), `${rebuiltEnumBlock}${rebuilt}`);
+    return edit;
+  }
+
+  edit.insert(document.uri, new vscode.Position(imageBlockInsertLine, 0), rebuilt);
   return edit;
 }
 
