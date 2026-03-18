@@ -563,8 +563,13 @@ test("parses fixtures/smoke/12-visibility-colors-fonts.pbf", () => {
 
   const txtName = doc.gadgets.find((g) => g.id === "#TxtName");
   const chkActive = doc.gadgets.find((g) => g.id === "#ChkActive");
+  const font = doc.fonts.find((entry) => entry.id === "#Font_FrmStyleProps_0");
 
   assert.ok(txtName, "Expected #TxtName gadget.");
+  assert.ok(font, "Expected #Font_FrmStyleProps_0 font.");
+  assert.equal(font?.name, "Arial");
+  assert.equal(font?.size, 12);
+  assert.equal(font?.flagsRaw, "#PB_Font_Bold | #PB_Font_Italic");
   assert.equal(txtName?.textRaw, "Value$");
   assert.equal(txtName?.text, "Value$");
   assert.equal(txtName?.textVariable, true);

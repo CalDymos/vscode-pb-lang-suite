@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
-import { splitParams, unquoteString } from "../parser/tokenizer";
-import { FormImage, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
+import { FormFont, FormImage, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -232,6 +232,14 @@ export interface StatusBarFieldArgs {
   flagsRaw?: string;
   progressBar?: boolean;
   progressRaw?: string;
+}
+
+export interface FontArgs {
+  idRaw: string;
+  nameRaw: string;
+  sizeRaw: string;
+  flagsRaw?: string;
+  assignedVar?: string;
 }
 
 export interface ImageArgs {
@@ -2389,6 +2397,59 @@ function buildImageLine(args: ImageArgs): string {
   return `${procName}(${idRaw}, ${imageRaw})`;
 }
 
+function buildFontLine(args: FontArgs): string {
+  const idRaw = args.idRaw.trim();
+  const nameRaw = args.nameRaw.trim();
+  const sizeRaw = args.sizeRaw.trim();
+  const flagsRaw = normalizeOptionalRaw(args.flagsRaw);
+
+  if (idRaw === "#PB_Any") {
+    const assignedVar = args.assignedVar?.trim();
+    if (assignedVar) {
+      return `${assignedVar} = LoadFont(#PB_Any, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
+    }
+  }
+
+  return `LoadFont(${idRaw}, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
+}
+
+function cloneFormFont(font: FormFont): FormFont {
+  return {
+    id: font.id,
+    pbAny: font.pbAny,
+    variable: font.variable,
+    firstParam: font.firstParam,
+    nameRaw: font.nameRaw,
+    name: font.name,
+    sizeRaw: font.sizeRaw,
+    size: font.size,
+    flagsRaw: font.flagsRaw,
+    source: font.source,
+  };
+}
+
+function mapFontArgsToFont(args: FontArgs): FormFont {
+  const firstParam = args.idRaw.trim();
+  const pbAny = firstParam === "#PB_Any";
+  const assignedVar = args.assignedVar?.trim();
+  const nameRaw = args.nameRaw.trim();
+  const sizeRaw = args.sizeRaw.trim();
+  const name = unquoteString(nameRaw) ?? undefined;
+  const size = asNumber(sizeRaw);
+
+  return {
+    id: pbAny ? (assignedVar || "#PB_Any") : firstParam,
+    pbAny,
+    variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    nameRaw,
+    name,
+    sizeRaw,
+    size: typeof size === "number" ? size : undefined,
+    flagsRaw: normalizeOptionalRaw(args.flagsRaw),
+  };
+}
+
 function cloneFormImage(image: FormImage): FormImage {
   return {
     id: image.id,
@@ -2420,6 +2481,188 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
     image: normalized,
     inline: args.inline,
   };
+}
+
+function getFirstProcedureLine(document: vscode.TextDocument): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    if (/^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
+  }
+  return document.lineCount;
+}
+
+function findFontLoadCalls(calls: PbCall[], document: vscode.TextDocument): PbCall[] {
+  const firstProcedureLine = getFirstProcedureLine(document);
+  return calls.filter(call => call.name === "LoadFont" && call.range.line < firstProcedureLine);
+}
+
+function getFontGlobalVars(fonts: FormFont[]): string[] {
+  return fonts
+    .filter(font => font.pbAny)
+    .map(font => font.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getFontEnumSymbols(fonts: FormFont[]): string[] {
+  return fonts
+    .filter(font => !font.pbAny)
+    .map(font => font.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildFontGlobalBlock(fonts: FormFont[]): string {
+  const globals = getFontGlobalVars(fonts);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildFontEnumBlock(fonts: FormFont[]): string {
+  const symbols = getFontEnumSymbols(fonts);
+  if (!symbols.length) return "";
+  return `Enumeration FormFont
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function findFontGlobalBlock(document: vscode.TextDocument, fonts: FormFont[]): LineBlock | undefined {
+  const fontGlobalNames = new Set(getFontGlobalVars(fonts));
+  if (!fontGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => fontGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findFontGlobalInsertLine(document: vscode.TextDocument): number {
+  return findImageGlobalInsertLine(document);
+}
+
+function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  const fontLoadCalls = findFontLoadCalls(calls, document);
+  if (fontLoadCalls.length) return fontLoadCalls[0].range.line;
+
+  const decoderLines: number[] = [];
+  for (let i = 0; i < document.lineCount; i++) {
+    if (isImageDecoderLine(document.lineAt(i).text)) decoderLines.push(i);
+  }
+
+  const imageCalls = calls.filter(c => IMAGE_ENTRY_NAMES.has(c.name.toLowerCase()));
+  if (imageCalls.length || decoderLines.length) {
+    const lastLine = Math.max(
+      imageCalls.length ? imageCalls[imageCalls.length - 1].range.line : -1,
+      decoderLines.length ? decoderLines[decoderLines.length - 1] : -1
+    );
+    let insertLine = lastLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") insertLine += 1;
+    return insertLine;
+  }
+
+  const preferredEnums = ["FormWindow", "FormGadget", "FormMenu", "FormImage"];
+  let lastBlock: LineBlock | undefined;
+  for (const enumName of preferredEnums) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) lastBlock = block;
+  }
+
+  if (lastBlock) {
+    let insertLine = lastBlock.endLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") insertLine += 1;
+    return insertLine;
+  }
+
+  return findImageBlockInsertLine(document, calls);
+}
+
+function buildFontLoadBlock(fonts: FormFont[], indent: string): string {
+  if (!fonts.length) return "";
+
+  const lines = fonts.map(font => `${indent}${buildFontLine({
+    idRaw: font.firstParam,
+    nameRaw: font.nameRaw,
+    sizeRaw: font.sizeRaw,
+    flagsRaw: font.flagsRaw,
+    assignedVar: font.pbAny ? font.id : undefined,
+  })}`);
+
+  return `${lines.join("\n")}
+
+`;
+}
+
+function applyFontMutation(
+  document: vscode.TextDocument,
+  mutate: (fonts: FormFont[]) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const nextFonts = parsed.fonts.map(cloneFormFont);
+  if (!mutate(nextFonts)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const fontLoadCalls = findFontLoadCalls(calls, document);
+  const anchorLine = fontLoadCalls.length ? fontLoadCalls[0].range.line : findFontBlockInsertLine(document, calls);
+  const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, Math.max(0, document.lineCount - 1))) : "";
+  const rebuiltLoadBlock = buildFontLoadBlock(nextFonts, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  const fontGlobalBlock = findFontGlobalBlock(document, parsed.fonts);
+  applyOptionalBlockPatch(edit, document, fontGlobalBlock, findFontGlobalInsertLine(document), buildFontGlobalBlock(nextFonts));
+
+  const fontEnumBlock = findNamedEnumerationBlock(document, "FormFont");
+  const fontEnumInsertLine = findFontBlockInsertLine(document, calls);
+  const combineFreshEnumAndLoadInsert = !fontLoadCalls.length && !fontEnumBlock && !!buildFontEnumBlock(nextFonts);
+
+  if (!combineFreshEnumAndLoadInsert) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      fontEnumBlock ? expandBlockWithTrailingBlank(document, fontEnumBlock) : undefined,
+      fontEnumInsertLine,
+      buildFontEnumBlock(nextFonts)
+    );
+  }
+
+  if (fontLoadCalls.length) {
+    const firstLine = fontLoadCalls[0].range.line;
+    const lastLine = fontLoadCalls[fontLoadCalls.length - 1].range.line;
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      rebuiltLoadBlock
+    );
+    return edit;
+  }
+
+  if (!rebuiltLoadBlock) {
+    const hasStructuralFontBlock = !!fontGlobalBlock || !!buildFontGlobalBlock(nextFonts) || !!fontEnumBlock || !!buildFontEnumBlock(nextFonts);
+    return hasStructuralFontBlock ? edit : undefined;
+  }
+
+  if (combineFreshEnumAndLoadInsert) {
+    edit.insert(document.uri, new vscode.Position(fontEnumInsertLine, 0), `${buildFontEnumBlock(nextFonts)}${rebuiltLoadBlock}`);
+    return edit;
+  }
+
+  edit.insert(document.uri, new vscode.Position(fontEnumInsertLine, 0), rebuiltLoadBlock);
+  return edit;
 }
 
 const IMAGE_DECODER_ORDER = [
@@ -3446,6 +3689,60 @@ export function applyStatusBarFieldDelete(
   );
 }
 
+
+export function applyFontInsert(
+  document: vscode.TextDocument,
+  args: FontArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      fonts.push(mapFontArgsToFont(args));
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyFontUpdate(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  args: FontArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      const index = fonts.findIndex(font => font.source?.line === sourceLine);
+      if (index < 0) return false;
+      fonts[index] = {
+        ...fonts[index],
+        ...mapFontArgsToFont(args),
+        source: fonts[index].source,
+      };
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyFontDelete(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      const index = fonts.findIndex(font => font.source?.line === sourceLine);
+      if (index < 0) return false;
+      fonts.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
 
 export function applyImageInsert(
   document: vscode.TextDocument,

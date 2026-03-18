@@ -1,5 +1,6 @@
 import {
   FormDocument,
+  FormFont,
   FormImage,
   FormEnumerations,
   FormIssue,
@@ -82,7 +83,7 @@ export function parseFormDocument(text: string): FormDocument {
     enums
   };
 
-  const doc: FormDocument = { window: undefined, images: [], gadgets: [], menus: [], toolbars: [], statusbars: [], meta };
+  const doc: FormDocument = { window: undefined, fonts: [], images: [], gadgets: [], menus: [], toolbars: [], statusbars: [], meta };
 
   const gadgetById = new Map<string, Gadget>();
   const panelCurrentItem = new Map<string, number>();
@@ -154,6 +155,10 @@ export function parseFormDocument(text: string): FormDocument {
 
   const addStatusBarField = (field: FormStatusBarField) => {
     if (curStatusBar) curStatusBar.fields.push(field);
+  };
+
+  const addFont = (font: FormFont) => {
+    doc.fonts.push(font);
   };
 
   const addImage = (image: FormImage) => {
@@ -543,19 +548,14 @@ export function parseFormDocument(text: string): FormDocument {
       }
 
       case "LoadFont": {
-        const p = splitParams(c.args);
-        if (p.length >= 3) {
-          const id = (p[0] ?? "").trim();
-          const nameRaw = (p[1] ?? "").trim();
-          const sizeRaw = (p[2] ?? "").trim();
-          const name = unquoteString(nameRaw);
-          const size = asNumber(sizeRaw);
-
-          if (id.length && typeof name === "string" && typeof size === "number") {
-            fontById.set(id, {
-              name,
-              size,
-              flagsRaw: p[3]?.trim() || undefined
+        const font = parseFormFont(c.assignedVar, c.args, c.range);
+        if (font) {
+          addFont(font);
+          if (typeof font.name === "string" && typeof font.size === "number") {
+            fontById.set(font.id, {
+              name: font.name,
+              size: font.size,
+              flagsRaw: font.flagsRaw
             });
           }
         }
@@ -1319,6 +1319,34 @@ function normalizeImageValue(raw: string | undefined, inline: boolean): string |
   }
 
   return unquoteString(valueRaw) ?? (valueRaw.length ? valueRaw : undefined);
+}
+
+function parseFormFont(assignedVar: string | undefined, args: string, source?: FormFont["source"]): FormFont | undefined {
+  const p = splitParams(args);
+  if (p.length < 3) return undefined;
+
+  const firstParam = (p[0] ?? "").trim();
+  const pbAny = firstParam === "#PB_Any";
+  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const nameRaw = (p[1] ?? "").trim();
+  const sizeRaw = (p[2] ?? "").trim();
+  if (!nameRaw.length || !sizeRaw.length) return undefined;
+
+  const name = unquoteString(nameRaw) ?? undefined;
+  const size = asNumber(sizeRaw);
+
+  return {
+    id,
+    pbAny,
+    variable: pbAny ? (assignedVar ?? undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    nameRaw,
+    name,
+    sizeRaw,
+    size: typeof size === "number" ? size : undefined,
+    flagsRaw: p[3]?.trim() || undefined,
+    source
+  };
 }
 
 function parseFormImage(inline: boolean, assignedVar: string | undefined, args: string, source?: FormImage["source"]): FormImage | undefined {

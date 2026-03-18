@@ -262,6 +262,19 @@ export interface FormStatusBar {
   source?: SourceRange;
 }
 
+export interface FormFont {
+  id: string;            // stable key for patching (assigned var for #PB_Any, else first param)
+  pbAny: boolean;
+  variable?: string;     // e.g. "fontMain" when #PB_Any is used with an assigned variable
+  firstParam: string;    // raw first param token
+  nameRaw: string;       // raw font name expression from LoadFont(...)
+  name?: string;         // unquoted font name when possible
+  sizeRaw: string;       // raw font size expression from LoadFont(...)
+  size?: number;
+  flagsRaw?: string;
+  source?: SourceRange;
+}
+
 export interface FormImage {
   id: string;            // stable key for patching/references (assigned var for #PB_Any, else first param)
   pbAny: boolean;
@@ -275,6 +288,7 @@ export interface FormImage {
 
 export interface FormDocument {
   window?: FormWindow;
+  fonts: FormFont[];
   images: FormImage[];
   gadgets: Gadget[];
   menus: FormMenu[];
