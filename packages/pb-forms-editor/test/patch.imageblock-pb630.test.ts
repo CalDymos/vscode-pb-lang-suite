@@ -332,6 +332,84 @@ EndProcedure
 });
 
 
+test("inserts an Enumeration FormImage block before custom gadget initialisation", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+XIncludeFile "events/form-main.pbi"
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#PB_Any, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    'Enumeration FormImage',
+    '  #ImgMainLogo',
+    'EndEnumeration',
+    '',
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+    'InitScintillaBridge()',
+  ].join("\n")));
+  assert.ok(normalized.includes([
+    'UsePNGImageDecoder()',
+    '',
+    'LoadImage(#ImgMainLogo, "logo.png")',
+    '',
+    'XIncludeFile "events/form-main.pbi"',
+  ].join("\n")));
+});
+
+
+test("moves FormImage before custom gadget initialisation when toggling the last pbAny image to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global ImgMainLogo
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+ImgMainLogo = LoadImage(#PB_Any, "logo.png")
+
+XIncludeFile "events/form-main.pbi"
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#PB_Any, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const sourceLine = text.split(/\r?\n/).findIndex((line) => line.includes('ImgMainLogo = LoadImage(#PB_Any, "logo.png")'));
+  assert.notEqual(sourceLine, -1, 'Expected pbAny image line.');
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine, {
+    inline: false,
+    idRaw: '#ImgMainLogo',
+    imageRaw: '"logo.png"',
+  }));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    'Enumeration FormImage',
+    '  #ImgMainLogo',
+    'EndEnumeration',
+    '',
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+    'InitScintillaBridge()',
+  ].join("\n")));
+  assert.doesNotMatch(patchedText, /^Global\s+ImgMainLogo\s*$/m);
+  assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
+});
+
+
 test("inserts a pbAny image Global block before custom gadget initialisation", () => {
   const text = `; Form Designer for PureBasic - 6.30
 

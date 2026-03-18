@@ -2527,6 +2527,16 @@ function isTopLevelImageOrFontBoundaryLine(text: string): boolean {
     || isTopLevelHeadBoundaryLine(text);
 }
 
+function findCustomGadgetInitMarkerLine(document: vscode.TextDocument, startLine = 0): number | undefined {
+  for (let i = Math.max(0, startLine); i < document.lineCount; i++) {
+    if (isCustomGadgetInitMarkerLine(document.lineAt(i).text)) {
+      return i;
+    }
+  }
+
+  return undefined;
+}
+
 function findCustomGadgetInitBoundaryLine(document: vscode.TextDocument, startLine = 0): number | undefined {
   let seenMarker = false;
 
@@ -2664,8 +2674,8 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
     return insertLine;
   }
 
-  const customInitBoundary = findCustomGadgetInitBoundaryLine(document);
-  if (customInitBoundary !== undefined) return customInitBoundary;
+  const customInitMarker = findCustomGadgetInitMarkerLine(document);
+  if (customInitMarker !== undefined) return customInitMarker;
 
   return findImageBlockInsertLine(document, calls);
 }
@@ -2894,6 +2904,9 @@ function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[])
     }
     return insertLine;
   }
+
+  const customInitMarker = findCustomGadgetInitMarkerLine(document);
+  if (customInitMarker !== undefined) return customInitMarker;
 
   return findImageBlockInsertLine(document, calls);
 }
