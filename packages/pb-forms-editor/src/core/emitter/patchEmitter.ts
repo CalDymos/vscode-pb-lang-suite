@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
-import { FormFont, FormImage, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -354,6 +354,76 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
     default:
       return "";
   }
+}
+
+function cloneMenuEntry(entry: FormMenuEntry): FormMenuEntry {
+  return { ...entry };
+}
+
+function collectMenuEnumSymbols(menus: FormMenu[]): string[] {
+  const seen = new Set<string>();
+  const symbols: string[] = [];
+
+  for (const menu of menus) {
+    for (const entry of menu.entries) {
+      const idRaw = entry.idRaw?.trim();
+      if (!idRaw?.startsWith("#") || seen.has(idRaw)) continue;
+      seen.add(idRaw);
+      symbols.push(idRaw);
+    }
+  }
+
+  return symbols;
+}
+
+function buildMenuEnumBlock(symbols: string[]): string {
+  if (!symbols.length) return "";
+  return `Enumeration FormMenu
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  const preferredEnums = ["FormWindow", "FormGadget"];
+  let lastBlock: LineBlock | undefined;
+
+  for (const enumName of preferredEnums) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) {
+      lastBlock = block;
+    }
+  }
+
+  if (lastBlock) {
+    let insertLine = lastBlock.endLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+    return insertLine;
+  }
+
+  const customInitMarker = findCustomGadgetInitMarkerLine(document);
+  if (customInitMarker !== undefined) return customInitMarker;
+
+  return findImageBlockInsertLine(document, calls);
+}
+
+function applyMenuEnumPatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  symbols: string[]
+): void {
+  const menuEnumBlock = findNamedEnumerationBlock(document, "FormMenu");
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    menuEnumBlock ? expandBlockWithTrailingBlank(document, menuEnumBlock) : undefined,
+    findMenuEnumInsertLine(document, calls),
+    buildMenuEnumBlock(symbols)
+  );
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
@@ -3427,28 +3497,39 @@ export function applyMenuEntryInsert(
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
   const insertText = args.kind === MENU_ENTRY_KIND.OpenSubMenu
-    ? (indent: string) => `${indent}${buildMenuEntryLine(args)}
-${indent}CloseSubMenu()`
+    ? (indent: string) => `${indent}${buildMenuEntryLine(args)}\n${indent}CloseSubMenu()`
     : (indent: string) => `${indent}${buildMenuEntryLine(args)}`;
+
+  let edit: vscode.WorkspaceEdit | undefined;
 
   if (typeof insertOptions?.parentSourceLine === "number") {
     const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, insertOptions.parentSourceLine);
     if (!anchored) return undefined;
 
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}
-`);
-    return edit;
+    edit = new vscode.WorkspaceEdit();
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}\n`);
+  } else {
+    edit = applySectionEntryInsert(
+      document,
+      calls,
+      "createmenu",
+      menuId,
+      MENU_ENTRY_NAMES,
+      insertText
+    );
   }
 
-  return applySectionEntryInsert(
-    document,
-    calls,
-    "createmenu",
-    menuId,
-    MENU_ENTRY_NAMES,
-    insertText
-  );
+  if (!edit) return undefined;
+
+  const idRaw = args.idRaw?.trim();
+  if (idRaw?.startsWith("#")) {
+    const parsed = parseFormDocument(document.getText());
+    const symbols = collectMenuEnumSymbols(parsed.menus);
+    if (!symbols.includes(idRaw)) symbols.push(idRaw);
+    applyMenuEnumPatch(edit, document, calls, symbols);
+  }
+
+  return edit;
 }
 
 export function applyMenuEntryUpdate(
@@ -3459,7 +3540,7 @@ export function applyMenuEntryUpdate(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryUpdate(
+  const edit = applySectionEntryUpdate(
     document,
     calls,
     "createmenu",
@@ -3468,6 +3549,17 @@ export function applyMenuEntryUpdate(
     args.kind.toLowerCase(),
     buildMenuEntryLine(args)
   );
+  if (!edit) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menus = parsed.menus.map(menu => ({ ...menu, entries: menu.entries.map(cloneMenuEntry) }));
+  const menu = menus.find(entry => entry.id === menuId);
+  const target = menu?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
+  if (target) {
+    target.idRaw = args.idRaw;
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus));
+  return edit;
 }
 
 export function applyMenuEntryDelete(
@@ -3489,6 +3581,15 @@ export function applyMenuEntryDelete(
       document.lineAt(deleteRange.endLine).rangeIncludingLineBreak.end
     )
   );
+
+  const parsed = parseFormDocument(document.getText());
+  const menus = parsed.menus.map(menu => ({ ...menu, entries: menu.entries.map(cloneMenuEntry) }));
+  const menu = menus.find(entry => entry.id === menuId);
+  if (menu) {
+    const targetIndex = menu.entries.findIndex(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === kind.toLowerCase());
+    if (targetIndex >= 0) menu.entries.splice(targetIndex, 1);
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus));
   return edit;
 }
 
