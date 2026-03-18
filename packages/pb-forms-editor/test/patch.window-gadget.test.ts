@@ -839,6 +839,52 @@ EndProcedure
 });
 
 
+
+
+test("re-inserts Enumeration FormGadget before custom gadget initialisation and ProcedureDLL boundaries", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
+
+EndProcedure
+
+XIncludeFile "events/form-main.pbi"
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
+  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormGadget',
+    '  #BtnOk',
+    'EndEnumeration',
+    '',
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+  ].join("\n")));
+  assert.ok(normalized.includes([
+    'InitScintillaBridge()',
+    '',
+    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
+  ].join("\n")));
+
+  const button = parsed.gadgets.find((g) => g.id === '#BtnOk');
+  assert.ok(button, 'Expected patched enum gadget.');
+  assert.equal(button?.x, 20);
+  assert.equal(button?.y, 24);
+  assert.equal(button?.w, 90);
+  assert.equal(button?.h, 28);
+});
+
 test("re-inserts Enumeration FormGadget before FormMenu when patching an enum gadget", () => {
   const text = `; Form Designer for PureBasic - 6.30
 

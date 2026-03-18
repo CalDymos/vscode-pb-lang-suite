@@ -68,6 +68,45 @@ EndProcedure
   assert.equal(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"), true);
 });
 
+
+
+test("inserts FormMenu before ProcedureDLL and XIncludeFile boundaries when no prior enums exist", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
+
+EndProcedure
+
+XIncludeFile "events/form-main.pbi"
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#FrmMain, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormMenu',
+    '  #MenuSave',
+    'EndEnumeration',
+    '',
+    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
+  ].join("\n")));
+  assert.equal(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"), true);
+});
+
 test("removes an empty FormMenu block when deleting the last menu symbol", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
