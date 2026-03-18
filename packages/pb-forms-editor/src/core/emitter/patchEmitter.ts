@@ -2550,6 +2550,7 @@ function findCustomGadgetInitBoundaryLine(document: vscode.TextDocument, startLi
 function isTopLevelGlobalAnchorLine(text: string): boolean {
   const trimmed = text.trim();
   return /^Enumeration\b/i.test(trimmed)
+    || isCustomGadgetInitMarkerLine(text)
     || isImageDecoderLine(text)
     || /^LoadImage\s*\(/i.test(trimmed)
     || /^CatchImage\s*\(/i.test(trimmed)

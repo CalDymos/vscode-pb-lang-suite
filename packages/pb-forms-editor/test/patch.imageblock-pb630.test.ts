@@ -331,6 +331,42 @@ EndProcedure
   ].join("\n")));
 });
 
+
+test("inserts a pbAny image Global block before custom gadget initialisation", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+XIncludeFile "events/form-main.pbi"
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    'Global ImgMainLogo',
+    '',
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+    'InitScintillaBridge()',
+  ].join("\n")));
+  assert.ok(normalized.includes([
+    'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
+    '',
+    'XIncludeFile "events/form-main.pbi"',
+  ].join("\n")));
+});
+
 test("inserts a pbAny image Global block before Declare and XIncludeFile boundaries", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
