@@ -2492,6 +2492,40 @@ function isTopLevelHeadBoundaryLine(text: string): boolean {
     || /^\s*;\s*IDE Options\b/i.test(text);
 }
 
+function isCustomGadgetInitMarkerLine(text: string): boolean {
+  return /^\s*;\s*\d+\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i.test(text);
+}
+
+function isTopLevelImageOrFontBoundaryLine(text: string): boolean {
+  const trimmed = text.trim();
+  return isImageDecoderLine(text)
+    || /^LoadImage\s*\(/i.test(trimmed)
+    || /^CatchImage\s*\(/i.test(trimmed)
+    || /^Enumeration\s+FormFont\b/i.test(trimmed)
+    || /^LoadFont\s*\(/i.test(trimmed)
+    || isTopLevelHeadBoundaryLine(text);
+}
+
+function findCustomGadgetInitBoundaryLine(document: vscode.TextDocument, startLine = 0): number | undefined {
+  let seenMarker = false;
+
+  for (let i = Math.max(0, startLine); i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    if (!seenMarker) {
+      if (isCustomGadgetInitMarkerLine(text)) {
+        seenMarker = true;
+      }
+      continue;
+    }
+
+    if (isTopLevelImageOrFontBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return seenMarker ? document.lineCount : undefined;
+}
+
 function isTopLevelGlobalAnchorLine(text: string): boolean {
   const trimmed = text.trim();
   return /^Enumeration\b/i.test(trimmed)
@@ -2603,8 +2637,13 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
   if (lastBlock) {
     let insertLine = lastBlock.endLine + 1;
     while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") insertLine += 1;
+    const customInitBoundary = findCustomGadgetInitBoundaryLine(document, insertLine);
+    if (customInitBoundary !== undefined) return customInitBoundary;
     return insertLine;
   }
+
+  const customInitBoundary = findCustomGadgetInitBoundaryLine(document);
+  if (customInitBoundary !== undefined) return customInitBoundary;
 
   return findImageBlockInsertLine(document, calls);
 }

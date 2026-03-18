@@ -366,3 +366,97 @@ EndProcedure
     'Declare ResizeGadgetsFrmMain()',
   ].join("\n")));
 });
+
+test("inserts an enum font block after custom gadget initialisation and before Declare", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ScintillaMain
+EndEnumeration
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+Declare ResizeGadgetsFrmMain()
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Fonts")
+EndProcedure
+`;
+
+  const args: FontArgs = {
+    idRaw: '#Font_FrmMain_0',
+    nameRaw: '"Arial"',
+    sizeRaw: '10',
+    flagsRaw: '#PB_Font_Bold',
+  };
+
+  const document = new FakeTextDocument(text);
+  const edit = applyFontInsert(document.asTextDocument(), args);
+  assert.ok(edit, 'Expected font insert edit.');
+
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+    'InitScintillaBridge()',
+    '',
+    'Enumeration FormFont',
+    '  #Font_FrmMain_0',
+    'EndEnumeration',
+    '',
+    'LoadFont(#Font_FrmMain_0, "Arial", 10, #PB_Font_Bold)',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+});
+
+test("inserts a pbAny font load block after custom gadget initialisation and before Declare", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #ScintillaMain
+EndEnumeration
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+Declare ResizeGadgetsFrmMain()
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Fonts")
+EndProcedure
+`;
+
+  const args: FontArgs = {
+    idRaw: '#PB_Any',
+    assignedVar: 'FontMain',
+    nameRaw: '"Arial"',
+    sizeRaw: '10',
+    flagsRaw: '#PB_Font_Bold',
+  };
+
+  const document = new FakeTextDocument(text);
+  const edit = applyFontInsert(document.asTextDocument(), args);
+  assert.ok(edit, 'Expected font insert edit.');
+
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    '; 0 Custom gadget initialisation (do Not remove this line)',
+    'InitScintillaBridge()',
+    '',
+    'FontMain = LoadFont(#PB_Any, "Arial", 10, #PB_Font_Bold)',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+  assert.ok(normalized.includes(['Global FontMain', '', 'Enumeration FormWindow'].join("\n")));
+});
