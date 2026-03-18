@@ -5445,14 +5445,9 @@ function renderProps() {
 
       const editFn = canPatch
         ? () => {
-            const width = prompt("Width raw", field.widthRaw ?? "0");
-            if (width === null) return;
-            const flags = prompt("Flags raw (blank clears)", field.flagsRaw ?? "");
-            if (flags === null) return;
-            postFieldUpdate({
-              widthRaw: width.trim(),
-              flagsRaw: flags.trim()
-            });
+            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
+            if (fieldIndex < 0) return;
+            setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
         : undefined;
 
@@ -5469,17 +5464,9 @@ function renderProps() {
 
       const statusSetImageFn = canPatch
         ? () => {
-            const imageRaw = prompt("Image raw (blank clears)", field.imageRaw ?? "");
-            if (imageRaw === null) return;
-            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
-            if (flags === null) return;
-            postFieldUpdate({
-              textRaw: "",
-              imageRaw: imageRaw.trim(),
-              flagsRaw: flags.trim(),
-              progressBar: false,
-              progressRaw: ""
-            });
+            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
+            if (fieldIndex < 0) return;
+            setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
         : undefined;
 
@@ -5499,33 +5486,17 @@ function renderProps() {
 
       const statusTextFn = canPatch
         ? () => {
-            const textRaw = prompt("Text raw (blank clears)", field.textRaw ?? toPbString(field.text ?? "Label"));
-            if (textRaw === null) return;
-            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
-            if (flags === null) return;
-            postFieldUpdate({
-              textRaw: textRaw.trim(),
-              imageRaw: "",
-              flagsRaw: flags.trim(),
-              progressBar: false,
-              progressRaw: ""
-            });
+            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
+            if (fieldIndex < 0) return;
+            setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
         : undefined;
 
       const statusProgressFn = canPatch
         ? () => {
-            const progressRaw = prompt("Progress raw", field.progressRaw ?? "0");
-            if (progressRaw === null) return;
-            const flags = prompt("Flags raw (optional)", field.flagsRaw ?? "");
-            if (flags === null) return;
-            postFieldUpdate({
-              textRaw: "",
-              imageRaw: "",
-              flagsRaw: flags.trim(),
-              progressBar: true,
-              progressRaw: progressRaw.trim() || "0"
-            });
+            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
+            if (fieldIndex < 0) return;
+            setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
         : undefined;
 
@@ -5635,6 +5606,58 @@ function renderProps() {
           {
             disabled: !selectedUi.canPatch,
             title: "Match the original statusbar text field for the current selection."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "ImageRaw",
+        textInput(
+          selectedField.imageRaw ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({
+              textRaw: "",
+              imageRaw: v.trim(),
+              progressBar: false,
+              progressRaw: ""
+            });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Patch the raw StatusBarImage reference for the selected field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "ProgressRaw",
+        textInput(
+          selectedField.progressRaw ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({
+              textRaw: "",
+              imageRaw: "",
+              progressBar: true,
+              progressRaw: v.trim() || "0"
+            });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Patch the raw StatusBarProgress value for the selected field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "FlagsRaw",
+        textInput(
+          selectedField.flagsRaw ?? "",
+          v => {
+            if (!selectedUi.canPatch) return;
+            selectedUi.postFieldUpdate({ flagsRaw: v.trim() });
+          },
+          {
+            disabled: !selectedUi.canPatch,
+            title: "Patch the raw AddStatusBarField flags for the selected field."
           }
         )
       ));
