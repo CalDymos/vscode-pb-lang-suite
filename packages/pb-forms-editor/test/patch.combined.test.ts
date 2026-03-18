@@ -1473,3 +1473,55 @@ test("deletes full statusbar section", () => {
   assert.doesNotMatch(patchedText, /AddStatusBarField\(/);
   assert.doesNotMatch(patchedText, /StatusBar(Text|Image|Progress)\(/);
 });
+
+
+test("roundtrips combined top-level chrome updates in fixture 14", () => {
+  const text = loadFixture("fixtures/roundtrip/14-combined-regression.pbf");
+  const initial = parseFormDocument(text);
+  const menuSourceLine = initial.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MnuOpen")?.source?.line;
+  const toolBarSourceLine = initial.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave")?.source?.line;
+  const statusFieldSourceLine = initial.statusbars[0]?.fields[2]?.source?.line;
+
+  assert.equal(typeof menuSourceLine, "number", "Expected source line for combined menu entry.");
+  assert.equal(typeof toolBarSourceLine, "number", "Expected source line for combined toolbar button.");
+  assert.equal(typeof statusFieldSourceLine, "number", "Expected source line for combined statusbar image field.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyMenuEntryUpdate(document, DEFAULT_SECTION_ID, menuSourceLine!, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "#MnuOpen",
+      textRaw: '"Open Recent"',
+      shortcut: "Ctrl+Shift+O",
+      iconRaw: "ImageID(#Img_FrmMain_2)",
+    }),
+    (document) => applyToolBarEntryUpdate(document, DEFAULT_SECTION_ID, toolBarSourceLine!, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: "#TbSave",
+      iconRaw: "ImageID(#Img_FrmMain_0)",
+    }),
+    (document) => applyStatusBarFieldUpdate(document, DEFAULT_SECTION_ID, statusFieldSourceLine!, {
+      widthRaw: "140",
+      textRaw: "",
+      imageRaw: "ImageID(#Img_FrmMain_1)",
+      flagsRaw: "#PB_StatusBar_Raised",
+      progressBar: false,
+      progressRaw: "",
+    })
+  );
+
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MnuOpen");
+  const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const statusField = parsed.statusbars[0]?.fields[2];
+
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open Recent" \+ Chr\(9\) \+ "Ctrl\+Shift\+O", ImageID\(#Img_FrmMain_2\)\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmMain_0\)\)/);
+  assert.match(patchedText, /AddStatusBarField\(140\)\r?\n\s*StatusBarImage\(0, 2, ImageID\(#Img_FrmMain_1\), #PB_StatusBar_Raised\)/);
+  assert.equal(menuItem?.text, "Open Recent");
+  assert.equal(menuItem?.shortcut, "Ctrl+Shift+O");
+  assert.equal(menuItem?.iconId, "#Img_FrmMain_2");
+  assert.equal(toolBarButton?.iconId, "#Img_FrmMain_0");
+  assert.equal(statusField?.widthRaw, "140");
+  assert.equal(statusField?.imageId, "#Img_FrmMain_1");
+  assert.equal(statusField?.flagsRaw, "#PB_StatusBar_Raised");
+});

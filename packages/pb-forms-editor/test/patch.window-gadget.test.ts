@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetOpenArgsUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -692,6 +692,100 @@ test("roundtrips combined object event binding updates in fixture 15", () => {
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
+test("roundtrips combined panel container updates in fixture 05", () => {
+  const text = loadFixture("fixtures/smoke/05-container-panel.pbf");
+  const initial = parseFormDocument(text);
+  const panel = initial.gadgets.find((g) => g.id === "#PnlMain");
+  const secondTabLine = panel?.items?.[1]?.source?.line;
+
+  assert.equal(typeof secondTabLine, "number", "Expected source line for second panel item.");
+
+  let patchedText = text;
+
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyGadgetItemUpdate(document.asTextDocument(), "#PnlMain", secondTabLine!, {
+    posRaw: "-1",
+    textRaw: '"Settings"',
+  });
+  assert.ok(edit, "Expected panel item update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyGadgetOpenArgsUpdate(document.asTextDocument(), "#StrTab1", {
+    textRaw: '"SettingsValue"',
+    flagsExpr: "#PB_String_ReadOnly",
+  });
+  assert.ok(edit, "Expected nested gadget arg update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyRectPatch(document.asTextDocument(), "#StrTab1", 22, 24, 140, 28);
+  assert.ok(edit, "Expected nested gadget rect edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  const parsed = parseFormDocument(patchedText);
+  const updatedPanel = parsed.gadgets.find((g) => g.id === "#PnlMain");
+  const updatedInput = parsed.gadgets.find((g) => g.id === "#StrTab1");
+
+  assert.match(patchedText, /AddGadgetItem\(#PnlMain, -1, "Settings"\)/);
+  assert.match(patchedText, /StringGadget\(#StrTab1, 22, 24, 140, 28, "SettingsValue", #PB_String_ReadOnly\)/);
+  assert.equal(updatedPanel?.items?.[1]?.text, "Settings");
+  assert.equal(updatedInput?.parentId, "#PnlMain");
+  assert.equal(updatedInput?.parentItem, 1);
+  assert.equal(updatedInput?.x, 22);
+  assert.equal(updatedInput?.y, 24);
+  assert.equal(updatedInput?.w, 140);
+  assert.equal(updatedInput?.h, 28);
+  assert.equal(updatedInput?.text, "SettingsValue");
+  assert.equal(updatedInput?.flagsExpr, "#PB_String_ReadOnly");
+});
+
+
+test("roundtrips combined scrollarea container updates in fixture 06", () => {
+  const text = loadFixture("fixtures/smoke/06-container-scrollarea.pbf");
+
+  let patchedText = text;
+
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyGadgetOpenArgsUpdate(document.asTextDocument(), "#ScrMain", {
+    minRaw: "640",
+    maxRaw: "360",
+    flagsExpr: "#PB_ScrollArea_BorderLess",
+  });
+  assert.ok(edit, "Expected scrollarea arg update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyGadgetOpenArgsUpdate(document.asTextDocument(), "#TxtInner", {
+    textRaw: '"InnerUpdated"',
+  });
+  assert.ok(edit, "Expected scrollarea child arg update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyRectPatch(document.asTextDocument(), "#TxtInner", 42, 58, 144, 24);
+  assert.ok(edit, "Expected scrollarea child rect update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  const parsed = parseFormDocument(patchedText);
+  const scroll = parsed.gadgets.find((g) => g.id === "#ScrMain");
+  const inner = parsed.gadgets.find((g) => g.id === "#TxtInner");
+
+  assert.match(patchedText, /ScrollAreaGadget\(#ScrMain, 10, 10, 220, 120, 640, 360, 1, #PB_ScrollArea_BorderLess\)/);
+  assert.match(patchedText, /TextGadget\(#TxtInner, 42, 58, 144, 24, "InnerUpdated"\)/);
+  assert.equal(scroll?.minRaw, "640");
+  assert.equal(scroll?.min, 640);
+  assert.equal(scroll?.maxRaw, "360");
+  assert.equal(scroll?.max, 360);
+  assert.equal(scroll?.flagsExpr, "#PB_ScrollArea_BorderLess");
+  assert.equal(inner?.parentId, "#ScrMain");
+  assert.equal(inner?.x, 42);
+  assert.equal(inner?.y, 58);
+  assert.equal(inner?.w, 144);
+  assert.equal(inner?.h, 24);
+  assert.equal(inner?.text, "InnerUpdated");
+});
+
 
 test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny window back to enum mode", () => {
   const text = `; Form Designer for PureBasic - 6.30
@@ -1002,4 +1096,51 @@ EndProcedure
   assert.ok(input, "Expected patched pbAny gadget.");
   assert.equal(input?.pbAny, true);
   assert.equal(input?.textRaw, 'Value$');
+});
+
+
+test("roundtrips combined splitter container updates in fixture 07", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+
+  let patchedText = text;
+
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyGadgetOpenArgsUpdate(document.asTextDocument(), "#SplitMain", {
+    gadget1Raw: "#TxtRight",
+    gadget2Raw: "#TxtLeft",
+    flagsExpr: "#PB_Splitter_Separator",
+  });
+  assert.ok(edit, "Expected splitter arg update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyRectPatch(document.asTextDocument(), "#SplitMain", 16, 46, 240, 110);
+  assert.ok(edit, "Expected splitter rect update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyGadgetPropertyUpdate(document.asTextDocument(), "#SplitMain", {
+    stateRaw: "80",
+  });
+  assert.ok(edit, "Expected splitter state update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  const parsed = parseFormDocument(patchedText);
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  const left = parsed.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+
+  assert.match(patchedText, /SplitterGadget\(#SplitMain, 16, 46, 240, 110, #TxtRight, #TxtLeft, #PB_Splitter_Separator\)/);
+  assert.match(patchedText, /SetGadgetState\(#SplitMain, 80\)/);
+  assert.equal(splitter?.x, 16);
+  assert.equal(splitter?.y, 46);
+  assert.equal(splitter?.w, 240);
+  assert.equal(splitter?.h, 110);
+  assert.equal(splitter?.gadget1Id, "#TxtRight");
+  assert.equal(splitter?.gadget2Id, "#TxtLeft");
+  assert.equal(splitter?.flagsExpr, "#PB_Splitter_Separator");
+  assert.equal(splitter?.stateRaw, "80");
+  assert.equal(splitter?.state, 80);
+  assert.equal(left?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, "#SplitMain");
 });
