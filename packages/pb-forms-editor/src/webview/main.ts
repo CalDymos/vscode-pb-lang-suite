@@ -558,7 +558,26 @@ type PendingImageEditor = {
   assignedVar: string;
 };
 
+type PendingGadgetItemEditor = {
+  gadgetId: string;
+  sourceLine?: number;
+  posRaw: string;
+  text: string;
+  imageRaw: string;
+  flagsRaw: string;
+};
+
+type PendingGadgetColumnEditor = {
+  gadgetId: string;
+  sourceLine?: number;
+  colRaw: string;
+  title: string;
+  widthRaw: string;
+};
+
 let pendingImageEditor: PendingImageEditor | null = null;
+let pendingGadgetItemEditor: PendingGadgetItemEditor | null = null;
+let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -2795,6 +2814,132 @@ function getStatusBarPreviewInsertArgs(
     case "progress":
       return { widthRaw: "50", progressBar: true, progressRaw: "0" };
   }
+}
+
+function openGadgetItemEditor(gadget: Gadget, item?: GadgetItem) {
+  pendingGadgetItemEditor = {
+    gadgetId: gadget.id,
+    sourceLine: item?.source?.line,
+    posRaw: item?.posRaw ?? "-1",
+    text: item?.text ?? "",
+    imageRaw: item?.imageRaw ?? "",
+    flagsRaw: item?.flagsRaw ?? ""
+  };
+}
+
+function closeGadgetItemEditor(gadgetId?: string, sourceLine?: number) {
+  if (!pendingGadgetItemEditor) return;
+  if (gadgetId && pendingGadgetItemEditor.gadgetId !== gadgetId) return;
+  if (typeof sourceLine === "number" && pendingGadgetItemEditor.sourceLine !== sourceLine) return;
+  pendingGadgetItemEditor = null;
+}
+
+function isGadgetItemEditorOpen(gadget: Gadget, item?: GadgetItem): boolean {
+  if (!pendingGadgetItemEditor || pendingGadgetItemEditor.gadgetId !== gadget.id) return false;
+  if (!item) return true;
+  return typeof item.source?.line === "number" && pendingGadgetItemEditor.sourceLine === item.source.line;
+}
+
+function getGadgetItemDraft(gadget: Gadget): PendingGadgetItemEditor | null {
+  if (!pendingGadgetItemEditor || pendingGadgetItemEditor.gadgetId !== gadget.id) return null;
+  return pendingGadgetItemEditor;
+}
+
+function updateGadgetItemEditorDraft(patch: Partial<PendingGadgetItemEditor>) {
+  if (!pendingGadgetItemEditor) return;
+  pendingGadgetItemEditor = { ...pendingGadgetItemEditor, ...patch };
+  renderProps();
+}
+
+function saveGadgetItemEditor(gadget: Gadget) {
+  const draft = getGadgetItemDraft(gadget);
+  if (!draft) return;
+
+  const payload = {
+    id: gadget.id,
+    posRaw: draft.posRaw.trim() || "-1",
+    textRaw: toPbString(draft.text),
+    imageRaw: draft.imageRaw.trim().length ? draft.imageRaw.trim() : undefined,
+    flagsRaw: draft.flagsRaw.trim().length ? draft.flagsRaw.trim() : undefined,
+  };
+
+  const sourceLine = draft.sourceLine;
+  closeGadgetItemEditor(gadget.id, sourceLine);
+  if (typeof sourceLine === "number") {
+    post({
+      type: "updateGadgetItem",
+      sourceLine,
+      ...payload,
+    });
+    return;
+  }
+
+  post({
+    type: "insertGadgetItem",
+    ...payload,
+  });
+}
+
+function openGadgetColumnEditor(gadget: Gadget, column?: GadgetColumn, index?: number) {
+  pendingGadgetColumnEditor = {
+    gadgetId: gadget.id,
+    sourceLine: column?.source?.line,
+    colRaw: column?.colRaw ?? String(index ?? gadget.columns?.length ?? 0),
+    title: column?.title ?? "",
+    widthRaw: column?.widthRaw ?? "80"
+  };
+}
+
+function closeGadgetColumnEditor(gadgetId?: string, sourceLine?: number) {
+  if (!pendingGadgetColumnEditor) return;
+  if (gadgetId && pendingGadgetColumnEditor.gadgetId !== gadgetId) return;
+  if (typeof sourceLine === "number" && pendingGadgetColumnEditor.sourceLine !== sourceLine) return;
+  pendingGadgetColumnEditor = null;
+}
+
+function isGadgetColumnEditorOpen(gadget: Gadget, column?: GadgetColumn): boolean {
+  if (!pendingGadgetColumnEditor || pendingGadgetColumnEditor.gadgetId !== gadget.id) return false;
+  if (!column) return true;
+  return typeof column.source?.line === "number" && pendingGadgetColumnEditor.sourceLine === column.source.line;
+}
+
+function getGadgetColumnDraft(gadget: Gadget): PendingGadgetColumnEditor | null {
+  if (!pendingGadgetColumnEditor || pendingGadgetColumnEditor.gadgetId !== gadget.id) return null;
+  return pendingGadgetColumnEditor;
+}
+
+function updateGadgetColumnEditorDraft(patch: Partial<PendingGadgetColumnEditor>) {
+  if (!pendingGadgetColumnEditor) return;
+  pendingGadgetColumnEditor = { ...pendingGadgetColumnEditor, ...patch };
+  renderProps();
+}
+
+function saveGadgetColumnEditor(gadget: Gadget) {
+  const draft = getGadgetColumnDraft(gadget);
+  if (!draft) return;
+
+  const payload = {
+    id: gadget.id,
+    colRaw: draft.colRaw.trim() || String(gadget.columns?.length ?? 0),
+    titleRaw: toPbString(draft.title),
+    widthRaw: draft.widthRaw.trim() || "80",
+  };
+
+  const sourceLine = draft.sourceLine;
+  closeGadgetColumnEditor(gadget.id, sourceLine);
+  if (typeof sourceLine === "number") {
+    post({
+      type: "updateGadgetColumn",
+      sourceLine,
+      ...payload,
+    });
+    return;
+  }
+
+  post({
+    type: "insertGadgetColumn",
+    ...payload,
+  });
 }
 
 function openImageEditor(entry: ImageEntry) {
@@ -6293,6 +6438,50 @@ function renderProps() {
 
   // Items editor (minimal UI)
   propsEl.appendChild(section("Items"));
+  const itemDraft = getGadgetItemDraft(g);
+  const itemEditorOpen = isGadgetItemEditorOpen(g);
+  if (itemDraft && itemEditorOpen) {
+    propsEl.appendChild(row(
+      "Item Text",
+      textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
+        title: "Patch the gadget item text without using a browser prompt."
+      })
+    ));
+    propsEl.appendChild(row(
+      "Position",
+      textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
+        title: "Patch the raw gadget item position without using a browser prompt."
+      })
+    ));
+    propsEl.appendChild(row(
+      "Image Raw",
+      textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
+        title: "Patch the optional gadget item image reference without using a browser prompt."
+      })
+    ));
+    propsEl.appendChild(row(
+      "Flags Raw",
+      textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
+        title: "Patch the optional gadget item flags without using a browser prompt."
+      })
+    ));
+
+    const itemEditorActions = document.createElement("div");
+    itemEditorActions.className = "miniActions";
+    const saveItemBtn = document.createElement("button");
+    saveItemBtn.textContent = itemDraft.sourceLine ? "Save Item" : "Insert Item";
+    saveItemBtn.onclick = () => saveGadgetItemEditor(g);
+    const cancelItemBtn = document.createElement("button");
+    cancelItemBtn.textContent = "Cancel Item";
+    cancelItemBtn.onclick = () => {
+      closeGadgetItemEditor(g.id);
+      renderProps();
+    };
+    itemEditorActions.appendChild(saveItemBtn);
+    itemEditorActions.appendChild(cancelItemBtn);
+    propsEl.appendChild(itemEditorActions);
+  }
+
   const itemsBox = miniList();
   (g.items ?? []).forEach((it, idx) => {
     const label = `${idx}  ${it.text ?? it.textRaw ?? ""}`;
@@ -6306,24 +6495,8 @@ function renderProps() {
         label,
         canPatch
           ? () => {
-              const txt = prompt("Item text", it.text ?? "");
-              if (txt === null) return;
-              const pos = prompt("Position (-1 append)", it.posRaw ?? "-1");
-              if (pos === null) return;
-              const img = prompt("Image raw (optional)", it.imageRaw ?? "");
-              if (img === null) return;
-              const flags = prompt("Flags raw (optional)", it.flagsRaw ?? "");
-              if (flags === null) return;
-
-              vscode.postMessage({
-                type: "updateGadgetItem",
-                id: g.id,
-                sourceLine: it.source!.line,
-                posRaw: pos,
-                textRaw: toPbString(txt),
-                imageRaw: img.trim().length ? img.trim() : undefined,
-                flagsRaw: flags.trim().length ? flags.trim() : undefined
-              });
+              openGadgetItemEditor(g, it);
+              renderProps();
             }
           : undefined,
         canPatch
@@ -6345,23 +6518,8 @@ function renderProps() {
   const addItemBtn = document.createElement("button");
   addItemBtn.textContent = "Add Item";
   addItemBtn.onclick = () => {
-    const txt = prompt("Item text", "");
-    if (txt === null) return;
-    const pos = prompt("Position (-1 append)", "-1");
-    if (pos === null) return;
-    const img = prompt("Image raw (optional)", "");
-    if (img === null) return;
-    const flags = prompt("Flags raw (optional)", "");
-    if (flags === null) return;
-
-    vscode.postMessage({
-      type: "insertGadgetItem",
-      id: g.id,
-      posRaw: pos,
-      textRaw: toPbString(txt),
-      imageRaw: img.trim().length ? img.trim() : undefined,
-      flagsRaw: flags.trim().length ? flags.trim() : undefined
-    });
+    openGadgetItemEditor(g);
+    renderProps();
   };
 
   const itemActions = document.createElement("div");
@@ -6373,6 +6531,44 @@ function renderProps() {
 
   // Columns editor (minimal UI)
   propsEl.appendChild(section("Columns"));
+  const columnDraft = getGadgetColumnDraft(g);
+  const columnEditorOpen = isGadgetColumnEditorOpen(g);
+  if (columnDraft && columnEditorOpen) {
+    propsEl.appendChild(row(
+      "Column Title",
+      textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
+        title: "Patch the column title without using a browser prompt."
+      })
+    ));
+    propsEl.appendChild(row(
+      "Column Index",
+      textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
+        title: "Patch the raw column index without using a browser prompt."
+      })
+    ));
+    propsEl.appendChild(row(
+      "Width",
+      textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
+        title: "Patch the raw column width without using a browser prompt."
+      })
+    ));
+
+    const columnEditorActions = document.createElement("div");
+    columnEditorActions.className = "miniActions";
+    const saveColumnBtn = document.createElement("button");
+    saveColumnBtn.textContent = columnDraft.sourceLine ? "Save Column" : "Insert Column";
+    saveColumnBtn.onclick = () => saveGadgetColumnEditor(g);
+    const cancelColumnBtn = document.createElement("button");
+    cancelColumnBtn.textContent = "Cancel Column";
+    cancelColumnBtn.onclick = () => {
+      closeGadgetColumnEditor(g.id);
+      renderProps();
+    };
+    columnEditorActions.appendChild(saveColumnBtn);
+    columnEditorActions.appendChild(cancelColumnBtn);
+    propsEl.appendChild(columnEditorActions);
+  }
+
   const colsBox = miniList();
   (g.columns ?? []).forEach((c, idx) => {
     const label = `${idx}  ${c.title ?? c.titleRaw ?? ""}  w:${c.widthRaw ?? ""}`;
@@ -6383,21 +6579,8 @@ function renderProps() {
         label,
         canPatch
           ? () => {
-              const title = prompt("Column title", c.title ?? "");
-              if (title === null) return;
-              const col = prompt("Column index", c.colRaw ?? String(idx));
-              if (col === null) return;
-              const width = prompt("Width", c.widthRaw ?? "80");
-              if (width === null) return;
-
-              vscode.postMessage({
-                type: "updateGadgetColumn",
-                id: g.id,
-                sourceLine: c.source!.line,
-                colRaw: col,
-                titleRaw: toPbString(title),
-                widthRaw: width
-              });
+              openGadgetColumnEditor(g, c, idx);
+              renderProps();
             }
           : undefined,
         canPatch
@@ -6413,20 +6596,8 @@ function renderProps() {
   const addColBtn = document.createElement("button");
   addColBtn.textContent = "Add Column";
   addColBtn.onclick = () => {
-    const title = prompt("Column title", "");
-    if (title === null) return;
-    const col = prompt("Column index", String(g.columns?.length ?? 0));
-    if (col === null) return;
-    const width = prompt("Width", "80");
-    if (width === null) return;
-
-    vscode.postMessage({
-      type: "insertGadgetColumn",
-      id: g.id,
-      colRaw: col,
-      titleRaw: toPbString(title),
-      widthRaw: width
-    });
+    openGadgetColumnEditor(g);
+    renderProps();
   };
 
   const colActions = document.createElement("div");
