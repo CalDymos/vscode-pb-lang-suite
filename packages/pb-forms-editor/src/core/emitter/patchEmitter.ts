@@ -459,7 +459,7 @@ function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: stri
 }
 
 function ensureGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
-  const re = new RegExp(`^\s*Global\s+${escapeRegExp(varName)}\b`);
+  const re = new RegExp("^\\s*Global\\s+" + escapeRegExp(varName) + "(?:\\s|$)");
   for (let i = 0; i < document.lineCount; i++) {
     if (re.test(document.lineAt(i).text)) return;
   }
@@ -484,18 +484,24 @@ function ensureGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocum
     insertLine = firstAnchor;
   }
 
-  const line = `Global ${varName}
+  const block = `Global ${varName}
+
 `;
-  edit.insert(document.uri, new vscode.Position(insertLine, 0), line);
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), block);
 }
 
 function removeGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
-  const re = new RegExp(`^\\s*Global\\s+${escapeRegExp(varName)}\\b`);
+  const re = new RegExp("^\\s*Global\\s+" + escapeRegExp(varName) + "(?:\\s|$)");
   for (let i = 0; i < document.lineCount; i++) {
     const line = document.lineAt(i);
-    if (re.test(line.text)) {
-      edit.delete(document.uri, line.rangeIncludingLineBreak);
+    if (!re.test(line.text)) continue;
+
+    let end = line.rangeIncludingLineBreak.end;
+    if (i + 1 < document.lineCount && document.lineAt(i + 1).text.trim() === "") {
+      end = document.lineAt(i + 1).rangeIncludingLineBreak.end;
     }
+
+    edit.delete(document.uri, new vscode.Range(line.range.start, end));
   }
 }
 

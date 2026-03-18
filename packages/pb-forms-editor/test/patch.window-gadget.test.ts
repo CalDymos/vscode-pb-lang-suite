@@ -735,9 +735,43 @@ EndProcedure
   const normalized = patchedText.replace(/\r\n/g, "\n");
   assert.ok(normalized.includes([
     'Global winMain',
+    '',
     'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
   assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
   assert.equal(parsed.window?.id, 'winMain');
   assert.equal(parsed.window?.pbAny, true);
 });
+
+test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global winMain
+
+Enumeration FormImage
+  #ImgMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPbAnyToggle(document, "winMain", false, "winMain", "#FrmMain", undefined)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormImage',
+  ].join("\n")));
+  assert.doesNotMatch(patchedText, /^Global winMain$/m);
+  assert.doesNotMatch(normalized, /Global winMain\n\n\nEnumeration FormImage/);
+  assert.equal(parsed.window?.id, '#FrmMain');
+  assert.equal(parsed.window?.pbAny, false);
+});
+
