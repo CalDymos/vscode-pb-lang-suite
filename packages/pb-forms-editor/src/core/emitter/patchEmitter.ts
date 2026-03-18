@@ -459,26 +459,33 @@ function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: stri
 }
 
 function ensureGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
-  const re = new RegExp(`^\\s*Global\\s+${escapeRegExp(varName)}\\b`);
+  const re = new RegExp(`^\s*Global\s+${escapeRegExp(varName)}\b`);
   for (let i = 0; i < document.lineCount; i++) {
     if (re.test(document.lineAt(i).text)) return;
   }
 
   let insertLine = 0;
   let lastGlobal = -1;
-  let anchor = -1;
+  let firstAnchor = document.lineCount;
   for (let i = 0; i < document.lineCount; i++) {
     const t = document.lineAt(i).text;
     if (/^\s*Global\b/i.test(t)) lastGlobal = i;
-    if (anchor < 0 && (/^\s*Enumeration\b/i.test(t) || /^\s*Procedure\b/i.test(t))) {
-      anchor = i;
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(t)) {
+      firstAnchor = i;
     }
   }
-  if (lastGlobal >= 0) insertLine = lastGlobal + 1;
-  else if (anchor >= 0) insertLine = anchor;
-  else insertLine = document.lineCount;
 
-  const line = `Global ${varName}\n`;
+  if (lastGlobal >= 0) {
+    insertLine = lastGlobal + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+  } else {
+    insertLine = firstAnchor;
+  }
+
+  const line = `Global ${varName}
+`;
   edit.insert(document.uri, new vscode.Position(insertLine, 0), line);
 }
 
@@ -490,6 +497,27 @@ function removeGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocum
       edit.delete(document.uri, line.rangeIncludingLineBreak);
     }
   }
+}
+
+function findWindowEnumInsertLine(document: vscode.TextDocument): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const trimmed = text.trim();
+    if (/^Enumeration\s+FormGadget\b/i.test(trimmed)
+      || /^Enumeration\s+FormMenu\b/i.test(trimmed)
+      || /^Enumeration\s+FormImage\b/i.test(trimmed)
+      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+      || isCustomGadgetInitMarkerLine(text)
+      || isImageDecoderLine(text)
+      || /^LoadImage\s*\(/i.test(trimmed)
+      || /^CatchImage\s*\(/i.test(trimmed)
+      || /^LoadFont\s*\(/i.test(trimmed)
+      || isTopLevelHeadBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return document.lineCount;
 }
 
 function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, enumSymbol: string, enumValueRaw: string | undefined) {
@@ -524,16 +552,7 @@ function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.Te
     return;
   }
 
-  // Insert a new Enumeration FormWindow block before Enumeration FormGadget or Procedure.
-  let anchor = -1;
-  for (let i = 0; i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    if (/^\s*Enumeration\s+FormGadget\b/i.test(t) || /^\s*Procedure\b/i.test(t)) {
-      anchor = i;
-      break;
-    }
-  }
-  if (anchor < 0) anchor = document.lineCount;
+  const anchor = findWindowEnumInsertLine(document);
 
   const entry = enumValueRaw && enumValueRaw.trim().length
     ? `  ${enumSymbol}=${enumValueRaw.trim()}`

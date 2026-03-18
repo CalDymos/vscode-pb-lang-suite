@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetOpenArgsUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPropertyUpdate, applyWindowRectPatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetEventProcUpdate, applyGadgetOpenArgsUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -649,4 +649,95 @@ test("roundtrips toolbar entry event removal without touching menu events", () =
   const menuItem = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
   assert.equal(menuItem?.event, "HandleMenuOpen");
   assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+
+test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny window back to enum mode", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo, "logo.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+  ImageGadget(#PB_Any, 10, 10, 32, 32, ImageID(#ImgMainLogo))
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormImage',
+  ].join("\n")));
+  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, '#FrmMain');
+  assert.equal(parsed.window?.pbAny, false);
+});
+
+test("re-inserts Enumeration FormWindow before ProcedureDLL and XIncludeFile boundaries", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)
+  
+EndProcedure
+
+XIncludeFile "events/form-main.pbi"
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'ProcedureDLL ScintillaCallbackGadget, *scinotify.SCNotification)',
+  ].join("\n")));
+  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, '#FrmMain');
+  assert.equal(parsed.window?.pbAny, false);
+});
+
+
+test("inserts a missing pbAny window Global before XIncludeFile when renaming the variable", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+XIncludeFile "events/form-main.pbi"
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowVariableNamePatch(document, "winMain")
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Global winMain',
+    'XIncludeFile "events/form-main.pbi"',
+  ].join("\n")));
+  assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, 'winMain');
+  assert.equal(parsed.window?.pbAny, true);
 });
