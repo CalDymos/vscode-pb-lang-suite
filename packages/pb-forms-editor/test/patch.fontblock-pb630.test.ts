@@ -284,3 +284,85 @@ EndProcedure
     'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
+
+test("keeps a single blank line before Declare when updating an existing font block", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormFont
+  #Font_FrmMain_0
+EndEnumeration
+
+LoadFont(#Font_FrmMain_0,"Arial", 10)
+
+Declare ResizeGadgetsFrmMain()
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Fonts")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.fonts.find((entry) => entry.id === "#Font_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected font source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyFontUpdate(document, sourceLine!, {
+    idRaw: "#Font_FrmMain_0",
+    nameRaw: '"Arial"',
+    sizeRaw: "12",
+  }));
+
+  const normalized = toLf(patchedText);
+  assert.ok(normalized.includes([
+    'LoadFont(#Font_FrmMain_0, "Arial", 12)',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+  assert.ok(!normalized.includes([
+    'LoadFont(#Font_FrmMain_0, "Arial", 12)',
+    '',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+});
+
+test("keeps a single blank line before Declare when deleting the last font block", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormFont
+  #Font_FrmMain_0
+EndEnumeration
+
+LoadFont(#Font_FrmMain_0,"Arial", 10)
+
+Declare ResizeGadgetsFrmMain()
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Fonts")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.fonts.find((entry) => entry.id === "#Font_FrmMain_0")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected font source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyFontDelete(document, sourceLine!));
+
+  const normalized = toLf(patchedText);
+  assert.ok(normalized.includes([
+    'EndEnumeration',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+  assert.ok(!normalized.includes([
+    'EndEnumeration',
+    '',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+  ].join("\n")));
+});

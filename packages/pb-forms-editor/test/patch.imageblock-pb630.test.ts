@@ -367,3 +367,99 @@ EndProcedure
     'XIncludeFile "events/form-main.pbi"',
   ].join("\n")));
 });
+
+test("keeps a single blank line before FormFont when updating an existing image block", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo,"logo.png")
+
+Enumeration FormFont
+  #Font_FrmMain_0
+EndEnumeration
+
+LoadFont(#Font_FrmMain_0,"Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageUpdate(document, sourceLine!, {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '"logo.jpg"',
+  }));
+
+  const normalized = toLf(patchedText);
+  assert.ok(normalized.includes([
+    'LoadImage(#ImgMainLogo, "logo.jpg")',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
+  assert.ok(!normalized.includes([
+    'LoadImage(#ImgMainLogo, "logo.jpg")',
+    '',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
+});
+
+test("keeps a single blank line before FormFont when deleting the last image block", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormImage
+  #ImgMainLogo
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgMainLogo,"logo.png")
+
+Enumeration FormFont
+  #Font_FrmMain_0
+EndEnumeration
+
+LoadFont(#Font_FrmMain_0,"Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const parsed = parseFormDocument(text);
+  const sourceLine = parsed.images.find((entry) => entry.id === "#ImgMainLogo")?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected image source line.");
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageDelete(document, sourceLine!));
+
+  const normalized = toLf(patchedText);
+  assert.ok(normalized.includes([
+    'EndEnumeration',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
+  assert.ok(!normalized.includes([
+    'EndEnumeration',
+    '',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
+});

@@ -2664,7 +2664,7 @@ function applyFontMutation(
     const lastLine = fontLoadCalls[fontLoadCalls.length - 1].range.line;
     edit.replace(
       document.uri,
-      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
       rebuiltLoadBlock
     );
     return edit;
@@ -2862,6 +2862,15 @@ function applyOptionalBlockPatch(
   }
 }
 
+function getHeadBlockReplaceEnd(document: vscode.TextDocument, lastLine: number): vscode.Position {
+  const trailingBlankLine = lastLine + 1;
+  if (trailingBlankLine < document.lineCount && document.lineAt(trailingBlankLine).text.trim() === "") {
+    return document.lineAt(trailingBlankLine).rangeIncludingLineBreak.end;
+  }
+
+  return document.lineAt(lastLine).rangeIncludingLineBreak.end;
+}
+
 function buildImageBlock(images: FormImage[], indent: string): string {
   if (!images.length) return "";
 
@@ -2963,7 +2972,7 @@ function applyImageMutation(
     );
     edit.replace(
       document.uri,
-      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
       rebuilt
     );
     return edit;
@@ -3323,7 +3332,7 @@ function applyStatusBarFieldMutation(
     const lastLine = statusCalls[statusCalls.length - 1].range.line;
     edit.replace(
       document.uri,
-      new vscode.Range(new vscode.Position(firstLine, 0), document.lineAt(lastLine).rangeIncludingLineBreak.end),
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
       rebuilt
     );
     return edit;
