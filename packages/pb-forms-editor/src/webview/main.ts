@@ -558,6 +558,34 @@ type PendingImageEditor = {
   assignedVar: string;
 };
 
+type ImageAssignmentTarget =
+  | { kind: "menuEntry"; menuId: string; entryIndex: number }
+  | { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }
+  | { kind: "statusBarField"; statusBarId: string; fieldIndex: number }
+  | { kind: "gadget"; gadgetId: string };
+
+type PendingImageReferencePicker = {
+  target: ImageAssignmentTarget;
+  selectedImageId: string;
+};
+
+type PendingImageAssignmentDraft = {
+  target: ImageAssignmentTarget;
+  mode: "create" | "chooseFile";
+  inline: boolean;
+  idRaw: string;
+  imageRaw: string;
+  assignedVar: string;
+  resizeToImage: boolean;
+};
+
+type PendingImageInsertDraft = {
+  inline: boolean;
+  idRaw: string;
+  imageRaw: string;
+  assignedVar: string;
+};
+
 type PendingGadgetItemEditor = {
   gadgetId: string;
   sourceLine?: number;
@@ -575,9 +603,25 @@ type PendingGadgetColumnEditor = {
   widthRaw: string;
 };
 
+type PendingDestructiveAction =
+  | { kind: "deleteMenuEntry"; menuId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
+  | { kind: "deleteMenu"; menuId: string; message: string; confirmLabel: string }
+  | { kind: "deleteToolBarEntry"; toolBarId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
+  | { kind: "deleteToolBar"; toolBarId: string; message: string; confirmLabel: string }
+  | { kind: "deleteStatusBarField"; statusBarId: string; fieldIndex: number; sourceLine: number; message: string; confirmLabel: string }
+  | { kind: "clearStatusBarField"; statusBarId: string; fieldIndex: number; sourceLine: number; message: string; confirmLabel: string }
+  | { kind: "deleteStatusBar"; statusBarId: string; message: string; confirmLabel: string }
+  | { kind: "deleteImage"; imageId: string; sourceLine: number; message: string; confirmLabel: string }
+  | { kind: "deleteGadgetItem"; gadgetId: string; sourceLine: number; message: string; confirmLabel: string }
+  | { kind: "deleteGadgetColumn"; gadgetId: string; sourceLine: number; message: string; confirmLabel: string };
+
 let pendingImageEditor: PendingImageEditor | null = null;
+let pendingImageReferencePicker: PendingImageReferencePicker | null = null;
+let pendingImageAssignmentDraft: PendingImageAssignmentDraft | null = null;
+let pendingImageInsertDraft: PendingImageInsertDraft | null = null;
 let pendingGadgetItemEditor: PendingGadgetItemEditor | null = null;
 let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
+let pendingDestructiveAction: PendingDestructiveAction | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -695,6 +739,91 @@ function setSelectionAndRefresh(next: DesignerSelection): void {
   render();
   renderListAndParentSelector();
   renderProps();
+}
+
+function openDestructiveAction(action: PendingDestructiveAction, nextSelection?: DesignerSelection): void {
+  pendingDestructiveAction = action;
+  if (nextSelection) {
+    setSelectionAndRefresh(nextSelection);
+    return;
+  }
+  renderProps();
+}
+
+function closeDestructiveAction(): void {
+  pendingDestructiveAction = null;
+  renderProps();
+}
+
+function confirmDestructiveAction(): void {
+  const action = pendingDestructiveAction;
+  if (!action) return;
+
+  pendingDestructiveAction = null;
+
+  switch (action.kind) {
+    case "deleteMenuEntry":
+      post({
+        type: "deleteMenuEntry",
+        menuId: action.menuId,
+        sourceLine: action.sourceLine,
+        kind: action.entryKind
+      });
+      return;
+    case "deleteMenu":
+      post({ type: "deleteMenu", menuId: action.menuId });
+      return;
+    case "deleteToolBarEntry":
+      post({
+        type: "deleteToolBarEntry",
+        toolBarId: action.toolBarId,
+        sourceLine: action.sourceLine,
+        kind: action.entryKind
+      });
+      return;
+    case "deleteToolBar":
+      post({ type: "deleteToolBar", toolBarId: action.toolBarId });
+      return;
+    case "deleteStatusBarField":
+      post({
+        type: "deleteStatusBarField",
+        statusBarId: action.statusBarId,
+        sourceLine: action.sourceLine
+      });
+      return;
+    case "clearStatusBarField": {
+      const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+      const field = statusBar?.fields?.[action.fieldIndex];
+      if (!statusBar || !field || typeof field.source?.line !== "number") {
+        renderProps();
+        return;
+      }
+      post({
+        type: "updateStatusBarField",
+        statusBarId: statusBar.id,
+        sourceLine: field.source.line,
+        widthRaw: field.widthRaw,
+        textRaw: "",
+        imageRaw: "",
+        flagsRaw: "",
+        progressBar: false,
+        progressRaw: ""
+      });
+      return;
+    }
+    case "deleteStatusBar":
+      post({ type: "deleteStatusBar", statusBarId: action.statusBarId });
+      return;
+    case "deleteImage":
+      post({ type: "deleteImage", sourceLine: action.sourceLine });
+      return;
+    case "deleteGadgetItem":
+      post({ type: "deleteGadgetItem", id: action.gadgetId, sourceLine: action.sourceLine });
+      return;
+    case "deleteGadgetColumn":
+      post({ type: "deleteGadgetColumn", id: action.gadgetId, sourceLine: action.sourceLine });
+      return;
+  }
 }
 
 function isMenuEntrySelection(sel: DesignerSelection, menuId: string, entryIndex: number): boolean {
@@ -835,42 +964,12 @@ function getImageReferenceHint(imageId?: string, label: "gadget" | "menu" | "too
   return "";
 }
 
-function promptImageReferenceFromModel(currentImageId?: string): { imageId: string; imageRaw: string } | undefined {
+function getDefaultImageReferenceSelection(currentImageId?: string): string {
   const images = model.images ?? [];
-  if (!images.length) {
-    alert("No image entries are defined in this form.");
-    return undefined;
-  }
-
-  const options = images
-    .map((img, index) => {
-      const procName = img.inline ? "CatchImage" : "LoadImage";
-      const assignPrefix = img.pbAny && img.variable ? `${img.variable} = ` : "";
-      return `${index + 1}. ${img.id}  ${assignPrefix}${procName}(${img.firstParam}, ${img.imageRaw})`;
-    })
-    .join("\n");
-
-  const defaultValue = currentImageId && findImageEntryById(currentImageId)
+  if (!images.length) return "";
+  return currentImageId && findImageEntryById(currentImageId)
     ? currentImageId
-    : images[0]?.id;
-  const value = prompt(`Select image by id or number:\n\n${options}`, defaultValue ?? "");
-  if (value === null) return undefined;
-
-  const trimmed = value.trim();
-  if (!trimmed.length) return undefined;
-
-  const selected = /^\d+$/.test(trimmed)
-    ? images[Number(trimmed) - 1]
-    : images.find(img => img.id === trimmed);
-  if (!selected) {
-    alert(`Image '${trimmed}' was not found in this form.`);
-    return undefined;
-  }
-
-  return {
-    imageId: selected.id,
-    imageRaw: `ImageID(${selected.id})`
-  };
+    : (images[0]?.id ?? "");
 }
 
 function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imageId: string; imageRaw: string } | undefined {
@@ -3013,6 +3112,366 @@ function saveImageEditor(entry: ImageEntry) {
   renderProps();
 }
 
+function isSameImageTarget(target: ImageAssignmentTarget, other: ImageAssignmentTarget): boolean {
+  if (target.kind !== other.kind) return false;
+  switch (target.kind) {
+    case "menuEntry":
+      return target.menuId === (other as Extract<ImageAssignmentTarget, { kind: "menuEntry" }>).menuId
+        && target.entryIndex === (other as Extract<ImageAssignmentTarget, { kind: "menuEntry" }>).entryIndex;
+    case "toolBarEntry":
+      return target.toolBarId === (other as Extract<ImageAssignmentTarget, { kind: "toolBarEntry" }>).toolBarId
+        && target.entryIndex === (other as Extract<ImageAssignmentTarget, { kind: "toolBarEntry" }>).entryIndex;
+    case "statusBarField":
+      return target.statusBarId === (other as Extract<ImageAssignmentTarget, { kind: "statusBarField" }>).statusBarId
+        && target.fieldIndex === (other as Extract<ImageAssignmentTarget, { kind: "statusBarField" }>).fieldIndex;
+    case "gadget":
+      return target.gadgetId === (other as Extract<ImageAssignmentTarget, { kind: "gadget" }>).gadgetId;
+  }
+}
+
+function getDefaultPendingImageInsertDraft(): PendingImageInsertDraft {
+  return {
+    inline: false,
+    idRaw: "#ImgNew",
+    imageRaw: '"image.png"',
+    assignedVar: "imgNew"
+  };
+}
+
+function openImageInsertDraft() {
+  pendingImageInsertDraft = getDefaultPendingImageInsertDraft();
+  renderProps();
+}
+
+function closeImageInsertDraft() {
+  pendingImageInsertDraft = null;
+  renderProps();
+}
+
+function updateImageInsertDraft(patch: Partial<PendingImageInsertDraft>) {
+  if (!pendingImageInsertDraft) return;
+  pendingImageInsertDraft = { ...pendingImageInsertDraft, ...patch };
+  renderProps();
+}
+
+function saveImageInsertDraft() {
+  if (!pendingImageInsertDraft) return;
+  const inline = pendingImageInsertDraft.inline;
+  const idRaw = pendingImageInsertDraft.idRaw.trim();
+  const imageRaw = pendingImageInsertDraft.imageRaw.trim();
+  if (!idRaw.length || !imageRaw.length) return;
+
+  let assignedVar: string | undefined;
+  if (idRaw.toLowerCase() === "#pb_any") {
+    const trimmedAssigned = pendingImageInsertDraft.assignedVar.trim();
+    if (!trimmedAssigned.length) {
+      alert("#PB_Any requires an assigned variable name.");
+      return;
+    }
+    assignedVar = trimmedAssigned;
+  }
+
+  pendingImageInsertDraft = null;
+  post({
+    type: "insertImage",
+    inline,
+    idRaw,
+    imageRaw,
+    assignedVar
+  });
+  renderProps();
+}
+
+function openImageReferencePicker(target: ImageAssignmentTarget, currentImageId?: string) {
+  if (!(model.images?.length)) {
+    alert("No image entries are defined in this form.");
+    return;
+  }
+  pendingImageReferencePicker = {
+    target,
+    selectedImageId: getDefaultImageReferenceSelection(currentImageId)
+  };
+  renderProps();
+}
+
+function closeImageReferencePicker() {
+  pendingImageReferencePicker = null;
+  renderProps();
+}
+
+function updateImageReferencePicker(patch: Partial<PendingImageReferencePicker>) {
+  if (!pendingImageReferencePicker) return;
+  pendingImageReferencePicker = { ...pendingImageReferencePicker, ...patch };
+  renderProps();
+}
+
+function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
+  return Boolean(pendingImageReferencePicker && isSameImageTarget(pendingImageReferencePicker.target, target));
+}
+
+function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
+  return {
+    target,
+    mode,
+    inline: false,
+    idRaw: "#ImgNew",
+    imageRaw: '"image.png"',
+    assignedVar: "imgNew",
+    resizeToImage: false,
+  };
+}
+
+function openImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile") {
+  pendingImageAssignmentDraft = getDefaultPendingImageAssignmentDraft(target, mode);
+  renderProps();
+}
+
+function closeImageAssignmentDraft() {
+  pendingImageAssignmentDraft = null;
+  renderProps();
+}
+
+function updateImageAssignmentDraft(patch: Partial<PendingImageAssignmentDraft>) {
+  if (!pendingImageAssignmentDraft) return;
+  pendingImageAssignmentDraft = { ...pendingImageAssignmentDraft, ...patch };
+  renderProps();
+}
+
+function isImageAssignmentDraftOpenFor(target: ImageAssignmentTarget): boolean {
+  return Boolean(pendingImageAssignmentDraft && isSameImageTarget(pendingImageAssignmentDraft.target, target));
+}
+
+function saveImageReferencePicker() {
+  if (!pendingImageReferencePicker) return;
+  const selected = findImageEntryById(pendingImageReferencePicker.selectedImageId);
+  if (!selected) return;
+  const imageRaw = `ImageID(${selected.id})`;
+  const { target } = pendingImageReferencePicker;
+  pendingImageReferencePicker = null;
+
+  switch (target.kind) {
+    case "menuEntry": {
+      const menu = model.menus?.find(candidate => candidate.id === target.menuId);
+      const entry = menu?.entries?.[target.entryIndex];
+      if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
+      post({
+        type: "updateMenuEntry",
+        menuId: menu.id,
+        sourceLine: entry.source.line,
+        kind: entry.kind,
+        idRaw: entry.idRaw,
+        textRaw: entry.textRaw ?? (entry.text !== undefined ? toPbString(entry.text) : undefined),
+        shortcut: entry.shortcut,
+        iconRaw: imageRaw
+      });
+      break;
+    }
+    case "toolBarEntry": {
+      const toolBar = model.toolbars?.find(candidate => candidate.id === target.toolBarId);
+      const entry = toolBar?.entries?.[target.entryIndex];
+      if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
+      post({
+        type: "updateToolBarEntry",
+        toolBarId: toolBar.id,
+        sourceLine: entry.source.line,
+        kind: entry.kind,
+        idRaw: entry.idRaw,
+        iconRaw: imageRaw,
+        toggle: entry.toggle
+      });
+      break;
+    }
+    case "statusBarField": {
+      const statusBar = model.statusbars?.find(candidate => candidate.id === target.statusBarId);
+      const field = statusBar?.fields?.[target.fieldIndex];
+      if (!statusBar || !field || typeof field.source?.line !== "number") return;
+      post({
+        type: "updateStatusBarField",
+        statusBarId: statusBar.id,
+        sourceLine: field.source.line,
+        widthRaw: field.widthRaw,
+        textRaw: "",
+        imageRaw,
+        flagsRaw: field.flagsRaw ?? "",
+        progressBar: false,
+        progressRaw: ""
+      });
+      break;
+    }
+    case "gadget": {
+      const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
+      if (!gadget) return;
+      gadget.imageRaw = imageRaw;
+      gadget.imageId = selected.id;
+      post({
+        type: "setGadgetImageRaw",
+        id: gadget.id,
+        imageRaw
+      });
+      break;
+    }
+  }
+
+  renderProps();
+}
+
+function saveImageAssignmentDraft() {
+  if (!pendingImageAssignmentDraft) return;
+  const draft = pendingImageAssignmentDraft;
+  const idRaw = draft.idRaw.trim();
+  if (!idRaw.length) return;
+
+  let assignedVar: string | undefined;
+  if (idRaw.toLowerCase() === "#pb_any") {
+    const trimmedAssigned = draft.assignedVar.trim();
+    if (!trimmedAssigned.length) {
+      alert("#PB_Any requires an assigned variable name.");
+      return;
+    }
+    assignedVar = trimmedAssigned;
+  }
+
+  const imageRaw = draft.imageRaw.trim();
+  if (draft.mode === "create" && !imageRaw.length) return;
+
+  const reference = buildCreatedImageReference(idRaw, assignedVar);
+  if (!reference) {
+    alert("#PB_Any requires an assigned variable name.");
+    return;
+  }
+
+  pendingImageAssignmentDraft = null;
+
+  const target = draft.target;
+
+  switch (target.kind) {
+    case "menuEntry": {
+      const menu = model.menus?.find(candidate => candidate.id === target.menuId);
+      const entry = menu?.entries?.[target.entryIndex];
+      if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
+      if (draft.mode === "create") {
+        post({
+          type: "createAndAssignMenuEntryImage",
+          menuId: menu.id,
+          sourceLine: entry.source.line,
+          kind: entry.kind,
+          idRaw: entry.idRaw,
+          textRaw: entry.textRaw ?? (entry.text !== undefined ? toPbString(entry.text) : undefined),
+          shortcut: entry.shortcut,
+          newInline: draft.inline,
+          newImageIdRaw: idRaw,
+          newImageRaw: imageRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      else {
+        post({
+          type: "chooseFileAndAssignMenuEntryImage",
+          menuId: menu.id,
+          sourceLine: entry.source.line,
+          kind: entry.kind,
+          idRaw: entry.idRaw,
+          textRaw: entry.textRaw ?? (entry.text !== undefined ? toPbString(entry.text) : undefined),
+          shortcut: entry.shortcut,
+          newImageIdRaw: idRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      break;
+    }
+    case "toolBarEntry": {
+      const toolBar = model.toolbars?.find(candidate => candidate.id === target.toolBarId);
+      const entry = toolBar?.entries?.[target.entryIndex];
+      if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
+      if (draft.mode === "create") {
+        post({
+          type: "createAndAssignToolBarEntryImage",
+          toolBarId: toolBar.id,
+          sourceLine: entry.source.line,
+          kind: entry.kind,
+          idRaw: entry.idRaw,
+          toggle: entry.toggle,
+          newInline: draft.inline,
+          newImageIdRaw: idRaw,
+          newImageRaw: imageRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      else {
+        post({
+          type: "chooseFileAndAssignToolBarEntryImage",
+          toolBarId: toolBar.id,
+          sourceLine: entry.source.line,
+          kind: entry.kind,
+          idRaw: entry.idRaw,
+          toggle: entry.toggle,
+          newImageIdRaw: idRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      break;
+    }
+    case "statusBarField": {
+      const statusBar = model.statusbars?.find(candidate => candidate.id === target.statusBarId);
+      const field = statusBar?.fields?.[target.fieldIndex];
+      if (!statusBar || !field || typeof field.source?.line !== "number") return;
+      if (draft.mode === "create") {
+        post({
+          type: "createAndAssignStatusBarFieldImage",
+          statusBarId: statusBar.id,
+          sourceLine: field.source.line,
+          widthRaw: field.widthRaw,
+          newInline: draft.inline,
+          newImageIdRaw: idRaw,
+          newImageRaw: imageRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      else {
+        post({
+          type: "chooseFileAndAssignStatusBarFieldImage",
+          statusBarId: statusBar.id,
+          sourceLine: field.source.line,
+          widthRaw: field.widthRaw,
+          newImageIdRaw: idRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      break;
+    }
+    case "gadget": {
+      const gadget = model.gadgets.find(candidate => candidate.id === target.gadgetId);
+      if (!gadget) return;
+      gadget.imageRaw = reference.imageRaw;
+      gadget.imageId = reference.imageId;
+      if (draft.mode === "create") {
+        post({
+          type: "createAndAssignGadgetImage",
+          id: gadget.id,
+          newInline: draft.inline,
+          newImageIdRaw: idRaw,
+          newImageRaw: imageRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      else {
+        post({
+          type: "chooseFileAndAssignGadgetImage",
+          id: gadget.id,
+          x: gadget.x,
+          y: gadget.y,
+          resizeToImage: draft.resizeToImage,
+          newImageIdRaw: idRaw,
+          newAssignedVar: assignedVar,
+        });
+      }
+      break;
+    }
+  }
+
+  renderProps();
+}
+
 function getStatusBarFieldDisplayKind(field: StatusbarField): string {
   if (field.progressBar) return "Progress";
   if ((field.imageRaw ?? "").trim().length) return "Image";
@@ -4485,90 +4944,28 @@ function renderProps() {
     return r;
   };
 
-  const promptImageArgs = (current?: ImageEntry): { inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } | undefined => {
-    const procName = prompt("Image kind (LoadImage/CatchImage)", current?.inline ? "CatchImage" : "LoadImage");
-    if (procName === null) return undefined;
-    const normalizedProc = procName.trim().toLowerCase();
-    const inline = normalizedProc === "catchimage";
-    if (normalizedProc !== "loadimage" && normalizedProc !== "catchimage") return undefined;
+  const createPendingDestructiveActionEl = () => {
+    if (!pendingDestructiveAction) return null;
 
-    const firstParamDefault = current?.firstParam ?? (current?.pbAny ? "#PB_Any" : current?.id ?? "#ImgNew");
-    const firstParam = prompt("First param (#ImgName or #PB_Any)", firstParamDefault);
-    if (firstParam === null) return undefined;
-    const idRaw = firstParam.trim();
-    if (!idRaw.length) return undefined;
+    const wrap = document.createElement("div");
+    wrap.appendChild(section("Confirm Action"));
+    wrap.appendChild(mutedNote(pendingDestructiveAction.message));
 
-    let assignedVar: string | undefined;
-    if (idRaw.toLowerCase() === "#pb_any") {
-      const assigned = prompt("Assigned variable", current?.variable ?? current?.id ?? "imgNew");
-      if (assigned === null) return undefined;
-      const trimmedAssigned = assigned.trim();
-      if (!trimmedAssigned.length) return undefined;
-      assignedVar = trimmedAssigned;
-    }
+    const actions = document.createElement("div");
+    actions.className = "miniActions";
 
-    const imageRawPrompt = prompt("Image raw", current?.imageRaw ?? '"image.png"');
-    if (imageRawPrompt === null) return undefined;
-    const imageRaw = imageRawPrompt.trim();
-    if (!imageRaw.length) return undefined;
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = pendingDestructiveAction.confirmLabel;
+    confirmBtn.onclick = () => confirmDestructiveAction();
 
-    return { inline, idRaw, imageRaw, assignedVar };
-  };
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.onclick = () => closeDestructiveAction();
 
-  const promptCreateAndAssignImageArgs = (current?: ImageEntry): ({ inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string } & { imageId: string; imageRefRaw: string }) | undefined => {
-    const next = promptImageArgs(current);
-    if (!next) return undefined;
-
-    const reference = buildCreatedImageReference(next.idRaw, next.assignedVar);
-    if (!reference) {
-      alert("#PB_Any requires an assigned variable name.");
-      return undefined;
-    }
-
-    return {
-      ...next,
-      imageId: reference.imageId,
-      imageRefRaw: reference.imageRaw,
-    };
-  };
-
-  const promptCreateAndAssignLoadImageArgs = (): ({ idRaw: string; assignedVar?: string } & { imageId: string; imageRefRaw: string }) | undefined => {
-    const firstParam = prompt("First param for new LoadImage entry (#ImgName or #PB_Any)", "#ImgNew");
-    if (firstParam === null) return undefined;
-    const idRaw = firstParam.trim();
-    if (!idRaw.length) return undefined;
-
-    let assignedVar: string | undefined;
-    if (idRaw.toLowerCase() === "#pb_any") {
-      const assigned = prompt("Assigned variable", "imgNew");
-      if (assigned === null) return undefined;
-      const trimmedAssigned = assigned.trim();
-      if (!trimmedAssigned.length) return undefined;
-      assignedVar = trimmedAssigned;
-    }
-
-    const reference = buildCreatedImageReference(idRaw, assignedVar);
-    if (!reference) {
-      alert("#PB_Any requires an assigned variable name.");
-      return undefined;
-    }
-
-    return {
-      idRaw,
-      assignedVar,
-      imageId: reference.imageId,
-      imageRefRaw: reference.imageRaw,
-    };
-  };
-
-  const promptChooseFileAndAssignGadgetImageArgs = (): ({ idRaw: string; assignedVar?: string; resizeToImage: boolean } & { imageId: string; imageRefRaw: string }) | undefined => {
-    const next = promptCreateAndAssignLoadImageArgs();
-    if (!next) return undefined;
-
-    return {
-      ...next,
-      resizeToImage: confirm("Resize gadget to the selected image size?")
-    };
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+    wrap.appendChild(actions);
+    return wrap;
   };
 
   if (sel.kind === "window") {
@@ -4784,9 +5181,7 @@ function renderProps() {
         : "Only MenuItem supports a parsed image argument.";
       selectedUseExistingBtn.onclick = () => {
         if (!selectedCanEditImage) return;
-        const picked = promptImageReferenceFromModel(selectedEntry.iconId);
-        if (!picked) return;
-        postSelectedMenuUpdate({ iconRaw: picked.imageRaw });
+        openImageReferencePicker({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
       };
       selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
@@ -4797,19 +5192,7 @@ function renderProps() {
         : "Only MenuItem supports a parsed image argument.";
       selectedChooseFileBtn.onclick = () => {
         if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
-        const next = promptCreateAndAssignLoadImageArgs();
-        if (!next) return;
-        post({
-          type: "chooseFileAndAssignMenuEntryImage",
-          menuId: m.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          textRaw: selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : undefined),
-          shortcut: selectedEntry.shortcut,
-          newImageIdRaw: next.idRaw,
-          newAssignedVar: next.assignedVar,
-        });
+        openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
       const selectedCreateNewBtn = document.createElement("button");
@@ -4820,21 +5203,7 @@ function renderProps() {
         : "Only MenuItem supports a parsed image argument.";
       selectedCreateNewBtn.onclick = () => {
         if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
-        const next = promptCreateAndAssignImageArgs();
-        if (!next) return;
-        post({
-          type: "createAndAssignMenuEntryImage",
-          menuId: m.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          textRaw: selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : undefined),
-          shortcut: selectedEntry.shortcut,
-          newInline: next.inline,
-          newImageIdRaw: next.idRaw,
-          newImageRaw: next.imageRaw,
-          newAssignedVar: next.assignedVar,
-        });
+        openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "create");
       };
       selectedImageActions.appendChild(selectedCreateNewBtn);
       const selectedClearBtn = document.createElement("button");
@@ -4918,6 +5287,14 @@ function renderProps() {
         readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")
       ));
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
+      if (isImageReferencePickerOpenFor({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! })) {
+        const pendingEl = createPendingImageReferencePickerEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+      if (isImageAssignmentDraftOpenFor({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! })) {
+        const pendingEl = createPendingImageAssignmentDraftEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
       propsEl.appendChild(row(
         "SelectProc",
         textInput(
@@ -4955,13 +5332,18 @@ function renderProps() {
 
       const delFn = canPatch
         ? () => {
-            if (!confirm("Delete this menu entry?")) return;
-            vscode.postMessage({
-              type: "deleteMenuEntry",
-              menuId: m.id,
-              sourceLine: e.source!.line,
-              kind: e.kind
-            });
+            openDestructiveAction(
+              {
+                kind: "deleteMenuEntry",
+                menuId: m.id,
+                entryIndex,
+                sourceLine: e.source!.line,
+                entryKind: e.kind,
+                message: `Delete the selected ${e.kind} entry from menu '${m.id}'?`,
+                confirmLabel: "Delete Entry"
+              },
+              { kind: "menuEntry", menuId: m.id, entryIndex }
+            );
           }
         : undefined;
 
@@ -4981,54 +5363,17 @@ function renderProps() {
         : undefined;
       const menuPickImageFn = e.kind === "MenuItem" && canPatch
         ? () => {
-            const selected = promptImageReferenceFromModel(e.iconId);
-            if (!selected) return;
-            post({
-              type: "updateMenuEntry",
-              menuId: m.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
-              shortcut: e.shortcut,
-              iconRaw: selected.imageRaw
-            });
+            openImageReferencePicker({ kind: "menuEntry", menuId: m.id, entryIndex }, e.iconId);
           }
         : undefined;
       const menuChooseFileImageFn = e.kind === "MenuItem" && canPatch
         ? () => {
-            const next = promptCreateAndAssignLoadImageArgs();
-            if (!next) return;
-            post({
-              type: "chooseFileAndAssignMenuEntryImage",
-              menuId: m.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
-              shortcut: e.shortcut,
-              newImageIdRaw: next.idRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex }, "chooseFile");
           }
         : undefined;
       const menuCreateImageFn = e.kind === "MenuItem" && canPatch
         ? () => {
-            const next = promptCreateAndAssignImageArgs();
-            if (!next) return;
-            post({
-              type: "createAndAssignMenuEntryImage",
-              menuId: m.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              textRaw: e.textRaw ?? (e.text !== undefined ? toPbString(e.text) : undefined),
-              shortcut: e.shortcut,
-              newInline: next.inline,
-              newImageIdRaw: next.idRaw,
-              newImageRaw: next.imageRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex }, "create");
           }
         : undefined;
 
@@ -5100,12 +5445,27 @@ function renderProps() {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete Menu";
         deleteBtn.onclick = () => {
-          if (!confirm(`Delete menu '${m.id}'?`)) return;
-          post({ type: "deleteMenu", menuId: m.id });
+          openDestructiveAction({
+            kind: "deleteMenu",
+            menuId: m.id,
+            message: `Delete menu '${m.id}'?`,
+            confirmLabel: "Delete Menu"
+          });
         };
         actions.appendChild(deleteBtn);
       }
       propsEl.appendChild(actions);
+      if (pendingDestructiveAction?.kind === "deleteMenu" && pendingDestructiveAction.menuId === m.id) {
+        const pendingEl = createPendingDestructiveActionEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+    }
+    if (selectedEntry
+      && pendingDestructiveAction?.kind === "deleteMenuEntry"
+      && pendingDestructiveAction.menuId === m.id
+      && pendingDestructiveAction.entryIndex === selectedEntryIndex) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
     }
     return;
   }
@@ -5155,17 +5515,7 @@ function renderProps() {
         : "Only ToolBarImageButton supports a parsed image reference.";
       selectedUseExistingBtn.onclick = () => {
         if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        const picked = promptImageReferenceFromModel(selectedEntry.iconId);
-        if (!picked) return;
-        post({
-          type: "updateToolBarEntry",
-          toolBarId: t.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          iconRaw: picked.imageRaw,
-          toggle: selectedEntry.toggle,
-        });
+        openImageReferencePicker({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
       };
       selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
@@ -5176,18 +5526,7 @@ function renderProps() {
         : "Only ToolBarImageButton supports a parsed image reference.";
       selectedChooseFileBtn.onclick = () => {
         if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        const next = promptCreateAndAssignLoadImageArgs();
-        if (!next) return;
-        post({
-          type: "chooseFileAndAssignToolBarEntryImage",
-          toolBarId: t.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          toggle: selectedEntry.toggle,
-          newImageIdRaw: next.idRaw,
-          newAssignedVar: next.assignedVar,
-        });
+        openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
       const selectedCreateNewBtn = document.createElement("button");
@@ -5198,20 +5537,7 @@ function renderProps() {
         : "Only ToolBarImageButton supports a parsed image reference.";
       selectedCreateNewBtn.onclick = () => {
         if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        const next = promptCreateAndAssignImageArgs();
-        if (!next) return;
-        post({
-          type: "createAndAssignToolBarEntryImage",
-          toolBarId: t.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          toggle: selectedEntry.toggle,
-          newInline: next.inline,
-          newImageIdRaw: next.idRaw,
-          newImageRaw: next.imageRaw,
-          newAssignedVar: next.assignedVar,
-        });
+        openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "create");
       };
       selectedImageActions.appendChild(selectedCreateNewBtn);
       const selectedClearBtn = document.createElement("button");
@@ -5340,6 +5666,14 @@ function renderProps() {
       ));
       propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")));
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
+      if (isImageReferencePickerOpenFor({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! })) {
+        const pendingEl = createPendingImageReferencePickerEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+      if (isImageAssignmentDraftOpenFor({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! })) {
+        const pendingEl = createPendingImageAssignmentDraftEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
       propsEl.appendChild(row(
         "ToggleButton",
         checkboxInput(
@@ -5411,13 +5745,18 @@ function renderProps() {
 
       const delFn = canPatch
         ? () => {
-            if (!confirm("Delete this toolbar entry?")) return;
-            vscode.postMessage({
-              type: "deleteToolBarEntry",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              kind: e.kind
-            });
+            openDestructiveAction(
+              {
+                kind: "deleteToolBarEntry",
+                toolBarId: t.id,
+                entryIndex,
+                sourceLine: e.source!.line,
+                entryKind: e.kind,
+                message: `Delete the selected ${e.kind} entry from toolbar '${t.id}'?`,
+                confirmLabel: "Delete Entry"
+              },
+              { kind: "toolBarEntry", toolBarId: t.id, entryIndex }
+            );
           }
         : undefined;
 
@@ -5442,51 +5781,17 @@ function renderProps() {
         : undefined;
       const toolBarPickImageFn = e.kind === "ToolBarImageButton" && canPatch
         ? () => {
-            const selected = promptImageReferenceFromModel(e.iconId);
-            if (!selected) return;
-            post({
-              type: "updateToolBarEntry",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              iconRaw: selected.imageRaw,
-              toggle: e.toggle
-            });
+            openImageReferencePicker({ kind: "toolBarEntry", toolBarId: t.id, entryIndex }, e.iconId);
           }
         : undefined;
       const toolBarChooseFileImageFn = e.kind === "ToolBarImageButton" && canPatch
         ? () => {
-            const next = promptCreateAndAssignLoadImageArgs();
-            if (!next) return;
-            post({
-              type: "chooseFileAndAssignToolBarEntryImage",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              toggle: e.toggle,
-              newImageIdRaw: next.idRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex }, "chooseFile");
           }
         : undefined;
       const toolBarCreateImageFn = e.kind === "ToolBarImageButton" && canPatch
         ? () => {
-            const next = promptCreateAndAssignImageArgs();
-            if (!next) return;
-            post({
-              type: "createAndAssignToolBarEntryImage",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              toggle: e.toggle,
-              newInline: next.inline,
-              newImageIdRaw: next.idRaw,
-              newImageRaw: next.imageRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex }, "create");
           }
         : undefined;
 
@@ -5543,12 +5848,27 @@ function renderProps() {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete Toolbar";
         deleteBtn.onclick = () => {
-          if (!confirm(`Delete toolbar '${t.id}'?`)) return;
-          post({ type: "deleteToolBar", toolBarId: t.id });
+          openDestructiveAction({
+            kind: "deleteToolBar",
+            toolBarId: t.id,
+            message: `Delete toolbar '${t.id}'?`,
+            confirmLabel: "Delete Toolbar"
+          });
         };
         actions.appendChild(deleteBtn);
       }
       propsEl.appendChild(actions);
+      if (pendingDestructiveAction?.kind === "deleteToolBar" && pendingDestructiveAction.toolBarId === t.id) {
+        const pendingEl = createPendingDestructiveActionEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+    }
+    if (selectedEntry
+      && pendingDestructiveAction?.kind === "deleteToolBarEntry"
+      && pendingDestructiveAction.toolBarId === t.id
+      && pendingDestructiveAction.entryIndex === selectedEntryIndex) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
     }
     return;
   }
@@ -5563,6 +5883,7 @@ function renderProps() {
     }
 
     const getStatusBarFieldUi = (field: StatusbarField) => {
+      const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
       const canPatch = typeof field.source?.line === "number";
       const statusImage = findImageEntryById(field.imageId);
       const statusImageTitle = getImageReferenceHint(field.imageId, "statusbar");
@@ -5590,7 +5911,6 @@ function renderProps() {
 
       const editFn = canPatch
         ? () => {
-            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
             if (fieldIndex < 0) return;
             setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
@@ -5598,18 +5918,22 @@ function renderProps() {
 
       const delFn = canPatch
         ? () => {
-            if (!confirm("Delete this statusbar field?")) return;
-            post({
-              type: "deleteStatusBarField",
-              statusBarId: sb.id,
-              sourceLine: field.source!.line
-            });
+            openDestructiveAction(
+              {
+                kind: "deleteStatusBarField",
+                statusBarId: sb.id,
+                fieldIndex,
+                sourceLine: field.source!.line,
+                message: `Delete field ${fieldIndex} from statusbar '${sb.id}'?`,
+                confirmLabel: "Delete Field"
+              },
+              { kind: "statusBarField", statusBarId: sb.id, fieldIndex }
+            );
           }
         : undefined;
 
       const statusSetImageFn = canPatch
         ? () => {
-            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
             if (fieldIndex < 0) return;
             setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
@@ -5617,21 +5941,12 @@ function renderProps() {
 
       const statusPickImageFn = canPatch
         ? () => {
-            const selected = promptImageReferenceFromModel(field.imageId);
-            if (!selected) return;
-            postFieldUpdate({
-              textRaw: "",
-              imageRaw: selected.imageRaw,
-              flagsRaw: field.flagsRaw ?? "",
-              progressBar: false,
-              progressRaw: ""
-            });
+            openImageReferencePicker({ kind: "statusBarField", statusBarId: sb.id, fieldIndex }, field.imageId);
           }
         : undefined;
 
       const statusTextFn = canPatch
         ? () => {
-            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
             if (fieldIndex < 0) return;
             setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
@@ -5639,7 +5954,6 @@ function renderProps() {
 
       const statusProgressFn = canPatch
         ? () => {
-            const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
             if (fieldIndex < 0) return;
             setSelectionAndRefresh({ kind: "statusBarField", statusBarId: sb.id, fieldIndex });
           }
@@ -5647,46 +5961,29 @@ function renderProps() {
 
       const statusClearFn = canPatch
         ? () => {
-            if (!confirm("Clear this statusbar field decoration?")) return;
-            postFieldUpdate({
-              textRaw: "",
-              imageRaw: "",
-              flagsRaw: "",
-              progressBar: false,
-              progressRaw: ""
-            });
+            openDestructiveAction(
+              {
+                kind: "clearStatusBarField",
+                statusBarId: sb.id,
+                fieldIndex,
+                sourceLine: field.source!.line,
+                message: `Clear text, image and progress decoration for field ${fieldIndex}?`,
+                confirmLabel: "Clear Decoration"
+              },
+              { kind: "statusBarField", statusBarId: sb.id, fieldIndex }
+            );
           }
         : undefined;
 
       const statusChooseFileImageFn = canPatch
         ? () => {
-            const next = promptCreateAndAssignLoadImageArgs();
-            if (!next) return;
-            post({
-              type: "chooseFileAndAssignStatusBarFieldImage",
-              statusBarId: sb.id,
-              sourceLine: field.source!.line,
-              widthRaw: field.widthRaw,
-              newImageIdRaw: next.idRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "statusBarField", statusBarId: sb.id, fieldIndex }, "chooseFile");
           }
         : undefined;
 
       const statusCreateImageFn = canPatch
         ? () => {
-            const next = promptCreateAndAssignImageArgs();
-            if (!next) return;
-            post({
-              type: "createAndAssignStatusBarFieldImage",
-              statusBarId: sb.id,
-              sourceLine: field.source!.line,
-              widthRaw: field.widthRaw,
-              newInline: next.inline,
-              newImageIdRaw: next.idRaw,
-              newImageRaw: next.imageRaw,
-              newAssignedVar: next.assignedVar,
-            });
+            openImageAssignmentDraft({ kind: "statusBarField", statusBarId: sb.id, fieldIndex }, "create");
           }
         : undefined;
 
@@ -5841,6 +6138,14 @@ function renderProps() {
         selectedImageActions.appendChild(jumpImageBtn);
       }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
+      if (isImageReferencePickerOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
+        const pendingEl = createPendingImageReferencePickerEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+      if (isImageAssignmentDraftOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
+        const pendingEl = createPendingImageAssignmentDraftEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
       propsEl.appendChild(row(
         "ProgressBar",
         checkboxInput(
@@ -5941,12 +6246,29 @@ function renderProps() {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete StatusBar";
         deleteBtn.onclick = () => {
-          if (!confirm(`Delete statusbar '${sb.id}'?`)) return;
-          post({ type: "deleteStatusBar", statusBarId: sb.id });
+          openDestructiveAction({
+            kind: "deleteStatusBar",
+            statusBarId: sb.id,
+            message: `Delete statusbar '${sb.id}'?`,
+            confirmLabel: "Delete StatusBar"
+          });
         };
         actions.appendChild(deleteBtn);
       }
       propsEl.appendChild(actions);
+      if (pendingDestructiveAction?.kind === "deleteStatusBar" && pendingDestructiveAction.statusBarId === sb.id) {
+        const pendingEl = createPendingDestructiveActionEl();
+        if (pendingEl) propsEl.appendChild(pendingEl);
+      }
+    }
+    if (selectedField
+      && pendingDestructiveAction
+      && ((pendingDestructiveAction.kind === "deleteStatusBarField"
+        || pendingDestructiveAction.kind === "clearStatusBarField")
+        && pendingDestructiveAction.statusBarId === sb.id
+        && pendingDestructiveAction.fieldIndex === selectedFieldIndex)) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
     }
     return;
   }
@@ -6106,8 +6428,13 @@ function renderProps() {
     delBtn.disabled = imageEditorOpen || !canPatch;
     delBtn.onclick = () => {
       if (!canPatch) return;
-      if (!confirm("Delete this image entry?")) return;
-      post({ type: "deleteImage", sourceLine: img.source!.line });
+      openDestructiveAction({
+        kind: "deleteImage",
+        imageId: img.id,
+        sourceLine: img.source!.line,
+        message: `Delete image '${img.id}'?`,
+        confirmLabel: "Delete Image"
+      });
     };
 
     actions.appendChild(editBtn);
@@ -6118,6 +6445,10 @@ function renderProps() {
     actions.appendChild(relativeBtn);
     actions.appendChild(delBtn);
     propsEl.appendChild(actions);
+    if (pendingDestructiveAction?.kind === "deleteImage" && pendingDestructiveAction.imageId === img.id) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
     return;
   }
 
@@ -6138,8 +6469,16 @@ function renderProps() {
           : undefined,
           canPatch
             ? () => {
-                if (!confirm("Delete this image entry?")) return;
-                post({ type: "deleteImage", sourceLine: img.source!.line });
+                openDestructiveAction(
+                  {
+                    kind: "deleteImage",
+                    imageId: img.id,
+                    sourceLine: img.source!.line,
+                    message: `Delete image '${img.id}'?`,
+                    confirmLabel: "Delete Image"
+                  },
+                  { kind: "image", id: img.id }
+                );
               }
             : undefined,
           {
@@ -6227,21 +6566,17 @@ function renderProps() {
     const addBtn = document.createElement("button");
     addBtn.textContent = "Add Image";
     addBtn.onclick = () => {
-      const next = promptImageArgs();
-      if (!next) return;
-      post({
-        type: "insertImage",
-        inline: next.inline,
-        idRaw: next.idRaw,
-        imageRaw: next.imageRaw,
-        assignedVar: next.assignedVar
-      });
+      openImageInsertDraft();
     };
 
     const actions = document.createElement("div");
     actions.className = "miniActions";
     actions.appendChild(addBtn);
     propsEl.appendChild(actions);
+    if (pendingImageInsertDraft) {
+      const pendingEl = createPendingImageInsertDraftEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
     return;
   }
 
@@ -6296,16 +6631,7 @@ function renderProps() {
     gadgetPickImageBtn.disabled = !(model.images?.length);
     gadgetPickImageBtn.title = model.images?.length ? "Select an image from the form image list." : "No image entries are defined in this form.";
     gadgetPickImageBtn.onclick = () => {
-      const selected = promptImageReferenceFromModel(g.imageId);
-      if (!selected) return;
-      g.imageRaw = selected.imageRaw;
-      g.imageId = selected.imageId;
-      post({
-        type: "setGadgetImageRaw",
-        id: g.id,
-        imageRaw: selected.imageRaw
-      });
-      renderProps();
+      openImageReferencePicker({ kind: "gadget", gadgetId: g.id }, g.imageId);
     };
     gadgetImageActions.appendChild(gadgetPickImageBtn);
 
@@ -6313,19 +6639,7 @@ function renderProps() {
     gadgetCreateImageBtn.textContent = "Create New Image";
     gadgetCreateImageBtn.title = "Create a new form image entry and assign it to this gadget.";
     gadgetCreateImageBtn.onclick = () => {
-      const next = promptCreateAndAssignImageArgs();
-      if (!next) return;
-      g.imageRaw = next.imageRefRaw;
-      g.imageId = next.imageId;
-      post({
-        type: "createAndAssignGadgetImage",
-        id: g.id,
-        newInline: next.inline,
-        newImageIdRaw: next.idRaw,
-        newImageRaw: next.imageRaw,
-        newAssignedVar: next.assignedVar,
-      });
-      renderProps();
+      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "create");
     };
     gadgetImageActions.appendChild(gadgetCreateImageBtn);
 
@@ -6333,20 +6647,7 @@ function renderProps() {
     gadgetChooseFileBtn.textContent = "Choose File";
     gadgetChooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this gadget. Optionally resize the gadget to the image size.";
     gadgetChooseFileBtn.onclick = () => {
-      const next = promptChooseFileAndAssignGadgetImageArgs();
-      if (!next) return;
-      g.imageRaw = next.imageRefRaw;
-      g.imageId = next.imageId;
-      post({
-        type: "chooseFileAndAssignGadgetImage",
-        id: g.id,
-        x: g.x,
-        y: g.y,
-        resizeToImage: next.resizeToImage,
-        newImageIdRaw: next.idRaw,
-        newAssignedVar: next.assignedVar,
-      });
-      renderProps();
+      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
   }
@@ -6361,6 +6662,14 @@ function renderProps() {
   };
   gadgetImageActions.appendChild(gadgetImageBtn);
   propsEl.appendChild(row("", gadgetImageActions));
+  if (isImageReferencePickerOpenFor({ kind: "gadget", gadgetId: g.id })) {
+    const pendingEl = createPendingImageReferencePickerEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
+  if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
+    const pendingEl = createPendingImageAssignmentDraftEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
   if (gadgetImageHint) {
     propsEl.appendChild(mutedNote(gadgetImageHint));
   }
@@ -6501,8 +6810,13 @@ function renderProps() {
           : undefined,
         canPatch
           ? () => {
-              if (!confirm("Delete this item?")) return;
-              vscode.postMessage({ type: "deleteGadgetItem", id: g.id, sourceLine: it.source!.line });
+              openDestructiveAction({
+                kind: "deleteGadgetItem",
+                gadgetId: g.id,
+                sourceLine: it.source!.line,
+                message: `Delete item ${idx} from gadget '${g.id}'?`,
+                confirmLabel: "Delete Item"
+              });
             }
           : undefined,
         {
@@ -6528,6 +6842,10 @@ function renderProps() {
 
   propsEl.appendChild(itemsBox);
   propsEl.appendChild(itemActions);
+  if (pendingDestructiveAction?.kind === "deleteGadgetItem" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
 
   // Columns editor (minimal UI)
   propsEl.appendChild(section("Columns"));
@@ -6585,8 +6903,13 @@ function renderProps() {
           : undefined,
         canPatch
           ? () => {
-              if (!confirm("Delete this column?")) return;
-              vscode.postMessage({ type: "deleteGadgetColumn", id: g.id, sourceLine: c.source!.line });
+              openDestructiveAction({
+                kind: "deleteGadgetColumn",
+                gadgetId: g.id,
+                sourceLine: c.source!.line,
+                message: `Delete column ${idx} from gadget '${g.id}'?`,
+                confirmLabel: "Delete Column"
+              });
             }
           : undefined
       )
@@ -6606,6 +6929,163 @@ function renderProps() {
 
   propsEl.appendChild(colsBox);
   propsEl.appendChild(colActions);
+  if (pendingDestructiveAction?.kind === "deleteGadgetColumn" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
+}
+
+function createPendingImageReferencePickerEl() {
+  if (!pendingImageReferencePicker) return null;
+  const wrap = document.createElement("div");
+  wrap.appendChild(createSubSection("Select Existing Image"));
+  wrap.appendChild(row(
+    "Image",
+    selectInput(
+      pendingImageReferencePicker.selectedImageId,
+      (model.images ?? []).map(img => ({
+        value: img.id,
+        label: `${img.id} — ${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`
+      })),
+      value => updateImageReferencePicker({ selectedImageId: value })
+    )
+  ));
+  const selected = findImageEntryById(pendingImageReferencePicker.selectedImageId);
+  wrap.appendChild(row("Current", readonlyInput(selected?.imageRaw ?? selected?.image ?? "")));
+  const actions = document.createElement("div");
+  actions.className = "miniActions";
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = "Assign";
+  saveBtn.onclick = () => saveImageReferencePicker();
+  actions.appendChild(saveBtn);
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeImageReferencePicker();
+  actions.appendChild(cancelBtn);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function createPendingImageAssignmentDraftEl() {
+  if (!pendingImageAssignmentDraft) return null;
+  const wrap = document.createElement("div");
+  wrap.appendChild(createSubSection(pendingImageAssignmentDraft.mode === "create" ? "Create and Assign Image" : "Choose File and Assign Image"));
+  if (pendingImageAssignmentDraft.mode === "create") {
+    wrap.appendChild(row(
+      "Kind",
+      selectInput(
+        pendingImageAssignmentDraft.inline ? "CatchImage" : "LoadImage",
+        [
+          { value: "LoadImage", label: "LoadImage" },
+          { value: "CatchImage", label: "CatchImage" }
+        ],
+        value => updateImageAssignmentDraft({ inline: value === "CatchImage" })
+      )
+    ));
+  }
+  else {
+    wrap.appendChild(row("Kind", readonlyInput("LoadImage")));
+  }
+  wrap.appendChild(row(
+    "First Param",
+    textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
+      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
+    })
+  ));
+  if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+    wrap.appendChild(row(
+      "Assigned Var",
+      textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
+        title: "Variable name receiving the #PB_Any image handle."
+      })
+    ));
+  }
+  if (pendingImageAssignmentDraft.mode === "create") {
+    wrap.appendChild(row(
+      "Image Raw",
+      textInput(pendingImageAssignmentDraft.imageRaw, value => updateImageAssignmentDraft({ imageRaw: value }), {
+        title: 'Raw second argument for LoadImage/CatchImage, for example "icons/open.png" or ?Label.'
+      })
+    ));
+  }
+  if (pendingImageAssignmentDraft.mode === "chooseFile" && pendingImageAssignmentDraft.target.kind === "gadget") {
+    wrap.appendChild(row(
+      "Resize",
+      checkboxInput(
+        pendingImageAssignmentDraft.resizeToImage,
+        value => updateImageAssignmentDraft({ resizeToImage: value }),
+        { title: "Resize the gadget to the selected image dimensions after creating the new LoadImage entry." }
+      )
+    ));
+  }
+  const actions = document.createElement("div");
+  actions.className = "miniActions";
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = pendingImageAssignmentDraft.mode === "create" ? "Create" : "Continue";
+  saveBtn.onclick = () => saveImageAssignmentDraft();
+  actions.appendChild(saveBtn);
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeImageAssignmentDraft();
+  actions.appendChild(cancelBtn);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function createPendingImageInsertDraftEl() {
+  if (!pendingImageInsertDraft) return null;
+  const wrap = document.createElement("div");
+  wrap.appendChild(createSubSection("New Image"));
+  wrap.appendChild(row(
+    "Kind",
+    selectInput(
+      pendingImageInsertDraft.inline ? "CatchImage" : "LoadImage",
+      [
+        { value: "LoadImage", label: "LoadImage" },
+        { value: "CatchImage", label: "CatchImage" }
+      ],
+      value => updateImageInsertDraft({ inline: value === "CatchImage" })
+    )
+  ));
+  wrap.appendChild(row(
+    "First Param",
+    textInput(pendingImageInsertDraft.idRaw, value => updateImageInsertDraft({ idRaw: value }), {
+      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
+    })
+  ));
+  if (pendingImageInsertDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+    wrap.appendChild(row(
+      "Assigned Var",
+      textInput(pendingImageInsertDraft.assignedVar, value => updateImageInsertDraft({ assignedVar: value }), {
+        title: "Variable name receiving the #PB_Any image handle."
+      })
+    ));
+  }
+  wrap.appendChild(row(
+    "Image Raw",
+    textInput(pendingImageInsertDraft.imageRaw, value => updateImageInsertDraft({ imageRaw: value }), {
+      title: 'Raw second argument for LoadImage/CatchImage, for example "icons/open.png" or ?Label.'
+    })
+  ));
+  const actions = document.createElement("div");
+  actions.className = "miniActions";
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = "Add Image";
+  saveBtn.onclick = () => saveImageInsertDraft();
+  actions.appendChild(saveBtn);
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeImageInsertDraft();
+  actions.appendChild(cancelBtn);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function createSubSection(title: string) {
+  const h = document.createElement("div");
+  h.className = "subHeader";
+  h.textContent = title;
+  return h;
 }
 
 function row(label: string, input: HTMLElement) {
@@ -6645,6 +7125,26 @@ function textInput(
   i.placeholder = options?.placeholder ?? "";
   i.onchange = () => onChange(i.value);
   return i;
+}
+
+function selectInput(
+  value: string,
+  options: { value: string; label: string }[],
+  onChange: (v: string) => void,
+  config?: { disabled?: boolean; title?: string }
+) {
+  const select = document.createElement("select");
+  select.disabled = Boolean(config?.disabled);
+  select.title = config?.title ?? "";
+  for (const option of options) {
+    const opt = document.createElement("option");
+    opt.value = option.value;
+    opt.textContent = option.label;
+    select.appendChild(opt);
+  }
+  select.value = value;
+  select.onchange = () => onChange(select.value);
+  return select;
 }
 
 function checkboxInput(
