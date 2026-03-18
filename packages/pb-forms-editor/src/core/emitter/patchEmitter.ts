@@ -2682,7 +2682,7 @@ function applyFontMutation(
   const edit = new vscode.WorkspaceEdit();
 
   const fontGlobalBlock = findFontGlobalBlock(document, parsed.fonts);
-  applyOptionalBlockPatch(edit, document, fontGlobalBlock, findFontGlobalInsertLine(document), buildFontGlobalBlock(nextFonts));
+  applyOptionalBlockPatch(edit, document, fontGlobalBlock, findFontGlobalInsertLine(document), "");
 
   const fontEnumBlock = findNamedEnumerationBlock(document, "FormFont");
   const fontEnumInsertLine = findFontBlockInsertLine(document, calls);
@@ -2710,7 +2710,7 @@ function applyFontMutation(
   }
 
   if (!rebuiltLoadBlock) {
-    const hasStructuralFontBlock = !!fontGlobalBlock || !!buildFontGlobalBlock(nextFonts) || !!fontEnumBlock || !!buildFontEnumBlock(nextFonts);
+    const hasStructuralFontBlock = !!fontGlobalBlock || !!fontEnumBlock || !!buildFontEnumBlock(nextFonts);
     return hasStructuralFontBlock ? edit : undefined;
   }
 

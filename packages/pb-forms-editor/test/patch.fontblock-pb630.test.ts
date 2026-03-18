@@ -127,7 +127,6 @@ EndProcedure
   const { patchedText } = patchAndReparse(text, (document) => applyFontInsert(document, args));
   const normalized = toLf(patchedText);
 
-  assert.ok(normalized.includes(['Global FontMain', '', 'Enumeration FormWindow'].join("\n")));
   assert.ok(normalized.includes([
     'FontMain = LoadFont(#PB_Any, "Arial", 10)',
     '',
@@ -168,7 +167,7 @@ EndProcedure
   const { patchedText } = patchAndReparse(text, (document) => applyFontUpdate(document, sourceLine!, args));
   const normalized = toLf(patchedText);
 
-  assert.ok(normalized.includes('Global FontMain'));
+  assert.doesNotMatch(patchedText, /^Global\s+FontMain$/m);
   assert.ok(!normalized.includes(['Enumeration FormFont', '  #Font_FrmMain_0', 'EndEnumeration'].join("\n")));
   assert.match(patchedText, /FontMain = LoadFont\(#PB_Any, "Arial", 10\)/);
 });
@@ -272,11 +271,7 @@ EndProcedure
   const { patchedText } = patchAndReparse(text, (document) => applyFontInsert(document, args));
   const normalized = toLf(patchedText);
 
-  assert.ok(normalized.includes([
-    'Global FontMain',
-    '',
-    'Enumeration FormWindow',
-  ].join("\n")));
+  assert.doesNotMatch(patchedText, /^Global\s+FontMain$/m);
   assert.ok(normalized.includes([
     'FontMain = LoadFont(#PB_Any, "Arial", 10)',
     '',
@@ -458,5 +453,4 @@ EndProcedure
     '',
     'Declare ResizeGadgetsFrmMain()',
   ].join("\n")));
-  assert.ok(normalized.includes(['Global FontMain', '', 'Enumeration FormWindow'].join("\n")));
 });
