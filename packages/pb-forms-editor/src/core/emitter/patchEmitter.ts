@@ -458,35 +458,31 @@ function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: stri
   return undefined;
 }
 
-function ensureGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
+function findWindowGlobalInsertLine(document: vscode.TextDocument): number {
+  let firstGlobal = document.lineCount;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (firstGlobal === document.lineCount && /^\s*Global\b/i.test(line)) {
+      firstGlobal = i;
+    }
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
+      firstAnchor = i;
+    }
+  }
+
+  return firstGlobal !== document.lineCount ? firstGlobal : firstAnchor;
+}
+
+function ensureWindowGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
   const re = new RegExp("^\\s*Global\\s+" + escapeRegExp(varName) + "(?:\\s|$)");
   for (let i = 0; i < document.lineCount; i++) {
     if (re.test(document.lineAt(i).text)) return;
   }
 
-  let insertLine = 0;
-  let lastGlobal = -1;
-  let firstAnchor = document.lineCount;
-  for (let i = 0; i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    if (/^\s*Global\b/i.test(t)) lastGlobal = i;
-    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(t)) {
-      firstAnchor = i;
-    }
-  }
-
-  if (lastGlobal >= 0) {
-    insertLine = lastGlobal + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
-      insertLine += 1;
-    }
-  } else {
-    insertLine = firstAnchor;
-  }
-
-  const block = `Global ${varName}
-
-`;
+  const insertLine = findWindowGlobalInsertLine(document);
+  const block = `Global ${varName}\n\n`;
   edit.insert(document.uri, new vscode.Position(insertLine, 0), block);
 }
 
@@ -1103,7 +1099,7 @@ export function applyWindowPbAnyToggle(
     }
 
     // 2) Ensure Global variable exists.
-    ensureGlobalLine(edit, document, variableName);
+    ensureWindowGlobalLine(edit, document, variableName);
 
     // 3) Rewrite OpenWindow line to "Var = OpenWindow(#PB_Any, ...)".
     openParams[0] = "#PB_Any";
@@ -1256,9 +1252,9 @@ export function applyWindowVariableNamePatch(
     // 1) Rename Global line
     if (oldVar !== newVar) {
       removeGlobalLine(edit, document, oldVar);
-      ensureGlobalLine(edit, document, newVar);
+      ensureWindowGlobalLine(edit, document, newVar);
     } else {
-      ensureGlobalLine(edit, document, newVar);
+      ensureWindowGlobalLine(edit, document, newVar);
     }
 
     // 2) Rewrite OpenWindow assignment line

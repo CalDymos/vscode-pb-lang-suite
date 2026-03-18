@@ -743,6 +743,39 @@ EndProcedure
   assert.equal(parsed.window?.pbAny, true);
 });
 
+test("inserts a missing pbAny window Global before existing gadget and image globals", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global gadgetMain
+
+Global imgMain
+
+Enumeration FormImage
+  #ImgMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowVariableNamePatch(document, "winMain")
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Global winMain',
+    '',
+    'Global gadgetMain',
+    '',
+    'Global imgMain',
+  ].join("\n")));
+  assert.match(patchedText, /winMain = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, 'winMain');
+  assert.equal(parsed.window?.pbAny, true);
+});
+
 test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
