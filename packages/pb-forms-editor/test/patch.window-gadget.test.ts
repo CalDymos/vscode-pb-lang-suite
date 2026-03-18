@@ -651,6 +651,39 @@ test("roundtrips toolbar entry event removal without touching menu events", () =
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
+test("roundtrips combined object event binding updates in fixture 15", () => {
+  const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
+
+  let patchedText = text;
+
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyGadgetEventProcUpdate(document.asTextDocument(), "#BtnApply", "HandleApplyUpdated");
+  assert.ok(edit, "Expected gadget event update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyMenuEntryEventUpdate(document.asTextDocument(), "#MenuOpen", "HandleMenuOpenUpdated");
+  assert.ok(edit, "Expected menu event update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyToolBarEntryEventUpdate(document.asTextDocument(), "#TbRefresh", "HandleToolbarRefreshUpdated");
+  assert.ok(edit, "Expected toolbar event update edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  const parsed = parseFormDocument(patchedText);
+  const button = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  const menuItem = parsed.menus[0]?.entries.find((entry) => entry.idRaw === "#MenuOpen");
+  const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
+
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpenUpdated\(EventMenu\(\)\)\s+Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
+  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\(EventType\(\)\)/s);
+  assert.equal(button?.eventProc, "HandleApplyUpdated");
+  assert.equal(menuItem?.event, "HandleMenuOpenUpdated");
+  assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
+  assert.equal(parsed.window?.generateEventLoop, true);
+});
+
 
 test("re-inserts Enumeration FormWindow before FormImage when toggling a pbAny window back to enum mode", () => {
   const text = `; Form Designer for PureBasic - 6.30
