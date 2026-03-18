@@ -550,6 +550,16 @@ let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
 
+type PendingImageEditor = {
+  sourceLine: number;
+  inline: boolean;
+  idRaw: string;
+  imageRaw: string;
+  assignedVar: string;
+};
+
+let pendingImageEditor: PendingImageEditor | null = null;
+
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
 const scrollAreaOffsets = new Map<string, { x: number; y: number }>();
@@ -2765,60 +2775,103 @@ function canEditToolBarTooltip(entry: ToolBarEntry): boolean {
     && entry.idRaw.trim().length > 0;
 }
 
-function promptToolBarTooltipRaw(entry: ToolBarEntry): string | undefined | null {
-  const currentValue = entry.tooltip ?? entry.text ?? "";
-  const nextValue = prompt("Tooltip (blank clears)", currentValue);
-  if (nextValue === null) return null;
-
-  const trimmed = nextValue.trim();
-  return trimmed.length ? toPbString(nextValue) : undefined;
-}
-
-function promptToolBarPreviewInsertArgs(toolBar: ToolbarModel): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } | undefined {
-  const choice = prompt("Toolbar add action (AddButton/AddToggle/AddSeparator)", "AddButton");
-  if (choice === null) return undefined;
-
-  const normalized = choice.trim().toLowerCase();
+function getToolBarPreviewInsertArgs(
+  toolBar: ToolbarModel,
+  action: "button" | "toggle" | "separator"
+): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } {
   const idRaw = getDefaultToolBarInsertId(toolBar);
-
-  switch (normalized) {
-    case "addbutton":
+  switch (action) {
     case "button":
-    case "toolbarimagebutton":
       return { kind: "ToolBarImageButton", idRaw, iconRaw: "0" };
-    case "addtoggle":
     case "toggle":
       return { kind: "ToolBarImageButton", idRaw, iconRaw: "0", toggle: true };
-    case "addseparator":
     case "separator":
-    case "toolbarseparator":
       return { kind: "ToolBarSeparator" };
-    default:
-      alert(`Unsupported toolbar add action '${choice.trim()}'. Use AddButton, AddToggle or AddSeparator.`);
-      return undefined;
   }
 }
 
-function promptStatusBarPreviewInsertArgs(): { widthRaw: string; textRaw?: string; progressBar?: boolean; progressRaw?: string } | undefined {
-  const choice = prompt("StatusBar add action (AddImage/AddLabel/AddProgressBar)", "AddImage");
-  if (choice === null) return undefined;
-
-  const normalized = choice.trim().toLowerCase();
-  switch (normalized) {
-    case "addimage":
+function getStatusBarPreviewInsertArgs(
+  action: "image" | "label" | "progress"
+): { widthRaw: string; textRaw?: string; progressBar?: boolean; progressRaw?: string } {
+  switch (action) {
     case "image":
       return { widthRaw: "50" };
-    case "addlabel":
     case "label":
       return { widthRaw: "50", textRaw: toPbString("Label") };
-    case "addprogressbar":
-    case "progressbar":
     case "progress":
       return { widthRaw: "50", progressBar: true, progressRaw: "0" };
-    default:
-      alert(`Unsupported statusbar add action '${choice.trim()}'. Use AddImage, AddLabel or AddProgressBar.`);
-      return undefined;
   }
+}
+
+function openImageEditor(entry: ImageEntry) {
+  if (typeof entry.source?.line !== "number") return;
+  pendingImageEditor = {
+    sourceLine: entry.source.line,
+    inline: entry.inline,
+    idRaw: entry.firstParam,
+    imageRaw: entry.imageRaw,
+    assignedVar: entry.variable ?? entry.id ?? "imgNew"
+  };
+}
+
+function closeImageEditor(sourceLine?: number) {
+  if (!pendingImageEditor) return;
+  if (typeof sourceLine === "number" && pendingImageEditor.sourceLine !== sourceLine) return;
+  pendingImageEditor = null;
+}
+
+function isImageEditorOpen(entry: ImageEntry): boolean {
+  return typeof entry.source?.line === "number"
+    && pendingImageEditor?.sourceLine === entry.source.line;
+}
+
+function getImageEditorDraft(entry: ImageEntry): PendingImageEditor {
+  if (isImageEditorOpen(entry) && pendingImageEditor) {
+    return pendingImageEditor;
+  }
+
+  return {
+    sourceLine: entry.source?.line ?? -1,
+    inline: entry.inline,
+    idRaw: entry.firstParam,
+    imageRaw: entry.imageRaw,
+    assignedVar: entry.variable ?? entry.id ?? "imgNew"
+  };
+}
+
+function updateImageEditorDraft(patch: Partial<PendingImageEditor>) {
+  if (!pendingImageEditor) return;
+  pendingImageEditor = { ...pendingImageEditor, ...patch };
+  renderProps();
+}
+
+function saveImageEditor(entry: ImageEntry) {
+  if (typeof entry.source?.line !== "number") return;
+  const draft = getImageEditorDraft(entry);
+  const idRaw = draft.idRaw.trim();
+  const imageRaw = draft.imageRaw.trim();
+  if (!idRaw.length || !imageRaw.length) return;
+
+  let assignedVar: string | undefined;
+  if (idRaw.toLowerCase() === "#pb_any") {
+    const trimmedAssigned = draft.assignedVar.trim();
+    if (!trimmedAssigned.length) {
+      alert("#PB_Any requires an assigned variable name.");
+      return;
+    }
+    assignedVar = trimmedAssigned;
+  }
+
+  closeImageEditor(entry.source.line);
+  post({
+    type: "updateImage",
+    sourceLine: entry.source.line,
+    inline: draft.inline,
+    idRaw,
+    imageRaw,
+    assignedVar
+  });
+  renderProps();
 }
 
 function getStatusBarFieldDisplayKind(field: StatusbarField): string {
@@ -5100,7 +5153,7 @@ function renderProps() {
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row("Variable", readonlyInput(selectedEntry.idRaw ?? "")));
       propsEl.appendChild(row(
-        "Caption",
+        "Tooltip",
         textInput(
           selectedEntry.tooltip ?? "",
           v => {
@@ -5292,15 +5345,7 @@ function renderProps() {
         : undefined;
       const toolBarTooltipFn = canPatch && canEditToolBarTooltip(e)
         ? () => {
-            const nextTextRaw = promptToolBarTooltipRaw(e);
-            if (nextTextRaw === null || !e.idRaw) return;
-            post({
-              type: "setToolBarEntryTooltip",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              entryIdRaw: e.idRaw,
-              textRaw: nextTextRaw,
-            });
+            setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
       const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
@@ -5395,18 +5440,32 @@ function renderProps() {
       propsEl.appendChild(section("Structure"));
       propsEl.appendChild(box);
 
-      const addBtn = document.createElement("button");
-      addBtn.textContent = "Add Entry";
-      addBtn.title = "Match the original toolbar add popup: AddButton, AddToggle or AddSeparator.";
-      addBtn.onclick = () => {
-        const nextArgs = promptToolBarPreviewInsertArgs(t);
-        if (!nextArgs) return;
-        postInsertToolBarEntry(t, nextArgs);
+      const addButtonBtn = document.createElement("button");
+      addButtonBtn.textContent = "Add Button";
+      addButtonBtn.title = "Insert a new ToolBarImageButton with the default image argument 0.";
+      addButtonBtn.onclick = () => {
+        postInsertToolBarEntry(t, getToolBarPreviewInsertArgs(t, "button"));
+      };
+
+      const addToggleBtn = document.createElement("button");
+      addToggleBtn.textContent = "Add Toggle";
+      addToggleBtn.title = "Insert a new ToolBarImageButton with #PB_ToolBar_Toggle enabled.";
+      addToggleBtn.onclick = () => {
+        postInsertToolBarEntry(t, getToolBarPreviewInsertArgs(t, "toggle"));
+      };
+
+      const addSeparatorBtn = document.createElement("button");
+      addSeparatorBtn.textContent = "Add Separator";
+      addSeparatorBtn.title = "Insert a new ToolBarSeparator entry.";
+      addSeparatorBtn.onclick = () => {
+        postInsertToolBarEntry(t, getToolBarPreviewInsertArgs(t, "separator"));
       };
 
       const actions = document.createElement("div");
       actions.className = "miniActions";
-      actions.appendChild(addBtn);
+      actions.appendChild(addButtonBtn);
+      actions.appendChild(addToggleBtn);
+      actions.appendChild(addSeparatorBtn);
       if (sel.kind === "toolbar") {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete Toolbar";
@@ -5756,18 +5815,32 @@ function renderProps() {
       propsEl.appendChild(section("Fields"));
       propsEl.appendChild(box);
 
-      const addBtn = document.createElement("button");
-      addBtn.textContent = "Add Field";
-      addBtn.title = "Match the original statusbar add popup: AddImage, AddLabel or AddProgressBar.";
-      addBtn.onclick = () => {
-        const nextArgs = promptStatusBarPreviewInsertArgs();
-        if (!nextArgs) return;
-        postInsertStatusBarField(sb, nextArgs);
+      const addImageBtn = document.createElement("button");
+      addImageBtn.textContent = "Add Image";
+      addImageBtn.title = "Insert a new statusbar field with image decoration defaults.";
+      addImageBtn.onclick = () => {
+        postInsertStatusBarField(sb, getStatusBarPreviewInsertArgs("image"));
+      };
+
+      const addLabelBtn = document.createElement("button");
+      addLabelBtn.textContent = "Add Label";
+      addLabelBtn.title = "Insert a new statusbar field with the default label text.";
+      addLabelBtn.onclick = () => {
+        postInsertStatusBarField(sb, getStatusBarPreviewInsertArgs("label"));
+      };
+
+      const addProgressBtn = document.createElement("button");
+      addProgressBtn.textContent = "Add Progress";
+      addProgressBtn.title = "Insert a new statusbar field with progress decoration defaults.";
+      addProgressBtn.onclick = () => {
+        postInsertStatusBarField(sb, getStatusBarPreviewInsertArgs("progress"));
       };
 
       const actions = document.createElement("div");
       actions.className = "miniActions";
-      actions.appendChild(addBtn);
+      actions.appendChild(addImageBtn);
+      actions.appendChild(addLabelBtn);
+      actions.appendChild(addProgressBtn);
       if (sel.kind === "statusbar") {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "Delete StatusBar";
@@ -5791,11 +5864,35 @@ function renderProps() {
 
     const usages = collectImageUsages(img.id);
     const canPatch = typeof img.source?.line === "number";
+    const imageEditorOpen = canPatch && isImageEditorOpen(img);
+    const imageDraft = getImageEditorDraft(img);
 
     propsEl.appendChild(row("Id", readonlyInput(img.id)));
-    propsEl.appendChild(row("Kind", readonlyInput(img.inline ? "CatchImage" : "LoadImage")));
-    propsEl.appendChild(row("First Param", readonlyInput(img.firstParam)));
-    propsEl.appendChild(row("Image Raw", readonlyInput(img.imageRaw)));
+    propsEl.appendChild(row("Kind", readonlyInput(imageEditorOpen ? (imageDraft.inline ? "CatchImage" : "LoadImage") : (img.inline ? "CatchImage" : "LoadImage"))));
+    propsEl.appendChild(row(
+      "First Param",
+      imageEditorOpen
+        ? textInput(imageDraft.idRaw, v => updateImageEditorDraft({ idRaw: v }), {
+            title: "Patch the first image argument (#ImgName or #PB_Any) without using a browser prompt."
+          })
+        : readonlyInput(img.firstParam)
+    ));
+    if (imageEditorOpen && imageDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+      propsEl.appendChild(row(
+        "Assigned Var",
+        textInput(imageDraft.assignedVar, v => updateImageEditorDraft({ assignedVar: v }), {
+          title: "Provide the assigned variable name for #PB_Any image entries."
+        })
+      ));
+    }
+    propsEl.appendChild(row(
+      "Image Raw",
+      imageEditorOpen
+        ? textInput(imageDraft.imageRaw, v => updateImageEditorDraft({ imageRaw: v }), {
+            title: "Patch the raw LoadImage/CatchImage argument without using a browser prompt."
+          })
+        : readonlyInput(img.imageRaw)
+    ));
     propsEl.appendChild(row("References", readonlyInput(String(usages.length))));
 
     propsEl.appendChild(section("References"));
@@ -5818,25 +5915,31 @@ function renderProps() {
     actions.className = "miniActions";
 
     const editBtn = document.createElement("button");
-    editBtn.textContent = "Edit Image";
+    editBtn.textContent = imageEditorOpen ? "Save Image" : "Edit Image";
     editBtn.disabled = !canPatch;
     editBtn.onclick = () => {
       if (!canPatch) return;
-      const next = promptImageArgs(img);
-      if (!next) return;
-      post({
-        type: "updateImage",
-        sourceLine: img.source!.line,
-        inline: next.inline,
-        idRaw: next.idRaw,
-        imageRaw: next.imageRaw,
-        assignedVar: next.assignedVar
-      });
+      if (imageEditorOpen) {
+        saveImageEditor(img);
+        return;
+      }
+      openImageEditor(img);
+      renderProps();
+    };
+
+    const cancelEditBtn = document.createElement("button");
+    cancelEditBtn.textContent = "Cancel Edit";
+    cancelEditBtn.hidden = !imageEditorOpen;
+    cancelEditBtn.disabled = !imageEditorOpen;
+    cancelEditBtn.onclick = () => {
+      if (!canPatch || !imageEditorOpen) return;
+      closeImageEditor(img.source?.line);
+      renderProps();
     };
 
     const chooseFileBtn = document.createElement("button");
     chooseFileBtn.textContent = "Choose File";
-    chooseFileBtn.disabled = !(canPatch && canChooseFileImageEntry(img));
+    chooseFileBtn.disabled = imageEditorOpen || !(canPatch && canChooseFileImageEntry(img));
     chooseFileBtn.title = canChooseFileImageEntry(img)
       ? "Select a file for this LoadImage entry."
       : "Only LoadImage entries can select a file path.";
@@ -5853,7 +5956,7 @@ function renderProps() {
 
     const toggleInlineBtn = document.createElement("button");
     toggleInlineBtn.textContent = img.inline ? "Use LoadImage" : "Use CatchImage";
-    toggleInlineBtn.disabled = !canPatch;
+    toggleInlineBtn.disabled = imageEditorOpen || !canPatch;
     toggleInlineBtn.title = img.inline
       ? "Switch this image entry from CatchImage to LoadImage without changing its raw value."
       : "Switch this image entry from LoadImage to CatchImage without changing its raw value.";
@@ -5871,7 +5974,7 @@ function renderProps() {
 
     const togglePbAnyBtn = document.createElement("button");
     togglePbAnyBtn.textContent = img.pbAny ? "Use Enum Id" : "Use PB_Any";
-    togglePbAnyBtn.disabled = !(canPatch && canToggleImagePbAny(img));
+    togglePbAnyBtn.disabled = imageEditorOpen || !(canPatch && canToggleImagePbAny(img));
     togglePbAnyBtn.title = img.pbAny
       ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
       : "Switch this image entry to #PB_Any assignment and update parsed references.";
@@ -5886,7 +5989,7 @@ function renderProps() {
 
     const relativeBtn = document.createElement("button");
     relativeBtn.textContent = "Make Relative";
-    relativeBtn.disabled = !(canPatch && canRelativizeImageEntry(img));
+    relativeBtn.disabled = imageEditorOpen || !(canPatch && canRelativizeImageEntry(img));
     relativeBtn.title = canRelativizeImageEntry(img)
       ? "Rewrite the LoadImage file path relative to the current form file."
       : "Only quoted LoadImage file paths can be made relative.";
@@ -5904,7 +6007,7 @@ function renderProps() {
 
     const delBtn = document.createElement("button");
     delBtn.textContent = "Delete Image";
-    delBtn.disabled = !canPatch;
+    delBtn.disabled = imageEditorOpen || !canPatch;
     delBtn.onclick = () => {
       if (!canPatch) return;
       if (!confirm("Delete this image entry?")) return;
@@ -5912,6 +6015,7 @@ function renderProps() {
     };
 
     actions.appendChild(editBtn);
+    actions.appendChild(cancelEditBtn);
     actions.appendChild(chooseFileBtn);
     actions.appendChild(toggleInlineBtn);
     actions.appendChild(togglePbAnyBtn);
@@ -5929,23 +6033,13 @@ function renderProps() {
       const label = `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}(${img.firstParam}, ${img.imageRaw})`;
       const canPatch = typeof img.source?.line === "number";
 
-      box.appendChild(
-        miniRow(
-          label,
-          canPatch
-            ? () => {
-                const next = promptImageArgs(img);
-                if (!next) return;
-                post({
-                  type: "updateImage",
-                  sourceLine: img.source!.line,
-                  inline: next.inline,
-                  idRaw: next.idRaw,
-                  imageRaw: next.imageRaw,
-                  assignedVar: next.assignedVar
-                });
-              }
-            : undefined,
+      const rowEl = miniRow(
+        label,
+        canPatch
+          ? () => {
+              setSelectionAndRefresh({ kind: "image", id: img.id });
+            }
+          : undefined,
           canPatch
             ? () => {
                 if (!confirm("Delete this image entry?")) return;
@@ -6024,8 +6118,12 @@ function renderProps() {
               ? "Rewrite the LoadImage file path relative to the current form file."
               : "Only quoted LoadImage file paths can be made relative."
           }
-        )
-      );
+        );
+      rowEl.onclick = (ev) => {
+        if (ev.target instanceof HTMLButtonElement) return;
+        setSelectionAndRefresh({ kind: "image", id: img.id });
+      };
+      box.appendChild(rowEl);
     }
     propsEl.appendChild(section("Images"));
     propsEl.appendChild(box);
