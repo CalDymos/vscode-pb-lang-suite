@@ -16,7 +16,7 @@ import {
   getToolBarRect,
   getStatusBarRect,
   getWindowContentRect
-} from "../core/previewChromeUtils.js";
+} from "../core/previewChromeUtils";
 
 type SourceRange = { line: number };
 
