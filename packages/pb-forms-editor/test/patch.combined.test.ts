@@ -339,6 +339,54 @@ test("roundtrips nested menu entry insert into submenu footer", () => {
   assert.match(patchedText, /MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
 });
 
+test("roundtrips menu entry insert into empty submenu footer", () => {
+  const text = [
+    '; Form Designer for PureBasic - 6.30',
+    'Enumeration FormMenu',
+    '  #MenuOpen',
+    'EndEnumeration',
+    '',
+    'Procedure OpenFrmMain()',
+    '  CreateMenu(0, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  OpenSubMenu("Recent")',
+    '  CloseSubMenu()',
+    'EndProcedure',
+    '',
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === menuId);
+  const emptySubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu);
+  const parentSourceLine = emptySubMenu?.source?.line;
+
+  assert.ok(menu, "Expected menu.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for empty OpenSubMenu entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent1",
+    textRaw: '"Last file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
+  assert.ok(updatedMenu, "Expected menu after empty submenu insert.");
+
+  const openIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const insertedIndex = updatedMenu!.entries.findIndex((entry) => entry.idRaw === "#MenuRecent1");
+  const closeIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+
+  assert.ok(openIndex >= 0, "Expected existing empty submenu entry.");
+  assert.ok(insertedIndex > openIndex, "Expected inserted child after OpenSubMenu.");
+  assert.ok(closeIndex > insertedIndex, "Expected inserted child before CloseSubMenu.");
+  assert.equal(updatedMenu!.entries[insertedIndex]?.level, 2);
+  assert.match(patchedText, /OpenSubMenu\("Recent"\)\r?\n\s*MenuItem\(#MenuRecent1, "Last file"\)\r?\n\s*CloseSubMenu\(\)/);
+});
+
 test("roundtrips submenu insert with generated closing line", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const args: MenuEntryArgs = {
