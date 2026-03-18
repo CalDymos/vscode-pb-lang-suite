@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "outDir": "out-webview",
+    "rootDir": "src",
+    "types": []
+  },
+  "include": [
+    "src/webview/main.ts",
+    "src/core/previewChromeUtils.ts"
+  ]
+}

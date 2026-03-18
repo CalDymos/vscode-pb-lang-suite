@@ -1056,7 +1056,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
   private getWebviewHtml(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "out", "webview", "main.js")
+      vscode.Uri.joinPath(this.context.extensionUri, "out-webview", "webview", "main.js")
     );
     const nonce = getNonce();
     const symbolsJson = JSON.stringify(PBFD_SYMBOLS);
@@ -1069,7 +1069,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       content="default-src 'none';
                img-src ${webview.cspSource} data:;
                style-src ${webview.cspSource} 'unsafe-inline';
-               script-src 'nonce-${nonce}';">
+               script-src 'nonce-${nonce}' ${webview.cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PureBasic Form Designer</title>
     <style>
@@ -1265,7 +1265,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     </div>
 
     <script nonce="${nonce}">window.__PBFD_SYMBOLS__ = ${symbolsJson};</script>
-    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </body>
 </html>`;
   }
