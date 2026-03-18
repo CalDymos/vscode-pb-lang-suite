@@ -1661,14 +1661,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (toolBarAddHit) {
     const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarAddHit.toolBarId);
     if (toolBar) {
-      const nextArgs = promptToolBarPreviewInsertArgs(toolBar);
-      if (nextArgs) {
-        postInsertToolBarEntry(toolBar, nextArgs);
-        selection = { kind: "toolbar", id: toolBar.id };
-        drag = null;
-        canvas.style.cursor = "default";
-        renderSelectionUiWithoutParentSelector();
-      }
+      postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "button"));
+      selection = { kind: "toolbar", id: toolBar.id };
+      drag = null;
+      canvas.style.cursor = "default";
+      renderSelectionUiWithoutParentSelector();
       return;
     }
   }
@@ -1677,14 +1674,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (statusBarAddHit) {
     const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarAddHit.statusBarId);
     if (statusBar) {
-      const nextArgs = promptStatusBarPreviewInsertArgs();
-      if (nextArgs) {
-        postInsertStatusBarField(statusBar, nextArgs);
-        selection = { kind: "statusbar", id: statusBar.id };
-        drag = null;
-        canvas.style.cursor = "default";
-        renderSelectionUiWithoutParentSelector();
-      }
+      postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("image"));
+      selection = { kind: "statusbar", id: statusBar.id };
+      drag = null;
+      canvas.style.cursor = "default";
+      renderSelectionUiWithoutParentSelector();
       return;
     }
   }

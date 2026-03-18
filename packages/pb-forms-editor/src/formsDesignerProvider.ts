@@ -197,6 +197,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     function createErrorModel(textLen: number, message: string): FormDocument {
       return {
         window: undefined,
+        fonts: [],
         gadgets: [],
         menus: [],
         toolbars: [],
