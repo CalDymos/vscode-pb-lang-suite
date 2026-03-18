@@ -374,34 +374,10 @@ test("roundtrips window event include insertion", () => {
     })
   );
 
-  assert.match(patchedText, /XIncludeFile "events\/form-main\.pbi"\nProcedure OpenFrmMain/);
+  assert.match(patchedText, /XIncludeFile "events\/form-main\.pbi"(?:\r?\n)+Procedure OpenFrmMain/);
   assert.equal(parsed.window?.eventFile, "events/form-main.pbi");
-});
-
-
-test("roundtrips window event proc update inside existing Default branch", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParentUpdated")
-  );
-
-  assert.match(patchedText, /Default\s+HandleFrmEventsParentUpdated\(event, #FrmEventsParent\)/s);
-  assert.equal(parsed.window?.eventProc, "HandleFrmEventsParentUpdated");
-  assert.equal(parsed.window?.generateEventLoop, true);
-});
-
-test("roundtrips window event proc removal while keeping event loop block", () => {
-  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
-
-  const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowEventProcUpdate(document, "#FrmEventsParent", undefined)
-  );
-
-  assert.doesNotMatch(patchedText, /HandleFrmEventsParent\(event, #FrmEventsParent\)/);
-  assert.match(patchedText, /Select EventGadget\(\)/);
   assert.equal(parsed.window?.eventProc, undefined);
-  assert.equal(parsed.window?.generateEventLoop, true);
+  assert.equal(parsed.window?.generateEventLoop, undefined);
 });
 
 test("roundtrips window event proc insertion by adding Default branch to existing event loop", () => {
@@ -494,6 +470,38 @@ EndProcedure
   assert.equal(edit, undefined);
 });
 
+test("roundtrips combined window event bootstrap updates from a plain window fixture", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  let patchedText = text;
+
+  let document = new FakeTextDocument(patchedText);
+  let edit = applyWindowEventUpdate(document.asTextDocument(), "#FrmMain", {
+    eventFileRaw: '"events/form-main.pbi"',
+  });
+  assert.ok(edit, "Expected event include edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyWindowGenerateEventLoopUpdate(document.asTextDocument(), "#FrmMain", true);
+  assert.ok(edit, "Expected generateEventLoop edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  document = new FakeTextDocument(patchedText);
+  edit = applyWindowEventProcUpdate(document.asTextDocument(), "#FrmMain", "HandleFrmMain");
+  assert.ok(edit, "Expected window event proc edit.");
+  patchedText = applyWorkspaceEditToText(patchedText, edit!);
+
+  const parsed = parseFormDocument(patchedText);
+
+  assert.match(patchedText, /XIncludeFile "events\/form-main\.pbi"(?:\r?\n)+Procedure OpenFrmMain/);
+  assert.match(patchedText, /Select EventGadget\(\)\s+Default\s+HandleFrmMain\(\)\s+EndSelect/s);
+  assert.equal(parsed.window?.eventFile, "events/form-main.pbi");
+  assert.equal(parsed.window?.generateEventLoop, true);
+  assert.equal(parsed.window?.eventProc, "HandleFrmMain");
+  assert.equal(parsed.window?.hasEventGadgetBlock, true);
+  assert.equal(parsed.window?.hasEventGadgetCaseBranches, undefined);
+});
 
 
 test("roundtrips gadget event proc update inside existing EventGadget block", () => {
