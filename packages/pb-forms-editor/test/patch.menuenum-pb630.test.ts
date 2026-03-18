@@ -146,3 +146,40 @@ EndProcedure
   assert.doesNotMatch(patchedText, /Enumeration FormMenu\r?\n  #MenuSave/);
   assert.match(patchedText, /MenuItem\(#MenuStore, "Save"\)/);
 });
+
+
+test("inserts FormMenu before an existing FormImage block when no window or gadget enum is present", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormImage
+  #ImgSave
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgSave, "save.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Menu")
+  CreateImageMenu(0, WindowID(#PB_Any))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+    iconRaw: 'ImageID(#ImgSave)',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  assert.match(
+    patchedText,
+    /Enumeration FormMenu\r?\n  #MenuSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
+  );
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});

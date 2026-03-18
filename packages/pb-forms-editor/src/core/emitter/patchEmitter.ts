@@ -450,10 +450,22 @@ function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]):
     return insertLine;
   }
 
-  const customInitMarker = findCustomGadgetInitMarkerLine(document);
-  if (customInitMarker !== undefined) return customInitMarker;
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const trimmed = text.trim();
+    if (/^Enumeration\s+FormImage\b/i.test(trimmed)
+      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+      || isCustomGadgetInitMarkerLine(text)
+      || isImageDecoderLine(text)
+      || /^LoadImage\s*\(/i.test(trimmed)
+      || /^CatchImage\s*\(/i.test(trimmed)
+      || /^LoadFont\s*\(/i.test(trimmed)
+      || isTopLevelHeadBoundaryLine(text)) {
+      return i;
+    }
+  }
 
-  return findImageBlockInsertLine(document, calls);
+  return document.lineCount;
 }
 
 function applyMenuEnumPatch(

@@ -183,3 +183,39 @@ EndProcedure
   assert.match(patchedText, /Enumeration FormMenu\r?\n  #MenuOpen\r?\nEndEnumeration/);
   assert.doesNotMatch(patchedText, /Enumeration FormMenu\r?\n  #MenuOpen\r?\n  #MenuOpen/);
 });
+
+
+test("inserts toolbar-only FormMenu before image decoder and load blocks when no window or gadget enum is present", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormImage
+  #ImgSave
+EndEnumeration
+
+UsePNGImageDecoder()
+
+LoadImage(#ImgSave, "save.png")
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Toolbar Only")
+  CreateToolbar(0, WindowID(#PB_Any))
+  ToolBarSeparator()
+EndProcedure
+`;
+
+  const args: ToolBarEntryArgs = {
+    kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+    idRaw: "#TbSave",
+    iconRaw: "ImageID(#ImgSave)",
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyToolBarEntryInsert(document, "0", args)
+  );
+
+  assert.match(
+    patchedText,
+    /Enumeration FormMenu\r?\n  #TbSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
+  );
+  assert.ok(parsed.toolbars[0]?.entries.some((entry) => entry.idRaw === "#TbSave"));
+});
