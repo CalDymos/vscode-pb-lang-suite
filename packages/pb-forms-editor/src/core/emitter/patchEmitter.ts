@@ -2483,9 +2483,28 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
   };
 }
 
+function isTopLevelHeadBoundaryLine(text: string): boolean {
+  const trimmed = text.trim();
+  return /^Declare\b/i.test(trimmed)
+    || /^XIncludeFile\b/i.test(trimmed)
+    || /^ProcedureDLL\b/i.test(trimmed)
+    || /^Procedure(?:\.\w+)?\b/i.test(trimmed)
+    || /^\s*;\s*IDE Options\b/i.test(text);
+}
+
+function isTopLevelGlobalAnchorLine(text: string): boolean {
+  const trimmed = text.trim();
+  return /^Enumeration\b/i.test(trimmed)
+    || isImageDecoderLine(text)
+    || /^LoadImage\s*\(/i.test(trimmed)
+    || /^CatchImage\s*\(/i.test(trimmed)
+    || /^LoadFont\s*\(/i.test(trimmed)
+    || isTopLevelHeadBoundaryLine(text);
+}
+
 function getFirstProcedureLine(document: vscode.TextDocument): number {
   for (let i = 0; i < document.lineCount; i++) {
-    if (/^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
+    if (/^\s*ProcedureDLL\b/i.test(document.lineAt(i).text) || /^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
   }
   return document.lineCount;
 }
@@ -2534,7 +2553,7 @@ function findFontGlobalBlock(document: vscode.TextDocument, fonts: FormFont[]): 
   let topAnchor = document.lineCount;
   for (let i = 0; i < document.lineCount; i++) {
     const line = document.lineAt(i).text;
-    if (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line)) {
+    if (isTopLevelGlobalAnchorLine(line)) {
       topAnchor = i;
       break;
     }
@@ -2695,14 +2714,7 @@ function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]
     const text = document.lineAt(i).text.trim();
     if (/^Enumeration\s+FormFont\b/i.test(text)) return i;
     if (/^LoadFont\s*\(/i.test(text)) return i;
-    if (/^Procedure(?:\.\w+)?\s+/i.test(text)) return i;
-  }
-
-  for (let i = 0; i < document.lineCount; i++) {
-    const text = document.lineAt(i).text;
-    if (/^\s*;\s*IDE Options\b/i.test(text)) {
-      return i;
-    }
+    if (isTopLevelHeadBoundaryLine(document.lineAt(i).text)) return i;
   }
 
   return document.lineCount;
@@ -2764,7 +2776,7 @@ function findImageGlobalBlock(document: vscode.TextDocument, images: FormImage[]
   let topAnchor = document.lineCount;
   for (let i = 0; i < document.lineCount; i++) {
     const line = document.lineAt(i).text;
-    if (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line)) {
+    if (isTopLevelGlobalAnchorLine(line)) {
       topAnchor = i;
       break;
     }
@@ -2787,7 +2799,7 @@ function findImageGlobalInsertLine(document: vscode.TextDocument): number {
   for (let i = 0; i < document.lineCount; i++) {
     const line = document.lineAt(i).text;
     if (/^\s*Global\b/i.test(line)) lastGlobal = i;
-    if (firstAnchor === document.lineCount && (/^\s*Enumeration\b/i.test(line) || /^\s*Procedure(?:\.\w+)?\b/i.test(line))) {
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
       firstAnchor = i;
     }
   }

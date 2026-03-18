@@ -293,3 +293,77 @@ EndProcedure
   ].join("\n")));
   assert.match(patchedText, /LoadImage\(#ImgMainLogo, "logo\.png"\)/);
 });
+
+test("inserts an enum image block before Declare and XIncludeFile boundaries", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Declare ResizeGadgetsFrmMain()
+XIncludeFile "events/form-main.pbi"
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    'Enumeration FormImage',
+    '  #ImgMainLogo',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+    '',
+    'LoadImage(#ImgMainLogo, "logo.png")',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+    'XIncludeFile "events/form-main.pbi"',
+  ].join("\n")));
+});
+
+test("inserts a pbAny image Global block before Declare and XIncludeFile boundaries", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Declare ResizeGadgetsFrmMain()
+XIncludeFile "events/form-main.pbi"
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Images")
+EndProcedure
+`;
+
+  const args: ImageArgs = {
+    inline: false,
+    idRaw: "#PB_Any",
+    assignedVar: "ImgMainLogo",
+    imageRaw: '"logo.png"',
+  };
+
+  const { patchedText } = patchAndReparse(text, (document) => applyImageInsert(document, args));
+  const normalized = toLf(patchedText);
+
+  assert.ok(normalized.includes([
+    'Global ImgMainLogo',
+    '',
+    'Enumeration FormWindow',
+  ].join("\n")));
+  assert.ok(normalized.includes([
+    'ImgMainLogo = LoadImage(#PB_Any, "logo.png")',
+    '',
+    'Declare ResizeGadgetsFrmMain()',
+    'XIncludeFile "events/form-main.pbi"',
+  ].join("\n")));
+});
