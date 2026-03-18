@@ -364,6 +364,38 @@ function cloneToolBarEntry(entry: FormToolBarEntry): FormToolBarEntry {
   return { ...entry };
 }
 
+function getGadgetGlobalVars(gadgets: Gadget[]): string[] {
+  return gadgets
+    .filter(gadget => gadget.pbAny)
+    .map(gadget => gadget.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getGadgetEnumSymbols(gadgets: Gadget[]): string[] {
+  return gadgets
+    .filter(gadget => !gadget.pbAny)
+    .map(gadget => gadget.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildGadgetGlobalBlock(gadgets: Gadget[]): string {
+  const globals = getGadgetGlobalVars(gadgets);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildGadgetEnumBlock(gadgets: Gadget[]): string {
+  const symbols = getGadgetEnumSymbols(gadgets);
+  if (!symbols.length) return "";
+  return `Enumeration FormGadget
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
 function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = []): string[] {
   const seen = new Set<string>();
   const symbols: string[] = [];
@@ -921,7 +953,9 @@ export function applyMovePatch(
   params[1] = String(Math.trunc(x));
   params[2] = String(Math.trunc(y));
 
-  return replaceCallArgsEdit(document, call, params);
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
 }
 
 export function applyRectPatch(
@@ -946,7 +980,9 @@ export function applyRectPatch(
   params[3] = String(Math.trunc(w));
   params[4] = String(Math.trunc(h));
 
-  return replaceCallArgsEdit(document, call, params);
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
 }
 
 export function applyWindowRectPatch(
@@ -1138,7 +1174,9 @@ export function applyGadgetOpenArgsUpdate(
     params.pop();
   }
 
-  return replaceCallArgsEdit(document, call, params);
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
 }
 
 export function applyWindowPbAnyToggle(
@@ -1565,6 +1603,7 @@ export function applyGadgetItemDelete(
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  applyGadgetHeadPatch(edit, document);
   return edit;
 }
 
@@ -1621,6 +1660,7 @@ export function applyGadgetColumnDelete(
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  applyGadgetHeadPatch(edit, document);
   return edit;
 }
 
@@ -2922,6 +2962,111 @@ function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: Line
     endLine += 1;
   }
   return { startLine: block.startLine, endLine };
+}
+
+function findGadgetGlobalBlock(document: vscode.TextDocument, gadgets: Gadget[]): LineBlock | undefined {
+  const gadgetGlobalNames = new Set(getGadgetGlobalVars(gadgets));
+  if (!gadgetGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (isTopLevelGlobalAnchorLine(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => gadgetGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findGadgetGlobalInsertLine(document: vscode.TextDocument): number {
+  const parsed = parseFormDocument(document.getText());
+  const windowGlobalNames = new Set(
+    parsed.window?.pbAny && parsed.window.id && !parsed.window.id.startsWith("#")
+      ? [parsed.window.id]
+      : []
+  );
+
+  let firstGlobal = document.lineCount;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (firstGlobal === document.lineCount && /^\s*Global\b/i.test(line)) {
+      firstGlobal = i;
+    }
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
+      firstAnchor = i;
+    }
+
+    const vars = parseGlobalVarNames(line);
+    if (!vars.length) continue;
+    if (!vars.some(name => windowGlobalNames.has(name))) continue;
+
+    const block = expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+    return block.endLine + 1;
+  }
+
+  return firstGlobal !== document.lineCount ? firstGlobal : firstAnchor;
+}
+
+function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
+  const windowEnumBlock = findNamedEnumerationBlock(document, "FormWindow");
+  if (windowEnumBlock) {
+    let insertLine = windowEnumBlock.endLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+    return insertLine;
+  }
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const trimmed = text.trim();
+    if (/^Enumeration\s+FormMenu\b/i.test(trimmed)
+      || /^Enumeration\s+FormImage\b/i.test(trimmed)
+      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+      || isCustomGadgetInitMarkerLine(text)
+      || isImageDecoderLine(text)
+      || /^LoadImage\s*\(/i.test(trimmed)
+      || /^CatchImage\s*\(/i.test(trimmed)
+      || /^LoadFont\s*\(/i.test(trimmed)
+      || isTopLevelHeadBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return document.lineCount;
+}
+
+function applyGadgetHeadPatch(edit: vscode.WorkspaceEdit, document: vscode.TextDocument): void {
+  const parsed = parseFormDocument(document.getText());
+
+  const gadgetGlobalBlock = findGadgetGlobalBlock(document, parsed.gadgets);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetGlobalBlock,
+    findGadgetGlobalInsertLine(document),
+    buildGadgetGlobalBlock(parsed.gadgets)
+  );
+
+  const gadgetEnumBlock = findNamedEnumerationBlock(document, "FormGadget");
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetEnumBlock ? expandBlockWithTrailingBlank(document, gadgetEnumBlock) : undefined,
+    findGadgetEnumInsertLine(document),
+    buildGadgetEnumBlock(parsed.gadgets)
+  );
 }
 
 function findImageGlobalBlock(document: vscode.TextDocument, images: FormImage[]): LineBlock | undefined {

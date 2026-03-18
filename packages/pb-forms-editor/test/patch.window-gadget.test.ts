@@ -838,3 +838,81 @@ EndProcedure
   assert.equal(parsed.window?.pbAny, false);
 });
 
+
+test("re-inserts Enumeration FormGadget before FormMenu when patching an enum gadget", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormMenu
+  #MenuSave
+EndEnumeration
+
+; 0 Custom gadget initialisation (do Not remove this line)
+InitScintillaBridge()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
+  ButtonGadget(#BtnOk, 10, 10, 80, 24, "OK")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyRectPatch(document, "#BtnOk", 20, 24, 90, 28)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormGadget',
+    '  #BtnOk',
+    'EndEnumeration',
+    '',
+    'Enumeration FormMenu',
+  ].join("\n")));
+
+  const button = parsed.gadgets.find((g) => g.id === "#BtnOk");
+  assert.ok(button, "Expected patched enum gadget.");
+  assert.equal(button?.x, 20);
+  assert.equal(button?.y, 24);
+  assert.equal(button?.w, 90);
+  assert.equal(button?.h, 28);
+});
+
+test("inserts a missing pbAny gadget Global between window and image globals", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global winMain
+
+Global imgMain
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  winMain = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+  gInput = StringGadget(#PB_Any, 10, 36, 220, 24, "")
+  ImageGadget(imgMain, 10, 70, 32, 32, 0)
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetOpenArgsUpdate(document, "gInput", { textRaw: 'Value$' })
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Global winMain',
+    '',
+    'Global gInput',
+    '',
+    'Global imgMain',
+  ].join("\n")));
+  assert.match(patchedText, /gInput = StringGadget\(#PB_Any, 10, 36, 220, 24, Value\$\)/);
+  const input = parsed.gadgets.find((g) => g.id === "gInput");
+  assert.ok(input, "Expected patched pbAny gadget.");
+  assert.equal(input?.pbAny, true);
+  assert.equal(input?.textRaw, 'Value$');
+});
