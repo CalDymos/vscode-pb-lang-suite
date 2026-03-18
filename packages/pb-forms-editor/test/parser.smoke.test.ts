@@ -788,6 +788,39 @@ EndProcedure
   assert.equal(tree?.items?.[1]?.imageId, "imgHandle");
   assert.equal(tree?.items?.[1]?.flagsRaw, "1");
 });
+test("parses fixtures/roundtrip/14-combined-regression.pbf", () => {
+  const text = loadFixture("fixtures/roundtrip/14-combined-regression.pbf");
+  const doc = parseFormDocument(text);
+
+  assert.ok(doc.window, "Expected a parsed window.");
+  assert.equal(doc.window?.id, "#FrmMain");
+  assert.equal(doc.window?.caption, "Combined Regression");
+  assert.equal(doc.images.length, 3);
+  assert.equal(doc.menus.length, 1);
+  assert.equal(doc.toolbars.length, 1);
+  assert.equal(doc.statusbars.length, 1);
+
+  const menuItem = doc.menus[0]?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MnuOpen");
+  assert.ok(menuItem, "Expected #MnuOpen menu item.");
+  assert.equal(menuItem?.shortcut, "Ctrl+O");
+  assert.equal(menuItem?.iconId, "#Img_FrmMain_0");
+
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  assert.ok(toolBarButton, "Expected #TbSave toolbar button.");
+  assert.equal(toolBarButton?.iconId, "#Img_FrmMain_1");
+  assert.equal(toolBarButton?.tooltip, "Save current form");
+
+  const statusField = doc.statusbars[0]?.fields[2];
+  assert.ok(statusField, "Expected third statusbar field.");
+  assert.equal(statusField?.imageId, "#Img_FrmMain_2");
+
+  const inlineImage = doc.images.find((img) => img.id === "#Img_FrmMain_2");
+  assert.ok(inlineImage, "Expected CatchImage-based inline image.");
+  assert.equal(inlineImage?.inline, true);
+  assert.equal(inlineImage?.imageRaw, "?Img_FrmMain_2");
+});
+
+
 test("parses fixtures/smoke/11-images-crossrefs.pbf", () => {
   const text = loadFixture("fixtures/smoke/11-images-crossrefs.pbf");
   const doc = parseFormDocument(text);
