@@ -5096,8 +5096,81 @@ function renderProps() {
         selectedImageActions.appendChild(selectedJumpImageBtn);
       }
 
+      const postSelectedToolBarEntryUpdate = (patch: {
+        idRaw?: string;
+        iconRaw?: string;
+        textRaw?: string;
+        toggle?: boolean;
+      }) => {
+        if (!selectedCanPatch || typeof selectedEntry.source?.line !== "number") return;
+        post({
+          type: "updateToolBarEntry",
+          toolBarId: t.id,
+          sourceLine: selectedEntry.source.line,
+          kind: selectedEntry.kind,
+          idRaw: patch.idRaw ?? selectedEntry.idRaw,
+          iconRaw: patch.iconRaw ?? selectedEntry.iconRaw,
+          textRaw: patch.textRaw ?? selectedEntry.textRaw,
+          toggle: patch.toggle ?? selectedEntry.toggle,
+        });
+      };
+      const canEditSelectedId = selectedCanPatch && selectedEntry.kind !== "ToolBarSeparator";
+      const canEditSelectedText = selectedCanPatch && (selectedEntry.kind === "ToolBarButton" || selectedEntry.kind === "ToolBarToolTip");
+      const canEditSelectedIconRaw = selectedCanPatch && (
+        selectedEntry.kind === "ToolBarStandardButton"
+        || selectedEntry.kind === "ToolBarButton"
+        || selectedEntry.kind === "ToolBarImageButton"
+      );
+
       propsEl.appendChild(section("Selected Entry"));
-      propsEl.appendChild(row("Variable", readonlyInput(selectedEntry.idRaw ?? "")));
+      propsEl.appendChild(row(
+        "Variable",
+        textInput(
+          selectedEntry.idRaw ?? "",
+          v => {
+            if (!canEditSelectedId) return;
+            postSelectedToolBarEntryUpdate({ idRaw: v.trim() });
+          },
+          {
+            disabled: !canEditSelectedId,
+            title: canEditSelectedId
+              ? "Patch the raw toolbar button id without using a browser prompt."
+              : "Toolbar separators do not expose an editable id field."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "Text",
+        textInput(
+          selectedEntry.text ?? "",
+          v => {
+            if (!canEditSelectedText) return;
+            postSelectedToolBarEntryUpdate({ textRaw: v.trim().length ? toPbString(v) : "" });
+          },
+          {
+            disabled: !canEditSelectedText,
+            title: canEditSelectedText
+              ? "Patch the raw toolbar caption/tooltip text without using a browser prompt."
+              : "Only ToolBarButton and ToolBarToolTip expose editable text in the original toolbar structure."
+          }
+        )
+      ));
+      propsEl.appendChild(row(
+        "IconRaw",
+        textInput(
+          selectedEntry.iconRaw ?? "",
+          v => {
+            if (!canEditSelectedIconRaw) return;
+            postSelectedToolBarEntryUpdate({ iconRaw: v.trim() });
+          },
+          {
+            disabled: !canEditSelectedIconRaw,
+            title: canEditSelectedIconRaw
+              ? "Patch the raw toolbar icon argument without using a browser prompt."
+              : "Only toolbar button kinds with an icon argument expose this field."
+          }
+        )
+      ));
       propsEl.appendChild(row(
         "Tooltip",
         textInput(
@@ -5187,78 +5260,7 @@ function renderProps() {
       const canPatch = typeof e.source?.line === "number";
       const editFn = canPatch
         ? () => {
-            const kind = e.kind;
-            if (kind === "ToolBarStandardButton") {
-              const idRaw = prompt("Button id", e.idRaw ?? "");
-              if (idRaw === null) return;
-              const iconRaw = prompt("Icon raw", e.iconRaw ?? "0");
-              if (iconRaw === null) return;
-              vscode.postMessage({
-                type: "updateToolBarEntry",
-                toolBarId: t.id,
-                sourceLine: e.source!.line,
-                kind,
-                idRaw: idRaw.trim(),
-                iconRaw: iconRaw.trim()
-              });
-              return;
-            }
-
-            if (kind === "ToolBarButton") {
-              const idRaw = prompt("Button id", e.idRaw ?? "");
-              if (idRaw === null) return;
-              const iconRaw = prompt("Icon raw", e.iconRaw ?? "0");
-              if (iconRaw === null) return;
-              const txt = prompt("Text", e.text ?? "");
-              if (txt === null) return;
-              vscode.postMessage({
-                type: "updateToolBarEntry",
-                toolBarId: t.id,
-                sourceLine: e.source!.line,
-                kind,
-                idRaw: idRaw.trim(),
-                iconRaw: iconRaw.trim(),
-                textRaw: toPbString(txt)
-              });
-              return;
-            }
-
-            if (kind === "ToolBarToolTip") {
-              const idRaw = prompt("Button id", e.idRaw ?? "");
-              if (idRaw === null) return;
-              const txt = prompt("Tooltip", e.text ?? "");
-              if (txt === null) return;
-              vscode.postMessage({
-                type: "updateToolBarEntry",
-                toolBarId: t.id,
-                sourceLine: e.source!.line,
-                kind,
-                idRaw: idRaw.trim(),
-                textRaw: toPbString(txt)
-              });
-              return;
-            }
-
-            if (kind === "ToolBarImageButton") {
-              const idRaw = prompt("Button id", e.idRaw ?? "");
-              if (idRaw === null) return;
-              const iconRaw = prompt("Icon raw", e.iconRaw ?? "ImageID(#ImgOpen)");
-              if (iconRaw === null) return;
-              const toggleRaw = prompt("Toggle (#PB_ToolBar_Toggle or blank)", e.toggle ? "#PB_ToolBar_Toggle" : "");
-              if (toggleRaw === null) return;
-              vscode.postMessage({
-                type: "updateToolBarEntry",
-                toolBarId: t.id,
-                sourceLine: e.source!.line,
-                kind,
-                idRaw: idRaw.trim(),
-                iconRaw: iconRaw.trim(),
-                toggle: toggleRaw.trim().length > 0
-              });
-              return;
-            }
-
-            // ToolBarSeparator has no editable fields.
+            setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
 
@@ -5276,17 +5278,7 @@ function renderProps() {
 
       const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
         ? () => {
-            const cur = e.event ?? "";
-            const value = prompt("Event proc (blank clears)", cur);
-            if (value === null) return;
-            const trimmed = value.trim();
-            e.event = trimmed || undefined;
-            post({
-              type: "setToolBarEntryEvent",
-              entryIdRaw: e.idRaw!,
-              eventProc: trimmed.length ? trimmed : undefined
-            });
-            renderProps();
+            setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
       const toolBarTooltipFn = canPatch && canEditToolBarTooltip(e)
@@ -5300,17 +5292,7 @@ function renderProps() {
 
       const toolBarSetImageFn = e.kind === "ToolBarImageButton" && canPatch
         ? () => {
-            const iconRaw = prompt("Icon raw", e.iconRaw ?? "ImageID(#ImgOpen)");
-            if (iconRaw === null) return;
-            post({
-              type: "updateToolBarEntry",
-              toolBarId: t.id,
-              sourceLine: e.source!.line,
-              kind: e.kind,
-              idRaw: e.idRaw,
-              iconRaw: iconRaw.trim(),
-              toggle: e.toggle
-            });
+            setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
       const toolBarPickImageFn = e.kind === "ToolBarImageButton" && canPatch
