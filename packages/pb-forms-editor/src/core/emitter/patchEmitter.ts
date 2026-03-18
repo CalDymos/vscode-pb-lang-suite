@@ -2674,8 +2674,8 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
     return insertLine;
   }
 
-  const customInitMarker = findCustomGadgetInitMarkerLine(document);
-  if (customInitMarker !== undefined) return customInitMarker;
+  const customInitBoundary = findCustomGadgetInitBoundaryLine(document);
+  if (customInitBoundary !== undefined) return customInitBoundary;
 
   return findImageBlockInsertLine(document, calls);
 }
