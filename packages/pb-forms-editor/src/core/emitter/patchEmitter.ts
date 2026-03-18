@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
-import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -360,12 +360,26 @@ function cloneMenuEntry(entry: FormMenuEntry): FormMenuEntry {
   return { ...entry };
 }
 
-function collectMenuEnumSymbols(menus: FormMenu[]): string[] {
+function cloneToolBarEntry(entry: FormToolBarEntry): FormToolBarEntry {
+  return { ...entry };
+}
+
+function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = []): string[] {
   const seen = new Set<string>();
   const symbols: string[] = [];
 
   for (const menu of menus) {
     for (const entry of menu.entries) {
+      const idRaw = entry.idRaw?.trim();
+      if (!idRaw?.startsWith("#") || seen.has(idRaw)) continue;
+      seen.add(idRaw);
+      symbols.push(idRaw);
+    }
+  }
+
+  for (const toolBar of toolbars) {
+    for (const entry of toolBar.entries) {
+      if (!isToolBarButtonKind(entry.kind)) continue;
       const idRaw = entry.idRaw?.trim();
       if (!idRaw?.startsWith("#") || seen.has(idRaw)) continue;
       seen.add(idRaw);
@@ -3524,7 +3538,7 @@ export function applyMenuEntryInsert(
   const idRaw = args.idRaw?.trim();
   if (idRaw?.startsWith("#")) {
     const parsed = parseFormDocument(document.getText());
-    const symbols = collectMenuEnumSymbols(parsed.menus);
+    const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars);
     if (!symbols.includes(idRaw)) symbols.push(idRaw);
     applyMenuEnumPatch(edit, document, calls, symbols);
   }
@@ -3558,7 +3572,7 @@ export function applyMenuEntryUpdate(
   if (target) {
     target.idRaw = args.idRaw;
   }
-  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus));
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
   return edit;
 }
 
@@ -3589,7 +3603,7 @@ export function applyMenuEntryDelete(
     const targetIndex = menu.entries.findIndex(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === kind.toLowerCase());
     if (targetIndex >= 0) menu.entries.splice(targetIndex, 1);
   }
-  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus));
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
   return edit;
 }
 
@@ -3667,7 +3681,7 @@ export function applyToolBarEntryInsert(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionEntryInsert(
+  const edit = applySectionEntryInsert(
     document,
     calls,
     "createtoolbar",
@@ -3675,6 +3689,20 @@ export function applyToolBarEntryInsert(
     TOOLBAR_ENTRY_NAMES,
     indent => buildToolBarEntryText(args, toolBarId, indent)
   );
+  if (!edit) return undefined;
+
+  const idRaw = args.idRaw?.trim();
+  if (isToolBarButtonKind(args.kind) && idRaw?.startsWith("#")) {
+    const parsed = parseFormDocument(document.getText());
+    const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+    const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+    if (targetToolBar) {
+      targetToolBar.entries.push({ kind: args.kind, idRaw: args.idRaw });
+    }
+    applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
+  }
+
+  return edit;
 }
 
 
@@ -3720,6 +3748,15 @@ export function applyToolBarEntryUpdate(
     }
   }
 
+  const parsed = parseFormDocument(document.getText());
+  const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+  const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+  const target = targetToolBar?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
+  if (target && isToolBarButtonKind(target.kind)) {
+    target.idRaw = args.idRaw;
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
+
   return edit;
 }
 
@@ -3747,6 +3784,15 @@ export function applyToolBarEntryDelete(
       edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
     }
   }
+
+  const parsed = parseFormDocument(document.getText());
+  const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+  const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+  if (targetToolBar) {
+    const targetIndex = targetToolBar.entries.findIndex(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === kind.toLowerCase());
+    if (targetIndex >= 0) targetToolBar.entries.splice(targetIndex, 1);
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
 
   return edit;
 }
