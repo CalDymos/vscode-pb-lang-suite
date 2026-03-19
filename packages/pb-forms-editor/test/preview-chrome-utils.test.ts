@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
   getRectHandlePoints,
+  clampRect,
+  applyResize,
   getMenuBarRect,
   getPanelTabLayouts,
   clampScrollAreaOffset,
@@ -22,9 +24,13 @@ import {
   getWindowContentRect,
   getWindowChromeLayout,
   intersectRect,
+  isPointInTitleBar,
+  isPointInWindowRect,
   isPointOnRectBorder,
   rectContainsPoint,
   resolvePanelActiveItem,
+  toWindowGlobalPoint,
+  toWindowLocalPoint,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/previewChromeUtils";
@@ -177,4 +183,38 @@ test("computes statusbar content alignment for left, center and right flags", ()
   assert.equal(getStatusBarAlignedX(10, 90, 30, false, false), 10);
   assert.equal(getStatusBarAlignedX(10, 90, 30, true, false), 40);
   assert.equal(getStatusBarAlignedX(10, 90, 30, false, true), 70);
+});
+
+
+test("converts between global and window-local preview coordinates", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+
+  assert.deepEqual(toWindowLocalPoint(windowRect, 100, 90), { x: 60, y: 40 });
+  assert.deepEqual(toWindowGlobalPoint(windowRect, 60, 40), { x: 100, y: 90 });
+});
+
+test("detects window and titlebar hits from preview geometry", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+
+  assert.equal(isPointInWindowRect(windowRect, 60, 70), true);
+  assert.equal(isPointInWindowRect(windowRect, 10, 10), false);
+  assert.equal(isPointInTitleBar(windowRect, 26, 60, 70), true);
+  assert.equal(isPointInTitleBar(windowRect, 26, 60, 90), false);
+});
+
+
+test("clamps preview rect size against minimum width and height", () => {
+  assert.deepEqual(clampRect({ x: 10.8, y: 20.2, w: 5, h: 7 }, 18, 16), { x: 10, y: 20, w: 18, h: 16 });
+});
+
+test("applies resize deltas for east and north-west handles", () => {
+  assert.deepEqual(
+    applyResize(RECT, { dx: 15, dy: 12 }, "e", 24, 18),
+    { x: 10, y: 20, w: 135, h: 80 }
+  );
+
+  assert.deepEqual(
+    applyResize(RECT, { dx: 40, dy: 50 }, "nw", 60, 40),
+    { x: 50, y: 60, w: 80, h: 40 }
+  );
 });

@@ -19,6 +19,65 @@ export type WindowChromeLayout = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
+export function clampRect(
+  rect: PreviewRect,
+  minW: number,
+  minH: number
+): PreviewRect {
+  const nx = Math.trunc(rect.x);
+  const ny = Math.trunc(rect.y);
+  let nw = Math.trunc(rect.w);
+  let nh = Math.trunc(rect.h);
+
+  if (nw < minW) nw = minW;
+  if (nh < minH) nh = minH;
+
+  return { x: nx, y: ny, w: nw, h: nh };
+}
+
+export function applyResize(
+  rect: PreviewRect,
+  delta: { dx: number; dy: number },
+  handle: ResizeHandle,
+  minW: number,
+  minH: number
+): PreviewRect {
+  let nx = rect.x;
+  let ny = rect.y;
+  let nw = rect.w;
+  let nh = rect.h;
+
+  const west = handle === "nw" || handle === "w" || handle === "sw";
+  const east = handle === "ne" || handle === "e" || handle === "se";
+  const north = handle === "nw" || handle === "n" || handle === "ne";
+  const south = handle === "sw" || handle === "s" || handle === "se";
+
+  if (east) nw = rect.w + delta.dx;
+  if (south) nh = rect.h + delta.dy;
+
+  if (west) {
+    nx = rect.x + delta.dx;
+    nw = rect.w - delta.dx;
+  }
+
+  if (north) {
+    ny = rect.y + delta.dy;
+    nh = rect.h - delta.dy;
+  }
+
+  if (nw < minW) {
+    if (west) nx = rect.x + (rect.w - minW);
+    nw = minW;
+  }
+
+  if (nh < minH) {
+    if (north) ny = rect.y + (rect.h - minH);
+    nh = minH;
+  }
+
+  return clampRect({ x: nx, y: ny, w: nw, h: nh }, minW, minH);
+}
+
 export type PanelTabLayout = {
   index: number;
   label: string;
@@ -374,6 +433,25 @@ export function hitHandlePoints(
   return null;
 }
 
+
+
+export function isPointInWindowRect(windowRect: PreviewRect, x: number, y: number): boolean {
+  return rectContainsPoint(windowRect, x, y);
+}
+
+export function toWindowLocalPoint(windowRect: PreviewRect, x: number, y: number): PreviewOffset {
+  return { x: x - windowRect.x, y: y - windowRect.y };
+}
+
+export function toWindowGlobalPoint(windowRect: PreviewRect, x: number, y: number): PreviewOffset {
+  return { x: x + windowRect.x, y: y + windowRect.y };
+}
+
+export function isPointInTitleBar(windowRect: PreviewRect, titleBarHeight: number, x: number, y: number): boolean {
+  if (titleBarHeight <= 0) return false;
+  return x >= windowRect.x && x <= windowRect.x + windowRect.w
+    && y >= windowRect.y && y <= windowRect.y + titleBarHeight;
+}
 export function getWindowContentRect(
   windowRect: PreviewRect,
   titleBarHeight: number,

@@ -24,7 +24,13 @@ import {
   getStatusBarAlignedX,
   getWindowChromeLayout,
   getRectHandlePoints,
-  hitHandlePoints
+  hitHandlePoints,
+  clampRect,
+  applyResize,
+  isPointInTitleBar as isPointInWindowTitleBarRect,
+  isPointInWindowRect,
+  toWindowGlobalPoint,
+  toWindowLocalPoint
 } from "../core/previewChromeUtils";
 
 type SourceRange = { line: number };
@@ -1095,7 +1101,7 @@ function sanitizeSelectionAfterModelUpdate() {
 }
 
 function normalizeRectInPlace(r: RectLike, minW: number, minH: number) {
-  const c = clampRect(r.x, r.y, r.w, r.h, minW, minH);
+  const c = clampRect(r, minW, minH);
   r.x = c.x;
   r.y = c.y;
   r.w = c.w;
@@ -1130,7 +1136,7 @@ function applyLiveSnapRect(
   const ny = snapValue(y, gs);
   const nw = snapValue(w, gs);
   const nh = snapValue(h, gs);
-  return clampRect(nx, ny, nw, nh, minW, minH);
+  return clampRect({ x: nx, y: ny, w: nw, h: nh }, minW, minH);
 }
 
 function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
@@ -1142,7 +1148,7 @@ function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
   r.w = snapValue(r.w, gs);
   r.h = snapValue(r.h, gs);
 
-  const c = clampRect(r.x, r.y, r.w, r.h, minW, minH);
+  const c = clampRect(r, minW, minH);
   r.x = c.x;
   r.y = c.y;
   r.w = c.w;
@@ -1389,21 +1395,21 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
 function hitWindow(mx: number, my: number): boolean {
   const wr = getWinRect();
   if (!wr) return false;
-  return mx >= wr.x && mx <= wr.x + wr.w && my >= wr.y && my <= wr.y + wr.h;
+  return isPointInWindowRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
 }
 
 function toLocal(mx: number, my: number): { lx: number; ly: number } {
   const wr = getWinRect();
-  const ox = wr?.x ?? 0;
-  const oy = wr?.y ?? 0;
-  return { lx: mx - ox, ly: my - oy };
+  if (!wr) return { lx: mx, ly: my };
+  const local = toWindowLocalPoint({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
+  return { lx: local.x, ly: local.y };
 }
 
 function toGlobal(lx: number, ly: number): { gx: number; gy: number } {
   const wr = getWinRect();
-  const ox = wr?.x ?? 0;
-  const oy = wr?.y ?? 0;
-  return { gx: lx + ox, gy: ly + oy };
+  if (!wr) return { gx: lx, gy: ly };
+  const global = toWindowGlobalPoint({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, lx, ly);
+  return { gx: global.x, gy: global.y };
 }
 
 function hitTestGadget(mx: number, my: number): Gadget | null {
@@ -1452,10 +1458,7 @@ function hitHandleWindow(mx: number, my: number): Handle | null {
 function isInTitleBar(mx: number, my: number): boolean {
   const wr = getWinRect();
   if (!wr) return false;
-  const tbH = wr.tbH;
-  if (tbH <= 0) return false;
-
-  return mx >= wr.x && mx <= wr.x + wr.w && my >= wr.y && my <= wr.y + tbH;
+  return isPointInWindowTitleBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, wr.tbH, mx, my);
 }
 
 function getHandleCursor(h: Handle): string {
@@ -1473,72 +1476,6 @@ function getHandleCursor(h: Handle): string {
     case "e":
       return "ew-resize";
   }
-}
-
-function clampRect(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  minW: number,
-  minH: number
-): { x: number; y: number; w: number; h: number } {
-  let nx = asInt(x);
-  let ny = asInt(y);
-  let nw = asInt(w);
-  let nh = asInt(h);
-
-  if (nw < minW) nw = minW;
-  if (nh < minH) nh = minH;
-
-  return { x: nx, y: ny, w: nw, h: nh };
-}
-
-function applyResize(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  dx: number,
-  dy: number,
-  handle: Handle,
-  minW: number,
-  minH: number
-): { x: number; y: number; w: number; h: number } {
-  let nx = x;
-  let ny = y;
-  let nw = w;
-  let nh = h;
-
-  const west = handle === "nw" || handle === "w" || handle === "sw";
-  const east = handle === "ne" || handle === "e" || handle === "se";
-  const north = handle === "nw" || handle === "n" || handle === "ne";
-  const south = handle === "sw" || handle === "s" || handle === "se";
-
-  if (east) nw = w + dx;
-  if (south) nh = h + dy;
-
-  if (west) {
-    nx = x + dx;
-    nw = w - dx;
-  }
-
-  if (north) {
-    ny = y + dy;
-    nh = h - dy;
-  }
-
-  if (nw < minW) {
-    if (west) nx = x + (w - minW);
-    nw = minW;
-  }
-
-  if (nh < minH) {
-    if (north) ny = y + (h - minH);
-    nh = minH;
-  }
-
-  return clampRect(nx, ny, nw, nh, minW, minH);
 }
 
 function snapValue(v: number, gridSize: number): number {
@@ -1924,7 +1861,7 @@ window.addEventListener("mousemove", (e) => {
       g.y = ny;
       canvas.style.cursor = "move";
     } else {
-      const r0 = applyResize(d.startX, d.startY, d.startW, d.startH, dx, dy, d.handle, MIN_GADGET_W, MIN_GADGET_H);
+      const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_GADGET_W, MIN_GADGET_H);
 
       let nx = r0.x;
       let ny = r0.y;
@@ -1965,7 +1902,7 @@ window.addEventListener("mousemove", (e) => {
 
     canvas.style.cursor = "move";
   } else {
-    const r0 = applyResize(d.startX, d.startY, d.startW, d.startH, dx, dy, d.handle, MIN_WIN_W, MIN_WIN_H);
+    const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_WIN_W, MIN_WIN_H);
 
     let nx = r0.x;
     let ny = r0.y;
