@@ -2,7 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canEditToolBarTooltip,
+  getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
+  getDirectMenuChildIndices,
+  getMenuAncestorChain,
+  getMenuEntryBlockEndIndex,
+  getMenuEntryLevel,
+  getMenuEntrySourceLine,
+  getMenuPreviewLabel,
+  getPredictedMenuEntryMoveIndex,
   getStatusBarPreviewInsertArgs,
   getToolBarPreviewInsertArgs,
   getVisibleToolBarEntryCount,
@@ -39,6 +47,64 @@ test("filters bound toolbar tooltip rows from the visible structure count", () =
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 2), true);
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 3), true);
   assert.equal(getVisibleToolBarEntryCount(toolBar), 3);
+});
+
+test("builds default menu labels, levels and insert args", () => {
+  const menu = {
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1 },
+      { kind: "MenuItem", text: "PNG", level: 2 },
+      { kind: "CloseSubMenu", level: 1 }
+    ]
+  };
+
+  assert.equal(getMenuPreviewLabel(menu.entries[0]), "File");
+  assert.equal(getMenuPreviewLabel(menu.entries[2]), "PNG");
+  assert.equal(getMenuPreviewLabel(menu.entries[3]), "");
+  assert.equal(getMenuEntryLevel(menu.entries[1]), 1);
+  assert.equal(getMenuEntryLevel(undefined), 0);
+  assert.deepEqual(getDefaultMenuItemInsertArgs(menu), {
+    idRaw: "#MenuItem_4",
+    textRaw: '"MenuItem4"'
+  });
+});
+
+test("resolves direct menu children and ancestor chains from entry levels", () => {
+  const menu = {
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } },
+      { kind: "MenuItem", textRaw: '"PNG"', level: 2, source: { line: 12 } },
+      { kind: "MenuItem", textRaw: '"JPG"', level: 2, source: { line: 13 } },
+      { kind: "CloseSubMenu", level: 1, source: { line: 14 } },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1, source: { line: 15 } }
+    ]
+  };
+
+  assert.deepEqual(getDirectMenuChildIndices(menu, 1), [2, 3]);
+  assert.deepEqual(getMenuAncestorChain(menu, 3), [0, 1, 3]);
+  assert.equal(getMenuEntrySourceLine(menu, 5), 15);
+  assert.equal(getMenuEntrySourceLine(menu, 99), undefined);
+});
+
+test("predicts menu block end indices and move targets for subtree moves", () => {
+  const menu = {
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1 },
+      { kind: "MenuItem", textRaw: '"PNG"', level: 2 },
+      { kind: "MenuItem", textRaw: '"JPG"', level: 2 },
+      { kind: "CloseSubMenu", level: 1 },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1 },
+      { kind: "MenuTitle", textRaw: '"Edit"', level: 0 }
+    ]
+  };
+
+  assert.equal(getMenuEntryBlockEndIndex(menu.entries, 1), 3);
+  assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 6, "after"), 4);
+  assert.equal(getPredictedMenuEntryMoveIndex(menu, 5, 0, "before"), 0);
+  assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 2, "before"), null);
 });
 
 test("builds default toolbar insert ids and preview insert args", () => {

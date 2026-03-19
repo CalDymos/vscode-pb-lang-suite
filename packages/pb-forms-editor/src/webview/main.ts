@@ -40,6 +40,14 @@ import {
 } from "../core/statusbarPreviewUtils";
 import {
   canEditToolBarTooltip,
+  getDefaultMenuItemInsertArgs,
+  getDirectMenuChildIndices,
+  getMenuAncestorChain,
+  getMenuEntryBlockEndIndex,
+  getMenuEntryLevel,
+  getMenuEntrySourceLine,
+  getMenuPreviewLabel,
+  getPredictedMenuEntryMoveIndex,
   getStatusBarPreviewInsertArgs,
   getToolBarPreviewInsertArgs,
   getVisibleToolBarEntryCount,
@@ -2501,35 +2509,12 @@ function drawSplitterChrome(
   ctx.restore();
 }
 
-function getMenuPreviewLabel(entry: MenuEntry): string {
-  if (entry.kind === "MenuBar" || entry.kind === "CloseSubMenu") return "";
-  return (entry.text ?? unquotePbString(entry.textRaw) ?? entry.idRaw ?? entry.kind).trim();
-}
-
-function getMenuEntryLevel(entry: MenuEntry | undefined): number {
-  return Math.max(0, entry?.level ?? 0);
-}
-
 function getMenuEntryRect(menuId: string, entryIndex: number): PreviewEntryRect | undefined {
   return menuEntryPreviewRects.find(entry => entry.ownerId === menuId && entry.index === entryIndex);
 }
 
 function getMenuFooterRect(menuId: string, parentIndex: number): PreviewMenuFooterRect | undefined {
   return menuFooterPreviewRects.find(entry => entry.menuId === menuId && entry.parentIndex === parentIndex);
-}
-
-function getDefaultMenuItemInsertArgs(menu: MenuModel): { idRaw: string; textRaw: string } {
-  let logicalCount = 0;
-  for (const entry of menu.entries ?? []) {
-    if (entry.kind === "CloseSubMenu") continue;
-    logicalCount += 1;
-  }
-
-  const nextIndex = logicalCount + 1;
-  return {
-    idRaw: `#MenuItem_${nextIndex}`,
-    textRaw: toPbString(`MenuItem${nextIndex}`)
-  };
 }
 
 function openGadgetItemEditor(gadget: Gadget, item?: GadgetItem) {
@@ -3090,50 +3075,6 @@ function saveImageAssignmentDraft() {
 }
 
 
-function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
-  const entries = menu.entries ?? [];
-  if (parentIndex < 0 || parentIndex >= entries.length) return [];
-
-  const childLevel = getMenuEntryLevel(entries[parentIndex]) + 1;
-  const result: number[] = [];
-  for (let i = parentIndex + 1; i < entries.length; i++) {
-    const entry = entries[i];
-    const level = getMenuEntryLevel(entry);
-    if (level < childLevel) break;
-    if (level !== childLevel) continue;
-    if (entry.kind === "CloseSubMenu") continue;
-    result.push(i);
-  }
-  return result;
-}
-
-function getMenuAncestorChain(menu: MenuModel, entryIndex: number): number[] {
-  const entries = menu.entries ?? [];
-  if (entryIndex < 0 || entryIndex >= entries.length) return [];
-
-  const chain = [entryIndex];
-  let searchIndex = entryIndex - 1;
-  let level = getMenuEntryLevel(entries[entryIndex]);
-
-  while (searchIndex >= 0 && level > 0) {
-    let foundIndex = -1;
-    for (let i = searchIndex; i >= 0; i--) {
-      const candidateLevel = getMenuEntryLevel(entries[i]);
-      if (candidateLevel < level) {
-        foundIndex = i;
-        break;
-      }
-    }
-    if (foundIndex < 0) break;
-    chain.push(foundIndex);
-    level = getMenuEntryLevel(entries[foundIndex]);
-    searchIndex = foundIndex - 1;
-  }
-
-  chain.reverse();
-  return chain;
-}
-
 function getMenuVisibleEntries(menu: MenuModel): Array<{ index: number; entry: MenuEntry; rect: PreviewEntryRect }> {
   const result: Array<{ index: number; entry: MenuEntry; rect: PreviewEntryRect }> = [];
 
@@ -3144,52 +3085,6 @@ function getMenuVisibleEntries(menu: MenuModel): Array<{ index: number; entry: M
   }
 
   return result;
-}
-
-function getMenuEntrySourceLine(menu: MenuModel, entryIndex: number): number | undefined {
-  return menu.entries?.[entryIndex]?.source?.line;
-}
-
-function getMenuEntryBlockEndIndex(entries: MenuEntry[], entryIndex: number): number {
-  if (entryIndex < 0 || entryIndex >= entries.length) return entryIndex;
-
-  const entryLevel = getMenuEntryLevel(entries[entryIndex]);
-  let endIndex = entryIndex;
-  for (let i = entryIndex + 1; i < entries.length; i++) {
-    if (getMenuEntryLevel(entries[i]) <= entryLevel) {
-      break;
-    }
-    endIndex = i;
-  }
-
-  return endIndex;
-}
-
-function getPredictedMenuEntryMoveIndex(
-  menu: MenuModel,
-  sourceEntryIndex: number,
-  targetEntryIndex: number,
-  placement: MenuEntryMovePlacement
-): number | null {
-  const entries = menu.entries ?? [];
-  if (sourceEntryIndex < 0 || sourceEntryIndex >= entries.length) return null;
-  if (targetEntryIndex < 0 || targetEntryIndex >= entries.length) return null;
-
-  const sourceEndIndex = getMenuEntryBlockEndIndex(entries, sourceEntryIndex);
-  let insertIndex = placement === "before"
-    ? targetEntryIndex
-    : getMenuEntryBlockEndIndex(entries, targetEntryIndex) + 1;
-
-  if (insertIndex >= sourceEntryIndex && insertIndex <= sourceEndIndex + 1) {
-    return null;
-  }
-
-  const blockLength = sourceEndIndex - sourceEntryIndex + 1;
-  if (sourceEntryIndex < insertIndex) {
-    insertIndex -= blockLength;
-  }
-
-  return Math.max(0, insertIndex);
 }
 
 function buildPendingMenuEntrySelection(
