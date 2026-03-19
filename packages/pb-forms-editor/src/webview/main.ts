@@ -32,6 +32,19 @@ import {
   toWindowGlobalPoint,
   toWindowLocalPoint
 } from "../core/previewChromeUtils";
+import {
+  STATUSBAR_KNOWN_FLAGS,
+  buildStatusBarFlagsRaw,
+  getStatusBarFieldDisplaySummary,
+  parseStatusBarWidth
+} from "../core/statusbarPreviewUtils";
+import {
+  canEditToolBarTooltip,
+  getStatusBarPreviewInsertArgs,
+  getToolBarPreviewInsertArgs,
+  getVisibleToolBarEntryCount,
+  shouldShowToolBarStructureEntry
+} from "../core/topLevelPreviewUtils";
 
 type SourceRange = { line: number };
 
@@ -2519,82 +2532,6 @@ function getDefaultMenuItemInsertArgs(menu: MenuModel): { idRaw: string; textRaw
   };
 }
 
-function isBoundToolBarTooltipEntry(toolBar: ToolbarModel, entryIndex: number): boolean {
-  const entry = toolBar.entries?.[entryIndex];
-  if (!entry || entry.kind !== "ToolBarToolTip") return false;
-  const entryId = entry.idRaw?.trim();
-  if (!entryId) return false;
-
-  for (let i = entryIndex - 1; i >= 0; i--) {
-    const candidate = toolBar.entries?.[i];
-    if (!candidate || candidate.kind === "ToolBarToolTip") continue;
-    if ((candidate.idRaw?.trim() ?? "") === entryId) return true;
-  }
-
-  return false;
-}
-
-function shouldShowToolBarStructureEntry(toolBar: ToolbarModel, entryIndex: number): boolean {
-  const entry = toolBar.entries?.[entryIndex];
-  if (!entry) return false;
-  if (entry.kind !== "ToolBarToolTip") return true;
-  return !isBoundToolBarTooltipEntry(toolBar, entryIndex);
-}
-
-function getVisibleToolBarEntryCount(toolBar: ToolbarModel): number {
-  let count = 0;
-  for (let i = 0; i < (toolBar.entries?.length ?? 0); i++) {
-    if (!shouldShowToolBarStructureEntry(toolBar, i)) continue;
-    count += 1;
-  }
-  return count;
-}
-
-function getDefaultToolBarInsertId(toolBar: ToolbarModel): string {
-  let logicalCount = 0;
-  for (const entry of toolBar.entries ?? []) {
-    if (entry.kind === "ToolBarToolTip") continue;
-    logicalCount += 1;
-  }
-
-  return `#Toolbar_${logicalCount}`;
-}
-
-function canEditToolBarTooltip(entry: ToolBarEntry): boolean {
-  return entry.kind !== "ToolBarSeparator"
-    && entry.kind !== "ToolBarToolTip"
-    && typeof entry.idRaw === "string"
-    && entry.idRaw.trim().length > 0;
-}
-
-function getToolBarPreviewInsertArgs(
-  toolBar: ToolbarModel,
-  action: "button" | "toggle" | "separator"
-): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } {
-  const idRaw = getDefaultToolBarInsertId(toolBar);
-  switch (action) {
-    case "button":
-      return { kind: "ToolBarImageButton", idRaw, iconRaw: "0" };
-    case "toggle":
-      return { kind: "ToolBarImageButton", idRaw, iconRaw: "0", toggle: true };
-    case "separator":
-      return { kind: "ToolBarSeparator" };
-  }
-}
-
-function getStatusBarPreviewInsertArgs(
-  action: "image" | "label" | "progress"
-): { widthRaw: string; textRaw?: string; progressBar?: boolean; progressRaw?: string } {
-  switch (action) {
-    case "image":
-      return { widthRaw: "50" };
-    case "label":
-      return { widthRaw: "50", textRaw: toPbString("Label") };
-    case "progress":
-      return { widthRaw: "50", progressBar: true, progressRaw: "0" };
-  }
-}
-
 function openGadgetItemEditor(gadget: Gadget, item?: GadgetItem) {
   pendingGadgetItemEditor = {
     gadgetId: gadget.id,
@@ -3152,26 +3089,6 @@ function saveImageAssignmentDraft() {
   renderProps();
 }
 
-function getStatusBarFieldDisplayKind(field: StatusbarField): string {
-  if (field.progressBar) return "Progress";
-  if ((field.imageRaw ?? "").trim().length) return "Image";
-  if ((field.textRaw ?? "").trim().length) return "Label";
-  return "Empty";
-}
-
-function getStatusBarFieldDisplaySummary(field: StatusbarField): string {
-  const kind = getStatusBarFieldDisplayKind(field);
-  switch (kind) {
-    case "Progress":
-      return `${kind} ${field.progressRaw ?? "0"}`;
-    case "Image":
-      return `${kind} ${field.imageId ?? field.imageRaw ?? ""}`.trim();
-    case "Label":
-      return `${kind} ${field.text ?? field.textRaw ?? ""}`.trim();
-    default:
-      return kind;
-  }
-}
 
 function getDirectMenuChildIndices(menu: MenuModel, parentIndex: number): number[] {
   const entries = menu.entries ?? [];
@@ -3751,42 +3668,6 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   ctx.restore();
 }
 
-function parseStatusbarWidth(widthRaw: string | undefined): number | null {
-  const trimmed = (widthRaw ?? "").trim();
-  if (!trimmed.length || trimmed === "#PB_Ignore") return null;
-  const width = Number(trimmed);
-  if (!Number.isFinite(width) || width < 0) return null;
-  return Math.trunc(width);
-}
-
-const STATUSBAR_KNOWN_FLAGS = [
-  "#PB_StatusBar_Raised",
-  "#PB_StatusBar_BorderLess",
-  "#PB_StatusBar_Center",
-  "#PB_StatusBar_Right"
-] as const;
-
-function splitPbFlags(flagsRaw: string | undefined): string[] {
-  return (flagsRaw ?? "")
-    .split("|")
-    .map(part => part.trim())
-    .filter(Boolean);
-}
-
-function buildStatusBarFlagsRaw(existingRaw: string | undefined, updates: Partial<Record<(typeof STATUSBAR_KNOWN_FLAGS)[number], boolean>>): string | undefined {
-  const current = splitPbFlags(existingRaw);
-  const currentSet = new Set(current);
-  for (const flag of STATUSBAR_KNOWN_FLAGS) {
-    const next = updates[flag];
-    if (typeof next !== "boolean") continue;
-    if (next) currentSet.add(flag);
-    else currentSet.delete(flag);
-  }
-  const unknown = current.filter(flag => !STATUSBAR_KNOWN_FLAGS.includes(flag as (typeof STATUSBAR_KNOWN_FLAGS)[number]));
-  const orderedKnown = STATUSBAR_KNOWN_FLAGS.filter(flag => currentSet.has(flag));
-  const merged = [...orderedKnown, ...unknown];
-  return merged.length ? merged.join(" | ") : undefined;
-}
 
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const statusbar = getPrimaryStatusbar();
@@ -3810,7 +3691,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   let fixedWidth = 0;
   let flexibleCount = 0;
   for (const field of statusbar.fields) {
-    const parsed = parseStatusbarWidth(field.widthRaw);
+    const parsed = parseStatusBarWidth(field.widthRaw);
     if (parsed === null) flexibleCount++;
     else fixedWidth += parsed;
   }
@@ -3823,7 +3704,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const imageY = rect.y + 4;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
-    const parsedWidth = parseStatusbarWidth(field.widthRaw);
+    const parsedWidth = parseStatusBarWidth(field.widthRaw);
     const fieldW = Math.max(18, parsedWidth ?? flexibleWidth);
     statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
 
