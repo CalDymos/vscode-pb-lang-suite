@@ -292,7 +292,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           postError(errorMessage);
           return false;
         }
-        await vscode.workspace.applyEdit(edit);
+        const ok = await vscode.workspace.applyEdit(edit);
+        if (!ok) {
+          postError(errorMessage);
+          return false;
+        }
         return true;
       };
 
@@ -783,7 +787,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
               postError(errorMessage);
               return false;
             }
-            await vscode.workspace.applyEdit(edit);
+            const ok = await vscode.workspace.applyEdit(edit);
+            if (!ok) {
+              postError(errorMessage);
+              return false;
+            }
             return true;
           };
 
