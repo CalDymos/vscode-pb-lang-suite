@@ -106,8 +106,11 @@ function toPbStringLiteral(value: string): string {
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
+  // Strip optional PureBasic escape-literal prefix (~"...") before unquoting.
+  const unescaped = trimmed.startsWith('~"') ? trimmed.slice(1) : trimmed;
+  if (unescaped.length >= 2 && unescaped.startsWith('"') && unescaped.endsWith('"')) {
+    // Unescape PureBasic doubled-quote sequences ("" → ").
+    return unescaped.slice(1, -1).replace(/""/g, '"');
   }
   return trimmed;
 }
