@@ -4,6 +4,7 @@ import {
   getGadgetContentRect,
   getMenuBarRect,
   getPanelTabLayouts,
+  clampScrollAreaOffset,
   getScrollAreaHorizontalBarRect,
   getScrollAreaHorizontalThumbRect,
   getScrollAreaMaxOffsetX,
@@ -12,7 +13,9 @@ import {
   getScrollAreaVerticalThumbRect,
   getSplitterBarRect,
   getSplitterPaneRect,
+  getScrollAreaViewportRect,
   getStatusBarRect,
+  getStatusBarAlignedX,
   getToolBarRect,
   getWindowContentRect,
   intersectRect,
@@ -56,6 +59,16 @@ test("computes gadget content rects for panel and scrollarea containers", () => 
   assert.deepEqual(getGadgetContentRect("PanelGadget", RECT, METRICS), { x: 10, y: 42, w: 120, h: 58 });
   assert.deepEqual(getGadgetContentRect("ScrollAreaGadget", RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
   assert.deepEqual(getGadgetContentRect("StringGadget", RECT, METRICS), RECT);
+});
+
+
+test("computes scrollarea viewport rect from chrome metrics", () => {
+  assert.deepEqual(getScrollAreaViewportRect(RECT, METRICS), { x: 10, y: 20, w: 100, h: 60 });
+});
+
+test("clamps scrollarea offsets against the available viewport range", () => {
+  assert.deepEqual(clampScrollAreaOffset({ x: 999, y: 999 }, RECT, METRICS, 240, 180), { x: 140, y: 120 });
+  assert.deepEqual(clampScrollAreaOffset({ x: -5, y: -10 }, RECT, METRICS, 240, 180), { x: 0, y: 0 });
 });
 
 test("computes a vertical splitter bar from state and width", () => {
@@ -121,4 +134,11 @@ test("computes panel tab layouts from labels and measured widths", () => {
     { index: 0, label: "General", active: false, rect: { x: 10, y: 22, w: 56, h: 18 } },
     { index: 1, label: "Advanced", active: true, rect: { x: 66, y: 20, w: 62, h: 21 } }
   ]);
+});
+
+
+test("computes statusbar content alignment for left, center and right flags", () => {
+  assert.equal(getStatusBarAlignedX(10, 90, 30, false, false), 10);
+  assert.equal(getStatusBarAlignedX(10, 90, 30, true, false), 40);
+  assert.equal(getStatusBarAlignedX(10, 90, 30, false, true), 70);
 });

@@ -1,4 +1,5 @@
 export type PreviewRect = { x: number; y: number; w: number; h: number };
+export type PreviewOffset = { x: number; y: number };
 
 export type PreviewChromeMetrics = {
   panelHeight: number;
@@ -113,6 +114,29 @@ export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: Previ
   };
 }
 
+export function getScrollAreaViewportRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: Math.max(0, rect.w - bar),
+    h: Math.max(0, rect.h - bar)
+  };
+}
+
+export function clampScrollAreaOffset(
+  offset: PreviewOffset,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number,
+  innerHeight?: number
+): PreviewOffset {
+  return {
+    x: Math.max(0, Math.min(offset.x, getScrollAreaMaxOffsetX(rect, metrics, innerWidth))),
+    y: Math.max(0, Math.min(offset.y, getScrollAreaMaxOffsetY(rect, metrics, innerHeight)))
+  };
+}
+
 export function getScrollAreaMaxOffsetX(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics,
@@ -203,13 +227,7 @@ export function getGadgetContentRect(
     }
 
     case "ScrollAreaGadget": {
-      const bar = getScrollAreaBarSize(rect, metrics);
-      return {
-        x: rect.x,
-        y: rect.y,
-        w: Math.max(0, rect.w - bar),
-        h: Math.max(0, rect.h - bar)
-      };
+      return getScrollAreaViewportRect(rect, metrics);
     }
 
     default:
@@ -299,6 +317,23 @@ export function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChrome
     w: windowRect.w,
     h: Math.min(metrics.statusBarHeight, Math.max(0, windowRect.h))
   };
+}
+
+
+export function getStatusBarAlignedX(
+  fieldX: number,
+  fieldW: number,
+  contentW: number,
+  isCentered: boolean,
+  isRightAligned: boolean
+): number {
+  if (isCentered) {
+    return fieldX + Math.max(0, Math.trunc((fieldW - contentW) / 2));
+  }
+  if (isRightAligned) {
+    return fieldX + Math.max(0, fieldW - contentW);
+  }
+  return fieldX;
 }
 
 export function getWindowContentRect(

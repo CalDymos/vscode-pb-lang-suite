@@ -8,6 +8,8 @@ import {
   getScrollAreaBarSize,
   getScrollAreaVerticalBarRect,
   getScrollAreaHorizontalBarRect,
+  getScrollAreaViewportRect,
+  clampScrollAreaOffset,
   getScrollAreaMaxOffsetX,
   getScrollAreaMaxOffsetY,
   getScrollAreaVerticalThumbRect,
@@ -20,6 +22,7 @@ import {
   getMenuBarRect,
   getToolBarRect,
   getStatusBarRect,
+  getStatusBarAlignedX,
   getWindowContentRect
 } from "../core/previewChromeUtils";
 
@@ -2181,22 +2184,25 @@ function getScrollAreaPreviewOffset(gadgetId: string): { x: number; y: number } 
   return { x: 0, y: 0 };
 }
 
+function getClampedScrollAreaPreviewOffset(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics): { x: number; y: number } {
+  return clampScrollAreaOffset(getScrollAreaPreviewOffset(g.id), rect, metrics, g.min, g.max);
+}
+
 function getScrollAreaOffsetX(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics): number {
-  return clamp(getScrollAreaPreviewOffset(g.id).x, 0, getScrollAreaMaxOffsetX(rect, metrics, g.min));
+  return getClampedScrollAreaPreviewOffset(g, rect, metrics).x;
 }
 
 function getScrollAreaOffsetY(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics): number {
-  return clamp(getScrollAreaPreviewOffset(g.id).y, 0, getScrollAreaMaxOffsetY(rect, metrics, g.max));
+  return getClampedScrollAreaPreviewOffset(g, rect, metrics).y;
 }
 
 function setScrollAreaPreviewOffset(g: Gadget, rect: PreviewRect, metrics: PreviewChromeMetrics, nextX: number, nextY: number) {
-  const clampedX = clamp(nextX, 0, getScrollAreaMaxOffsetX(rect, metrics, g.min));
-  const clampedY = clamp(nextY, 0, getScrollAreaMaxOffsetY(rect, metrics, g.max));
-  if (clampedX === 0 && clampedY === 0) {
+  const next = clampScrollAreaOffset({ x: nextX, y: nextY }, rect, metrics, g.min, g.max);
+  if (next.x === 0 && next.y === 0) {
     scrollAreaOffsets.delete(g.id);
     return;
   }
-  scrollAreaOffsets.set(g.id, { x: clampedX, y: clampedY });
+  scrollAreaOffsets.set(g.id, next);
 }
 
 function getPanelTabRects(
@@ -2454,8 +2460,9 @@ function drawScrollAreaChrome(
   const bg = getCssVar("--vscode-editor-background") || "transparent";
   const trackBg = getCssVar("--vscode-sideBar-background") || bg;
   const thumbBg = getCssVar("--vscode-scrollbarSlider-background") || fg;
-  const viewportW = Math.max(0, w - bar);
-  const viewportH = Math.max(0, h - bar);
+  const viewportRect = getScrollAreaViewportRect(rect, metrics);
+  const viewportW = viewportRect.w;
+  const viewportH = viewportRect.h;
   const innerW = typeof g.min === "number" && g.min > 0 ? g.min : viewportW;
   const innerH = typeof g.max === "number" && g.max > 0 ? g.max : viewportH;
   const offsetX = getScrollAreaOffsetX(g, rect, metrics);
@@ -3863,16 +3870,6 @@ function buildStatusBarFlagsRaw(existingRaw: string | undefined, updates: Partia
   return merged.length ? merged.join(" | ") : undefined;
 }
 
-function getStatusBarAlignedX(fieldX: number, fieldW: number, contentW: number, flagsRaw: string | undefined): number {
-  if (hasPbFlag(flagsRaw, "#PB_StatusBar_Center")) {
-    return fieldX + Math.max(0, Math.trunc((fieldW - contentW) / 2));
-  }
-  if (hasPbFlag(flagsRaw, "#PB_StatusBar_Right")) {
-    return fieldX + Math.max(0, fieldW - contentW);
-  }
-  return fieldX;
-}
-
 function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
   const statusbar = getPrimaryStatusbar();
   statusBarFieldPreviewRects = [];
@@ -3927,7 +3924,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     if (textLabel.length) {
       ctx.fillStyle = fg;
       const textWidth = Math.ceil(ctx.measureText(textLabel).width);
-      const textX = getStatusBarAlignedX(x, fieldW, textWidth, field.flagsRaw);
+      const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillText(textLabel, textX, rect.y + Math.min(rect.h - 6, 15));
     } else if (field.progressBar) {
       const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
@@ -3944,7 +3941,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.55;
       const size = Math.max(10, Math.min(16, rect.h - 8));
-      const imageX = getStatusBarAlignedX(x, fieldW, size, field.flagsRaw);
+      const imageX = getStatusBarAlignedX(x, fieldW, size, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillRect(imageX, imageY, size, size);
       ctx.restore();
     }
