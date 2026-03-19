@@ -300,6 +300,34 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return true;
       };
 
+      // Merges two WorkspaceEdits into one so they can be applied atomically in a single
+      // applyEdit() call. WorkspaceEdit has no built-in merge API; we accumulate via get/set.
+      const mergeWorkspaceEdits = (a: vscode.WorkspaceEdit, b: vscode.WorkspaceEdit): vscode.WorkspaceEdit => {
+        const merged = new vscode.WorkspaceEdit();
+        for (const edit of [a, b]) {
+          for (const [uri, textEdits] of edit.entries()) {
+            merged.set(uri, [...merged.get(uri), ...textEdits]);
+          }
+        }
+        return merged;
+      };
+
+      // Validates that both edits could be built, merges them into one WorkspaceEdit, and
+      // applies it atomically. Returns false (with error) if either edit is undefined or
+      // applyEdit() fails — without having partially modified the document.
+      const applyPairedEditsOrError = async (
+        assignEdit: vscode.WorkspaceEdit | undefined,
+        assignErrorMessage: string,
+        insertEdit: vscode.WorkspaceEdit | undefined,
+        insertErrorMessage: string,
+      ): Promise<boolean> => {
+        if (!assignEdit) { postError(assignErrorMessage); return false; }
+        if (!insertEdit) { postError(insertErrorMessage); return false; }
+        const ok = await vscode.workspace.applyEdit(mergeWorkspaceEdits(assignEdit, insertEdit));
+        if (!ok) { postError(assignErrorMessage); return false; }
+        return true;
+      };
+
       const pickImageFile = async (): Promise<{ fsPath: string; imageRaw: string } | undefined> => {
         const picked = await vscode.window.showOpenDialog({
           canSelectFiles: true,
@@ -861,12 +889,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -883,10 +910,15 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
+          if (!await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          )) {
             return;
           }
 
+          // Resize is non-fatal and applied separately after the atomic assign+insert.
           if (msg.resizeToImage) {
             try {
               const dims = await readImageDimensions(picked.fsPath);
@@ -901,9 +933,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
               postError(`Assigned image to gadget '${msg.id}', but could not read the selected image size: ${message}${rangeInfo}.`);
             }
           }
-
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
@@ -923,12 +952,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
             sr
           );
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -948,12 +976,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
             sr
           );
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -965,12 +992,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -995,12 +1021,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
             sr
           );
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -1025,12 +1050,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
             sr
           );
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
@@ -1047,12 +1071,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
-          if (!await applyEditOrError(assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`)) {
-            return;
-          }
-
           const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
-          await applyEditOrError(insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
           return;
         }
 
