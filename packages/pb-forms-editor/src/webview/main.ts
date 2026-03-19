@@ -3903,9 +3903,9 @@ function renderList() {
     id: "images",
     label: `Images  entries:${model.images?.length ?? 0}`,
     selectable: true,
-    children: (model.images ?? []).map((img, idx) => ({
-      kind: "menuEntry" as const,
-      id: `image:${idx}`,
+    children: (model.images ?? []).map((img) => ({
+      kind: "image" as const,
+      id: img.id,
       label: `${img.pbAny && img.variable ? `${img.variable} = ` : ""}${img.inline ? "CatchImage" : "LoadImage"}  ${img.firstParam}  ${img.imageRaw}  refs:${countImageUsages(img.id)}`,
       selectable: true,
       children: []
