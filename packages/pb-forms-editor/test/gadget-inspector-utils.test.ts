@@ -6,6 +6,8 @@ import {
   buildGadgetTooltipRaw,
   canEditGadgetColors,
   canEditGadgetText,
+  getGadgetCtorRangeFieldLabels,
+  getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue
@@ -41,6 +43,26 @@ test("builds gadget tooltip raw values for literal, variable and cleared modes",
   assert.equal(buildGadgetTooltipRaw("   ", true), undefined);
 });
 
+
+test("returns the original range/scrollarea field labels for constructor-bound gadget fields", () => {
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
+    minLabel: "Min",
+    maxLabel: "Max",
+    title: "Matches the original Min / Max constructor arguments."
+  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
+    minLabel: "InnerWidth",
+    maxLabel: "InnerHeight",
+    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
+  });
+  assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
+});
+
+test("resolves constructor-bound gadget field inspector values from raw or parsed numbers", () => {
+  assert.equal(getGadgetCtorRangeInspectorValue("MinValue", 5), "MinValue");
+  assert.equal(getGadgetCtorRangeInspectorValue(undefined, 95), "95");
+  assert.equal(getGadgetCtorRangeInspectorValue(undefined, undefined), "");
+});
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");
   assert.equal(getGadgetTextInspectorValue({ textRaw: "Caption$", text: "Caption$", textVariable: true }), "Caption$");

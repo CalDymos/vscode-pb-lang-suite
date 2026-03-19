@@ -17,6 +17,19 @@ export type GadgetFontLike = {
   gadgetFontFlagsRaw?: string;
 };
 
+export type GadgetCtorRangeLike = {
+  minRaw?: string;
+  min?: number;
+  maxRaw?: string;
+  max?: number;
+};
+
+export type GadgetCtorRangeFieldLabels = {
+  minLabel: string;
+  maxLabel: string;
+  title: string;
+};
+
 const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "ButtonGadget",
   "ButtonImageGadget",
@@ -41,6 +54,14 @@ const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "TextGadget",
   "TreeGadget",
   "WebGadget"
+]);
+
+const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<string, GadgetCtorRangeFieldLabels> = new Map([
+  ["ProgressBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  ["ScrollBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  ["SpinGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  ["TrackBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  ["ScrollAreaGadget", { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }]
 ]);
 
 const GADGET_COLOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
@@ -89,12 +110,23 @@ export function canEditGadgetColors(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLOR_CAPABLE_KINDS.has(kind);
 }
 
+export function getGadgetCtorRangeFieldLabels(kind: string | undefined): GadgetCtorRangeFieldLabels | undefined {
+  if (typeof kind !== "string") return undefined;
+  return GADGET_CTOR_RANGE_FIELD_LABELS.get(kind);
+}
+
 export function getGadgetTextInspectorValue(gadget: GadgetTextLike): string {
   return buildInspectorValue(gadget.textRaw, gadget.text);
 }
 
 export function getGadgetTooltipInspectorValue(gadget: GadgetTooltipLike): string {
   return buildInspectorValue(gadget.tooltipRaw, gadget.tooltip);
+}
+
+export function getGadgetCtorRangeInspectorValue(raw: string | undefined, fallback: number | undefined): string {
+  const trimmed = raw?.trim();
+  if (trimmed?.length) return trimmed;
+  return Number.isFinite(fallback) ? String(fallback) : "";
 }
 
 export function buildGadgetTextRaw(value: string, isVariable: boolean): string {

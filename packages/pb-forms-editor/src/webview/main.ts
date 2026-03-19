@@ -73,6 +73,8 @@ import {
   buildGadgetTooltipRaw,
   canEditGadgetColors,
   canEditGadgetText,
+  getGadgetCtorRangeFieldLabels,
+  getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue
@@ -1595,6 +1597,36 @@ function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boo
   g.tooltipVariable = isVariable && Boolean(tooltipRaw);
   g.tooltip = tooltipRaw ? (isVariable ? value.trim() : value) : undefined;
   postGadgetProperties(g.id, { tooltipRaw });
+  renderProps();
+}
+
+function parseOptionalIntegerLiteral(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (!/^[-+]?\d+$/.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value: string): void {
+  const trimmed = value.trim();
+  const labels = getGadgetCtorRangeFieldLabels(g.kind);
+  const fieldLabel = field === "min" ? labels?.minLabel ?? "Value" : labels?.maxLabel ?? "Value";
+  if (!trimmed.length) {
+    alert(`${fieldLabel} may not be empty.`);
+    renderProps();
+    return;
+  }
+  const parsed = parseOptionalIntegerLiteral(trimmed);
+  if (field === "min") {
+    g.minRaw = trimmed;
+    g.min = parsed;
+    postGadgetOpenArgs(g.id, { minRaw: trimmed });
+  } else {
+    g.maxRaw = trimmed;
+    g.max = parsed;
+    postGadgetOpenArgs(g.id, { maxRaw: trimmed });
+  }
+  render();
   renderProps();
 }
 
@@ -6079,6 +6111,34 @@ function renderProps() {
             renderProps();
           },
           { title: "Patch the raw SetGadgetColor(..., #PB_Gadget_BackColor, ...) expression directly." }
+        )
+      )
+    );
+  }
+
+  const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);
+  if (gadgetCtorRangeLabels) {
+    propsEl.appendChild(
+      row(
+        gadgetCtorRangeLabels.minLabel,
+        textInput(
+          getGadgetCtorRangeInspectorValue(g.minRaw, g.min),
+          v => {
+            applyLocalGadgetCtorRangeUpdate(g, "min", v);
+          },
+          { title: gadgetCtorRangeLabels.title }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        gadgetCtorRangeLabels.maxLabel,
+        textInput(
+          getGadgetCtorRangeInspectorValue(g.maxRaw, g.max),
+          v => {
+            applyLocalGadgetCtorRangeUpdate(g, "max", v);
+          },
+          { title: gadgetCtorRangeLabels.title }
         )
       )
     );
