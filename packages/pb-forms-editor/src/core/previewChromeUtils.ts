@@ -9,6 +9,61 @@ export type PreviewChromeMetrics = {
   statusBarHeight: number;
 };
 
+
+export type PanelTabLayout = {
+  index: number;
+  label: string;
+  rect: PreviewRect;
+  active: boolean;
+};
+
+export function resolvePanelActiveItem(storedIndex: number | undefined, tabCount: number): number {
+  if (typeof storedIndex === "number" && storedIndex >= 0 && storedIndex < Math.max(1, tabCount)) {
+    return storedIndex;
+  }
+  return 0;
+}
+
+export function getPanelTabLayouts(
+  labels: string[],
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  activeIndex: number,
+  measureText: (label: string) => number
+): PanelTabLayout[] {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  const tabRects: PanelTabLayout[] = [];
+  let tabX = rect.x;
+
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i] || `Tab ${i}`;
+    const tabW = Math.max(46, Math.ceil(measureText(label)) + 14);
+    const active = i === activeIndex;
+    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
+    const tabY = rect.y + (active ? 0 : 2);
+    const nextRight = tabX + tabW;
+
+    if (tabX >= rect.x + rect.w - 12) break;
+
+    tabRects.push({
+      index: i,
+      label,
+      active,
+      rect: {
+        x: tabX,
+        y: tabY,
+        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
+        h: tabH
+      }
+    });
+
+    tabX = nextRight;
+  }
+
+  return tabRects;
+}
+
+
 export function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
   const x = Math.max(a.x, b.x);
   const y = Math.max(a.y, b.y);

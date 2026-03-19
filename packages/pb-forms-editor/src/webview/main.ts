@@ -1,6 +1,7 @@
 import {
   type PreviewRect,
   type PreviewChromeMetrics,
+  type PanelTabLayout,
   intersectRect,
   rectContainsPoint,
   isPointOnRectBorder,
@@ -11,6 +12,8 @@ import {
   getScrollAreaMaxOffsetY,
   getScrollAreaVerticalThumbRect,
   getScrollAreaHorizontalThumbRect,
+  resolvePanelActiveItem,
+  getPanelTabLayouts,
   getSplitterBarRect,
   getSplitterPaneRect,
   getGadgetContentRect,
@@ -2104,12 +2107,7 @@ type GadgetPreviewLayout = {
   visible: boolean;
 };
 
-type PanelTabRect = {
-  index: number;
-  label: string;
-  rect: PreviewRect;
-  active: boolean;
-};
+type PanelTabRect = PanelTabLayout;
 
 type PreviewChromeHitZone = "containerBorder" | "panelHeader" | "scrollAreaVBar" | "scrollAreaHBar" | "splitterBar";
 
@@ -2174,12 +2172,7 @@ function rectIntersects(a: PreviewRect, b: PreviewRect): boolean {
 }
 
 function getPanelActiveItem(panel: Gadget): number {
-  const tabCount = panel.items?.length ?? 0;
-  const stored = panelActiveItems.get(panel.id);
-  if (typeof stored === "number" && stored >= 0 && stored < Math.max(1, tabCount)) {
-    return stored;
-  }
-  return 0;
+  return resolvePanelActiveItem(panelActiveItems.get(panel.id), panel.items?.length ?? 0);
 }
 
 function getScrollAreaPreviewOffset(gadgetId: string): { x: number; y: number } {
@@ -2212,38 +2205,8 @@ function getPanelTabRects(
   rect: PreviewRect,
   metrics: PreviewChromeMetrics
 ): PanelTabRect[] {
-  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
-  const activeIndex = getPanelActiveItem(g);
-  const tabs = g.items ?? [];
-  const tabRects: PanelTabRect[] = [];
-  let tabX = rect.x;
-
-  for (let i = 0; i < tabs.length; i++) {
-    const label = (tabs[i].text ?? unquotePbString(tabs[i].textRaw)) || `Tab ${i}`;
-    const tabW = Math.max(46, Math.ceil(ctx.measureText(label).width) + 14);
-    const active = i === activeIndex;
-    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
-    const tabY = rect.y + (active ? 0 : 2);
-    const nextRight = tabX + tabW;
-
-    if (tabX >= rect.x + rect.w - 12) break;
-
-    tabRects.push({
-      index: i,
-      label,
-      active,
-      rect: {
-        x: tabX,
-        y: tabY,
-        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
-        h: tabH
-      }
-    });
-
-    tabX = nextRight;
-  }
-
-  return tabRects;
+  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index}`);
+  return getPanelTabLayouts(labels, rect, metrics, getPanelActiveItem(g), (label) => ctx.measureText(label).width);
 }
 
 function getGadgetPreviewLayout(

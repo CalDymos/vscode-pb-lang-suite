@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
   getMenuBarRect,
+  getPanelTabLayouts,
   getScrollAreaHorizontalBarRect,
   getScrollAreaHorizontalThumbRect,
   getScrollAreaMaxOffsetX,
@@ -17,6 +18,7 @@ import {
   intersectRect,
   isPointOnRectBorder,
   rectContainsPoint,
+  resolvePanelActiveItem,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/previewChromeUtils";
@@ -103,4 +105,20 @@ test("computes splitter pane rects for both child slots", () => {
   assert.deepEqual(getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "second"), { x: 49, y: 20, w: 81, h: 80 });
   assert.deepEqual(getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 25, "first"), { x: 10, y: 20, w: 120, h: 25 });
   assert.deepEqual(getSplitterPaneRect(RECT, false, METRICS.splitterWidth, 25, "second"), { x: 10, y: 54, w: 120, h: 46 });
+});
+
+
+test("resolves active panel item from stored preview state", () => {
+  assert.equal(resolvePanelActiveItem(undefined, 0), 0);
+  assert.equal(resolvePanelActiveItem(1, 3), 1);
+  assert.equal(resolvePanelActiveItem(8, 2), 0);
+});
+
+test("computes panel tab layouts from labels and measured widths", () => {
+  const tabs = getPanelTabLayouts(["General", "Advanced", "Overflow"], RECT, METRICS, 1, (label) => label.length * 6);
+
+  assert.deepEqual(tabs, [
+    { index: 0, label: "General", active: false, rect: { x: 10, y: 22, w: 56, h: 18 } },
+    { index: 1, label: "Advanced", active: true, rect: { x: 66, y: 20, w: 62, h: 21 } }
+  ]);
 });
