@@ -19,6 +19,41 @@ export type WindowChromeLayout = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
+export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
+  const ua = userAgent.toLowerCase();
+
+  if (ua.includes("mac")) {
+    return {
+      panelHeight: 31,
+      scrollAreaWidth: 14,
+      splitterWidth: 12,
+      menuHeight: 23,
+      toolBarHeight: 36,
+      statusBarHeight: 24
+    };
+  }
+
+  if (ua.includes("linux")) {
+    return {
+      panelHeight: 29,
+      scrollAreaWidth: 20,
+      splitterWidth: 9,
+      menuHeight: 28,
+      toolBarHeight: 38,
+      statusBarHeight: 26
+    };
+  }
+
+  return {
+    panelHeight: 22,
+    scrollAreaWidth: 20,
+    splitterWidth: 9,
+    menuHeight: 22,
+    toolBarHeight: 24,
+    statusBarHeight: 23
+  };
+}
+
 export function clampRect(
   rect: PreviewRect,
   minW: number,

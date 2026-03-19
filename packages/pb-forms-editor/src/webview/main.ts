@@ -23,6 +23,7 @@ import {
   getGadgetContentRect,
   getStatusBarAlignedX,
   getWindowChromeLayout,
+  resolvePreviewChromeMetrics,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -41,6 +42,7 @@ import {
 import {
   canEditToolBarTooltip,
   getDefaultMenuItemInsertArgs,
+  getMenuFlyoutPanelRect,
   getDirectMenuChildIndices,
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
@@ -48,8 +50,11 @@ import {
   getMenuEntrySourceLine,
   getMenuPreviewLabel,
   getPredictedMenuEntryMoveIndex,
+  getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getToolBarPreviewInsertArgs,
+  hasPbFlag,
+  unquotePbString,
   getVisibleToolBarEntryCount,
   shouldShowToolBarStructureEntry
 } from "../core/topLevelPreviewUtils";
@@ -530,6 +535,8 @@ let settings: DesignerSettings = {
   canvasBackground: "",
   canvasReadonlyBackground: ""
 };
+
+const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
 
 type PbfdSymbols = {
   menuEntryKinds: readonly string[];
@@ -1437,7 +1444,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
   if (!hitWindow(mx, my)) return null;
 
   const { lx, ly } = toLocal(mx, my);
-  const metrics = getPreviewChromeMetrics();
+  const metrics = previewChromeMetrics;
   const cache = new Map<string, GadgetPreviewLayout>();
 
   for (let i = model.gadgets.length - 1; i >= 0; i--) {
@@ -1459,7 +1466,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
 
 
 function hitHandleGadget(g: Gadget, mx: number, my: number): Handle | null {
-  const metrics = getPreviewChromeMetrics();
+  const metrics = previewChromeMetrics;
   const layout = getGadgetPreviewLayout(g, metrics);
   if (!layout.visible) return null;
   const { gx, gy } = toGlobal(layout.rect.x, layout.rect.y);
@@ -1528,7 +1535,7 @@ canvas.addEventListener("mousedown", (e) => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  const panelTabHit = hitTestPanelTab(mx, my, getPreviewChromeMetrics());
+  const panelTabHit = hitTestPanelTab(mx, my, previewChromeMetrics);
   if (panelTabHit) {
     panelActiveItems.set(panelTabHit.panel.id, panelTabHit.index);
     selection = { kind: "gadget", id: panelTabHit.panel.id };
@@ -1577,7 +1584,7 @@ canvas.addEventListener("mousedown", (e) => {
     }
   }
 
-  const footerHit = hitTestMenuFooter(mx, my, getPreviewChromeMetrics());
+  const footerHit = hitTestMenuFooter(mx, my, previewChromeMetrics);
   if (footerHit) {
     const menu = (model.menus ?? []).find(entry => entry.id === footerHit.menuId);
     const parentEntry = menu?.entries?.[footerHit.parentIndex];
@@ -1597,7 +1604,7 @@ canvas.addEventListener("mousedown", (e) => {
     }
   }
 
-  const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
+  const topLevelChromeHit = hitTestTopLevelChrome(mx, my, previewChromeMetrics);
   if (topLevelChromeHit) {
     selection = topLevelChromeHit.selection;
     if (topLevelChromeHit.selection.kind === "menuEntry") {
@@ -1629,7 +1636,7 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
-  const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
+  const chromeHit = hitTestPreviewChrome(mx, my, previewChromeMetrics);
   if (chromeHit) {
     const g = chromeHit.gadget;
     selection = { kind: "gadget", id: g.id };
@@ -1661,7 +1668,7 @@ canvas.addEventListener("mousedown", (e) => {
       };
       canvas.style.cursor = "move";
     } else if (chromeHit.zone === "scrollAreaVBar" || chromeHit.zone === "scrollAreaHBar") {
-      const metrics = getPreviewChromeMetrics();
+      const metrics = previewChromeMetrics;
       const layout = getGadgetPreviewLayout(g, metrics);
       const axis = chromeHit.zone === "scrollAreaHBar" ? "x" : "y";
       drag = {
@@ -1812,13 +1819,13 @@ window.addEventListener("mousemove", (e) => {
       }
     }
 
-    const topLevelChromeHit = hitTestTopLevelChrome(mx, my, getPreviewChromeMetrics());
+    const topLevelChromeHit = hitTestTopLevelChrome(mx, my, previewChromeMetrics);
     if (topLevelChromeHit) {
       canvas.style.cursor = "default";
       return;
     }
 
-    const chromeHit = hitTestPreviewChrome(mx, my, getPreviewChromeMetrics());
+    const chromeHit = hitTestPreviewChrome(mx, my, previewChromeMetrics);
     if (chromeHit) {
       if (chromeHit.zone === "containerBorder" || chromeHit.zone === "panelHeader" || chromeHit.zone === "splitterBar") {
         canvas.style.cursor = "move";
@@ -1842,7 +1849,7 @@ window.addEventListener("mousemove", (e) => {
     if (!g) return;
     const delta = d.axis === "x" ? dx : dy;
     const nextOffset = clamp(d.startOffset + Math.round((delta / d.trackLength) * d.maxOffset), 0, d.maxOffset);
-    const metrics = getPreviewChromeMetrics();
+    const metrics = previewChromeMetrics;
     const layout = getGadgetPreviewLayout(g, metrics);
     const current = getScrollAreaPreviewOffset(g.id);
     if (d.axis === "x") {
@@ -1992,56 +1999,6 @@ window.addEventListener("mouseup", () => {
 
   drag = null;
 });
-
-function getPreviewChromeMetrics(): PreviewChromeMetrics {
-  const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
-
-  if (ua.includes("mac")) {
-    return {
-      panelHeight: 31,
-      scrollAreaWidth: 14,
-      splitterWidth: 12,
-      menuHeight: 23,
-      toolBarHeight: 36,
-      statusBarHeight: 24
-    };
-  }
-
-  if (ua.includes("linux")) {
-    return {
-      panelHeight: 29,
-      scrollAreaWidth: 20,
-      splitterWidth: 9,
-      menuHeight: 28,
-      toolBarHeight: 38,
-      statusBarHeight: 26
-    };
-  }
-
-  return {
-    panelHeight: 22,
-    scrollAreaWidth: 20,
-    splitterWidth: 9,
-    menuHeight: 22,
-    toolBarHeight: 24,
-    statusBarHeight: 23
-  };
-}
-
-function hasPbFlag(flagsExpr: string | undefined, flag: string): boolean {
-  if (!flagsExpr) return false;
-  const parts = flagsExpr.split("|").map((part) => part.trim());
-  return parts.includes(flag);
-}
-
-function unquotePbString(raw: string | undefined): string {
-  if (!raw) return "";
-  const trimmed = raw.trim();
-  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
 
 type GadgetPreviewLayout = {
   rect: PreviewRect;
@@ -3119,7 +3076,7 @@ function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: nu
   if (!menu) return null;
 
   const winRect = getWinRect();
-  const metrics = getPreviewChromeMetrics();
+  const metrics = previewChromeMetrics;
   const menuBarRect = getWindowGlobalChromeLayout(metrics)?.menuBarRect ?? null;
   const menuBarBottom = menuBarRect ? menuBarRect.y + menuBarRect.h : 0;
 
@@ -3231,41 +3188,6 @@ function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: nu
   }
 
   return null;
-}
-
-function getMenuFlyoutPanelRect(
-  ctx: CanvasRenderingContext2D,
-  menu: MenuModel,
-  parentIndex: number,
-  anchorRect: PreviewRect
-): PreviewRect | null {
-  const childIndices = getDirectMenuChildIndices(menu, parentIndex);
-
-  let innerWidth = 0;
-  let height = 20;
-  for (const childIndex of childIndices) {
-    const entry = menu.entries[childIndex];
-    if (entry.kind === "MenuBar") {
-      height += 12;
-      continue;
-    }
-
-    let textWidth = Math.ceil(ctx.measureText(getMenuPreviewLabel(entry)).width);
-    if (entry.shortcut) {
-      textWidth += Math.ceil(ctx.measureText(entry.shortcut).width);
-    }
-    textWidth += 24;
-    innerWidth = Math.max(innerWidth, textWidth);
-    height += 20;
-  }
-
-  const width = Math.max(100, innerWidth + 40);
-  return {
-    x: anchorRect.x,
-    y: anchorRect.y,
-    w: width,
-    h: Math.max(0, height)
-  };
 }
 
 function drawMenuFlyoutPanelPreview(
@@ -3464,7 +3386,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ? { x: previousPanelRect.x + previousPanelRect.w, y: parentRect.y, w: 0, h: 0 }
       : { x: parentRect.x, y: rect.y + rect.h - 2, w: 0, h: 0 };
 
-    const panelRect = getMenuFlyoutPanelRect(ctx, menu, parentIndex, anchorRect);
+    const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;
     drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, itemHover);
     previousPanelRect = panelRect;
@@ -3583,15 +3505,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
   ctx.restore();
 
-  let fixedWidth = 0;
-  let flexibleCount = 0;
-  for (const field of statusbar.fields) {
-    const parsed = parseStatusBarWidth(field.widthRaw);
-    if (parsed === null) flexibleCount++;
-    else fixedWidth += parsed;
-  }
-  const remainingWidth = Math.max(0, rect.w - fixedWidth);
-  const flexibleWidth = flexibleCount > 0 ? Math.max(1, Math.floor(remainingWidth / flexibleCount)) : 0;
+  const fieldWidths = getStatusBarFieldWidths(statusbar, rect.w);
 
   let x = rect.x;
   const progressY = rect.y + 5;
@@ -3599,8 +3513,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const imageY = rect.y + 4;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
-    const parsedWidth = parseStatusBarWidth(field.widthRaw);
-    const fieldW = Math.max(18, parsedWidth ?? flexibleWidth);
+    const fieldW = fieldWidths[i] ?? 18;
     statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
 
     if (i > 0) {
@@ -3721,7 +3634,7 @@ function render() {
     ctx.clearRect(winX, winY, winW, winH);
   }
 
-  const chromeMetrics = getPreviewChromeMetrics();
+  const chromeMetrics = previewChromeMetrics;
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
   const globalChromeLayout = getWindowGlobalChromeLayout(chromeMetrics);
   const windowContentRect = localChromeLayout.contentRect;
@@ -4327,7 +4240,7 @@ function getEditableSplitterState(g: Gadget): number {
     return Math.trunc(g.state);
   }
 
-  const metrics = getPreviewChromeMetrics();
+  const metrics = previewChromeMetrics;
   const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
   const range = Math.max(0, (vertical ? g.w : g.h) - metrics.splitterWidth);
   return Math.trunc(range / 2);

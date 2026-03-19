@@ -9,10 +9,14 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuFlyoutPanelRect,
   getMenuPreviewLabel,
   getPredictedMenuEntryMoveIndex,
+  getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getToolBarPreviewInsertArgs,
+  hasPbFlag,
+  unquotePbString,
   getVisibleToolBarEntryCount,
   isBoundToolBarTooltipEntry,
   shouldShowToolBarStructureEntry
@@ -155,4 +159,39 @@ test("builds default statusbar preview insert args", () => {
     progressBar: true,
     progressRaw: "50"
   });
+});
+
+
+test("exposes pb-style flags, string unquoting and top-level preview widths", () => {
+  assert.equal(hasPbFlag("#PB_StatusBar_Center | #PB_StatusBar_Raised", "#PB_StatusBar_Center"), true);
+  assert.equal(hasPbFlag("#PB_StatusBar_Raised", "#PB_StatusBar_Center"), false);
+  assert.equal(unquotePbString('  "Status"  '), "Status");
+  assert.equal(unquotePbString("Status"), "Status");
+
+  assert.deepEqual(getStatusBarFieldWidths({
+    fields: [
+      { widthRaw: "60" },
+      { widthRaw: "#PB_Ignore" },
+      { widthRaw: "120" },
+      { widthRaw: "VariableWidth" }
+    ]
+  }, 320), [60, 70, 120, 70]);
+});
+
+test("computes flyout menu panel rectangles from visible child content", () => {
+  const menu = {
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1 },
+      { kind: "MenuItem", textRaw: '"PNG"', shortcut: "Ctrl+P", level: 2 },
+      { kind: "MenuBar", level: 2 },
+      { kind: "MenuItem", textRaw: '"JPG"', level: 2 },
+      { kind: "CloseSubMenu", level: 1 }
+    ]
+  };
+
+  assert.deepEqual(
+    getMenuFlyoutPanelRect(menu, 1, { x: 100, y: 50, w: 0, h: 0 }, (text) => text.length * 6),
+    { x: 100, y: 50, w: 118, h: 72 }
+  );
 });

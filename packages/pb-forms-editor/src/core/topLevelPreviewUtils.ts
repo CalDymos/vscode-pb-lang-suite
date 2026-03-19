@@ -1,3 +1,5 @@
+import { parseStatusBarWidth } from "./statusbarPreviewUtils";
+
 export type SourceLineLike = {
   line: number;
 };
@@ -26,6 +28,28 @@ export type ToolBarModelLike = {
   entries?: ToolBarEntryLike[];
 };
 
+export type StatusBarFieldLike = {
+  widthRaw: string;
+  textRaw?: string;
+  text?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
+  imageRaw?: string;
+  imageId?: string;
+};
+
+export type StatusBarModelLike = {
+  fields?: StatusBarFieldLike[];
+};
+
+export type PreviewRectLike = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
 
@@ -33,7 +57,7 @@ function toPbStringLiteral(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function unquotePbString(raw?: string): string {
+export function unquotePbString(raw?: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
   if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
@@ -229,4 +253,71 @@ export function getStatusBarPreviewInsertArgs(
     case "progress":
       return { widthRaw: "120", progressBar: true, progressRaw: "50" };
   }
+}
+
+export function hasPbFlag(flagsExpr: string | undefined, flag: string): boolean {
+  if (!flagsExpr) return false;
+  const parts = flagsExpr.split("|").map((part) => part.trim());
+  return parts.includes(flag);
+}
+
+export function getStatusBarFieldWidths(
+  statusBar: StatusBarModelLike,
+  totalWidth: number,
+  minWidth = 18
+): number[] {
+  let fixedWidth = 0;
+  let flexibleCount = 0;
+  for (const field of statusBar.fields ?? []) {
+    const parsed = parseStatusBarWidth(field.widthRaw);
+    if (parsed === null) {
+      flexibleCount += 1;
+    } else {
+      fixedWidth += parsed;
+    }
+  }
+
+  const remainingWidth = Math.max(0, totalWidth - fixedWidth);
+  const flexibleWidth = flexibleCount > 0 ? Math.max(1, Math.floor(remainingWidth / flexibleCount)) : 0;
+
+  return (statusBar.fields ?? []).map((field) => {
+    const parsedWidth = parseStatusBarWidth(field.widthRaw);
+    return Math.max(minWidth, parsedWidth ?? flexibleWidth);
+  });
+}
+
+export function getMenuFlyoutPanelRect(
+  menu: MenuModelLike,
+  parentIndex: number,
+  anchorRect: PreviewRectLike,
+  measureText: (text: string) => number
+): PreviewRectLike | null {
+  const childIndices = getDirectMenuChildIndices(menu, parentIndex);
+
+  let innerWidth = 0;
+  let height = 20;
+  for (const childIndex of childIndices) {
+    const entry = menu.entries?.[childIndex];
+    if (!entry) continue;
+    if (entry.kind === "MenuBar") {
+      height += 12;
+      continue;
+    }
+
+    let textWidth = Math.ceil(measureText(getMenuPreviewLabel(entry)));
+    if (entry.shortcut) {
+      textWidth += Math.ceil(measureText(entry.shortcut));
+    }
+    textWidth += 24;
+    innerWidth = Math.max(innerWidth, textWidth);
+    height += 20;
+  }
+
+  const width = Math.max(100, innerWidth + 40);
+  return {
+    x: anchorRect.x,
+    y: anchorRect.y,
+    w: width,
+    h: Math.max(0, height)
+  };
 }

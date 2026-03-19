@@ -29,6 +29,7 @@ import {
   isPointOnRectBorder,
   rectContainsPoint,
   resolvePanelActiveItem,
+  resolvePreviewChromeMetrics,
   toWindowGlobalPoint,
   toWindowLocalPoint,
   type PreviewChromeMetrics,
@@ -217,4 +218,25 @@ test("applies resize deltas for east and north-west handles", () => {
     applyResize(RECT, { dx: 40, dy: 50 }, "nw", 60, 40),
     { x: 50, y: 60, w: 80, h: 40 }
   );
+});
+
+
+test("resolves default preview chrome metrics from user-agent hints", () => {
+  assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (Macintosh; Intel Mac OS X)"), {
+    panelHeight: 31,
+    scrollAreaWidth: 14,
+    splitterWidth: 12,
+    menuHeight: 23,
+    toolBarHeight: 36,
+    statusBarHeight: 24
+  });
+  assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (X11; Linux x86_64)"), {
+    panelHeight: 29,
+    scrollAreaWidth: 20,
+    splitterWidth: 9,
+    menuHeight: 28,
+    toolBarHeight: 38,
+    statusBarHeight: 26
+  });
+  assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), METRICS);
 });
