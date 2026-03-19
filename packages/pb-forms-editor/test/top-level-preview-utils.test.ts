@@ -9,11 +9,16 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuEntryMoveTarget,
+  getMenuEntryRect,
   getMenuFlyoutPanelRect,
+  getMenuFooterRect,
   getMenuPreviewLabel,
   getPredictedMenuEntryMoveIndex,
+  getMenuVisibleEntries,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolvePreviewRectListHit,
   resolveTopLevelChromeHit,
@@ -259,4 +264,103 @@ test("resolves top-level chrome hits from menu, toolbar and statusbar rectangles
   );
 
   assert.equal(resolveTopLevelChromeHit({ x: 0, y: 0, windowHit: false }), null);
+});
+
+
+test("resolves visible menu entry and footer rectangles from preview caches", () => {
+  const menu = {
+    id: "menu-1",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "MenuItem", textRaw: '"Open"', level: 1 }
+    ]
+  };
+  const entryRects = [
+    { ownerId: "menu-1", index: 0, x: 10, y: 20, w: 40, h: 18 },
+    { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 60, h: 18 }
+  ];
+  const footerRects = [{ menuId: "menu-1", parentIndex: 0, x: 20, y: 58, w: 60, h: 20 }];
+
+  assert.deepEqual(getMenuEntryRect(entryRects, "menu-1", 1), entryRects[1]);
+  assert.deepEqual(getMenuFooterRect(footerRects, "menu-1", 0), footerRects[0]);
+  assert.deepEqual(getMenuVisibleEntries(menu, entryRects), [
+    { index: 0, entry: menu.entries[0], rect: entryRects[0] },
+    { index: 1, entry: menu.entries[1], rect: entryRects[1] }
+  ]);
+  assert.deepEqual(
+    resolveMenuFooterHit({ x: 30, y: 65, windowHit: true, menuRect: { x: 0, y: 0, w: 100, h: 20 }, footerRects }),
+    footerRects[0]
+  );
+});
+
+test("resolves menu move targets from visible flyout entries", () => {
+  const menu = {
+    id: "menu-1",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } },
+      { kind: "MenuItem", textRaw: '"PNG"', level: 2, source: { line: 12 } },
+      { kind: "CloseSubMenu", level: 1, source: { line: 13 } },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1, source: { line: 14 } }
+    ]
+  };
+  const visibleEntries = [
+    { index: 0, entry: menu.entries[0], rect: { ownerId: "menu-1", index: 0, x: 10, y: 20, w: 40, h: 18 } },
+    { index: 1, entry: menu.entries[1], rect: { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 70, h: 20 } },
+    { index: 2, entry: menu.entries[2], rect: { ownerId: "menu-1", index: 2, x: 30, y: 60, w: 80, h: 20 } },
+    { index: 4, entry: menu.entries[4], rect: { ownerId: "menu-1", index: 4, x: 20, y: 80, w: 70, h: 20 } }
+  ];
+  const footerRects = [{ menuId: "menu-1", parentIndex: 1, x: 30, y: 80, w: 80, h: 20 }];
+
+  assert.deepEqual(
+    getMenuEntryMoveTarget({
+      menu,
+      sourceEntryIndex: 4,
+      x: 8,
+      y: 25,
+      menuBarBottom: 38,
+      visibleEntries,
+      footerRects
+    }),
+    {
+      targetSourceLine: 10,
+      placement: "before",
+      indicatorRect: { x: 9, y: 20, w: 2, h: 18 },
+      indicatorOrientation: "vertical"
+    }
+  );
+
+  const emptySubMenu = {
+    id: "menu-1",
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0, source: { line: 10 } },
+      { kind: "OpenSubMenu", textRaw: '"Export"', level: 1, source: { line: 11 } },
+      { kind: "CloseSubMenu", level: 1, source: { line: 13 } },
+      { kind: "MenuItem", textRaw: '"Quit"', level: 1, source: { line: 14 } }
+    ]
+  };
+  const emptyVisibleEntries = [
+    { index: 0, entry: emptySubMenu.entries[0], rect: { ownerId: "menu-1", index: 0, x: 10, y: 20, w: 40, h: 18 } },
+    { index: 1, entry: emptySubMenu.entries[1], rect: { ownerId: "menu-1", index: 1, x: 20, y: 40, w: 70, h: 20 } },
+    { index: 3, entry: emptySubMenu.entries[3], rect: { ownerId: "menu-1", index: 3, x: 20, y: 80, w: 70, h: 20 } }
+  ];
+
+  assert.deepEqual(
+    getMenuEntryMoveTarget({
+      menu: emptySubMenu,
+      sourceEntryIndex: 3,
+      x: 95,
+      y: 50,
+      menuBarBottom: 38,
+      visibleEntries: emptyVisibleEntries,
+      footerRects,
+      selectedEntryIndex: 1
+    }),
+    {
+      targetSourceLine: 11,
+      placement: "appendChild",
+      indicatorRect: { x: 90, y: 40, w: 80, h: 2 },
+      indicatorOrientation: "horizontal"
+    }
+  );
 });

@@ -16,6 +16,7 @@ export type MenuEntryLike = {
 };
 
 export type MenuModelLike = {
+  id?: string;
   entries?: MenuEntryLike[];
 };
 
@@ -79,6 +80,21 @@ export type TopLevelChromeHitLike =
   | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewEntryRectLike }
   | { selection: { kind: "statusbar"; id: string }; rect: PreviewRectLike }
   | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewEntryRectLike };
+
+export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
+
+export type MenuEntryMoveTargetLike = {
+  targetSourceLine: number;
+  placement: MenuEntryMovePlacement;
+  indicatorRect: PreviewRectLike;
+  indicatorOrientation: "horizontal" | "vertical";
+};
+
+export type VisibleMenuEntryLike = {
+  index: number;
+  entry: MenuEntryLike;
+  rect: PreviewEntryRectLike;
+};
 
 export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
@@ -411,6 +427,149 @@ export function resolveTopLevelChromeHit(args: {
       return { selection: { kind: "toolBarEntry", toolBarId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
     }
     return { selection: { kind: "toolbar", id: args.toolBarId }, rect: args.toolBarRect };
+  }
+
+  return null;
+}
+
+
+export function getMenuEntryRect(
+  entryRects: PreviewEntryRectLike[],
+  menuId: string,
+  entryIndex: number
+): PreviewEntryRectLike | undefined {
+  return entryRects.find((entry) => entry.ownerId === menuId && entry.index === entryIndex);
+}
+
+export function getMenuFooterRect(
+  footerRects: PreviewMenuFooterRectLike[],
+  menuId: string,
+  parentIndex: number
+): PreviewMenuFooterRectLike | undefined {
+  return footerRects.find((entry) => entry.menuId === menuId && entry.parentIndex === parentIndex);
+}
+
+export function getMenuVisibleEntries(
+  menu: MenuModelLike,
+  entryRects: PreviewEntryRectLike[]
+): VisibleMenuEntryLike[] {
+  const result: VisibleMenuEntryLike[] = [];
+
+  for (const [index, entry] of (menu.entries ?? []).entries()) {
+    const rect = getMenuEntryRect(entryRects, menu.id ?? "", index);
+    if (!rect) continue;
+    result.push({ index, entry, rect });
+  }
+
+  return result;
+}
+
+export function resolveMenuFooterHit(args: {
+  x: number;
+  y: number;
+  windowHit: boolean;
+  menuRect?: PreviewRectLike | null;
+  footerRects?: PreviewMenuFooterRectLike[];
+}): PreviewMenuFooterRectLike | null {
+  if (!args.windowHit || !args.menuRect) return null;
+  return resolvePreviewRectListHit(args.footerRects, args.x, args.y);
+}
+
+export function getMenuEntryMoveTarget(args: {
+  menu: MenuModelLike;
+  sourceEntryIndex: number;
+  x: number;
+  y: number;
+  menuBarBottom: number;
+  visibleEntries: VisibleMenuEntryLike[];
+  footerRects: PreviewMenuFooterRectLike[];
+  selectedEntryIndex?: number;
+}): MenuEntryMoveTargetLike | null {
+  const visibleEntries = args.visibleEntries;
+  if (!visibleEntries.length) return null;
+
+  const firstVisibleRoot = visibleEntries.find((item) => getMenuEntryLevel(item.entry) === 0);
+  if (
+    firstVisibleRoot
+    && firstVisibleRoot.index !== args.sourceEntryIndex
+    && args.x <= firstVisibleRoot.rect.x
+    && args.y >= firstVisibleRoot.rect.y
+    && args.y < firstVisibleRoot.rect.y + firstVisibleRoot.rect.h
+  ) {
+    const targetSourceLine = getMenuEntrySourceLine(args.menu, firstVisibleRoot.index);
+    if (typeof targetSourceLine === "number") {
+      return {
+        targetSourceLine,
+        placement: "before",
+        indicatorRect: { x: firstVisibleRoot.rect.x - 1, y: firstVisibleRoot.rect.y, w: 2, h: firstVisibleRoot.rect.h },
+        indicatorOrientation: "vertical"
+      };
+    }
+  }
+
+  let previousLevel = 0;
+  for (const visibleEntry of visibleEntries) {
+    const level = getMenuEntryLevel(visibleEntry.entry);
+    const rect = visibleEntry.rect;
+    const targetSourceLine = getMenuEntrySourceLine(args.menu, visibleEntry.index);
+
+    if (
+      typeof targetSourceLine === "number"
+      && visibleEntry.index !== args.sourceEntryIndex
+      && level > previousLevel
+      && args.y >= rect.y - 1
+      && args.y < rect.y + 1
+      && args.x > rect.x
+      && args.x <= rect.x + rect.w
+    ) {
+      return {
+        targetSourceLine,
+        placement: "before",
+        indicatorRect: { x: rect.x, y: rect.y - 1, w: rect.w, h: 2 },
+        indicatorOrientation: "horizontal"
+      };
+    }
+
+    if (
+      typeof targetSourceLine === "number"
+      && args.x > rect.x
+      && args.x <= rect.x + rect.w
+      && args.y > rect.y + 1
+      && args.y <= rect.y + rect.h
+    ) {
+      return {
+        targetSourceLine,
+        placement: "after",
+        indicatorRect: level === 0
+          ? { x: rect.x + rect.w, y: rect.y, w: 2, h: rect.h }
+          : { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 2 },
+        indicatorOrientation: level === 0 ? "vertical" : "horizontal"
+      };
+    }
+
+    if (visibleEntry.entry.kind === "OpenSubMenu") {
+      const footerRect = getMenuFooterRect(args.footerRects, args.menu.id ?? "", visibleEntry.index);
+      const childIndices = getDirectMenuChildIndices(args.menu, visibleEntry.index);
+      const isSelectedEmptyOpenSubmenu = visibleEntry.index === args.selectedEntryIndex;
+      if (
+        footerRect
+        && childIndices.length === 0
+        && typeof targetSourceLine === "number"
+        && visibleEntry.index !== args.sourceEntryIndex
+        && isSelectedEmptyOpenSubmenu
+        && args.x > rect.x + rect.w
+        && args.y > args.menuBarBottom
+      ) {
+        return {
+          targetSourceLine,
+          placement: "appendChild",
+          indicatorRect: { x: rect.x + rect.w, y: rect.y, w: footerRect.w, h: 2 },
+          indicatorOrientation: "horizontal"
+        };
+      }
+    }
+
+    previousLevel = level;
   }
 
   return null;
