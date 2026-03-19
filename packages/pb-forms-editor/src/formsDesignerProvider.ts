@@ -62,6 +62,8 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
+  setGadgetOpenArgs: "setGadgetOpenArgs",
+  setGadgetProperties: "setGadgetProperties",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
@@ -121,6 +123,8 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
@@ -445,6 +449,27 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs: {
+          const edit = applyGadgetOpenArgsUpdate(document, msg.id, {
+            textRaw: msg.textRaw,
+            minRaw: msg.minRaw,
+            maxRaw: msg.maxRaw
+          }, sr);
+          await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties: {
+          const edit = applyGadgetPropertyUpdate(document, msg.id, {
+            hiddenRaw: msg.hiddenRaw,
+            disabledRaw: msg.disabledRaw,
+            tooltipRaw: msg.tooltipRaw,
+            frontColorRaw: msg.frontColorRaw,
+            backColorRaw: msg.backColorRaw,
+            gadgetFontRaw: msg.gadgetFontRaw
+          }, sr);
+          await applyEditOrError(edit, `Could not patch properties for gadget '${msg.id}'. No matching gadget property block found${rangeInfo}.`);
+          return;
+        }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc: {
           const edit = applyGadgetEventProcUpdate(document, msg.id, msg.eventProc, sr);
           await applyEditOrError(edit, `Could not patch event proc for gadget '${msg.id}'. No matching EventGadget block found${rangeInfo}.`);

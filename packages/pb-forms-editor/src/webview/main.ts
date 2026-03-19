@@ -68,6 +68,16 @@ import {
   shouldShowToolBarStructureEntry
 } from "../core/topLevelPreviewUtils";
 
+import {
+  buildGadgetTextRaw,
+  buildGadgetTooltipRaw,
+  canEditGadgetColors,
+  canEditGadgetText,
+  getGadgetFontDisplaySummary,
+  getGadgetTextInspectorValue,
+  getGadgetTooltipInspectorValue
+} from "../core/gadgetInspectorUtils";
+
 type SourceRange = { line: number };
 
 type GadgetItem = {
@@ -99,7 +109,9 @@ type Gadget = {
   y: number;
   w: number;
   h: number;
+  textRaw?: string;
   text?: string;
+  textVariable?: boolean;
   imageRaw?: string;
   imageId?: string;
   minRaw?: string;
@@ -112,8 +124,23 @@ type Gadget = {
   gadget2Id?: string;
   splitterId?: string;
   flagsExpr?: string;
+  tooltipRaw?: string;
+  tooltip?: string;
+  tooltipVariable?: boolean;
   stateRaw?: string;
   state?: number;
+  frontColorRaw?: string;
+  frontColor?: number;
+  backColorRaw?: string;
+  backColor?: number;
+  gadgetFontRaw?: string;
+  gadgetFont?: string;
+  gadgetFontSize?: number;
+  gadgetFontFlagsRaw?: string;
+  hiddenRaw?: string;
+  hidden?: boolean;
+  disabledRaw?: string;
+  disabled?: boolean;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -248,6 +275,8 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
+  setGadgetOpenArgs: "setGadgetOpenArgs",
+  setGadgetProperties: "setGadgetProperties",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
@@ -314,6 +343,8 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
@@ -1528,6 +1559,43 @@ function postWindowRect() {
     w: model.window.w,
     h: model.window.h
   });
+}
+
+function postGadgetOpenArgs(id: string, args: { textRaw?: string; minRaw?: string; maxRaw?: string }): void {
+  post({ type: "setGadgetOpenArgs", id, ...args });
+}
+
+function postGadgetProperties(
+  id: string,
+  args: {
+    hiddenRaw?: string;
+    disabledRaw?: string;
+    tooltipRaw?: string;
+    frontColorRaw?: string;
+    backColorRaw?: string;
+    gadgetFontRaw?: string;
+  }
+): void {
+  post({ type: "setGadgetProperties", id, ...args });
+}
+
+function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  const textRaw = buildGadgetTextRaw(value, isVariable);
+  g.textRaw = textRaw;
+  g.textVariable = isVariable;
+  g.text = isVariable ? value.trim() : value;
+  postGadgetOpenArgs(g.id, { textRaw });
+  render();
+  renderProps();
+}
+
+function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  const tooltipRaw = buildGadgetTooltipRaw(value, isVariable);
+  g.tooltipRaw = tooltipRaw;
+  g.tooltipVariable = isVariable && Boolean(tooltipRaw);
+  g.tooltip = tooltipRaw ? (isVariable ? value.trim() : value) : undefined;
+  postGadgetProperties(g.id, { tooltipRaw });
+  renderProps();
 }
 
 canvas.addEventListener("mousedown", (e) => {
@@ -5882,6 +5950,140 @@ function renderProps() {
   if (isImageCapableGadget) {
     propsEl.appendChild(mutedNote("Image-capable gadgets accept raw image expressions such as ImageID(#ImgOpen) or 0."));
   }
+
+  const canEditCaption = canEditGadgetText(g.kind);
+  const canEditColors = canEditGadgetColors(g.kind);
+  const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
+
+  if (canEditCaption) {
+    propsEl.appendChild(
+      row(
+        "Caption Is Variable",
+        checkboxInput(Boolean(g.textVariable), v => {
+          applyLocalGadgetTextUpdate(g, getGadgetTextInspectorValue(g), v);
+        })
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "Caption",
+        textInput(
+          getGadgetTextInspectorValue(g),
+          v => {
+            applyLocalGadgetTextUpdate(g, v, Boolean(g.textVariable));
+          },
+          { title: "Matches the original Caption / CaptionIsVariable property pair and patches the gadget constructor argument." }
+        )
+      )
+    );
+  }
+
+  propsEl.appendChild(
+    row(
+      "Tooltip Is Variable",
+      checkboxInput(Boolean(g.tooltipVariable), v => {
+        applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
+      })
+    )
+  );
+  propsEl.appendChild(
+    row(
+      "Tooltip",
+      textInput(
+        getGadgetTooltipInspectorValue(g),
+        v => {
+          applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
+        },
+        { title: "Matches the original Tooltip / TooltipIsVariable property pair and patches GadgetToolTip(...)." }
+      )
+    )
+  );
+
+  propsEl.appendChild(
+    row(
+      "Hidden",
+      checkboxInput(Boolean(g.hidden), v => {
+        g.hidden = v;
+        g.hiddenRaw = v ? "1" : "0";
+        postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
+        render();
+        renderProps();
+      }, {
+        title: g.hiddenRaw && g.hidden === undefined ? "The source currently uses a non-literal HideGadget expression. Toggling here rewrites it to 1 or 0." : "Matches the original Hidden property and patches HideGadget(...)."
+      })
+    )
+  );
+  propsEl.appendChild(
+    row(
+      "Disabled",
+      checkboxInput(Boolean(g.disabled), v => {
+        g.disabled = v;
+        g.disabledRaw = v ? "1" : "0";
+        postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
+        render();
+        renderProps();
+      }, {
+        title: g.disabledRaw && g.disabled === undefined ? "The source currently uses a non-literal DisableGadget expression. Toggling here rewrites it to 1 or 0." : "Matches the original Disabled property and patches DisableGadget(...)."
+      })
+    )
+  );
+  if (hasExpressionVisibility) {
+    propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));
+  }
+
+  propsEl.appendChild(
+    row(
+      "Font Raw",
+      textInput(
+        g.gadgetFontRaw ?? "",
+        v => {
+          const trimmed = v.trim();
+          g.gadgetFontRaw = trimmed || undefined;
+          postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
+          renderProps();
+        },
+        { title: "Patch the raw SetGadgetFont(..., FontID(...)) argument directly." }
+      )
+    )
+  );
+  const gadgetFontSummary = getGadgetFontDisplaySummary(g);
+  if (gadgetFontSummary) {
+    propsEl.appendChild(mutedNote(`Parsed font: ${gadgetFontSummary}`));
+  }
+
+  if (canEditColors) {
+    propsEl.appendChild(
+      row(
+        "FrontColor Raw",
+        textInput(
+          g.frontColorRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.frontColorRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { frontColorRaw: trimmed || undefined });
+            renderProps();
+          },
+          { title: "Patch the raw SetGadgetColor(..., #PB_Gadget_FrontColor, ...) expression directly." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "BackColor Raw",
+        textInput(
+          g.backColorRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.backColorRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { backColorRaw: trimmed || undefined });
+            renderProps();
+          },
+          { title: "Patch the raw SetGadgetColor(..., #PB_Gadget_BackColor, ...) expression directly." }
+        )
+      )
+    );
+  }
+
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
   const gadgetEventProcHint = hasEventGadgetBlock
     ? ""

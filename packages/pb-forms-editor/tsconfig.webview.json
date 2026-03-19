@@ -15,6 +15,7 @@
     "src/webview/**/*.ts",
     "src/core/previewChromeUtils.ts",
     "src/core/statusbarPreviewUtils.ts",
-    "src/core/topLevelPreviewUtils.ts"
+    "src/core/topLevelPreviewUtils.ts",
+    "src/core/gadgetInspectorUtils.ts"
   ]
 }
