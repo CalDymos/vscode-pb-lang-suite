@@ -57,8 +57,39 @@ export interface Gadget {
   y: number;
   w: number;
   h: number;
+  textRaw?: string;      // raw caption/text expression from the gadget constructor
   text?: string;
+  textVariable?: boolean;
+  imageRaw?: string;     // raw image expression from the gadget constructor
+  imageId?: string;      // normalized image identifier extracted from ImageID(...)
+  minRaw?: string;       // raw minimum/range start expression from the gadget constructor
+  min?: number;
+  maxRaw?: string;       // raw maximum/range end expression from the gadget constructor
+  max?: number;
+  gadget1Raw?: string;   // raw first child gadget reference for SplitterGadget(...)
+  gadget1Id?: string;    // normalized first child gadget id/reference
+  gadget2Raw?: string;   // raw second child gadget reference for SplitterGadget(...)
+  gadget2Id?: string;    // normalized second child gadget id/reference
+  splitterId?: string;   // normalized owning splitter gadget id for gadgets inside a splitter
   flagsExpr?: string;
+  tooltipRaw?: string;   // raw tooltip expression from GadgetToolTip(...)
+  tooltip?: string;
+  tooltipVariable?: boolean;
+  stateRaw?: string;     // raw state expression from SetGadgetState(...)
+  state?: number;
+  frontColorRaw?: string;
+  frontColor?: number;
+  backColorRaw?: string;
+  backColor?: number;
+  gadgetFontRaw?: string;   // raw FontID(...) expression from SetGadgetFont(...)
+  gadgetFont?: string;
+  gadgetFontSize?: number;
+  gadgetFontFlagsRaw?: string;
+  hiddenRaw?: string;
+  hidden?: boolean;
+  disabledRaw?: string;
+  disabled?: boolean;
+  eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
   source?: SourceRange;
@@ -70,6 +101,7 @@ export interface GadgetItem {
   textRaw?: string;      // raw text expression
   text?: string;         // unquoted text (when possible)
   imageRaw?: string;     // optional image expression
+  imageId?: string;      // normalized image identifier extracted from ImageID(...)
   flagsRaw?: string;     // optional flags expression
   source?: SourceRange;
 }
@@ -93,8 +125,28 @@ export interface FormWindow {
   y: number;
   w: number;
   h: number;
-  title?: string;
+  captionRaw?: string;       // raw caption expression from OpenWindow(...)
+  caption?: string;          // canonical field matching original FormWindow\caption
+  captionVariable?: boolean; // matches original FormWindow\captionvariable
+  title?: string;            // temporary compatibility alias for current extension code
   flagsExpr?: string;
+  knownFlags?: string[];
+  colorRaw?: string;         // raw color expression from SetWindowColor(...)
+  color?: number;
+  generateEventLoop?: boolean;
+  hasEventGadgetBlock?: boolean;
+  hasEventGadgetCaseBranches?: boolean;
+  hasEventMenuBlock?: boolean;
+  disabledRaw?: string;      // raw disabled expression from DisableWindow(...)
+  disabled?: boolean;
+  hiddenRaw?: string;        // raw hidden expression from HideWindow(...)
+  hidden?: boolean;
+  parentRaw?: string;        // raw parent expression from OpenWindow(..., parent)
+  parent?: string;
+  eventFile?: string;
+  eventProc?: string;
+  customFlags?: string[];
+  source?: SourceRange;
 }
 
 export type FormIssueSeverity = "error" | "warning" | "info";
@@ -147,8 +199,11 @@ export interface FormMenuEntry {
   idRaw?: string;        // raw id token (MenuItem)
   textRaw?: string;      // raw title/text token
   text?: string;         // unquoted (when possible)
-  iconRaw?: string;      // for ToolBar entries (optional)
+  shortcut?: string;     // parsed shortcut suffix from MenuItem(...)
+  iconRaw?: string;      // raw ImageID(...) expression for menu icons
+  iconId?: string;       // normalized image identifier for menu icons
   widthRaw?: string;     // for StatusBar fields (optional)
+  event?: string;
   source?: SourceRange;
 }
 
@@ -161,6 +216,7 @@ export interface FormMenu {
 export const TOOLBAR_ENTRY_KIND = {
   ToolBarStandardButton: "ToolBarStandardButton",
   ToolBarButton: "ToolBarButton",
+  ToolBarImageButton: "ToolBarImageButton",
   ToolBarSeparator: "ToolBarSeparator",
   ToolBarToolTip: "ToolBarToolTip",
   Unknown: "Unknown",
@@ -173,8 +229,12 @@ export interface FormToolBarEntry {
   kind: ToolBarEntryKind;
   idRaw?: string;
   iconRaw?: string;
+  iconId?: string;
   textRaw?: string;
   text?: string;
+  tooltip?: string;
+  toggle?: boolean;
+  event?: string;
   source?: SourceRange;
 }
 
@@ -186,6 +246,13 @@ export interface FormToolBar {
 
 export interface FormStatusBarField {
   widthRaw: string;
+  textRaw?: string;
+  text?: string;
+  imageRaw?: string;
+  imageId?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
   source?: SourceRange;
 }
 
@@ -195,8 +262,34 @@ export interface FormStatusBar {
   source?: SourceRange;
 }
 
+export interface FormFont {
+  id: string;            // stable key for patching (assigned var for #PB_Any, else first param)
+  pbAny: boolean;
+  variable?: string;     // e.g. "fontMain" when #PB_Any is used with an assigned variable
+  firstParam: string;    // raw first param token
+  nameRaw: string;       // raw font name expression from LoadFont(...)
+  name?: string;         // unquoted font name when possible
+  sizeRaw: string;       // raw font size expression from LoadFont(...)
+  size?: number;
+  flagsRaw?: string;
+  source?: SourceRange;
+}
+
+export interface FormImage {
+  id: string;            // stable key for patching/references (assigned var for #PB_Any, else first param)
+  pbAny: boolean;
+  variable?: string;     // e.g. "imgSave" when #PB_Any is used with an assigned variable
+  firstParam: string;    // raw first param token
+  imageRaw: string;      // raw file or data-label expression from LoadImage/CatchImage
+  image?: string;        // normalized file path or data label (without leading '?')
+  inline: boolean;       // CatchImage(...) stores inline image data labels
+  source?: SourceRange;
+}
+
 export interface FormDocument {
   window?: FormWindow;
+  fonts: FormFont[];
+  images: FormImage[];
   gadgets: Gadget[];
   menus: FormMenu[];
   toolbars: FormToolBar[];
@@ -214,7 +307,7 @@ export const ENUM_NAMES = {
 // to ensure consistency of identifiers (menu entries, toolbar buttons, container gadgets, etc.)
 // and to avoid magic strings or mismatches between extension and webview.
 export const PBFD_MENU_ENTRY_KINDS = [MENU_ENTRY_KIND.MenuTitle, MENU_ENTRY_KIND.MenuItem, MENU_ENTRY_KIND.MenuBar, MENU_ENTRY_KIND.OpenSubMenu, MENU_ENTRY_KIND.CloseSubMenu] as const;
-export const PBFD_TOOLBAR_ENTRY_KINDS = [TOOLBAR_ENTRY_KIND.ToolBarButton, TOOLBAR_ENTRY_KIND.ToolBarStandardButton, TOOLBAR_ENTRY_KIND.ToolBarSeparator, TOOLBAR_ENTRY_KIND.ToolBarToolTip] as const;
+export const PBFD_TOOLBAR_ENTRY_KINDS = [TOOLBAR_ENTRY_KIND.ToolBarButton, TOOLBAR_ENTRY_KIND.ToolBarImageButton, TOOLBAR_ENTRY_KIND.ToolBarStandardButton, TOOLBAR_ENTRY_KIND.ToolBarSeparator, TOOLBAR_ENTRY_KIND.ToolBarToolTip] as const;
 export const PBFD_CONTAINER_GADGET_KINDS = [GADGET_KIND.ContainerGadget, GADGET_KIND.PanelGadget, GADGET_KIND.ScrollAreaGadget] as const;
 export const PBFD_ENUM_NAMES = ENUM_NAMES;
 

@@ -9,10 +9,8 @@
     "types": []
   },
   "include": [
-    "src/core/model.ts",
-    "src/core/parser/**/*.ts",
+    "src/core/**/*.ts",
     "test/**/*.ts",
     "test/types/**/*.d.ts",
-    "src/core/emitter/patchEmitter.ts"
   ]
 }

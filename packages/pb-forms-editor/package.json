@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.8.2",
+  "version": "0.13.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -195,15 +195,22 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p .",
-    "watch": "tsc -watch -p .",
+    "compile": "webpack --mode development --config webpack.config.js",
+    "watch": "webpack --mode development --watch --config webpack.config.js",
+    "webpack:prod": "webpack --mode production --config webpack.config.js",
+    "vscode:prepublish": "npm run webpack:prod",
     "compile:test": "tsc -p ./tsconfig.test.json && node ./test/scripts/copy-vscode-shim.js",
+    "compile:webview": "tsc -p ./tsconfig.webview.json",
     "test": "npm run compile:test && node --test out-test/test/*.test.js",
-    "test:watch": "npm run compile:test && node --test --watch out-test/test/parser.smoke.test.js out-test/test/patch.window-gadget.test.js out-test/test/patch.items-columns.test.js"
+    "test:watch": "npm run compile:test && node --test --watch out-test/test/parser.smoke.test.js out-test/test/patch.window-gadget.test.js out-test/test/patch.items-columns.test.js out-test/test/patch.combined.test.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "@types/node": "^20.11.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1",
+    "ts-loader": "^9.5.4",
+    "source-map-loader": "^5.0.0"
   }
 }

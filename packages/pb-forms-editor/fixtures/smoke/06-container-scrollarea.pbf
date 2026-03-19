@@ -8,11 +8,19 @@
 ;
 
 Enumeration FormWindow
-  #FrmMain
+  #FrmScrollHost
+EndEnumeration
+
+Enumeration FormGadget
+  #ScrMain
+  #TxtInner
 EndEnumeration
 
 
-Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
-  OpenWindow(#FrmMain, x, y, width, height, "Window Basic")
+Procedure OpenFrmScrollHost(x = 0, y = 0, width = 360, height = 220)
+  OpenWindow(#FrmScrollHost, x, y, width, height, "Scroll Host", #PB_Window_SystemMenu)
+  ScrollAreaGadget(#ScrMain, 10, 10, 220, 120, 480, 320, 1, #PB_ScrollArea_Flat)
+  TextGadget(#TxtInner, 30, 40, 120, 20, "Inner")
+  CloseGadgetList()
 EndProcedure
 
