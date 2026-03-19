@@ -47,6 +47,27 @@ A Visual Studio Code extension that provides a lightweight editor workflow for P
 - Stable window handling for both `#PB_Any` and enumeration-based `OpenWindow(...)` forms
 - Can work with `Enumeration FormWindow` / `Enumeration FormGadget` blocks inside the Form Designer section
 
+## Verified Support Matrix
+
+The matrix below is based on the currently verified parser, patcher, preview-geometry and regression tests in this repository.  
+**Verified** means there is a tested code path in the current suite. **Partial** means a working path exists, but parity or UX is still incomplete. **Not yet** means no verified end-to-end support is documented yet.
+
+| Area | Status | Verified scope / current limitation |
+| --- | --- | --- |
+| Form Designer block detection and metadata | Verified | Detects the Form Designer header, limits parsing to the designer block, and keeps header/version scan metadata. |
+| Window and gadget parsing / patching | Verified | Covers window geometry, `OpenWindow(...)` args, managed window lines, gadget geometry, gadget constructor args, `#PB_Any` / enum keys, and managed gadget properties such as tooltip, colors, hidden / disabled and state. |
+| Gadget items and columns | Verified | `AddGadgetItem(...)` and `AddGadgetColumn(...)` insert / update / delete roundtrips are covered by dedicated tests. |
+| Images and image references | Verified | Covers `LoadImage(...)`, `CatchImage(...)`, PB 6.30 image blocks, decoder management, enum / `#PB_Any` image ids, and cross references from gadgets, menus, toolbars and status bars. |
+| Menus, toolbars and status bars | Verified | Insert / update / delete / move patch flows are covered, including submenu blocks, toolbar tooltips, status bar decorations and combined top-level chrome roundtrips. |
+| Event bindings | Verified | Covers window include / default handler / `generateEventLoop`, plus gadget, menu and toolbar event proc patching in real fixtures. |
+| Container patching | Verified | Combined real-fixture patch / reparse flows are covered for `PanelGadget`, `ScrollAreaGadget` and `SplitterGadget`. |
+| Preview chrome geometry and hit zones | Partial | Geometry helpers for menu / toolbar / status bar bands, scroll areas and splitter bars are tested, but full visual parity and remaining rendering details are still in progress. |
+| Structural menu editing in the preview | Partial | Visible submenu flyouts, subtree move, structural delete and generated `OpenSubMenu(...)` / `CloseSubMenu()` insertion are implemented. Footer insertion for an empty submenu is still open, and custom footer entry kinds are not yet verified. |
+| Inspector / add flows in the webview | Partial | Several edit flows still rely on browser `prompt()` / `confirm()` dialogs and have not yet been replaced by dedicated webview UI. |
+| Preview-only local UI state | Partial | Active panel tabs and scroll offsets are currently local webview state and are not written back into the `.pbf` source. |
+| Performance validation on large forms | Not yet | Dedicated performance and stress validation for large forms and deeply nested containers is still open. |
+| Full original Form Designer parity | Partial | The extension has broad tested coverage for the currently implemented parser / patch / preview paths, but the migration is still ongoing and should not yet be treated as full parity. |
+
 > ⚠️ Still in development
 
 ## Related Extensions

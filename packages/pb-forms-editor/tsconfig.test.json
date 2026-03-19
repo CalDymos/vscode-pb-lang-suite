@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "out-test",
+    "lib": [
+      "ES2022"
+    ],
+    "types": []
+  },
+  "include": [
+    "src/core/**/*.ts",
+    "test/**/*.ts",
+    "test/types/**/*.d.ts",
+  ]
+}

@@ -4,27 +4,45 @@ import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
+  applyGadgetOpenArgsUpdate,
+  applyGadgetPropertyUpdate,
+  applyImageDelete,
+  applyImageInsert,
+  applyImageUpdate,
+  applyGadgetEventProcUpdate,
   applyGadgetItemDelete,
   applyGadgetItemInsert,
   applyGadgetItemUpdate,
+  applyMenuDelete,
   applyMenuEntryDelete,
+  applyMenuEntryEventUpdate,
   applyMenuEntryInsert,
+  applyMenuEntryMove,
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
+  applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
   applyStatusBarFieldUpdate,
+  applyToolBarDelete,
   applyToolBarEntryDelete,
+  applyToolBarEntryEventUpdate,
   applyToolBarEntryInsert,
+  applyToolBarEntryTooltipSet,
   applyToolBarEntryUpdate,
   applyWindowEnumValuePatch,
+  applyWindowEventProcUpdate,
+  applyWindowEventUpdate,
+  applyWindowGenerateEventLoopUpdate,
   applyWindowVariableNamePatch,
   applyWindowPbAnyToggle,
   applyWindowRectPatch
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
+import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
+import { readImageDimensions } from "./core/imageDimensionUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -44,10 +62,16 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
+  setGadgetEventProc: "setGadgetEventProc",
+  setGadgetImageRaw: "setGadgetImageRaw",
+  setGadgetStateRaw: "setGadgetStateRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
   setWindowVariableName: "setWindowVariableName",
+  setWindowEventFile: "setWindowEventFile",
+  setWindowEventProc: "setWindowEventProc",
+  setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
@@ -58,41 +82,91 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   deleteGadgetColumn: "deleteGadgetColumn",
 
   insertMenuEntry: "insertMenuEntry",
+  moveMenuEntry: "moveMenuEntry",
   updateMenuEntry: "updateMenuEntry",
   deleteMenuEntry: "deleteMenuEntry",
+  deleteMenu: "deleteMenu",
+  setMenuEntryEvent: "setMenuEntryEvent",
 
   insertToolBarEntry: "insertToolBarEntry",
   updateToolBarEntry: "updateToolBarEntry",
   deleteToolBarEntry: "deleteToolBarEntry",
+  deleteToolBar: "deleteToolBar",
+  setToolBarEntryEvent: "setToolBarEntryEvent",
+  setToolBarEntryTooltip: "setToolBarEntryTooltip",
 
   insertStatusBarField: "insertStatusBarField",
   updateStatusBarField: "updateStatusBarField",
-  deleteStatusBarField: "deleteStatusBarField"
+  deleteStatusBarField: "deleteStatusBarField",
+  deleteStatusBar: "deleteStatusBar",
+
+  insertImage: "insertImage",
+  updateImage: "updateImage",
+  deleteImage: "deleteImage",
+  relativizeImagePath: "relativizeImagePath",
+  chooseImageFileForEntry: "chooseImageFileForEntry",
+  toggleImagePbAny: "toggleImagePbAny",
+
+  createAndAssignGadgetImage: "createAndAssignGadgetImage",
+  chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
+  createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
+  createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
+  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
+  chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
+  chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
+  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage"
 } as const;
 
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn; id: string; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn; id: string; sourceLine: number; colRaw: string; titleRaw: string; widthRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn; id: string; sourceLine: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry; menuId: string; kind: string; idRaw?: string; textRaw?: string; parentSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry; menuId: string; sourceLine: number; kind: string; targetSourceLine: number; placement: "before" | "after" | "appendChild" }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry; menuId: string; sourceLine: number; kind: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu; menuId: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent; entryIdRaw: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry; toolBarId: string; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry; toolBarId: string; sourceLine: number; kind: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar; toolBarId: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent; entryIdRaw: string; eventProc?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip; toolBarId: string; sourceLine: number; entryIdRaw: string; textRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField; statusBarId: string; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField; statusBarId: string; sourceLine: number; widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny; sourceLine: number; toPbAny: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string };
 
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
@@ -123,10 +197,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     function createErrorModel(textLen: number, message: string): FormDocument {
       return {
         window: undefined,
+        fonts: [],
         gadgets: [],
         menus: [],
         toolbars: [],
         statusbars: [],
+        images: [],
         meta: {
           scanRange: { start: 0, end: textLen },
           issues: [{ severity: "error", message }]
@@ -216,8 +292,86 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           postError(errorMessage);
           return false;
         }
-        await vscode.workspace.applyEdit(edit);
+        const ok = await vscode.workspace.applyEdit(edit);
+        if (!ok) {
+          postError(errorMessage);
+          return false;
+        }
         return true;
+      };
+
+      // Merges two WorkspaceEdits into one so they can be applied atomically in a single
+      // applyEdit() call. WorkspaceEdit has no built-in merge API; we accumulate via get/set.
+      const mergeWorkspaceEdits = (a: vscode.WorkspaceEdit, b: vscode.WorkspaceEdit): vscode.WorkspaceEdit => {
+        const merged = new vscode.WorkspaceEdit();
+        for (const edit of [a, b]) {
+          for (const [uri, textEdits] of edit.entries()) {
+            merged.set(uri, [...merged.get(uri), ...textEdits]);
+          }
+        }
+        return merged;
+      };
+
+      // Validates that both edits could be built, merges them into one WorkspaceEdit, and
+      // applies it atomically. Returns false (with error) if either edit is undefined or
+      // applyEdit() fails — without having partially modified the document.
+      const applyPairedEditsOrError = async (
+        assignEdit: vscode.WorkspaceEdit | undefined,
+        assignErrorMessage: string,
+        insertEdit: vscode.WorkspaceEdit | undefined,
+        insertErrorMessage: string,
+      ): Promise<boolean> => {
+        if (!assignEdit) { postError(assignErrorMessage); return false; }
+        if (!insertEdit) { postError(insertErrorMessage); return false; }
+        const ok = await vscode.workspace.applyEdit(mergeWorkspaceEdits(assignEdit, insertEdit));
+        if (!ok) { postError(assignErrorMessage); return false; }
+        return true;
+      };
+
+      const pickImageFile = async (): Promise<{ fsPath: string; imageRaw: string } | undefined> => {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          openLabel: "Select Image"
+        });
+
+        const fileUri = picked?.[0];
+        if (!fileUri) return undefined;
+
+        return {
+          fsPath: fileUri.fsPath,
+          imageRaw: toPbFilePathLiteral(fileUri.fsPath)
+        };
+      };
+
+      const pickImageFileRaw = async (): Promise<string | undefined> => {
+        const picked = await pickImageFile();
+        return picked?.imageRaw;
+      };
+
+      const buildCreatedImageReference = (idRaw: string, assignedVar?: string): string | undefined => {
+        const trimmedId = idRaw.trim();
+        if (!trimmedId.length) return undefined;
+
+        if (trimmedId.toLowerCase() === "#pb_any") {
+          const variableName = assignedVar?.trim();
+          return variableName ? `ImageID(${variableName})` : undefined;
+        }
+
+        return `ImageID(${trimmedId})`;
+      };
+
+      const toPbAnyAssignedVar = (firstParam: string): string | undefined => {
+        const trimmed = firstParam.trim();
+        if (!trimmed.length) return undefined;
+        return trimmed.startsWith("#") ? trimmed.slice(1).trim() || undefined : trimmed;
+      };
+
+      const toEnumImageId = (variableOrId: string): string | undefined => {
+        const trimmed = variableOrId.trim();
+        if (!trimmed.length) return undefined;
+        return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
       };
 
       const ensureMenuEntryKind = (kind: string): boolean => {
@@ -291,6 +445,81 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc: {
+          const edit = applyGadgetEventProcUpdate(document, msg.id, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for gadget '${msg.id}'. No matching EventGadget block found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw: {
+          const edit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: msg.imageRaw }, sr);
+          await applyEditOrError(edit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw: {
+          const gadget = lastModel?.gadgets.find(entry => entry.id === msg.id);
+          if (!gadget) {
+            postError(`Could not find gadget '${msg.id}' for state update${rangeInfo}.`);
+            return;
+          }
+          if (gadget.kind !== "SplitterGadget") {
+            postError(`State editing is currently only enabled for SplitterGadget entries.`);
+            return;
+          }
+
+          const trimmed = msg.stateRaw.trim();
+          const nextState = Number(trimmed);
+          if (!trimmed.length || !Number.isFinite(nextState)) {
+            postError(`Splitter position must be a finite number.`);
+            return;
+          }
+
+          const vertical = (gadget.flagsExpr ?? "").split("|").map(part => part.trim()).includes("#PB_Splitter_Vertical");
+          const limit = vertical ? gadget.w : gadget.h;
+          const stateInt = Math.trunc(nextState);
+          if (stateInt <= 0 || stateInt >= limit) {
+            postError(`Splitter position must be greater than 0 and smaller than the splitter ${vertical ? "width" : "height"}.`);
+            return;
+          }
+
+          const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: String(stateInt) }, sr);
+          await applyEditOrError(edit, `Could not update splitter state for '${msg.id}'${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
+          const edit = applyMenuEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for menu entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent: {
+          const edit = applyToolBarEntryEventUpdate(document, msg.entryIdRaw, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for toolbar entry '${msg.entryIdRaw}'. No matching EventMenu block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip: {
+          const edit = applyToolBarEntryTooltipSet(document, msg.toolBarId, msg.sourceLine, msg.entryIdRaw, msg.textRaw, sr);
+          await applyEditOrError(edit, `Could not patch toolbar tooltip for entry '${msg.entryIdRaw}'. No matching toolbar entry found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile: {
+          const edit = applyWindowEventUpdate(document, msg.windowKey, { eventFileRaw: msg.eventFile }, sr);
+          await applyEditOrError(edit, `Could not patch event include for window '${msg.windowKey}'. No matching procedure block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc: {
+          const edit = applyWindowEventProcUpdate(document, msg.windowKey, msg.eventProc, sr);
+          await applyEditOrError(edit, `Could not patch event proc for window '${msg.windowKey}'. No matching EventGadget block found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop: {
+          const edit = applyWindowGenerateEventLoopUpdate(document, msg.windowKey, msg.enabled, sr);
+          await applyEditOrError(edit, `Could not patch generate-event-loop flag for window '${msg.windowKey}'. No safe EventGadget patch path found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem: {
           const edit = applyGadgetItemInsert(
             document,
@@ -346,8 +575,28 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry: {
           if (!ensureMenuEntryKind(msg.kind)) return;
-          const edit = applyMenuEntryInsert(document, msg.menuId, { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw }, sr);
+          const edit = applyMenuEntryInsert(
+            document,
+            msg.menuId,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+            sr,
+            { parentSourceLine: msg.parentSourceLine }
+          );
           await applyEditOrError(edit, `Could not insert menu entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+          const edit = applyMenuEntryMove(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            msg.kind as any,
+            { targetSourceLine: msg.targetSourceLine, placement: msg.placement },
+            sr
+          );
+          await applyEditOrError(edit, `Could not move menu entry for menu '${msg.menuId}'. No matching structural move target found${rangeInfo}.`);
           return;
         }
 
@@ -357,7 +606,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             document,
             msg.menuId,
             msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw },
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: msg.iconRaw },
             sr
           );
           await applyEditOrError(edit, `Could not update menu entry for menu '${msg.menuId}'. No matching call found${rangeInfo}.`);
@@ -389,7 +638,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             document,
             msg.toolBarId,
             msg.sourceLine,
-            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw },
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: msg.iconRaw, textRaw: msg.textRaw, toggle: msg.toggle },
             sr
           );
           await applyEditOrError(edit, `Could not update toolbar entry for toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`);
@@ -403,14 +652,34 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar: {
+          const edit = applyToolBarDelete(document, msg.toolBarId, sr);
+          await applyEditOrError(edit, `Could not delete toolbar '${msg.toolBarId}'. No matching CreateToolBar section found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField: {
-          const edit = applyStatusBarFieldInsert(document, msg.statusBarId, { widthRaw: msg.widthRaw }, sr);
+          const edit = applyStatusBarFieldInsert(document, msg.statusBarId, {
+            widthRaw: msg.widthRaw,
+            textRaw: msg.textRaw,
+            imageRaw: msg.imageRaw,
+            flagsRaw: msg.flagsRaw,
+            progressBar: msg.progressBar,
+            progressRaw: msg.progressRaw,
+          }, sr);
           await applyEditOrError(edit, `Could not insert statusbar field for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField: {
-          const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw }, sr);
+          const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, {
+            widthRaw: msg.widthRaw,
+            textRaw: msg.textRaw,
+            imageRaw: msg.imageRaw,
+            flagsRaw: msg.flagsRaw,
+            progressBar: msg.progressBar,
+            progressRaw: msg.progressRaw,
+          }, sr);
           await applyEditOrError(
             edit,
             `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
@@ -423,6 +692,389 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           await applyEditOrError(
             edit,
             `Could not delete statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar: {
+          const edit = applyStatusBarDelete(document, msg.statusBarId, sr);
+          await applyEditOrError(
+            edit,
+            `Could not delete statusbar '${msg.statusBarId}'. No matching CreateStatusBar section found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertImage: {
+          const edit = applyImageInsert(document, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar }, sr);
+          await applyEditOrError(edit, `Could not insert image entry. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.updateImage: {
+          const edit = applyImageUpdate(document, msg.sourceLine, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteImage: {
+          const edit = applyImageDelete(document, msg.sourceLine, sr);
+          await applyEditOrError(edit, `Could not delete image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath: {
+          if (msg.inline) {
+            postError(`Could not make image path relative. CatchImage entries do not use a file path${rangeInfo}.`);
+            return;
+          }
+
+          const relativeImageRaw = relativizeImagePath(document.uri.fsPath, msg.imageRaw);
+          if (!relativeImageRaw) {
+            postError(`Could not make image path relative. Save the form first and use a quoted LoadImage file path${rangeInfo}.`);
+            return;
+          }
+
+          const edit = applyImageUpdate(document, msg.sourceLine, {
+            inline: msg.inline,
+            idRaw: msg.idRaw,
+            imageRaw: relativeImageRaw,
+            assignedVar: msg.assignedVar
+          }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry: {
+          if (msg.inline) {
+            postError(`Could not choose a file for this image entry. CatchImage entries do not use a file path${rangeInfo}.`);
+            return;
+          }
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const edit = applyImageUpdate(document, msg.sourceLine, {
+            inline: false,
+            idRaw: msg.idRaw,
+            imageRaw: pickedImageRaw,
+            assignedVar: msg.assignedVar
+          }, sr);
+          await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny: {
+          const model = lastModel;
+          const image = model?.images.find((entry) => entry.source?.line === msg.sourceLine);
+          if (!image) {
+            postError(`Could not toggle image pbAny. No matching image entry found${rangeInfo}.`);
+            return;
+          }
+
+          const oldImageId = image.id;
+          const toggledAssignedVar = msg.toPbAny
+            ? toPbAnyAssignedVar(image.firstParam)
+            : undefined;
+          const toggledIdRaw = msg.toPbAny
+            ? "#PB_Any"
+            : toEnumImageId(image.variable ?? image.id ?? "");
+
+          if (!toggledIdRaw || (msg.toPbAny && !toggledAssignedVar)) {
+            postError(`Could not derive the target image identifier for '${image.id}'${rangeInfo}.`);
+            return;
+          }
+
+          const nextImageRef = buildCreatedImageReference(toggledIdRaw, toggledAssignedVar);
+          if (!nextImageRef) {
+            postError(`Could not build the updated image reference for '${image.id}'${rangeInfo}.`);
+            return;
+          }
+
+          const gadgetUsages = (model?.gadgets ?? []).filter((entry) => entry.imageId === oldImageId);
+          const menuUsages = (model?.menus ?? []).flatMap((menu) =>
+            menu.entries
+              .filter((entry) => entry.iconId === oldImageId)
+              .map((entry) => ({ menuId: menu.id, entry }))
+          );
+          const toolBarUsages = (model?.toolbars ?? []).flatMap((toolBar) =>
+            toolBar.entries
+              .filter((entry) => entry.iconId === oldImageId)
+              .map((entry) => ({ toolBarId: toolBar.id, entry }))
+          );
+          const statusBarUsages = (model?.statusbars ?? []).flatMap((statusBar) =>
+            statusBar.fields
+              .filter((field) => field.imageId === oldImageId)
+              .map((field) => ({ statusBarId: statusBar.id, field }))
+          );
+
+          const applyOrAbort = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
+            if (!edit) {
+              postError(errorMessage);
+              return false;
+            }
+            const ok = await vscode.workspace.applyEdit(edit);
+            if (!ok) {
+              postError(errorMessage);
+              return false;
+            }
+            return true;
+          };
+
+          for (const gadget of gadgetUsages) {
+            const edit = applyGadgetOpenArgsUpdate(document, gadget.id, { imageRaw: nextImageRef }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in gadget '${gadget.id}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { menuId, entry } of menuUsages) {
+            const sourceLine = entry.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyMenuEntryUpdate(document, menuId, sourceLine, {
+              kind: entry.kind as any,
+              idRaw: entry.idRaw,
+              textRaw: entry.textRaw,
+              shortcut: entry.shortcut,
+              iconRaw: nextImageRef,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in menu '${menuId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { toolBarId, entry } of toolBarUsages) {
+            const sourceLine = entry.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyToolBarEntryUpdate(document, toolBarId, sourceLine, {
+              kind: entry.kind as any,
+              idRaw: entry.idRaw,
+              iconRaw: nextImageRef,
+              toggle: entry.toggle,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in toolbar '${toolBarId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          for (const { statusBarId, field } of statusBarUsages) {
+            const sourceLine = field.source?.line;
+            if (typeof sourceLine !== "number") continue;
+            const edit = applyStatusBarFieldUpdate(document, statusBarId, sourceLine, {
+              widthRaw: field.widthRaw,
+              imageRaw: nextImageRef,
+            }, sr);
+            if (!await applyOrAbort(edit, `Could not update image reference in statusbar '${statusBarId}'${rangeInfo}.`)) {
+              return;
+            }
+          }
+
+          const declarationEdit = applyImageUpdate(document, msg.sourceLine, {
+            inline: image.inline,
+            idRaw: toggledIdRaw,
+            imageRaw: image.imageRaw,
+            assignedVar: toggledAssignedVar,
+          }, sr);
+          await applyEditOrError(declarationEdit, `Could not toggle image entry '${image.id}'${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage: {
+          const picked = await pickImageFile();
+          if (!picked) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
+          if (!await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+          )) {
+            return;
+          }
+
+          // Resize is non-fatal and applied separately after the atomic assign+insert.
+          if (msg.resizeToImage) {
+            try {
+              const dims = await readImageDimensions(picked.fsPath);
+              if (dims) {
+                const resizeEdit = applyRectPatch(document, msg.id, msg.x, msg.y, dims.width, dims.height, sr);
+                await applyEditOrError(resizeEdit, `Could not resize gadget '${msg.id}' to the selected image size${rangeInfo}.`);
+              } else {
+                postError(`Assigned image to gadget '${msg.id}', but could not determine the selected image size for auto-resize${rangeInfo}.`);
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              postError(`Assigned image to gadget '${msg.id}', but could not read the selected image size: ${message}${rangeInfo}.`);
+            }
+          }
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyMenuEntryUpdate(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            sr
+          );
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyToolBarEntryUpdate(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            sr
+          );
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
+          const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage: {
+          if (!ensureMenuEntryKind(msg.kind)) return;
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyMenuEntryUpdate(
+            document,
+            msg.menuId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, textRaw: msg.textRaw, shortcut: msg.shortcut, iconRaw: imageRef },
+            sr
+          );
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for menu entry in menu '${msg.menuId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for menu '${msg.menuId}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage: {
+          if (!ensureToolBarEntryKind(msg.kind)) return;
+
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyToolBarEntryUpdate(
+            document,
+            msg.toolBarId,
+            msg.sourceLine,
+            { kind: msg.kind as any, idRaw: msg.idRaw, iconRaw: imageRef, toggle: msg.toggle },
+            sr
+          );
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for toolbar entry in toolbar '${msg.toolBarId}'. No matching call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for toolbar '${msg.toolBarId}'. No suitable insertion point found${rangeInfo}.`,
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage: {
+          const pickedImageRaw = await pickImageFileRaw();
+          if (!pickedImageRaw) {
+            return;
+          }
+
+          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          if (!imageRef) {
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            return;
+          }
+
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
+          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
+          await applyPairedEditsOrError(
+            assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
+            insertEdit, `Could not insert image entry for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`,
           );
           return;
         }
@@ -448,7 +1100,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       content="default-src 'none';
                img-src ${webview.cspSource} data:;
                style-src ${webview.cspSource} 'unsafe-inline';
-               script-src 'nonce-${nonce}';">
+               script-src 'nonce-${nonce}' ${webview.cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PureBasic Form Designer</title>
     <style>
@@ -593,6 +1245,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         align-items: center;
         margin: 4px 0;
         font-size: 12px;
+        border-radius: 6px;
+        padding: 4px 6px;
+      }
+
+      .miniRow.selected {
+        background: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-activeSelectionForeground);
       }
 
       .miniRow button {

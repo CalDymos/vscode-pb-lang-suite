@@ -7,6 +7,7 @@ pnpm-debug.log*
 
 # Build outputs
 out/
+out-*/
 dist/
 build/
 *.vsix
@@ -99,4 +100,5 @@ jest-stare/
 # Yarn Integrity file
 .yarn-integrity
 
-.tmp
+.tmp/
+.dev/

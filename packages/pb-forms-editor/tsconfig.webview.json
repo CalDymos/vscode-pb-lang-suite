@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["dom", "ES2022"],
+    "strict": true,
+    "noImplicitAny": true,
+    "noEmit": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "src/webview/**/*.ts",
+    "src/core/previewChromeUtils.ts",
+    "src/core/statusbarPreviewUtils.ts",
+    "src/core/topLevelPreviewUtils.ts"
+  ]
+}
