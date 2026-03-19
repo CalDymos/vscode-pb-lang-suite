@@ -1182,24 +1182,17 @@ function parseMenuItemText(textRaw: string | undefined): { text?: string; shortc
 
   const literal = parsePbStringLiteral(raw);
   if (literal !== undefined) {
-    const shortcutPos = literal.indexOf('"');
-    if (shortcutPos < 0) {
-      return { text: literal.length ? literal : undefined };
-    }
-
-    const text = literal.slice(0, shortcutPos);
-    const shortcut = literal.slice(shortcutPos + 1);
-    return {
-      text: text.length ? text : undefined,
-      shortcut: shortcut.length ? shortcut : undefined
-    };
+    // parsePbStringLiteral() returns undefined for "..." + Chr(9) + "..." expressions,
+    // so the literal branch is only reached for plain captions without a shortcut.
+    // Any '"' in `literal` is unescaped caption content, never a shortcut delimiter.
+    return { text: literal.length ? literal : undefined };
   }
 
-  const expr = parseMenuItemTextExpression(raw);
-  if (expr) return expr;
+    const expr = parseMenuItemTextExpression(raw);
+    if (expr) return expr;
 
-  return { text: undefined, shortcut: undefined };
-}
+    return { text: undefined, shortcut: undefined };
+  }
 
 function parsePbStringLiteral(raw: string): string | undefined {
   const value = raw.trim();

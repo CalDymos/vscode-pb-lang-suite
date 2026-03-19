@@ -320,9 +320,9 @@ function normalizeMenuTextForShortcut(textRaw: string): string {
 
   const literal = unquoteString(raw);
   if (literal !== undefined) {
-    const shortcutPos = literal.indexOf('"');
-    const text = shortcutPos >= 0 ? literal.slice(0, shortcutPos) : literal;
-    return quotePbString(text);
+    // A plain string literal has no embedded shortcut in PBF format;
+    // shortcuts are always expressed as "..." + Chr(9) + "..." (handled above).
+    return quotePbString(literal);
   }
 
   return raw;
