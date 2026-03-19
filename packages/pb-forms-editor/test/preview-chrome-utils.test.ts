@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getGadgetContentRect,
+  getRectHandlePoints,
   getMenuBarRect,
   getPanelTabLayouts,
   clampScrollAreaOffset,
@@ -16,8 +17,10 @@ import {
   getScrollAreaViewportRect,
   getStatusBarRect,
   getStatusBarAlignedX,
+  hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
+  getWindowChromeLayout,
   intersectRect,
   isPointOnRectBorder,
   rectContainsPoint,
@@ -112,6 +115,18 @@ test("computes the window content rect below title, menu and toolbar and above s
   assert.deepEqual(content, { x: 0, y: 72, w: 320, h: 125 });
 });
 
+test("computes combined window chrome layout from title and top-level bands", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS);
+
+  assert.deepEqual(layout, {
+    menuBarRect: { x: 40, y: 76, w: 320, h: 22 },
+    toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
+    statusBarRect: { x: 40, y: 247, w: 320, h: 23 },
+    contentRect: { x: 40, y: 122, w: 320, h: 125 }
+  });
+});
+
 
 test("computes splitter pane rects for both child slots", () => {
   assert.deepEqual(getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "first"), { x: 10, y: 20, w: 30, h: 80 });
@@ -136,6 +151,27 @@ test("computes panel tab layouts from labels and measured widths", () => {
   ]);
 });
 
+
+
+
+test("computes window/gadget resize handles and resolves pointer hits", () => {
+  const points = getRectHandlePoints(RECT);
+
+  assert.deepEqual(points, [
+    ["nw", 10, 20],
+    ["n", 70, 20],
+    ["ne", 130, 20],
+    ["w", 10, 60],
+    ["e", 130, 60],
+    ["sw", 10, 100],
+    ["s", 70, 100],
+    ["se", 130, 100]
+  ]);
+
+  assert.equal(hitHandlePoints(points, 10, 20, 10), "nw");
+  assert.equal(hitHandlePoints(points, 130, 100, 10), "se");
+  assert.equal(hitHandlePoints(points, 80, 70, 10), null);
+});
 
 test("computes statusbar content alignment for left, center and right flags", () => {
   assert.equal(getStatusBarAlignedX(10, 90, 30, false, false), 10);

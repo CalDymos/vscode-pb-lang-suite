@@ -10,6 +10,14 @@ export type PreviewChromeMetrics = {
   statusBarHeight: number;
 };
 
+export type WindowChromeLayout = {
+  contentRect: PreviewRect;
+  menuBarRect: PreviewRect | null;
+  toolBarRect: PreviewRect | null;
+  statusBarRect: PreviewRect | null;
+};
+
+export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
 export type PanelTabLayout = {
   index: number;
@@ -336,6 +344,36 @@ export function getStatusBarAlignedX(
   return fieldX;
 }
 
+
+export function getRectHandlePoints(rect: PreviewRect): Array<[ResizeHandle, number, number]> {
+  const { x, y, w, h } = rect;
+  return [
+    ["nw", x, y],
+    ["n", x + w / 2, y],
+    ["ne", x + w, y],
+    ["w", x, y + h / 2],
+    ["e", x + w, y + h / 2],
+    ["sw", x, y + h],
+    ["s", x + w / 2, y + h],
+    ["se", x + w, y + h]
+  ];
+}
+
+export function hitHandlePoints(
+  points: Array<[ResizeHandle, number, number]>,
+  x: number,
+  y: number,
+  hitSize: number
+): ResizeHandle | null {
+  const half = hitSize / 2;
+  for (const [handle, px, py] of points) {
+    if (x >= px - half && x <= px + half && y >= py - half && y <= py + half) {
+      return handle;
+    }
+  }
+  return null;
+}
+
 export function getWindowContentRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
@@ -353,5 +391,21 @@ export function getWindowContentRect(
     y: windowRect.y + top,
     w: windowRect.w,
     h: Math.max(0, windowRect.h - top - bottom)
+  };
+}
+
+export function getWindowChromeLayout(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  hasToolbar: boolean,
+  hasStatusbar: boolean,
+  metrics: PreviewChromeMetrics
+): WindowChromeLayout {
+  return {
+    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics),
+    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics) : null,
+    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics) : null,
+    statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics) : null
   };
 }

@@ -2,6 +2,8 @@ import {
   type PreviewRect,
   type PreviewChromeMetrics,
   type PanelTabLayout,
+  type WindowChromeLayout,
+  type ResizeHandle,
   intersectRect,
   rectContainsPoint,
   isPointOnRectBorder,
@@ -19,11 +21,10 @@ import {
   getSplitterBarRect,
   getSplitterPaneRect,
   getGadgetContentRect,
-  getMenuBarRect,
-  getToolBarRect,
-  getStatusBarRect,
   getStatusBarAlignedX,
-  getWindowContentRect
+  getWindowChromeLayout,
+  getRectHandlePoints,
+  hitHandlePoints
 } from "../core/previewChromeUtils";
 
 type SourceRange = { line: number };
@@ -905,7 +906,7 @@ function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: s
   });
 }
 
-type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
+type Handle = ResizeHandle;
 
 const HANDLE_SIZE = 6;
 const HANDLE_HIT = 10;
@@ -1358,7 +1359,11 @@ function getWindowLocalRect(): PreviewRect {
 }
 
 function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect {
-  return getWindowContentRect(
+  return getWindowLocalChromeLayout(metrics).contentRect;
+}
+
+function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout {
+  return getWindowChromeLayout(
     getWindowLocalRect(),
     Math.max(0, asInt(settings.titleBarHeight)),
     hasParsedMenuChrome(),
@@ -1368,19 +1373,17 @@ function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect
   );
 }
 
-function getMenuBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
-  if (!hasParsedMenuChrome()) return null;
-  return getMenuBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, wr.tbH, metrics);
-}
-
-function getToolBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
-  if (!hasParsedToolbarChrome()) return null;
-  return getToolBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, wr.tbH, hasParsedMenuChrome(), metrics);
-}
-
-function getStatusBarRectGlobal(wr: { x: number; y: number; w: number; h: number; tbH: number }, metrics: PreviewChromeMetrics): PreviewRect | null {
-  if (!hasParsedStatusbarChrome()) return null;
-  return getStatusBarRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, metrics);
+function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout | null {
+  const wr = getWinRect();
+  if (!wr) return null;
+  return getWindowChromeLayout(
+    { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
+    wr.tbH,
+    hasParsedMenuChrome(),
+    hasParsedToolbarChrome(),
+    hasParsedStatusbarChrome(),
+    metrics
+  );
 }
 
 function hitWindow(mx: number, my: number): boolean {
@@ -1427,36 +1430,14 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
   return null;
 }
 
-function handlePointsLocal(x: number, y: number, w: number, h: number): Array<[Handle, number, number]> {
-  return [
-    ["nw", x, y],
-    ["n", x + w / 2, y],
-    ["ne", x + w, y],
-    ["w", x, y + h / 2],
-    ["e", x + w, y + h / 2],
-    ["sw", x, y + h],
-    ["s", x + w / 2, y + h],
-    ["se", x + w, y + h]
-  ];
-}
-
-function hitHandlePoints(points: Array<[Handle, number, number]>, mx: number, my: number): Handle | null {
-  const half = HANDLE_HIT / 2;
-  for (const [h, px, py] of points) {
-    if (mx >= px - half && mx <= px + half && my >= py - half && my <= py + half) {
-      return h;
-    }
-  }
-  return null;
-}
 
 function hitHandleGadget(g: Gadget, mx: number, my: number): Handle | null {
   const metrics = getPreviewChromeMetrics();
   const layout = getGadgetPreviewLayout(g, metrics);
   if (!layout.visible) return null;
   const { gx, gy } = toGlobal(layout.rect.x, layout.rect.y);
-  const pts = handlePointsLocal(gx, gy, layout.rect.w, layout.rect.h);
-  return hitHandlePoints(pts, mx, my);
+  const pts = getRectHandlePoints({ x: gx, y: gy, w: layout.rect.w, h: layout.rect.h });
+  return hitHandlePoints(pts, mx, my, HANDLE_HIT);
 }
 
 function hitHandleWindow(mx: number, my: number): Handle | null {
@@ -1464,8 +1445,8 @@ function hitHandleWindow(mx: number, my: number): Handle | null {
   if (!wr) return null;
 
   // Handles are around the outer window rect
-  const pts = handlePointsLocal(wr.x, wr.y, wr.w, wr.h);
-  return hitHandlePoints(pts, mx, my);
+  const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h });
+  return hitHandlePoints(pts, mx, my, HANDLE_HIT);
 }
 
 function isInTitleBar(mx: number, my: number): boolean {
@@ -2128,11 +2109,11 @@ type TopLevelChromeHit =
   | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewRect };
 
 function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMetrics): TopLevelChromeHit | null {
-  const wr = getWinRect();
-  if (!wr || !hitWindow(mx, my)) return null;
+  const chromeLayout = getWindowGlobalChromeLayout(metrics);
+  if (!chromeLayout || !hitWindow(mx, my)) return null;
 
   const statusbar = getPrimaryStatusbar();
-  const statusbarRect = getStatusBarRectGlobal(wr, metrics);
+  const statusbarRect = chromeLayout.statusBarRect;
   if (statusbar && statusbarRect && rectContainsPoint(statusbarRect, mx, my)) {
     const fieldHit = statusBarFieldPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
     if (fieldHit) {
@@ -2142,7 +2123,7 @@ function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMet
   }
 
   const menu = getPrimaryMenu();
-  const menuRect = getMenuBarRectGlobal(wr, metrics);
+  const menuRect = chromeLayout.menuBarRect;
   if (menu && menuRect && rectContainsPoint(menuRect, mx, my)) {
     const entryHit = menuEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
     if (entryHit) {
@@ -2152,7 +2133,7 @@ function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMet
   }
 
   const toolbar = getPrimaryToolbar();
-  const toolbarRect = getToolBarRectGlobal(wr, metrics);
+  const toolbarRect = chromeLayout.toolBarRect;
   if (toolbar && toolbarRect && rectContainsPoint(toolbarRect, mx, my)) {
     const entryHit = toolBarEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
     if (entryHit) {
@@ -2283,11 +2264,11 @@ function getGadgetPreviewLayout(
 }
 
 function hitTestMenuFooter(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewMenuFooterRect | null {
-  const wr = getWinRect();
-  if (!wr || !hitWindow(mx, my)) return null;
+  const chromeLayout = getWindowGlobalChromeLayout(metrics);
+  if (!chromeLayout || !hitWindow(mx, my)) return null;
 
   const menu = getPrimaryMenu();
-  const menuRect = getMenuBarRectGlobal(wr, metrics);
+  const menuRect = chromeLayout.menuBarRect;
   if (!menu || !menuRect) return null;
 
   return menuFooterPreviewRects.find(entry => rectContainsPoint(entry, mx, my)) ?? null;
@@ -3390,7 +3371,7 @@ function getMenuEntryMoveTarget(menuId: string, sourceEntryIndex: number, mx: nu
 
   const winRect = getWinRect();
   const metrics = getPreviewChromeMetrics();
-  const menuBarRect = winRect ? getMenuBarRectGlobal(winRect, metrics) : null;
+  const menuBarRect = getWindowGlobalChromeLayout(metrics)?.menuBarRect ?? null;
   const menuBarBottom = menuBarRect ? menuBarRect.y + menuBarRect.h : 0;
 
   const visibleEntries = getMenuVisibleEntries(menu);
@@ -4028,10 +4009,12 @@ function render() {
   }
 
   const chromeMetrics = getPreviewChromeMetrics();
-  const windowContentRect = getWindowContentPreviewRect(chromeMetrics);
-  const menuBarRect = getMenuBarRectGlobal(wr, chromeMetrics);
-  const toolBarRect = getToolBarRectGlobal(wr, chromeMetrics);
-  const statusBarRect = getStatusBarRectGlobal(wr, chromeMetrics);
+  const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
+  const globalChromeLayout = getWindowGlobalChromeLayout(chromeMetrics);
+  const windowContentRect = localChromeLayout.contentRect;
+  const menuBarRect = globalChromeLayout?.menuBarRect ?? null;
+  const toolBarRect = globalChromeLayout?.toolBarRect ?? null;
+  const statusBarRect = globalChromeLayout?.statusBarRect ?? null;
 
   // Grid only inside the client/content area.
   if (settings.showGrid) {
