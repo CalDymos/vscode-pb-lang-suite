@@ -52,6 +52,8 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  resolvePreviewRectHit,
+  resolveTopLevelChromeHit,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   unquotePbString,
@@ -1545,7 +1547,7 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
-  const menuAddHit = hitTestMenuAddButton(mx, my);
+  const menuAddHit = resolvePreviewRectHit(menuAddPreviewRect, mx, my);
   if (menuAddHit) {
     const menu = (model.menus ?? []).find(entry => entry.id === menuAddHit.menuId);
     if (menu) {
@@ -1558,7 +1560,7 @@ canvas.addEventListener("mousedown", (e) => {
     }
   }
 
-  const toolBarAddHit = hitTestToolBarAddButton(mx, my);
+  const toolBarAddHit = resolvePreviewRectHit(toolBarAddPreviewRect, mx, my);
   if (toolBarAddHit) {
     const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarAddHit.toolBarId);
     if (toolBar) {
@@ -1571,7 +1573,7 @@ canvas.addEventListener("mousedown", (e) => {
     }
   }
 
-  const statusBarAddHit = hitTestStatusBarAddButton(mx, my);
+  const statusBarAddHit = resolvePreviewRectHit(statusBarAddPreviewRect, mx, my);
   if (statusBarAddHit) {
     const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarAddHit.statusBarId);
     if (statusBar) {
@@ -1604,7 +1606,21 @@ canvas.addEventListener("mousedown", (e) => {
     }
   }
 
-  const topLevelChromeHit = hitTestTopLevelChrome(mx, my, previewChromeMetrics);
+  const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const topLevelChromeHit = resolveTopLevelChromeHit({
+    x: mx,
+    y: my,
+    windowHit: hitWindow(mx, my),
+    menuId: getPrimaryMenu()?.id,
+    menuRect: chromeLayout?.menuBarRect ?? null,
+    menuEntryRects: menuEntryPreviewRects,
+    toolBarId: getPrimaryToolbar()?.id,
+    toolBarRect: chromeLayout?.toolBarRect ?? null,
+    toolBarEntryRects: toolBarEntryPreviewRects,
+    statusBarId: getPrimaryStatusbar()?.id,
+    statusBarRect: chromeLayout?.statusBarRect ?? null,
+    statusBarFieldRects: statusBarFieldPreviewRects
+  });
   if (topLevelChromeHit) {
     selection = topLevelChromeHit.selection;
     if (topLevelChromeHit.selection.kind === "menuEntry") {
@@ -1819,7 +1835,21 @@ window.addEventListener("mousemove", (e) => {
       }
     }
 
-    const topLevelChromeHit = hitTestTopLevelChrome(mx, my, previewChromeMetrics);
+    const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const topLevelChromeHit = resolveTopLevelChromeHit({
+    x: mx,
+    y: my,
+    windowHit: hitWindow(mx, my),
+    menuId: getPrimaryMenu()?.id,
+    menuRect: chromeLayout?.menuBarRect ?? null,
+    menuEntryRects: menuEntryPreviewRects,
+    toolBarId: getPrimaryToolbar()?.id,
+    toolBarRect: chromeLayout?.toolBarRect ?? null,
+    toolBarEntryRects: toolBarEntryPreviewRects,
+    statusBarId: getPrimaryStatusbar()?.id,
+    statusBarRect: chromeLayout?.statusBarRect ?? null,
+    statusBarFieldRects: statusBarFieldPreviewRects
+  });
     if (topLevelChromeHit) {
       canvas.style.cursor = "default";
       return;
@@ -2015,51 +2045,6 @@ type PreviewChromeHit = {
   zone: PreviewChromeHitZone;
 };
 
-type TopLevelChromeHit =
-  | { selection: { kind: "menu"; id: string }; rect: PreviewRect }
-  | { selection: { kind: "menuEntry"; menuId: string; entryIndex: number }; rect: PreviewRect }
-  | { selection: { kind: "toolbar"; id: string }; rect: PreviewRect }
-  | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewRect }
-  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRect }
-  | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewRect };
-
-function hitTestTopLevelChrome(mx: number, my: number, metrics: PreviewChromeMetrics): TopLevelChromeHit | null {
-  const chromeLayout = getWindowGlobalChromeLayout(metrics);
-  if (!chromeLayout || !hitWindow(mx, my)) return null;
-
-  const statusbar = getPrimaryStatusbar();
-  const statusbarRect = chromeLayout.statusBarRect;
-  if (statusbar && statusbarRect && rectContainsPoint(statusbarRect, mx, my)) {
-    const fieldHit = statusBarFieldPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
-    if (fieldHit) {
-      return { selection: { kind: "statusBarField", statusBarId: fieldHit.ownerId, fieldIndex: fieldHit.index }, rect: fieldHit };
-    }
-    return { selection: { kind: "statusbar", id: statusbar.id }, rect: statusbarRect };
-  }
-
-  const menu = getPrimaryMenu();
-  const menuRect = chromeLayout.menuBarRect;
-  if (menu && menuRect && rectContainsPoint(menuRect, mx, my)) {
-    const entryHit = menuEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
-    if (entryHit) {
-      return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
-    }
-    return { selection: { kind: "menu", id: menu.id }, rect: menuRect };
-  }
-
-  const toolbar = getPrimaryToolbar();
-  const toolbarRect = chromeLayout.toolBarRect;
-  if (toolbar && toolbarRect && rectContainsPoint(toolbarRect, mx, my)) {
-    const entryHit = toolBarEntryPreviewRects.find(entry => rectContainsPoint(entry, mx, my));
-    if (entryHit) {
-      return { selection: { kind: "toolBarEntry", toolBarId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
-    }
-    return { selection: { kind: "toolbar", id: toolbar.id }, rect: toolbarRect };
-  }
-
-  return null;
-}
-
 function getGadgetById(id: string | undefined): Gadget | undefined {
   if (!id) return undefined;
   return model.gadgets.find((g) => g.id === id);
@@ -2187,18 +2172,6 @@ function hitTestMenuFooter(mx: number, my: number, metrics: PreviewChromeMetrics
   if (!menu || !menuRect) return null;
 
   return menuFooterPreviewRects.find(entry => rectContainsPoint(entry, mx, my)) ?? null;
-}
-
-function hitTestMenuAddButton(mx: number, my: number): PreviewMenuAddRect | null {
-  return menuAddPreviewRect && rectContainsPoint(menuAddPreviewRect, mx, my) ? menuAddPreviewRect : null;
-}
-
-function hitTestToolBarAddButton(mx: number, my: number): PreviewToolBarAddRect | null {
-  return toolBarAddPreviewRect && rectContainsPoint(toolBarAddPreviewRect, mx, my) ? toolBarAddPreviewRect : null;
-}
-
-function hitTestStatusBarAddButton(mx: number, my: number): PreviewStatusBarAddRect | null {
-  return statusBarAddPreviewRect && rectContainsPoint(statusBarAddPreviewRect, mx, my) ? statusBarAddPreviewRect : null;
 }
 
 function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetrics): PreviewChromeHit | null {

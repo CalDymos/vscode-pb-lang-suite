@@ -50,6 +50,36 @@ export type PreviewRectLike = {
   h: number;
 };
 
+export type PreviewEntryRectLike = PreviewRectLike & {
+  ownerId: string;
+  index: number;
+};
+
+export type PreviewMenuFooterRectLike = PreviewRectLike & {
+  menuId: string;
+  parentIndex: number;
+};
+
+export type PreviewMenuAddRectLike = PreviewRectLike & {
+  menuId: string;
+};
+
+export type PreviewToolBarAddRectLike = PreviewRectLike & {
+  toolBarId: string;
+};
+
+export type PreviewStatusBarAddRectLike = PreviewRectLike & {
+  statusBarId: string;
+};
+
+export type TopLevelChromeHitLike =
+  | { selection: { kind: "menu"; id: string }; rect: PreviewRectLike }
+  | { selection: { kind: "menuEntry"; menuId: string; entryIndex: number }; rect: PreviewEntryRectLike }
+  | { selection: { kind: "toolbar"; id: string }; rect: PreviewRectLike }
+  | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewEntryRectLike }
+  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRectLike }
+  | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewEntryRectLike };
+
 export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
 
@@ -320,4 +350,68 @@ export function getMenuFlyoutPanelRect(
     w: width,
     h: Math.max(0, height)
   };
+}
+
+
+function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
+  return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
+export function resolvePreviewRectHit<T extends PreviewRectLike>(
+  rect: T | null | undefined,
+  x: number,
+  y: number
+): T | null {
+  return rect && rectContainsPoint(rect, x, y) ? rect : null;
+}
+
+export function resolvePreviewRectListHit<T extends PreviewRectLike>(
+  rects: T[] | undefined,
+  x: number,
+  y: number
+): T | null {
+  return rects?.find((rect) => rectContainsPoint(rect, x, y)) ?? null;
+}
+
+export function resolveTopLevelChromeHit(args: {
+  x: number;
+  y: number;
+  windowHit: boolean;
+  menuId?: string;
+  menuRect?: PreviewRectLike | null;
+  menuEntryRects?: PreviewEntryRectLike[];
+  toolBarId?: string;
+  toolBarRect?: PreviewRectLike | null;
+  toolBarEntryRects?: PreviewEntryRectLike[];
+  statusBarId?: string;
+  statusBarRect?: PreviewRectLike | null;
+  statusBarFieldRects?: PreviewEntryRectLike[];
+}): TopLevelChromeHitLike | null {
+  if (!args.windowHit) return null;
+
+  if (args.statusBarId && args.statusBarRect && rectContainsPoint(args.statusBarRect, args.x, args.y)) {
+    const fieldHit = resolvePreviewRectListHit(args.statusBarFieldRects, args.x, args.y);
+    if (fieldHit) {
+      return { selection: { kind: "statusBarField", statusBarId: fieldHit.ownerId, fieldIndex: fieldHit.index }, rect: fieldHit };
+    }
+    return { selection: { kind: "statusbar", id: args.statusBarId }, rect: args.statusBarRect };
+  }
+
+  if (args.menuId && args.menuRect && rectContainsPoint(args.menuRect, args.x, args.y)) {
+    const entryHit = resolvePreviewRectListHit(args.menuEntryRects, args.x, args.y);
+    if (entryHit) {
+      return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
+    }
+    return { selection: { kind: "menu", id: args.menuId }, rect: args.menuRect };
+  }
+
+  if (args.toolBarId && args.toolBarRect && rectContainsPoint(args.toolBarRect, args.x, args.y)) {
+    const entryHit = resolvePreviewRectListHit(args.toolBarEntryRects, args.x, args.y);
+    if (entryHit) {
+      return { selection: { kind: "toolBarEntry", toolBarId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
+    }
+    return { selection: { kind: "toolbar", id: args.toolBarId }, rect: args.toolBarRect };
+  }
+
+  return null;
 }

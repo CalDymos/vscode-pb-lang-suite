@@ -14,6 +14,9 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  resolvePreviewRectHit,
+  resolvePreviewRectListHit,
+  resolveTopLevelChromeHit,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   unquotePbString,
@@ -194,4 +197,66 @@ test("computes flyout menu panel rectangles from visible child content", () => {
     getMenuFlyoutPanelRect(menu, 1, { x: 100, y: 50, w: 0, h: 0 }, (text) => text.length * 6),
     { x: 100, y: 50, w: 118, h: 72 }
   );
+});
+
+
+test("resolves generic preview rect hits for add buttons and footers", () => {
+  assert.deepEqual(
+    resolvePreviewRectHit({ menuId: "m1", x: 10, y: 20, w: 16, h: 16 }, 18, 28),
+    { menuId: "m1", x: 10, y: 20, w: 16, h: 16 }
+  );
+  assert.equal(resolvePreviewRectHit({ menuId: "m1", x: 10, y: 20, w: 16, h: 16 }, 40, 40), null);
+  assert.deepEqual(
+    resolvePreviewRectListHit([{ ownerId: "m1", index: 2, x: 30, y: 40, w: 20, h: 12 }], 35, 45),
+    { ownerId: "m1", index: 2, x: 30, y: 40, w: 20, h: 12 }
+  );
+});
+
+test("resolves top-level chrome hits from menu, toolbar and statusbar rectangles", () => {
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 32,
+      y: 88,
+      windowHit: true,
+      menuId: "menu-1",
+      menuRect: { x: 20, y: 80, w: 120, h: 22 },
+      menuEntryRects: [{ ownerId: "menu-1", index: 3, x: 30, y: 82, w: 40, h: 18 }]
+    }),
+    {
+      selection: { kind: "menuEntry", menuId: "menu-1", entryIndex: 3 },
+      rect: { ownerId: "menu-1", index: 3, x: 30, y: 82, w: 40, h: 18 }
+    }
+  );
+
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 55,
+      y: 145,
+      windowHit: true,
+      toolBarId: "tb-1",
+      toolBarRect: { x: 20, y: 140, w: 120, h: 24 },
+      toolBarEntryRects: [{ ownerId: "tb-1", index: 1, x: 50, y: 144, w: 16, h: 16 }]
+    }),
+    {
+      selection: { kind: "toolBarEntry", toolBarId: "tb-1", entryIndex: 1 },
+      rect: { ownerId: "tb-1", index: 1, x: 50, y: 144, w: 16, h: 16 }
+    }
+  );
+
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 70,
+      y: 224,
+      windowHit: true,
+      statusBarId: "sb-1",
+      statusBarRect: { x: 20, y: 220, w: 120, h: 22 },
+      statusBarFieldRects: [{ ownerId: "sb-1", index: 0, x: 60, y: 221, w: 30, h: 18 }]
+    }),
+    {
+      selection: { kind: "statusBarField", statusBarId: "sb-1", fieldIndex: 0 },
+      rect: { ownerId: "sb-1", index: 0, x: 60, y: 221, w: 30, h: 18 }
+    }
+  );
+
+  assert.equal(resolveTopLevelChromeHit({ x: 0, y: 0, windowHit: false }), null);
 });
