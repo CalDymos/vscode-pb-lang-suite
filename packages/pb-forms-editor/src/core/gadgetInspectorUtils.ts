@@ -56,6 +56,11 @@ const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "WebGadget"
 ]);
 
+const GADGET_CHECKED_STATE_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  "CheckBoxGadget",
+  "OptionGadget"
+]);
+
 const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<string, GadgetCtorRangeFieldLabels> = new Map([
   ["ProgressBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
   ["ScrollBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
@@ -108,6 +113,17 @@ export function canEditGadgetText(kind: string | undefined): boolean {
 
 export function canEditGadgetColors(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLOR_CAPABLE_KINDS.has(kind);
+}
+
+export function canEditGadgetCheckedState(kind: string | undefined): boolean {
+  return typeof kind === "string" && GADGET_CHECKED_STATE_CAPABLE_KINDS.has(kind);
+}
+
+export function buildGadgetCheckedStateRaw(kind: string | undefined, checked: boolean): string | undefined {
+  if (!checked) return undefined;
+  if (kind === "CheckBoxGadget") return "#PB_Checkbox_Checked";
+  if (kind === "OptionGadget") return "1";
+  return undefined;
 }
 
 export function getGadgetCtorRangeFieldLabels(kind: string | undefined): GadgetCtorRangeFieldLabels | undefined {

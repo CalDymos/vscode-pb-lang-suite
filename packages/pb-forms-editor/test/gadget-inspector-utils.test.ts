@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildGadgetCheckedStateRaw,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
+  canEditGadgetCheckedState,
   canEditGadgetColors,
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
@@ -27,6 +29,20 @@ test("marks original color-capable gadget kinds for front/back color editing", (
   assert.equal(canEditGadgetColors("ProgressBarGadget"), true);
   assert.equal(canEditGadgetColors("ButtonGadget"), false);
   assert.equal(canEditGadgetColors("ImageGadget"), false);
+});
+
+
+test("marks original checkbox/option gadget kinds as checked-state editable", () => {
+  assert.equal(canEditGadgetCheckedState("CheckBoxGadget"), true);
+  assert.equal(canEditGadgetCheckedState("OptionGadget"), true);
+  assert.equal(canEditGadgetCheckedState("SplitterGadget"), false);
+});
+
+test("builds original saved checked-state raw values for checkbox and option gadgets", () => {
+  assert.equal(buildGadgetCheckedStateRaw("CheckBoxGadget", true), "#PB_Checkbox_Checked");
+  assert.equal(buildGadgetCheckedStateRaw("OptionGadget", true), "1");
+  assert.equal(buildGadgetCheckedStateRaw("CheckBoxGadget", false), undefined);
+  assert.equal(buildGadgetCheckedStateRaw("ImageGadget", true), undefined);
 });
 
 test("builds gadget caption raw values for literal and variable modes", () => {

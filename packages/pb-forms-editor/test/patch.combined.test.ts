@@ -1303,6 +1303,20 @@ test("roundtrips gadget property update for state and removes cleared lines", ()
   assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_Checkbox_Checked\)/);
 });
 
+test("removes checkbox state lines when the checked property is cleared", () => {
+  const { text } = parseGadgetFixture();
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#ChkActive", { stateRaw: undefined })
+  );
+
+  const chkActive = parsed.gadgets.find((g) => g.id === "#ChkActive");
+  assert.ok(chkActive, "Expected #ChkActive gadget after clearing the checked property.");
+  assert.equal(chkActive?.stateRaw, undefined);
+  assert.equal(chkActive?.state, undefined);
+  assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive,/);
+});
+
 
 test("roundtrips splitter state update via SetGadgetState", () => {
   const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");

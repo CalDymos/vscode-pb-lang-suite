@@ -69,8 +69,10 @@ import {
 } from "../core/topLevelPreviewUtils";
 
 import {
+  buildGadgetCheckedStateRaw,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
+  canEditGadgetCheckedState,
   canEditGadgetColors,
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
@@ -349,7 +351,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -5985,7 +5987,9 @@ function renderProps() {
 
   const canEditCaption = canEditGadgetText(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);
+  const canEditChecked = canEditGadgetCheckedState(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
+  const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
 
   if (canEditCaption) {
     propsEl.appendChild(
@@ -6142,6 +6146,28 @@ function renderProps() {
         )
       )
     );
+  }
+
+  if (canEditChecked) {
+    propsEl.appendChild(
+      row(
+        "Checked",
+        checkboxInput(Boolean(g.state), v => {
+          g.state = v ? 1 : 0;
+          g.stateRaw = buildGadgetCheckedStateRaw(g.kind, v);
+          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: g.stateRaw });
+          render();
+          renderProps();
+        }, {
+          title: hasExpressionChecked
+            ? "The source currently uses a non-literal SetGadgetState expression. Toggling here rewrites it to the original saved Checked form."
+            : "Matches the original Checked property and patches SetGadgetState(...)."
+        })
+      )
+    );
+    if (hasExpressionChecked) {
+      propsEl.appendChild(mutedNote("Non-literal Checked expressions are preserved while untouched. Editing them here rewrites the state to the original saved form or removes SetGadgetState(...)."));
+    }
   }
 
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);

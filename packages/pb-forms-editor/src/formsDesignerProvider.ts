@@ -127,7 +127,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -486,28 +486,35 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             postError(`Could not find gadget '${msg.id}' for state update${rangeInfo}.`);
             return;
           }
-          if (gadget.kind !== "SplitterGadget") {
-            postError(`State editing is currently only enabled for SplitterGadget entries.`);
+
+          const trimmed = msg.stateRaw?.trim() ?? "";
+          if (gadget.kind === "SplitterGadget") {
+            const nextState = Number(trimmed);
+            if (!trimmed.length || !Number.isFinite(nextState)) {
+              postError(`Splitter position must be a finite number.`);
+              return;
+            }
+
+            const vertical = (gadget.flagsExpr ?? "").split("|").map(part => part.trim()).includes("#PB_Splitter_Vertical");
+            const limit = vertical ? gadget.w : gadget.h;
+            const stateInt = Math.trunc(nextState);
+            if (stateInt <= 0 || stateInt >= limit) {
+              postError(`Splitter position must be greater than 0 and smaller than the splitter ${vertical ? "width" : "height"}.`);
+              return;
+            }
+
+            const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: String(stateInt) }, sr);
+            await applyEditOrError(edit, `Could not update splitter state for '${msg.id}'${rangeInfo}.`);
             return;
           }
 
-          const trimmed = msg.stateRaw.trim();
-          const nextState = Number(trimmed);
-          if (!trimmed.length || !Number.isFinite(nextState)) {
-            postError(`Splitter position must be a finite number.`);
+          if (gadget.kind === "CheckBoxGadget" || gadget.kind === "OptionGadget") {
+            const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: trimmed || undefined }, sr);
+            await applyEditOrError(edit, `Could not update checked state for '${msg.id}'${rangeInfo}.`);
             return;
           }
 
-          const vertical = (gadget.flagsExpr ?? "").split("|").map(part => part.trim()).includes("#PB_Splitter_Vertical");
-          const limit = vertical ? gadget.w : gadget.h;
-          const stateInt = Math.trunc(nextState);
-          if (stateInt <= 0 || stateInt >= limit) {
-            postError(`Splitter position must be greater than 0 and smaller than the splitter ${vertical ? "width" : "height"}.`);
-            return;
-          }
-
-          const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: String(stateInt) }, sr);
-          await applyEditOrError(edit, `Could not update splitter state for '${msg.id}'${rangeInfo}.`);
+          postError(`State editing is currently only enabled for SplitterGadget, CheckBoxGadget and OptionGadget entries.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
