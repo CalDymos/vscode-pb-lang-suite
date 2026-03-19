@@ -145,7 +145,55 @@ export function detectImageDimensions(data: Uint8Array): ImageDimensions | undef
   return undefined;
 }
 
+// Initial read size: covers PNG (24 B), GIF (10 B), BMP (26 B) with plenty of margin,
+// and the vast majority of JPEGs whose SOF marker follows Exif/ICC/App segments.
+const INITIAL_READ_BYTES = 65_536; // 64 KB
+
+// Hard cap for JPEG chunked reads to avoid reading arbitrarily large files.
+const JPEG_MAX_READ_BYTES = 1_048_576; // 1 MB
+
+// Size of each additional chunk when the SOF marker wasn't found in the initial read.
+const JPEG_CHUNK_BYTES = 65_536; // 64 KB
+
 export async function readImageDimensions(filePath: string): Promise<ImageDimensions | undefined> {
-  const data = await fs.promises.readFile(filePath);
-  return detectImageDimensions(data);
+  const fh = await fs.promises.open(filePath, "r");
+  try {
+    // Read initial prefix — enough for PNG/GIF/BMP and most JPEGs.
+    let buf = Buffer.allocUnsafe(INITIAL_READ_BYTES);
+    const { bytesRead: initialRead } = await fh.read(buf, 0, INITIAL_READ_BYTES, 0);
+    const initial = buf.subarray(0, initialRead);
+
+    const result = detectImageDimensions(initial);
+    if (result !== undefined) {
+      return result;
+    }
+
+    // For JPEG only: the SOF marker may follow large Exif/ICC/App payloads.
+    // Read additional chunks until we find the marker or reach the cap.
+    if (initialRead >= 2 && initial[0] === 0xff && initial[1] === 0xd8) {
+      let totalRead = initialRead;
+      const chunks: Buffer[] = [Buffer.from(initial)];
+
+      while (totalRead < JPEG_MAX_READ_BYTES) {
+        const chunkBuf = Buffer.allocUnsafe(JPEG_CHUNK_BYTES);
+        const { bytesRead } = await fh.read(chunkBuf, 0, JPEG_CHUNK_BYTES, totalRead);
+        if (bytesRead === 0) break;
+
+        chunks.push(chunkBuf.subarray(0, bytesRead));
+        totalRead += bytesRead;
+
+        const combined = Buffer.concat(chunks);
+        const dims = detectImageDimensions(combined);
+        if (dims !== undefined) {
+          return dims;
+        }
+
+        if (bytesRead < JPEG_CHUNK_BYTES) break; // EOF reached
+      }
+    }
+
+    return undefined;
+  } finally {
+    await fh.close();
+  }
 }
