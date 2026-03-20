@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { parseFormDocument } from "./core/parser/formParser";
 import {
@@ -48,6 +50,7 @@ import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./conf
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { readImageDimensions } from "./core/imageDimensionUtils";
+import { extractProcedureNamesFromText, sortUniqueProcedureNames } from "./core/procedureListUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -55,6 +58,43 @@ const CONFIG_KEYS = {
 
 const ALLOWED_MENU_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.menuEntryKinds);
 const ALLOWED_TOOLBAR_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.toolBarEntryKinds);
+
+function tryReadTextFile(filePath: string | undefined): string | undefined {
+  if (!filePath) return undefined;
+
+  try {
+    if (!fs.existsSync(filePath)) return undefined;
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveProcedureSourcePaths(documentPath: string, eventFile?: string): string[] {
+  const resolved = new Set<string>();
+  resolved.add(documentPath);
+
+  const trimmedEventFile = (eventFile ?? "").trim();
+  if (!trimmedEventFile.length) return Array.from(resolved);
+
+  const eventPath = path.isAbsolute(trimmedEventFile)
+    ? trimmedEventFile
+    : path.resolve(path.dirname(documentPath), trimmedEventFile);
+  resolved.add(eventPath);
+
+  return Array.from(resolved);
+}
+
+function collectProcedureNames(documentPath: string, text: string, model: FormDocument): string[] {
+  const names: string[] = [];
+  for (const sourcePath of resolveProcedureSourcePaths(documentPath, model.window?.eventFile)) {
+    const sourceText = sourcePath === documentPath ? text : tryReadTextFile(sourcePath);
+    if (!sourceText) continue;
+    names.push(...extractProcedureNamesFromText(sourceText));
+  }
+
+  return sortUniqueProcedureNames(names);
+}
 
 const EXT_TO_WEBVIEW_MSG_TYPE = {
   init: "init",
@@ -268,6 +308,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             });
           }
         }
+
+        model.procedureNames = collectProcedureNames(document.uri.fsPath, text, model);
 
         const settings = readDesignerSettings();
         post({ type: "init", model, settings });

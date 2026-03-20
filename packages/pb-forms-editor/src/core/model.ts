@@ -317,6 +317,7 @@ export interface FormDocument {
   menus: FormMenu[];
   toolbars: FormToolBar[];
   statusbars: FormStatusBar[];
+  procedureNames?: string[];
   meta: FormMeta;
 }
 

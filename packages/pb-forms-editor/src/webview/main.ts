@@ -294,6 +294,7 @@ type Model = {
   toolbars?: ToolbarModel[];
   statusbars?: StatusbarModel[];
   images: ImageEntry[];
+  procedureNames?: string[];
   meta?: {
     header?: { version?: string; line: number; hasStrictSyntaxWarning: boolean };
     issues?: Array<{ severity: "error" | "warning" | "info"; message: string; line?: number }>;
@@ -661,6 +662,10 @@ const EVENT_UI_HINT = {
   generateEventLoopMenuBlock: "Cannot disable while a Select EventMenu() block exists.",
   generateEventLoopGadgetCases: "Cannot disable while Select EventGadget() contains Case branches."
 } as const;
+
+function getProcedureSuggestions(): string[] {
+  return Array.isArray(model.procedureNames) ? model.procedureNames : [];
+}
 
 function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entryLabel: "menu" | "toolbar" = "menu"): string {
   if (!idRaw) {
@@ -1563,7 +1568,7 @@ function getContextualInfoHint(): string {
 
   switch (sel.kind) {
     case "window":
-      return "Window properties, layout values and PureBasic window flags can be edited here.";
+      return "Window properties, layout values, SelectProc suggestions and PureBasic window flags can be edited here.";
     case "gadget":
       return "Drag or resize gadgets in the canvas. AddGadgetItem/AddGadgetColumn patching remains available for supported gadget kinds.";
     case "menu":
@@ -4756,9 +4761,10 @@ function renderProps() {
       )
     ));
     propsEl.appendChild(row(
-      "Event procedure",
-      textInput(
+      "SelectProc",
+      editableComboInput(
         win.eventProc ?? "",
+        getProcedureSuggestions(),
         v => {
           if (!model.window || !hasEventGadgetBlock) return;
           const trimmed = v.trim();
@@ -4766,18 +4772,12 @@ function renderProps() {
           post({ type: "setWindowEventProc", windowKey: win.id, eventProc: trimmed.length ? trimmed : undefined });
           renderProps();
         },
-        { disabled: !hasEventGadgetBlock, title: windowEventProcHint }
+        {
+          disabled: !hasEventGadgetBlock,
+          title: windowEventProcHint || "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
+          placeholder: "Type or pick a procedure"
+        }
       )
-    ));
-    propsEl.appendChild(row(
-      "Event File",
-      textInput(win.eventFile ?? "", v => {
-        if (!model.window) return;
-        const trimmed = v.trim();
-        win.eventFile = trimmed || undefined;
-        post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
-        renderProps();
-      })
     ));
     if (!hasEventGadgetBlock) {
       propsEl.appendChild(mutedNote(windowEventProcHint));
@@ -4785,6 +4785,26 @@ function renderProps() {
     if (Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) {
       propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
     }
+
+    propsEl.appendChild(createSubSection("Event File"));
+    propsEl.appendChild(row(
+      "XIncludeFile",
+      textInput(
+        win.eventFile ?? "",
+        v => {
+          if (!model.window) return;
+          const trimmed = v.trim();
+          win.eventFile = trimmed || undefined;
+          post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
+          renderProps();
+        },
+        {
+          title: "Auxiliary XIncludeFile patch path. The original PureBasic Property Grid does not expose Event File as a normal row.",
+          placeholder: "events/form-events.pbi"
+        }
+      )
+    ));
+    propsEl.appendChild(mutedNote("Event File stays available as an auxiliary XIncludeFile path, but it is intentionally separated from the original SelectProc property row."));
 
     propsEl.appendChild(section("Constants"));
     for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
@@ -5009,8 +5029,9 @@ function renderProps() {
       }
       propsEl.appendChild(row(
         "SelectProc",
-        textInput(
+        editableComboInput(
           selectedEntry.event ?? "",
+          getProcedureSuggestions(),
           v => {
             if (!selectedEntry.idRaw) return;
             post({
@@ -5450,8 +5471,9 @@ function renderProps() {
       ));
       propsEl.appendChild(row(
         "SelectProc",
-        textInput(
+        editableComboInput(
           selectedEntry.event ?? "",
+          getProcedureSuggestions(),
           v => {
             if (!selectedEntry.idRaw) return;
             post({
@@ -6746,9 +6768,10 @@ function renderProps() {
     : EVENT_UI_HINT.eventGadgetMissing;
   propsEl.appendChild(
     row(
-      "Event Proc",
-      textInput(
+      "SelectProc",
+      editableComboInput(
         g.eventProc ?? "",
+        getProcedureSuggestions(),
         v => {
           if (!hasEventGadgetBlock) return;
           const trimmed = v.trim();
@@ -6760,7 +6783,11 @@ function renderProps() {
           });
           renderProps();
         },
-        { disabled: !hasEventGadgetBlock, title: gadgetEventProcHint }
+        {
+          disabled: !hasEventGadgetBlock,
+          title: gadgetEventProcHint || "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
+          placeholder: "Type or pick a procedure"
+        }
       )
     )
   );
@@ -7189,6 +7216,37 @@ function textInput(
   i.placeholder = options?.placeholder ?? "";
   i.onchange = () => onChange(i.value);
   return i;
+}
+
+function editableComboInput(
+  value: string,
+  suggestions: string[],
+  onChange: (v: string) => void,
+  options?: { disabled?: boolean; title?: string; placeholder?: string }
+) {
+  const wrap = document.createElement("div");
+  wrap.className = "comboInputWrap";
+
+  const input = document.createElement("input");
+  const listId = `pbfd-proc-list-${Math.random().toString(36).slice(2)}`;
+  input.value = value;
+  input.disabled = Boolean(options?.disabled);
+  input.title = options?.title ?? "";
+  input.placeholder = options?.placeholder ?? "";
+  input.setAttribute("list", listId);
+  input.onchange = () => onChange(input.value);
+
+  const datalist = document.createElement("datalist");
+  datalist.id = listId;
+  for (const suggestion of suggestions) {
+    const opt = document.createElement("option");
+    opt.value = suggestion;
+    datalist.appendChild(opt);
+  }
+
+  wrap.appendChild(input);
+  wrap.appendChild(datalist);
+  return wrap;
 }
 
 function selectInput(
