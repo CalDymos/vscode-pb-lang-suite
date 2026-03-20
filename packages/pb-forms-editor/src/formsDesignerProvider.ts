@@ -56,6 +56,11 @@ import {
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames
 } from "./core/procedureListUtils";
+import {
+  PB_WRONG_VARIABLE_NAME_MESSAGE,
+  isValidPbVariableReference,
+  requiresPbVariableValidation
+} from "./core/propertyValidationUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -507,6 +512,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return false;
       };
 
+      const validateVariableRaw = (raw: string | undefined, fieldLabel: string): boolean => {
+        if (!requiresPbVariableValidation(raw)) return true;
+        if (isValidPbVariableReference(raw!.trim())) return true;
+        postError(`${fieldLabel}: ${PB_WRONG_VARIABLE_NAME_MESSAGE}`);
+        return false;
+      };
+
       switch (msg.type) {
         case WEBVIEW_TO_EXT_MSG_TYPE.ready:
           sendInit();
@@ -531,6 +543,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs: {
+          if (Object.prototype.hasOwnProperty.call(msg, "captionRaw") && !validateVariableRaw(msg.captionRaw, "Caption")) {
+            return;
+          }
           const edit = applyWindowOpenArgsUpdate(document, msg.windowKey, {
             xRaw: msg.xRaw,
             yRaw: msg.yRaw,
@@ -591,6 +606,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs: {
+          if (Object.prototype.hasOwnProperty.call(msg, "textRaw") && !validateVariableRaw(msg.textRaw, "Caption")) {
+            return;
+          }
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, {
             textRaw: msg.textRaw,
             minRaw: msg.minRaw,
@@ -617,6 +635,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties: {
+          if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw") && !validateVariableRaw(msg.tooltipRaw, "Tooltip")) {
+            return;
+          }
           const edit = applyGadgetPropertyUpdate(document, msg.id, {
             hiddenRaw: msg.hiddenRaw,
             disabledRaw: msg.disabledRaw,

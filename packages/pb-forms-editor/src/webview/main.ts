@@ -100,6 +100,10 @@ import {
   parseWindowPositionInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
+import {
+  PB_WRONG_VARIABLE_NAME_MESSAGE,
+  isValidPbVariableReference
+} from "../core/propertyValidationUtils";
 
 type SourceRange = { line: number };
 
@@ -723,17 +727,31 @@ function postWindowProperties(win: WindowModel, updates: { hiddenRaw?: string; d
   });
 }
 
+function setInfoError(message: string): void {
+  errEl.textContent = message;
+  renderInfoPanel();
+}
+
 function clearInfoError(): void {
   if (!(errEl.textContent ?? "").trim().length) return;
   errEl.textContent = "";
   renderInfoPanel();
 }
 
+function ensureValidPbVariableReference(value: string): boolean {
+  if (isValidPbVariableReference(value)) {
+    clearInfoError();
+    return true;
+  }
+
+  setInfoError(PB_WRONG_VARIABLE_NAME_MESSAGE);
+  return false;
+}
+
 function postWindowPositionRaw(win: WindowModel, axis: "x" | "y", rawValue: string): void {
   const parsed = parseWindowPositionInspectorInput(rawValue);
   if (!parsed.ok) {
-    errEl.textContent = `Window ${axis.toUpperCase()} accepts only an integer or ${WINDOW_POSITION_IGNORE_LITERAL}.`;
-    renderInfoPanel();
+    setInfoError(`Window ${axis.toUpperCase()} accepts only an integer or ${WINDOW_POSITION_IGNORE_LITERAL}.`);
     return;
   }
 
@@ -1833,6 +1851,11 @@ function postGadgetResizeRaw(
 
 
 function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  if (isVariable && !ensureValidPbVariableReference(value.trim())) {
+    renderProps();
+    return;
+  }
+
   const textRaw = buildGadgetTextRaw(value, isVariable);
   g.textRaw = textRaw;
   g.textVariable = isVariable;
@@ -1843,6 +1866,11 @@ function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolea
 }
 
 function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  if (isVariable && !ensureValidPbVariableReference(value.trim())) {
+    renderProps();
+    return;
+  }
+
   const tooltipRaw = buildGadgetTooltipRaw(value, isVariable);
   g.tooltipRaw = tooltipRaw;
   g.tooltipVariable = isVariable && Boolean(tooltipRaw);
@@ -4667,6 +4695,11 @@ function renderProps() {
       "Caption is a variable?",
       checkboxInput(Boolean(win.captionVariable), checked => {
         if (!model.window) return;
+        if (checked && !ensureValidPbVariableReference((win.title ?? "").trim())) {
+          renderProps();
+          return;
+        }
+        clearInfoError();
         win.captionVariable = checked;
         const nextCaptionRaw = buildWindowCaptionRaw(win.title ?? "", checked);
         win.captionRaw = nextCaptionRaw;
@@ -4679,6 +4712,11 @@ function renderProps() {
       "Caption",
       textInput(win.title ?? "", v => {
         if (!model.window) return;
+        if (Boolean(win.captionVariable) && !ensureValidPbVariableReference(v.trim())) {
+          renderProps();
+          return;
+        }
+        clearInfoError();
         win.title = v;
         const nextCaptionRaw = buildWindowCaptionRaw(v, Boolean(win.captionVariable));
         win.captionRaw = nextCaptionRaw;
