@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 import * as vscode from "vscode";
 import { parseFormDocument } from "./core/parser/formParser";
 import {
@@ -50,7 +49,13 @@ import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./conf
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { readImageDimensions } from "./core/imageDimensionUtils";
-import { extractProcedureNamesFromText, sortUniqueProcedureNames } from "./core/procedureListUtils";
+import {
+  discoverProcedureSourcePaths,
+  extractProcedureNamesFromText,
+  isProcedureSourceFilePath,
+  resolveProcedureEventFilePath,
+  sortUniqueProcedureNames
+} from "./core/procedureListUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -59,41 +64,71 @@ const CONFIG_KEYS = {
 const ALLOWED_MENU_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.menuEntryKinds);
 const ALLOWED_TOOLBAR_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.toolBarEntryKinds);
 
-function tryReadTextFile(filePath: string | undefined): string | undefined {
+function normalizeFsPathForCompare(filePath: string): string {
+  const normalized = vscode.Uri.file(filePath).fsPath;
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isSameFsPath(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
+  return normalizeFsPathForCompare(left) === normalizeFsPathForCompare(right);
+}
+
+function tryReadProcedureSourceTextSync(filePath: string | undefined): string | undefined {
   if (!filePath) return undefined;
 
+  const openDocument = vscode.workspace.textDocuments.find(doc => doc.uri.scheme === "file" && isSameFsPath(doc.uri.fsPath, filePath));
+  if (openDocument) return openDocument.getText();
+
   try {
-    if (!fs.existsSync(filePath)) return undefined;
-    return fs.readFileSync(filePath, "utf8");
+    const buffer = fs.readFileSync(filePath);
+    return Buffer.from(buffer).toString("utf8");
   } catch {
     return undefined;
   }
 }
 
-function resolveProcedureSourcePaths(documentPath: string, eventFile?: string): string[] {
-  const resolved = new Set<string>();
-  resolved.add(documentPath);
-
-  const trimmedEventFile = (eventFile ?? "").trim();
-  if (!trimmedEventFile.length) return Array.from(resolved);
-
-  const eventPath = path.isAbsolute(trimmedEventFile)
-    ? trimmedEventFile
-    : path.resolve(path.dirname(documentPath), trimmedEventFile);
-  resolved.add(eventPath);
-
-  return Array.from(resolved);
+function getWorkspaceRootForDocument(documentUri: vscode.Uri): string | undefined {
+  return vscode.workspace.getWorkspaceFolder(documentUri)?.uri.fsPath;
 }
 
-function collectProcedureNames(documentPath: string, text: string, model: FormDocument): string[] {
+function collectProcedureNames(documentPath: string, text: string, model: FormDocument, workspaceRoot?: string): string[] {
   const names: string[] = [];
-  for (const sourcePath of resolveProcedureSourcePaths(documentPath, model.window?.eventFile)) {
-    const sourceText = sourcePath === documentPath ? text : tryReadTextFile(sourcePath);
+  for (const sourcePath of discoverProcedureSourcePaths(documentPath, workspaceRoot, model.window?.eventFile)) {
+    const sourceText = isSameFsPath(sourcePath, documentPath) ? text : tryReadProcedureSourceTextSync(sourcePath);
     if (!sourceText) continue;
     names.push(...extractProcedureNamesFromText(sourceText));
   }
 
   return sortUniqueProcedureNames(names);
+}
+
+function shouldRefreshProcedureListFromDocumentChange(changedDocument: vscode.TextDocument, formDocumentUri: vscode.Uri, currentEventFilePath?: string): boolean {
+  if (changedDocument.uri.scheme !== "file") return false;
+  if (changedDocument.uri.toString() === formDocumentUri.toString()) return true;
+  if (isSameFsPath(changedDocument.uri.fsPath, currentEventFilePath)) return true;
+
+  const workspaceRoot = getWorkspaceRootForDocument(formDocumentUri);
+  if (!workspaceRoot) return false;
+  const changedWorkspace = vscode.workspace.getWorkspaceFolder(changedDocument.uri)?.uri.fsPath;
+  if (!changedWorkspace || !isSameFsPath(changedWorkspace, workspaceRoot)) return false;
+
+  return isProcedureSourceFilePath(changedDocument.uri.fsPath);
+}
+
+function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.Uri[], formDocumentUri: vscode.Uri, currentEventFilePath?: string): boolean {
+  const workspaceRoot = getWorkspaceRootForDocument(formDocumentUri);
+
+  return changedUris.some(uri => {
+    if (uri.scheme !== "file") return false;
+    if (isSameFsPath(uri.fsPath, currentEventFilePath)) return true;
+    if (!workspaceRoot) return false;
+
+    const changedWorkspace = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+    if (!changedWorkspace || !isSameFsPath(changedWorkspace, workspaceRoot)) return false;
+
+    return isProcedureSourceFilePath(uri.fsPath);
+  });
 }
 
 const EXT_TO_WEBVIEW_MSG_TYPE = {
@@ -309,7 +344,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
         }
 
-        model.procedureNames = collectProcedureNames(document.uri.fsPath, text, model);
+        const workspaceRoot = getWorkspaceRootForDocument(document.uri);
+        model.procedureNames = collectProcedureNames(document.uri.fsPath, text, model, workspaceRoot);
 
         const settings = readDesignerSettings();
         post({ type: "init", model, settings });
@@ -330,7 +366,30 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     });
 
     const docSub = vscode.workspace.onDidChangeTextDocument((e: vscode.TextDocumentChangeEvent) => {
-      if (e.document.uri.toString() === document.uri.toString()) {
+      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
+      if (shouldRefreshProcedureListFromDocumentChange(e.document, document.uri, currentEventFilePath)) {
+        scheduleInit();
+      }
+    });
+
+    const createSub = vscode.workspace.onDidCreateFiles((e: vscode.FileCreateEvent) => {
+      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
+      if (shouldRefreshProcedureListFromFileChanges(e.files, document.uri, currentEventFilePath)) {
+        scheduleInit();
+      }
+    });
+
+    const deleteSub = vscode.workspace.onDidDeleteFiles((e: vscode.FileDeleteEvent) => {
+      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
+      if (shouldRefreshProcedureListFromFileChanges(e.files, document.uri, currentEventFilePath)) {
+        scheduleInit();
+      }
+    });
+
+    const renameSub = vscode.workspace.onDidRenameFiles((e: vscode.FileRenameEvent) => {
+      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
+      const renamedUris = e.files.flatMap(file => [file.oldUri, file.newUri]);
+      if (shouldRefreshProcedureListFromFileChanges(renamedUris, document.uri, currentEventFilePath)) {
         scheduleInit();
       }
     });
@@ -338,6 +397,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     webviewPanel.onDidDispose(() => {
       cfgSub.dispose();
       docSub.dispose();
+      createSub.dispose();
+      deleteSub.dispose();
+      renameSub.dispose();
       if (initTimer) clearTimeout(initTimer);
     });
 

@@ -1,3 +1,18 @@
+import * as fs from "fs";
+import * as path from "path";
+
+const PROCEDURE_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([".pb", ".pbi"]);
+const PROCEDURE_SOURCE_IGNORED_DIRS: ReadonlySet<string> = new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "out-test"
+]);
+
 export function extractProcedureNamesFromText(text: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
@@ -45,4 +60,57 @@ export function sortUniqueProcedureNames(names: Iterable<string>): string[] {
   }
 
   return Array.from(unique.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+export function isProcedureSourceFilePath(filePath: string): boolean {
+  return PROCEDURE_SOURCE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+export function resolveProcedureEventFilePath(documentPath: string, eventFile?: string): string | undefined {
+  const trimmedEventFile = (eventFile ?? "").trim();
+  if (!trimmedEventFile.length) return undefined;
+
+  return path.isAbsolute(trimmedEventFile)
+    ? path.normalize(trimmedEventFile)
+    : path.normalize(path.resolve(path.dirname(documentPath), trimmedEventFile));
+}
+
+export function discoverProcedureSourcePaths(documentPath: string, workspaceRoot?: string, eventFile?: string): string[] {
+  const resolved = new Set<string>();
+  const addPath = (filePath: string | undefined) => {
+    const trimmed = (filePath ?? "").trim();
+    if (!trimmed.length) return;
+    resolved.add(path.normalize(trimmed));
+  };
+
+  if (isProcedureSourceFilePath(documentPath)) addPath(documentPath);
+  addPath(resolveProcedureEventFilePath(documentPath, eventFile));
+
+  const trimmedWorkspaceRoot = (workspaceRoot ?? "").trim();
+  if (!trimmedWorkspaceRoot.length) return Array.from(resolved).sort();
+
+  const visitDir = (dirPath: string) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (PROCEDURE_SOURCE_IGNORED_DIRS.has(entry.name)) continue;
+        visitDir(entryPath);
+        continue;
+      }
+
+      if (!entry.isFile()) continue;
+      if (!isProcedureSourceFilePath(entryPath)) continue;
+      addPath(entryPath);
+    }
+  };
+
+  visitDir(path.normalize(trimmedWorkspaceRoot));
+  return Array.from(resolved).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
