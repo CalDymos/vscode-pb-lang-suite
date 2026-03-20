@@ -4412,22 +4412,27 @@ function getEditableSplitterState(g: Gadget): number {
 function renderProps() {
   propsEl.innerHTML = "";
 
+  const section = (title: string) => {
+    const h = document.createElement("div");
+    h.className = "subHeader";
+    h.textContent = title;
+    return h;
+  };
+
   const sel = selection;
   if (!sel) {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
+    propsEl.appendChild(section("Selection"));
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.style.margin = "8px 0 0";
+    empty.textContent = "No selection";
+    propsEl.appendChild(empty);
     return;
   }
 
   const toPbString = (v: string): string => {
     const esc = (v ?? "").replace(/"/g, '""');
     return `"${esc}"`;
-  };
-
-  const section = (title: string) => {
-    const h = document.createElement("div");
-    h.className = "subHeader";
-    h.textContent = title;
-    return h;
   };
 
   const miniList = () => {
@@ -7107,9 +7112,10 @@ function clamp(v: number, min: number, max: number): number {
 }
 
 function setupPanelResize() {
-  const resizer = document.getElementById("panelResizer");
+  const resizer = document.getElementById("panelResizer") as HTMLElement | null;
   if (!resizer) return;
   let dragging = false;
+  let activePointerId: number | null = null;
   const applyWidth = (clientX: number) => {
     const nextWidth = clamp(window.innerWidth - clientX - 3, 300, Math.max(300, Math.min(900, window.innerWidth - 220)));
     document.documentElement.style.setProperty("--pbfd-panel-width", `${Math.trunc(nextWidth)}px`);
@@ -7123,14 +7129,23 @@ function setupPanelResize() {
     dragging = false;
     resizer.classList.remove("dragging");
     document.body.style.cursor = "";
+    if (activePointerId !== null) {
+      resizer.releasePointerCapture?.(activePointerId);
+      activePointerId = null;
+    }
   };
   resizer.addEventListener("pointerdown", ev => {
+    ev.preventDefault();
     dragging = true;
+    activePointerId = ev.pointerId;
     resizer.classList.add("dragging");
     document.body.style.cursor = "col-resize";
-    (resizer as HTMLElement).setPointerCapture?.(ev.pointerId);
+    resizer.setPointerCapture?.(ev.pointerId);
     applyWidth(ev.clientX);
   });
+  resizer.addEventListener("pointermove", onMove);
+  resizer.addEventListener("pointerup", stop);
+  resizer.addEventListener("pointercancel", stop);
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", stop);
   window.addEventListener("pointercancel", stop);
@@ -7143,4 +7158,5 @@ function asInt(v: any): number {
 }
 
 resizeCanvas();
+setupPanelResize();
 vscode.postMessage({ type: "ready" });

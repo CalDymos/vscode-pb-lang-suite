@@ -1251,6 +1251,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         cursor: col-resize;
         background: var(--vscode-panel-border);
         opacity: 0.35;
+        touch-action: none;
+        user-select: none;
       }
 
       .panelResizer:hover,
@@ -1421,13 +1423,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       <div class="panel">
         <div id="diag" class="diag" style="display:none"></div>
 
-        <div><b>Properties</b></div>
-        <div class="muted">Drag/resize gadgets. Items/Columns patching is supported for AddGadgetItem/AddGadgetColumn.</div>
+        <div class="subHeader">Info</div>
+        <div class="muted" style="margin:8px 0 10px">Drag/resize gadgets. Items/Columns patching is supported for AddGadgetItem/AddGadgetColumn.</div>
         <div id="props"></div>
 
         <div class="list">
-          <div><b>Hierarchy</b></div>
-          <div class="muted" style="margin:6px 0 8px">Select Parent lets you quickly navigate to a container/root.</div>
+          <div class="subHeader">Hierarchy</div>
+          <div class="muted" style="margin:8px 0 8px">Select Parent lets you quickly navigate to a container/root.</div>
           <div class="row" style="grid-template-columns: 110px 1fr;">
             <div>Select Parent</div>
             <select id="parentSel"></select>
