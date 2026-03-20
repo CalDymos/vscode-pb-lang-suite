@@ -217,6 +217,26 @@ test("resolves generic preview rect hits for add buttons and footers", () => {
   );
 });
 
+test("resolves flyout menu entry hits outside the menu bar rectangle", () => {
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 92,
+      y: 132,
+      windowHit: true,
+      menuId: "menu-1",
+      menuRect: { x: 20, y: 80, w: 120, h: 22 },
+      menuEntryRects: [
+        { ownerId: "menu-1", index: 0, x: 20, y: 80, w: 40, h: 18 },
+        { ownerId: "menu-1", index: 2, x: 80, y: 120, w: 110, h: 20 }
+      ]
+    }),
+    {
+      selection: { kind: "menuEntry", menuId: "menu-1", entryIndex: 2 },
+      rect: { ownerId: "menu-1", index: 2, x: 80, y: 120, w: 110, h: 20 }
+    }
+  );
+});
+
 test("resolves top-level chrome hits from menu, toolbar and statusbar rectangles", () => {
   assert.deepEqual(
     resolveTopLevelChromeHit({

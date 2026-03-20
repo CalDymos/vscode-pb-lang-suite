@@ -416,12 +416,14 @@ export function resolveTopLevelChromeHit(args: {
     return { selection: { kind: "statusbar", id: args.statusBarId }, rect: args.statusBarRect };
   }
 
-  if (args.menuId && args.menuRect && rectContainsPoint(args.menuRect, args.x, args.y)) {
+  if (args.menuId) {
     const entryHit = resolvePreviewRectListHit(args.menuEntryRects, args.x, args.y);
     if (entryHit) {
       return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
     }
-    return { selection: { kind: "menu", id: args.menuId }, rect: args.menuRect };
+    if (args.menuRect && rectContainsPoint(args.menuRect, args.x, args.y)) {
+      return { selection: { kind: "menu", id: args.menuId }, rect: args.menuRect };
+    }
   }
 
   if (args.toolBarId && args.toolBarRect && rectContainsPoint(args.toolBarRect, args.x, args.y)) {
