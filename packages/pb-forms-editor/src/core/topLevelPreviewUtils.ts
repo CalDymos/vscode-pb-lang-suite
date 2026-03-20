@@ -138,6 +138,20 @@ export function getDefaultMenuItemInsertArgs(menu: MenuModelLike): { idRaw: stri
   };
 }
 
+export function getOpenSubMenuBalance(menu: MenuModelLike): number {
+  let balance = 0;
+  for (const entry of menu.entries ?? []) {
+    if (entry.kind === "OpenSubMenu") {
+      balance += 1;
+      continue;
+    }
+    if (entry.kind === "CloseSubMenu") {
+      balance = Math.max(0, balance - 1);
+    }
+  }
+  return balance;
+}
+
 export function getDirectMenuChildIndices(menu: MenuModelLike, parentIndex: number): number[] {
   const entries = menu.entries ?? [];
   if (parentIndex < 0 || parentIndex >= entries.length) return [];

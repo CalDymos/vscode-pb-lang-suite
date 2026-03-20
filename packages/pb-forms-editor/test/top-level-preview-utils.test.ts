@@ -4,6 +4,7 @@ import {
   canEditToolBarTooltip,
   getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
+  getOpenSubMenuBalance,
   getDirectMenuChildIndices,
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
@@ -76,10 +77,29 @@ test("builds default menu labels, levels and insert args", () => {
   assert.equal(getMenuPreviewLabel(menu.entries[3]), "");
   assert.equal(getMenuEntryLevel(menu.entries[1]), 1);
   assert.equal(getMenuEntryLevel(undefined), 0);
+  assert.equal(getOpenSubMenuBalance(menu), 0);
   assert.deepEqual(getDefaultMenuItemInsertArgs(menu), {
     idRaw: "#MenuItem_4",
     textRaw: '"MenuItem4"'
   });
+});
+
+test("tracks unmatched open submenu balance for root close guards", () => {
+  assert.equal(getOpenSubMenuBalance({
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Recent"', level: 1 },
+      { kind: "MenuItem", textRaw: '"Last"', level: 2 }
+    ]
+  }), 1);
+
+  assert.equal(getOpenSubMenuBalance({
+    entries: [
+      { kind: "CloseSubMenu", level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Recent"', level: 0 },
+      { kind: "CloseSubMenu", level: 0 }
+    ]
+  }), 0);
 });
 
 test("resolves direct menu children and ancestor chains from entry levels", () => {

@@ -47,6 +47,7 @@ import {
   getMenuEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutPanelRect,
+  getOpenSubMenuBalance,
   getDirectMenuChildIndices,
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
@@ -4668,6 +4669,29 @@ function renderProps() {
           }
         )
       ));
+
+      const selectedDeleteMenuEntryBtn = document.createElement("button");
+      selectedDeleteMenuEntryBtn.textContent = "Delete Entry";
+      selectedDeleteMenuEntryBtn.disabled = typeof selectedEntry.source?.line !== "number";
+      selectedDeleteMenuEntryBtn.title = selectedDeleteMenuEntryBtn.disabled
+        ? "Only parsed menu entries with a source line can be deleted."
+        : "Delete the currently selected menu entry.";
+      selectedDeleteMenuEntryBtn.onclick = () => {
+        if (typeof selectedEntry.source?.line !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteMenuEntry",
+            menuId: m.id,
+            entryIndex: selectedEntryIndex!,
+            sourceLine: selectedEntry.source.line,
+            entryKind: selectedEntry.kind,
+            message: `Delete the selected ${selectedEntry.kind} entry from menu '${m.id}'?`,
+            confirmLabel: "Delete Entry"
+          },
+          { kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }
+        );
+      };
+      propsEl.appendChild(row("Delete", selectedDeleteMenuEntryBtn));
     }
 
     const box = miniList();
@@ -4782,10 +4806,17 @@ function renderProps() {
         postInsertMenuEntry(m, { kind: "MenuBar" });
       };
 
+      const closeBalance = getOpenSubMenuBalance(m);
+      const canInsertRootClose = closeBalance > 0;
+
       const addCloseBtn = document.createElement("button");
       addCloseBtn.textContent = "Add Close";
-      addCloseBtn.title = "Insert a new CloseSubMenu entry.";
+      addCloseBtn.disabled = !canInsertRootClose;
+      addCloseBtn.title = canInsertRootClose
+        ? "Insert a new CloseSubMenu entry for the last still-open submenu."
+        : "Disabled because the parsed menu currently has no unmatched OpenSubMenu entry.";
       addCloseBtn.onclick = () => {
+        if (!canInsertRootClose) return;
         postInsertMenuEntry(m, { kind: "CloseSubMenu" });
       };
 
@@ -5079,6 +5110,29 @@ function renderProps() {
           }
         )
       ));
+
+      const selectedDeleteToolBarEntryBtn = document.createElement("button");
+      selectedDeleteToolBarEntryBtn.textContent = "Delete Entry";
+      selectedDeleteToolBarEntryBtn.disabled = typeof selectedEntry.source?.line !== "number";
+      selectedDeleteToolBarEntryBtn.title = selectedDeleteToolBarEntryBtn.disabled
+        ? "Only parsed toolbar entries with a source line can be deleted."
+        : "Delete the currently selected toolbar entry.";
+      selectedDeleteToolBarEntryBtn.onclick = () => {
+        if (typeof selectedEntry.source?.line !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteToolBarEntry",
+            toolBarId: t.id,
+            entryIndex: selectedEntryIndex!,
+            sourceLine: selectedEntry.source.line,
+            entryKind: selectedEntry.kind,
+            message: `Delete the selected ${selectedEntry.kind} entry from toolbar '${t.id}'?`,
+            confirmLabel: "Delete Entry"
+          },
+          { kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }
+        );
+      };
+      propsEl.appendChild(row("Delete", selectedDeleteToolBarEntryBtn));
     }
 
     const box = miniList();
@@ -5540,6 +5594,15 @@ function renderProps() {
         statusBarFlagActions.appendChild(wrap);
       }
       propsEl.appendChild(row("Flags", statusBarFlagActions));
+
+      const selectedDeleteStatusFieldBtn = document.createElement("button");
+      selectedDeleteStatusFieldBtn.textContent = "Delete Field";
+      selectedDeleteStatusFieldBtn.disabled = !selectedUi.delFn;
+      selectedDeleteStatusFieldBtn.title = selectedDeleteStatusFieldBtn.disabled
+        ? "Only parsed statusbar fields with a source line can be deleted."
+        : "Delete the currently selected statusbar field.";
+      selectedDeleteStatusFieldBtn.onclick = () => selectedUi.delFn?.();
+      propsEl.appendChild(row("Delete", selectedDeleteStatusFieldBtn));
     }
 
     const box = miniList();

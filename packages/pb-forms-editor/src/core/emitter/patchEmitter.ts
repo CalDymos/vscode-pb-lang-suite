@@ -3913,6 +3913,22 @@ export function applyMenuEntryInsert(
       edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}\n`);
     }
   } else {
+    if (args.kind === MENU_ENTRY_KIND.CloseSubMenu) {
+      const parsed = parseFormDocument(document.getText());
+      const menu = parsed.menus.find(entry => entry.id === menuId);
+      let openBalance = 0;
+      for (const entry of menu?.entries ?? []) {
+        if (entry.kind === MENU_ENTRY_KIND.OpenSubMenu) {
+          openBalance += 1;
+          continue;
+        }
+        if (entry.kind === MENU_ENTRY_KIND.CloseSubMenu) {
+          openBalance = Math.max(0, openBalance - 1);
+        }
+      }
+      if (openBalance <= 0) return undefined;
+    }
+
     edit = applySectionEntryInsert(
       document,
       calls,

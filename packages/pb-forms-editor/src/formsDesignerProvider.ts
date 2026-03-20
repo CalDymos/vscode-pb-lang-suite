@@ -672,6 +672,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           return;
         }
 
+        case WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu: {
+          const edit = applyMenuDelete(document, msg.menuId, sr);
+          await applyEditOrError(edit, `Could not delete menu '${msg.menuId}'. No matching CreateMenu section found${rangeInfo}.`);
+          return;
+        }
+
         case WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
           const edit = applyToolBarEntryInsert(

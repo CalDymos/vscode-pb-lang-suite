@@ -1592,6 +1592,14 @@ test("deletes full menu section", () => {
   assert.doesNotMatch(patchedText, /OpenSubMenu\(/);
 });
 
+test("rejects root close submenu inserts when no submenu is currently open", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyMenuEntryInsert(document, menuId, { kind: MENU_ENTRY_KIND.CloseSubMenu });
+
+  assert.equal(edit, undefined);
+});
+
 test("deletes full toolbar section", () => {
   const text = loadFixture("fixtures/smoke/09-toolbar-basic.pbf");
 
