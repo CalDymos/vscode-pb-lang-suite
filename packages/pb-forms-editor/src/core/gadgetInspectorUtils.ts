@@ -37,6 +37,7 @@ const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "CheckBoxGadget",
   "ComboBoxGadget",
   "ContainerGadget",
+  "CustomGadget",
   "DateGadget",
   "EditorGadget",
   "ExplorerComboGadget",

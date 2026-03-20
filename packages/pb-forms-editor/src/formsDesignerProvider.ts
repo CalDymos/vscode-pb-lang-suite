@@ -5,6 +5,7 @@ import {
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
   applyGadgetOpenArgsUpdate,
+  applyCustomGadgetCodeUpdate,
   applyGadgetPropertyUpdate,
   applyImageDelete,
   applyImageInsert,
@@ -63,6 +64,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
   setGadgetOpenArgs: "setGadgetOpenArgs",
+  setCustomGadgetCode: "setCustomGadgetCode",
   setGadgetProperties: "setGadgetProperties",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
@@ -124,6 +126,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
@@ -456,6 +459,23 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             maxRaw: msg.maxRaw
           }, sr);
           await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`);
+          return;
+        }
+        case WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode: {
+          const gadget = lastModel?.gadgets.find(entry => entry.id === msg.id);
+          if (!gadget || gadget.kind !== "CustomGadget") {
+            postError(`Could not patch custom gadget code for '${msg.id}'. The current selection is not a parsed CustomGadget${rangeInfo}.`);
+            return;
+          }
+          if (msg.customCreateRaw !== undefined && !msg.customCreateRaw.trim().length) {
+            postError(`Custom gadget CreateCode must not be empty.`);
+            return;
+          }
+          const edit = applyCustomGadgetCodeUpdate(document, msg.id, {
+            customInitRaw: msg.customInitRaw,
+            customCreateRaw: msg.customCreateRaw
+          }, sr);
+          await applyEditOrError(edit, `Could not patch custom gadget code for '${msg.id}'. No matching custom gadget marker block found${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties: {

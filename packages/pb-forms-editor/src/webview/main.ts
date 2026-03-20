@@ -133,6 +133,9 @@ type Gadget = {
   tooltipVariable?: boolean;
   stateRaw?: string;
   state?: number;
+  customSelectName?: string;
+  customInitRaw?: string;
+  customCreateRaw?: string;
   frontColorRaw?: string;
   frontColor?: number;
   backColorRaw?: string;
@@ -280,6 +283,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   moveGadget: "moveGadget",
   setGadgetRect: "setGadgetRect",
   setGadgetOpenArgs: "setGadgetOpenArgs",
+  setCustomGadgetCode: "setCustomGadgetCode",
   setGadgetProperties: "setGadgetProperties",
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
@@ -348,6 +352,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
@@ -1567,6 +1572,10 @@ function postWindowRect() {
 
 function postGadgetOpenArgs(id: string, args: { textRaw?: string; minRaw?: string; maxRaw?: string }): void {
   post({ type: "setGadgetOpenArgs", id, ...args });
+}
+
+function postCustomGadgetCode(id: string, args: { customInitRaw?: string; customCreateRaw?: string }): void {
+  post({ type: "setCustomGadgetCode", id, ...args });
 }
 
 function postGadgetProperties(
@@ -6168,6 +6177,57 @@ function renderProps() {
     if (hasExpressionChecked) {
       propsEl.appendChild(mutedNote("Non-literal Checked expressions are preserved while untouched. Editing them here rewrites the state to the original saved form or removes SetGadgetState(...)."));
     }
+  }
+
+  if (g.kind === "CustomGadget") {
+    propsEl.appendChild(
+      row(
+        "SelectGadget",
+        textInput(
+          g.customSelectName ?? "",
+          () => {},
+          {
+            disabled: true,
+            title: "The original Property Grid shows a SelectGadget combo entry, but the persisted form only stores InitCode/CreateCode. The current value is derived from the parsed custom creation call name."
+          }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "InitCode",
+        textInput(
+          g.customInitRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.customInitRaw = trimmed || undefined;
+            postCustomGadgetCode(g.id, { customInitRaw: trimmed.length ? trimmed : "" });
+            renderProps();
+          },
+          { title: "Matches the original InitCode property and patches the custom gadget initialisation line." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "CreateCode",
+        textInput(
+          g.customCreateRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            if (!trimmed.length) {
+              renderProps();
+              return;
+            }
+            g.customCreateRaw = trimmed;
+            postCustomGadgetCode(g.id, { customCreateRaw: trimmed });
+            renderProps();
+          },
+          { title: "Matches the original CreateCode property and patches both the custom gadget marker template and the generated creation line." }
+        )
+      )
+    );
+    propsEl.appendChild(mutedNote("SelectGadget is not reconstructed from the saved form. InitCode and CreateCode are the persisted original custom-gadget fields."));
   }
 
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);

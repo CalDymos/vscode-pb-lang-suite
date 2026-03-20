@@ -17,6 +17,7 @@ import {
   GadgetItem,
   GadgetKind,
   ScanRange,
+  SourceRange,
   TOOLBAR_ENTRY_KIND,
   MENU_ENTRY_KIND,
   GADGET_KIND_SET,
@@ -123,6 +124,8 @@ export function parseFormDocument(text: string): FormDocument {
   };
 
   const lines = text.split(/\r?\n/);
+  const lineStarts = buildLineStartOffsets(lines);
+  const customGadgetInitByIndex = parseCustomGadgetInitMap(lines, lineStarts);
 
   const setMenuContext = (menu: FormMenu | undefined) => {
     curMenu = menu;
@@ -662,6 +665,22 @@ export function parseFormDocument(text: string): FormDocument {
         }
         continue;
       }
+    }
+
+    const customGadget = parseCustomGadgetCreationCall(c, lines, lineStarts, customGadgetInitByIndex);
+    if (customGadget) {
+      const parent = parentStack[parentStack.length - 1];
+      if (parent) {
+        customGadget.parentId = parent.id;
+        if (parent.kind === GADGET_KIND.PanelGadget && typeof parent.currentPanelItem === "number") {
+          customGadget.parentItem = parent.currentPanelItem;
+        }
+      }
+
+      doc.gadgets.push(customGadget);
+      gadgetById.set(customGadget.id, customGadget);
+      pushImplicitParent(customGadget);
+      continue;
     }
 
     const kind = asGadgetKind(c.name);
@@ -1372,6 +1391,142 @@ function parseNumericRaw(raw: string | undefined): { raw?: string; value?: numbe
   return {
     raw: valueRaw,
     value: typeof value === "number" ? value : undefined
+  };
+}
+
+const CUSTOM_GADGET_INIT_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i;
+const CUSTOM_GADGET_CREATE_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget creation \(do not remove this line\)\s*(.*?)\s*$/i;
+
+type CustomGadgetInitEntry = {
+  index: number;
+  markerLine: number;
+  codeRaw?: string;
+  codeLine?: number;
+  markerSource?: SourceRange;
+  codeSource?: SourceRange;
+};
+
+function buildLineStartOffsets(lines: string[]): number[] {
+  const offsets: number[] = [];
+  let offset = 0;
+  for (let i = 0; i < lines.length; i++) {
+    offsets.push(offset);
+    offset += lines[i]?.length ?? 0;
+    if (i < lines.length - 1) offset += 1;
+  }
+  if (!offsets.length) offsets.push(0);
+  return offsets;
+}
+
+function buildLineSourceRange(lines: string[], lineStarts: number[], line: number): SourceRange | undefined {
+  if (line < 0 || line >= lines.length) return undefined;
+  const lineStart = lineStarts[line] ?? 0;
+  const text = lines[line] ?? "";
+  return {
+    start: lineStart,
+    end: lineStart + text.length,
+    line,
+    lineStart
+  };
+}
+
+function parseCustomGadgetInitMap(lines: string[], lineStarts: number[]): Map<number, CustomGadgetInitEntry> {
+  const out = new Map<number, CustomGadgetInitEntry>();
+  for (let i = 0; i < lines.length; i++) {
+    const match = CUSTOM_GADGET_INIT_MARKER_RE.exec(lines[i] ?? "");
+    if (!match) continue;
+    const index = Number(match[1]);
+    const codeLine = i + 1 < lines.length ? i + 1 : undefined;
+    out.set(index, {
+      index,
+      markerLine: i,
+      codeRaw: codeLine !== undefined ? (lines[codeLine] ?? "").trim() || undefined : undefined,
+      codeLine,
+      markerSource: buildLineSourceRange(lines, lineStarts, i),
+      codeSource: codeLine !== undefined ? buildLineSourceRange(lines, lineStarts, codeLine) : undefined
+    });
+  }
+  return out;
+}
+
+function parseCustomGadgetNumericValue(raw: string | undefined): number | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return undefined;
+
+  const direct = asNumber(trimmed);
+  if (typeof direct === "number") return direct;
+
+  const tail = /(-?\d+)\s*$/.exec(trimmed);
+  if (tail) return Number(tail[1]);
+
+  return undefined;
+}
+
+function parseCustomGadgetCreationCall(
+  call: PbCall,
+  lines: string[],
+  lineStarts: number[],
+  initByIndex: ReadonlyMap<number, CustomGadgetInitEntry>
+): Gadget | undefined {
+  const markerLine = call.range.line - 1;
+  if (markerLine < 0 || markerLine >= lines.length) return undefined;
+
+  const markerMatch = CUSTOM_GADGET_CREATE_MARKER_RE.exec(lines[markerLine] ?? "");
+  if (!markerMatch) return undefined;
+
+  const templateRaw = markerMatch[2]?.trim() || undefined;
+  if (!templateRaw?.length) return undefined;
+
+  const params = splitParams(call.args);
+  const equalsPos = templateRaw.indexOf("=");
+  const placeholders = ["id", "x", "y", "w", "h", "txt", "hwnd"]
+    .map(token => ({ token, pos: templateRaw.indexOf(`%${token}%`) }))
+    .filter(entry => entry.pos >= 0)
+    .sort((a, b) => a.pos - b.pos);
+
+  const resolved = new Map<string, string>();
+  let paramIndex = 0;
+  for (const entry of placeholders) {
+    if (equalsPos >= 0 && entry.pos < equalsPos) {
+      const assigned = call.assignedVar?.trim();
+      if (assigned?.length) resolved.set(entry.token, assigned);
+      continue;
+    }
+
+    const raw = params[paramIndex]?.trim();
+    if (raw?.length) resolved.set(entry.token, raw);
+    paramIndex += 1;
+  }
+
+  const idRaw = resolved.get("id")?.trim();
+  if (!idRaw?.length) return undefined;
+
+  const pbAny = !idRaw.startsWith("#");
+  const firstParam = pbAny ? "#PB_Any" : idRaw;
+  const textRaw = resolved.get("txt")?.trim() || undefined;
+  const literalText = unquoteString(textRaw ?? "");
+  const initIndex = Number(markerMatch[1]);
+  const initEntry = initByIndex.get(initIndex);
+
+  return {
+    id: idRaw,
+    kind: GADGET_KIND.CustomGadget,
+    pbAny,
+    variable: pbAny ? idRaw : idRaw.replace(/^#/, ""),
+    firstParam,
+    x: parseCustomGadgetNumericValue(resolved.get("x")) ?? 0,
+    y: parseCustomGadgetNumericValue(resolved.get("y")) ?? 0,
+    w: parseCustomGadgetNumericValue(resolved.get("w")) ?? 0,
+    h: parseCustomGadgetNumericValue(resolved.get("h")) ?? 0,
+    textRaw,
+    text: literalText ?? (textRaw?.length ? textRaw : undefined),
+    textVariable: literalText === undefined && !!textRaw?.length,
+    customSelectName: call.name,
+    customInitRaw: initEntry?.codeRaw,
+    customCreateRaw: templateRaw,
+    customInitSource: initEntry?.codeSource,
+    customCreateMarkerSource: buildLineSourceRange(lines, lineStarts, markerLine),
+    source: call.range
   };
 }
 

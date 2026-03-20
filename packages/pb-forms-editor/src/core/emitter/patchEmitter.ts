@@ -269,6 +269,11 @@ export interface GadgetOpenArgs {
   flagsExpr?: string;
 }
 
+export interface CustomGadgetCodeArgs {
+  customInitRaw?: string;
+  customCreateRaw?: string;
+}
+
 function isCreateBoundary(nameLower: string): boolean {
   return (
     nameLower === "createmenu" ||
@@ -954,6 +959,13 @@ export function applyMovePatch(
   y: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  if (customGadget) {
+    const nextGadget: Gadget = { ...customGadget, x: Math.trunc(x), y: Math.trunc(y) };
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
   const calls = scanDocumentCalls(document, scanRange);
   const call = findCallByStableKey(calls, gadgetKey);
 
@@ -979,6 +991,19 @@ export function applyRectPatch(
   h: number,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  if (customGadget) {
+    const nextGadget: Gadget = {
+      ...customGadget,
+      x: Math.trunc(x),
+      y: Math.trunc(y),
+      w: Math.trunc(w),
+      h: Math.trunc(h)
+    };
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
   const calls = scanDocumentCalls(document, scanRange);
   const call = findCallByStableKey(calls, gadgetKey);
 
@@ -1141,6 +1166,60 @@ function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
   }
 }
 
+function buildCustomGadgetIdRaw(gadget: Gadget): string {
+  if (gadget.pbAny) {
+    return gadget.variable?.trim() || gadget.id;
+  }
+  return gadget.firstParam?.trim() || gadget.id;
+}
+
+function buildCustomGadgetTextReplacement(gadget: Gadget): string {
+  const textRaw = normalizeOptionalRaw(gadget.textRaw);
+  if (textRaw) return textRaw;
+  if (typeof gadget.text === "string") return quotePbString(gadget.text);
+  return '""';
+}
+
+function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string | undefined {
+  const templateRaw = normalizeOptionalRaw(gadget.customCreateRaw);
+  if (!templateRaw) return undefined;
+
+  const idRaw = buildCustomGadgetIdRaw(gadget);
+  const replacements: Record<string, string> = {
+    "%id%": idRaw,
+    "%x%": String(Math.trunc(gadget.x)),
+    "%y%": String(Math.trunc(gadget.y)),
+    "%w%": String(Math.trunc(gadget.w)),
+    "%h%": String(Math.trunc(gadget.h)),
+    "%txt%": buildCustomGadgetTextReplacement(gadget),
+    "%hwnd%": idRaw
+  };
+
+  let line = templateRaw;
+  for (const [token, value] of Object.entries(replacements)) {
+    line = line.split(token).join(value);
+  }
+
+  return `${indent}${line}`;
+}
+
+function applyCustomGadgetCreationLineEdit(
+  document: vscode.TextDocument,
+  gadget: Gadget
+): vscode.WorkspaceEdit | undefined {
+  if (!gadget.source) return undefined;
+
+  const line = gadget.source.line;
+  if (line < 0 || line >= document.lineCount) return undefined;
+
+  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line));
+  if (!rebuilt) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(line).range, rebuilt);
+  return edit;
+}
+
 function setRequiredCtorParam(params: string[], index: number | undefined, raw: string | undefined): void {
   if (index === undefined || raw === undefined) return;
   const normalized = normalizeOptionalRaw(raw);
@@ -1161,6 +1240,20 @@ export function applyGadgetOpenArgsUpdate(
   args: GadgetOpenArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  if (customGadget) {
+    const nextGadget: Gadget = { ...customGadget };
+    if (args.textRaw !== undefined) {
+      const nextTextRaw = normalizeOptionalRaw(args.textRaw) ?? '""';
+      const literalText = unquoteString(nextTextRaw);
+      nextGadget.textRaw = nextTextRaw;
+      nextGadget.text = literalText ?? nextTextRaw;
+      nextGadget.textVariable = literalText === undefined && nextTextRaw.length > 0;
+    }
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
   const calls = scanDocumentCalls(document, scanRange);
   const call = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
 
@@ -1189,6 +1282,74 @@ export function applyGadgetOpenArgsUpdate(
   const edit = replaceCallArgsEdit(document, call, params);
   applyGadgetHeadPatch(edit, document);
   return edit;
+}
+
+export function applyCustomGadgetCodeUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: CustomGadgetCodeArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  if (!gadget) return undefined;
+
+  const nextGadget: Gadget = { ...gadget };
+  if (args.customInitRaw !== undefined) {
+    nextGadget.customInitRaw = normalizeOptionalRaw(args.customInitRaw);
+  }
+  if (args.customCreateRaw !== undefined) {
+    nextGadget.customCreateRaw = normalizeOptionalRaw(args.customCreateRaw);
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  let changed = false;
+
+  if (args.customInitRaw !== undefined) {
+    if (gadget.customInitSource) {
+      const markerLine = gadget.customInitSource.line - 1;
+      const hasMarker = markerLine >= 0 && /^\s*;\s*\d+\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i.test(document.lineAt(markerLine).text);
+      if (!nextGadget.customInitRaw) {
+        if (hasMarker) {
+          edit.delete(document.uri, document.lineAt(markerLine).rangeIncludingLineBreak);
+        }
+        edit.delete(document.uri, document.lineAt(gadget.customInitSource.line).rangeIncludingLineBreak);
+        changed = true;
+      } else {
+        const indent = getLineIndent(document, gadget.customInitSource.line);
+        edit.replace(document.uri, document.lineAt(gadget.customInitSource.line).range, `${indent}${nextGadget.customInitRaw}`);
+        changed = true;
+      }
+    } else if (nextGadget.customInitRaw) {
+      return undefined;
+    }
+  }
+
+  if (args.customCreateRaw !== undefined) {
+    if (!gadget.customCreateMarkerSource || !gadget.source || !nextGadget.customCreateRaw) {
+      return undefined;
+    }
+
+    const markerLine = gadget.customCreateMarkerSource.line;
+    const markerText = document.lineAt(markerLine).text;
+    const markerMatch = /^(\s*);\s*(\d+)\s+Custom gadget creation \(do not remove this line\)\s*(.*)$/i.exec(markerText);
+    if (!markerMatch) return undefined;
+
+    const markerIndent = markerMatch[1] ?? "";
+    const markerIndex = markerMatch[2];
+    edit.replace(
+      document.uri,
+      document.lineAt(markerLine).range,
+      `${markerIndent}; ${markerIndex} Custom gadget creation (do not remove this line) ${nextGadget.customCreateRaw}`
+    );
+
+    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line));
+    if (!rebuiltLine) return undefined;
+    edit.replace(document.uri, document.lineAt(gadget.source.line).range, rebuiltLine);
+    changed = true;
+  }
+
+  return changed ? edit : undefined;
 }
 
 export function applyWindowPbAnyToggle(
@@ -2487,9 +2648,10 @@ function applyGadgetPropertyMutation(
 
   const calls = scanDocumentCalls(document, scanRange);
   const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
-  if (!createCall) return undefined;
+  const createLine = createCall?.range.line ?? gadget.source?.line;
+  if (createLine === undefined) return undefined;
 
-  const proc = findProcedureBlock(document, createCall.range.line);
+  const proc = findProcedureBlock(document, createLine);
   const propertyCalls = calls.filter(call => {
     const nameLower = call.name.toLowerCase();
     if (!GADGET_PROPERTY_NAMES.has(nameLower)) return false;
@@ -2498,8 +2660,8 @@ function applyGadgetPropertyMutation(
     return call.range.line >= proc.startLine && call.range.line <= proc.endLine;
   }).sort((a, b) => a.range.line - b.range.line);
 
-  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : createCall.range.line + 1;
-  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : createCall.range.line;
+  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : createLine + 1;
+  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : createLine;
   const indent = getLineIndent(document, indentSourceLine);
   const rebuilt = buildGadgetPropertyLines(gadgetKey, nextGadget, indent);
 

@@ -19,6 +19,7 @@ test("marks original text-capable gadget constructors as caption-editable", () =
   assert.equal(canEditGadgetText("StringGadget"), true);
   assert.equal(canEditGadgetText("ButtonGadget"), true);
   assert.equal(canEditGadgetText("OptionGadget"), true);
+  assert.equal(canEditGadgetText("CustomGadget"), true);
   assert.equal(canEditGadgetText("ImageGadget"), false);
   assert.equal(canEditGadgetText("ProgressBarGadget"), false);
 });

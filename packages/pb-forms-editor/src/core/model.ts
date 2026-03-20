@@ -32,6 +32,7 @@ export const GADGET_KIND = {
   IPAddressGadget: "IPAddressGadget",
   ScrollBarGadget: "ScrollBarGadget",
   ScintillaGadget: "ScintillaGadget",
+  CustomGadget: "CustomGadget",
   Unknown: "Unknown",
 } as const;
 
@@ -77,6 +78,11 @@ export interface Gadget {
   tooltipVariable?: boolean;
   stateRaw?: string;     // raw state expression from SetGadgetState(...)
   state?: number;
+  customSelectName?: string;
+  customInitRaw?: string;
+  customCreateRaw?: string;
+  customInitSource?: SourceRange;
+  customCreateMarkerSource?: SourceRange;
   frontColorRaw?: string;
   frontColor?: number;
   backColorRaw?: string;
