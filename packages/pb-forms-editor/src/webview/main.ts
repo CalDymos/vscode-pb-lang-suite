@@ -155,6 +155,10 @@ type Gadget = {
   hidden?: boolean;
   disabledRaw?: string;
   disabled?: boolean;
+  lockLeft?: boolean;
+  lockRight?: boolean;
+  lockTop?: boolean;
+  lockBottom?: boolean;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -6106,6 +6110,11 @@ function renderProps() {
       })
     )
   );
+  propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), () => {}, { disabled: true, title: "Matches the original LockLeft property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
+  propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), () => {}, { disabled: true, title: "Matches the original LockRight property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
+  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), () => {}, { disabled: true, title: "Matches the original LockTop property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
+  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), () => {}, { disabled: true, title: "Matches the original LockBottom property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
+  propsEl.appendChild(mutedNote("LockLeft / LockRight / LockTop / LockBottom are now parsed from existing ResizeGadget(...) logic and shown readonly. The write path is staged separately so it can follow the original ResizeGadgets generation safely."));
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));
   }

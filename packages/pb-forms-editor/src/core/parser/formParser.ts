@@ -602,6 +602,35 @@ export function parseFormDocument(text: string): FormDocument {
         continue;
       }
 
+      case "ResizeGadget": {
+        const p = splitParams(c.args);
+        const g = findGadgetByReference(gadgetById, p[0]);
+        if (p.length >= 5 && g) {
+          const xRaw = (p[1] ?? "").trim();
+          const yRaw = (p[2] ?? "").trim();
+          const widthRaw = (p[3] ?? "").trim();
+          const heightRaw = (p[4] ?? "").trim();
+
+          if (usesWidthResizeReference(xRaw)) {
+            g.lockLeft = false;
+            g.lockRight = true;
+          }
+          if (usesHeightResizeReference(yRaw)) {
+            g.lockTop = false;
+            g.lockBottom = true;
+          }
+          if (usesWidthResizeReference(widthRaw)) {
+            g.lockLeft = true;
+            g.lockRight = true;
+          }
+          if (usesHeightResizeReference(heightRaw)) {
+            g.lockTop = true;
+            g.lockBottom = true;
+          }
+        }
+        continue;
+      }
+
       case "HideWindow": {
         const p = splitParams(c.args);
         if (p.length >= 2 && windowMatchesReference(doc.window, p[0])) {
@@ -1394,6 +1423,18 @@ function parseNumericRaw(raw: string | undefined): { raw?: string; value?: numbe
   };
 }
 
+function usesWidthResizeReference(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return false;
+  return /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i.test(trimmed);
+}
+
+function usesHeightResizeReference(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return false;
+  return /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i.test(trimmed);
+}
+
 const CUSTOM_GADGET_INIT_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i;
 const CUSTOM_GADGET_CREATE_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget creation \(do not remove this line\)\s*(.*?)\s*$/i;
 
@@ -1770,6 +1811,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     gadget2Raw: ctor.gadget2Raw,
     gadget2Id: ctor.gadget2Id,
     flagsExpr: ctor.flagsExpr,
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
     source: range
   };
 }

@@ -95,6 +95,10 @@ export interface Gadget {
   hidden?: boolean;
   disabledRaw?: string;
   disabled?: boolean;
+  lockLeft?: boolean;
+  lockRight?: boolean;
+  lockTop?: boolean;
+  lockBottom?: boolean;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];

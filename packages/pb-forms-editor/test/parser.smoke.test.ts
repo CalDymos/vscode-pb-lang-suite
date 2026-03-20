@@ -903,3 +903,40 @@ imgInline = CatchImage(#PB_Any, ?BinaryBlock)
   assert.equal(inlineImg?.imageRaw, "?BinaryBlock");
   assert.equal(inlineImg?.image, "BinaryBlock");
 });
+
+
+test("parses gadget lock flags from ResizeGadget lines like the original opensave logic", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnLeftTop, 10, 12, 80, 24, "LeftTop")
+  ButtonGadget(#BtnRightBottom, 140, 120, 80, 24, "RightBottom")
+  ResizeGadget(#BtnRightBottom, FormWindowWidth - 180, FormWindowHeight - 100, 80, 24)
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, 10, 50, FormWindowWidth - 40, FormWindowHeight - 120)
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const leftTop = doc.gadgets.find(g => g.id === "#BtnLeftTop");
+  const rightBottom = doc.gadgets.find(g => g.id === "#BtnRightBottom");
+  const stretch = doc.gadgets.find(g => g.id === "#BtnStretch");
+
+  assert.ok(leftTop);
+  assert.equal(leftTop?.lockLeft, true);
+  assert.equal(leftTop?.lockRight, false);
+  assert.equal(leftTop?.lockTop, true);
+  assert.equal(leftTop?.lockBottom, false);
+
+  assert.ok(rightBottom);
+  assert.equal(rightBottom?.lockLeft, false);
+  assert.equal(rightBottom?.lockRight, true);
+  assert.equal(rightBottom?.lockTop, false);
+  assert.equal(rightBottom?.lockBottom, true);
+
+  assert.ok(stretch);
+  assert.equal(stretch?.lockLeft, true);
+  assert.equal(stretch?.lockRight, true);
+  assert.equal(stretch?.lockTop, true);
+  assert.equal(stretch?.lockBottom, true);
+});
