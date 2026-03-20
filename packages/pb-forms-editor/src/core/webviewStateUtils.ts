@@ -8,6 +8,8 @@ export type RectSnapshotLike = {
 export type PanelStateGadgetLike = {
   id: string;
   kind: string;
+  parentId?: string;
+  parentItem?: number;
   items?: Array<unknown>;
 };
 
@@ -35,6 +37,41 @@ export function retainPanelActiveItems(
 
     const clamped = Math.max(0, Math.min(Math.trunc(stored), itemCount - 1));
     next.set(gadget.id, clamped);
+  }
+
+  return next;
+}
+
+
+export function syncPanelActiveItemsForSelection(
+  previous: ReadonlyMap<string, number>,
+  gadgets: ReadonlyArray<PanelStateGadgetLike>,
+  selectedGadgetId: string
+): Map<string, number> {
+  const next = retainPanelActiveItems(previous, gadgets);
+  const gadgetById = new Map<string, PanelStateGadgetLike>();
+
+  for (const gadget of gadgets) {
+    gadgetById.set(gadget.id, gadget);
+  }
+
+  let current = gadgetById.get(selectedGadgetId);
+  while (current) {
+    const parentId = current.parentId;
+    if (!parentId) break;
+
+    const parent = gadgetById.get(parentId);
+    if (!parent) break;
+
+    if (parent.kind === "PanelGadget" && typeof current.parentItem === "number" && Number.isFinite(current.parentItem)) {
+      const itemCount = parent.items?.length ?? 0;
+      if (itemCount > 0) {
+        const clamped = Math.max(0, Math.min(Math.trunc(current.parentItem), itemCount - 1));
+        next.set(parent.id, clamped);
+      }
+    }
+
+    current = parent;
   }
 
   return next;

@@ -84,7 +84,8 @@ import {
 
 import {
   hasRectChanged,
-  retainPanelActiveItems
+  retainPanelActiveItems,
+  syncPanelActiveItemsForSelection
 } from "../core/webviewStateUtils";
 
 type SourceRange = { line: number };
@@ -4108,7 +4109,12 @@ function renderList() {
     div.onclick = () => {
       if (!n.selectable) return;
       if (n.kind === "window") selection = { kind: "window" };
-      else if (n.kind === "gadget") selection = { kind: "gadget", id: n.id };
+      else if (n.kind === "gadget") {
+        selection = { kind: "gadget", id: n.id };
+        const syncedPanelItems = syncPanelActiveItemsForSelection(panelActiveItems, model.gadgets, n.id);
+        panelActiveItems.clear();
+        syncedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
+      }
       else if (n.kind === "menu") selection = { kind: "menu", id: n.id };
       else if (n.kind === "menuEntry") {
         const [menuId, entryIndexRaw] = n.id.split(":");
