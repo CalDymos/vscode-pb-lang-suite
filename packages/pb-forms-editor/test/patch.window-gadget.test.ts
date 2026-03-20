@@ -415,6 +415,13 @@ test("roundtrips window event include removal", () => {
   assert.equal(parsed.window?.eventFile, undefined);
 });
 
+test("returns no edit when removing a missing window event include", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+  const document = new FakeTextDocument(text);
+  const edit = applyWindowEventUpdate(document.asTextDocument(), "#FrmMain", {});
+  assert.equal(edit, undefined);
+});
+
 test("roundtrips window event include insertion", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
 

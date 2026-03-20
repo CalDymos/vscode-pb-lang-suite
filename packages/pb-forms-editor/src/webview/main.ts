@@ -4787,24 +4787,34 @@ function renderProps() {
     }
 
     propsEl.appendChild(createSubSection("Event File"));
-    propsEl.appendChild(row(
-      "XIncludeFile",
-      textInput(
-        win.eventFile ?? "",
-        v => {
-          if (!model.window) return;
-          const trimmed = v.trim();
-          win.eventFile = trimmed || undefined;
-          post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
-          renderProps();
-        },
-        {
-          title: "Auxiliary XIncludeFile patch path. The original PureBasic Property Grid does not expose Event File as a normal row.",
-          placeholder: "events/form-events.pbi"
-        }
-      )
-    ));
-    propsEl.appendChild(mutedNote("Event File stays available as an auxiliary XIncludeFile path, but it is intentionally separated from the original SelectProc property row."));
+    const eventFileInput = textInput(
+      win.eventFile ?? "",
+      v => {
+        if (!model.window) return;
+        const trimmed = v.trim();
+        win.eventFile = trimmed || undefined;
+        post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
+        renderProps();
+      },
+      {
+        title: "Auxiliary XIncludeFile patch path. The original PureBasic Property Grid does not expose Event File as a normal row.",
+        placeholder: "events/form-events.pbi"
+      }
+    );
+    const removeEventFileBtn = document.createElement("button");
+    removeEventFileBtn.textContent = "Remove";
+    removeEventFileBtn.disabled = !Boolean(win.eventFile?.trim());
+    removeEventFileBtn.title = removeEventFileBtn.disabled
+      ? "No auxiliary XIncludeFile is currently set."
+      : "Matches the original #Menu_RemoveEventFile popup action and removes the auxiliary XIncludeFile line.";
+    removeEventFileBtn.onclick = () => {
+      if (!model.window || !win.eventFile?.trim()) return;
+      win.eventFile = undefined;
+      post({ type: "setWindowEventFile", windowKey: win.id, eventFile: undefined });
+      renderProps();
+    };
+    propsEl.appendChild(row("XIncludeFile", inputWithActions(eventFileInput, removeEventFileBtn)));
+    propsEl.appendChild(mutedNote("Event File stays available as an auxiliary XIncludeFile path, but it is intentionally separated from the original SelectProc property row. The explicit Remove action mirrors the original #Menu_RemoveEventFile popup path."));
 
     propsEl.appendChild(section("Constants"));
     for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
@@ -7186,6 +7196,21 @@ function row(label: string, input: HTMLElement) {
   l.textContent = label;
   wrap.appendChild(l);
   wrap.appendChild(input);
+  return wrap;
+}
+
+function inputWithActions(input: HTMLElement, ...actions: HTMLElement[]) {
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.alignItems = "center";
+  wrap.style.gap = "6px";
+  wrap.style.width = "100%";
+  input.style.flex = "1 1 auto";
+  wrap.appendChild(input);
+  for (const action of actions) {
+    action.style.flex = "0 0 auto";
+    wrap.appendChild(action);
+  }
   return wrap;
 }
 
