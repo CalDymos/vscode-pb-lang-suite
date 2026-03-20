@@ -72,10 +72,12 @@ import {
 
 import {
   buildGadgetCheckedStateRaw,
+  buildGadgetHorizontalLockResizeUpdate,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
   canEditGadgetColors,
+  canEditGadgetHorizontalLocks,
   canEditGadgetText,
   getCustomGadgetHelpDisplay,
   getGadgetCtorRangeFieldLabels,
@@ -122,6 +124,10 @@ type Gadget = {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   textRaw?: string;
   text?: string;
   textVariable?: boolean;
@@ -161,6 +167,11 @@ type Gadget = {
   lockRight?: boolean;
   lockTop?: boolean;
   lockBottom?: boolean;
+  resizeXRaw?: string;
+  resizeYRaw?: string;
+  resizeWRaw?: string;
+  resizeHRaw?: string;
+  resizeSource?: SourceRange;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -301,6 +312,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
+  setGadgetResizeRaw: "setGadgetResizeRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -370,6 +382,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -1610,6 +1623,19 @@ function postGadgetProperties(
 ): void {
   post({ type: "setGadgetProperties", id, ...args });
 }
+function postGadgetResizeRaw(
+  id: string,
+  args: {
+    xRaw?: string;
+    yRaw?: string;
+    wRaw?: string;
+    hRaw?: string;
+    deleteResize?: boolean;
+  }
+): void {
+  post({ type: "setGadgetResizeRaw", id, ...args });
+}
+
 
 function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolean): void {
   const textRaw = buildGadgetTextRaw(value, isVariable);
@@ -1627,6 +1653,33 @@ function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boo
   g.tooltipVariable = isVariable && Boolean(tooltipRaw);
   g.tooltip = tooltipRaw ? (isVariable ? value.trim() : value) : undefined;
   postGadgetProperties(g.id, { tooltipRaw });
+  renderProps();
+}
+
+function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, nextLockRight: boolean): void {
+  if (!model.window) return;
+  const update = buildGadgetHorizontalLockResizeUpdate(g, model.window, nextLockLeft, nextLockRight);
+  if (!update) return;
+
+  g.lockLeft = nextLockLeft;
+  g.lockRight = nextLockRight;
+
+  if (update.deleteResize) {
+    g.resizeXRaw = undefined;
+    g.resizeYRaw = undefined;
+    g.resizeWRaw = undefined;
+    g.resizeHRaw = undefined;
+    g.resizeSource = undefined;
+    postGadgetResizeRaw(g.id, { deleteResize: true });
+  } else {
+    g.resizeXRaw = update.xRaw;
+    g.resizeYRaw = update.yRaw;
+    g.resizeWRaw = update.wRaw;
+    g.resizeHRaw = update.hRaw;
+    postGadgetResizeRaw(g.id, update);
+  }
+
+  render();
   renderProps();
 }
 
@@ -6185,11 +6238,29 @@ function renderProps() {
       })
     )
   );
-  propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), () => {}, { disabled: true, title: "Matches the original LockLeft property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
-  propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), () => {}, { disabled: true, title: "Matches the original LockRight property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
-  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), () => {}, { disabled: true, title: "Matches the original LockTop property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
-  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), () => {}, { disabled: true, title: "Matches the original LockBottom property derived from the parsed ResizeGadget(...) logic. Editing is staged separately because it needs a verified ResizeGadgets... patch path." })));
-  propsEl.appendChild(mutedNote("LockLeft / LockRight / LockTop / LockBottom are now parsed from existing ResizeGadget(...) logic and shown readonly. The write path is staged separately so it can follow the original ResizeGadgets generation safely."));
+  const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, model.window);
+  propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
+    applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
+  }, {
+    disabled: !canEditHorizontalLocks,
+    title: canEditHorizontalLocks
+      ? "Matches the original LockLeft property and patches an existing ResizeGadget(...) line using the original top-level horizontal anchor formulas."
+      : "Horizontal lock editing currently requires an existing top-level ResizeGadget(...) line with preserved raw geometry expressions."
+  })));
+  propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
+    applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
+  }, {
+    disabled: !canEditHorizontalLocks,
+    title: canEditHorizontalLocks
+      ? "Matches the original LockRight property and patches an existing ResizeGadget(...) line using the original top-level horizontal anchor formulas."
+      : "Horizontal lock editing currently requires an existing top-level ResizeGadget(...) line with preserved raw geometry expressions."
+  })));
+  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), () => {}, { disabled: true, title: "Matches the original LockTop property derived from the parsed ResizeGadget(...) logic. The verified write path for vertical locks remains staged separately because it depends on the original height-padding formulas from codeviewer.pb." })));
+  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), () => {}, { disabled: true, title: "Matches the original LockBottom property derived from the parsed ResizeGadget(...) logic. The verified write path for vertical locks remains staged separately because it depends on the original height-padding formulas from codeviewer.pb." })));
+  propsEl.appendChild(mutedNote(canEditHorizontalLocks
+    ? "LockLeft / LockRight now patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom stay readonly until the original vertical ResizeGadgets formulas are wired in safely."
+    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Horizontal editing is currently enabled only for top-level gadgets that already have a ResizeGadget(...) line; vertical editing remains staged separately."
+  ));
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));
   }

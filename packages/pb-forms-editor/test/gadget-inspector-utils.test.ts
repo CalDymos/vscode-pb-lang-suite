@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 
 import {
   buildGadgetCheckedStateRaw,
+  buildGadgetHorizontalLockResizeUpdate,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
   canEditGadgetColors,
+  canEditGadgetHorizontalLocks,
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
@@ -105,4 +107,89 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
 
 test("returns the original custom-gadget help placeholder line", () => {
   assert.equal(getCustomGadgetHelpDisplay(), "%id% %x% %y% %w% %h% %txt% %hwnd% ");
+});
+
+
+test("enables horizontal lock editing only for top-level gadgets with an existing ResizeGadget line", () => {
+  assert.equal(canEditGadgetHorizontalLocks({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320 }), true);
+
+  assert.equal(canEditGadgetHorizontalLocks({
+    parentId: "#Container",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320 }), false);
+});
+
+test("builds a horizontal resize update that matches the original right-anchor formulas", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("returns a delete instruction when horizontal locks no longer require ResizeGadget emission", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: false,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "FormWindowWidth - 310",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320 }, true, false);
+
+  assert.deepEqual(update, { deleteResize: true });
 });

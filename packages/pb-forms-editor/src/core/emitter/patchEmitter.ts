@@ -1029,6 +1029,20 @@ export type GadgetResizeRawArgs = {
   hRaw: string;
 };
 
+export function applyResizeGadgetDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+  if (!call) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  return edit;
+}
+
 export function applyResizeGadgetRawUpdate(
   document: vscode.TextDocument,
   gadgetKey: string,

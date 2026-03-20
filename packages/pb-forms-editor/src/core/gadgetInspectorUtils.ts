@@ -30,6 +30,39 @@ export type GadgetCtorRangeFieldLabels = {
   title: string;
 };
 
+export type GadgetResizeLockLike = {
+  parentId?: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
+  resizeXRaw?: string;
+  resizeYRaw?: string;
+  resizeWRaw?: string;
+  resizeHRaw?: string;
+  resizeSource?: { line: number };
+  lockLeft?: boolean;
+  lockRight?: boolean;
+  lockTop?: boolean;
+  lockBottom?: boolean;
+};
+
+export type WindowResizeLockLike = {
+  w: number;
+};
+
+export type GadgetResizeRawUpdate = {
+  deleteResize?: boolean;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
+};
+
 const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "ButtonGadget",
   "ButtonImageGadget",
@@ -178,4 +211,105 @@ export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
     return gadget.gadgetFontRaw.trim();
   }
   return "";
+}
+
+function usesWidthResizeReference(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return false;
+  return /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i.test(trimmed);
+}
+
+function usesHeightResizeReference(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return false;
+  return /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i.test(trimmed);
+}
+
+function getBaseRectRaw(raw: string | undefined, fallback: number): string | undefined {
+  const trimmed = raw?.trim();
+  if (trimmed?.length) return trimmed;
+  return Number.isFinite(fallback) ? String(Math.trunc(fallback)) : undefined;
+}
+
+function buildTopLevelRightAnchorXRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
+  if (!Number.isFinite(gadget.x) || !Number.isFinite(win.w)) return undefined;
+  return `FormWindowWidth - ${Math.trunc(win.w - gadget.x)}`;
+}
+
+function buildTopLevelStretchWidthRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
+  if (!Number.isFinite(gadget.w) || !Number.isFinite(win.w)) return undefined;
+  return `FormWindowWidth - ${Math.trunc(win.w - gadget.w)}`;
+}
+
+function buildCurrentVerticalResizeArgs(gadget: GadgetResizeLockLike): { yRaw?: string; hRaw?: string } | undefined {
+  const lockTop = gadget.lockTop !== false;
+  const lockBottom = gadget.lockBottom === true;
+  const yRaw = lockTop
+    ? getBaseRectRaw(gadget.yRaw, gadget.y)
+    : gadget.resizeYRaw?.trim();
+  const hRaw = lockTop && lockBottom
+    ? gadget.resizeHRaw?.trim()
+    : getBaseRectRaw(gadget.hRaw, gadget.h);
+
+  if (!yRaw || !hRaw) return undefined;
+  return { yRaw, hRaw };
+}
+
+function shouldEmitResizeGadget(lockLeft: boolean, lockRight: boolean, lockTop: boolean, lockBottom: boolean): boolean {
+  return (lockRight && lockLeft)
+    || (lockTop && lockBottom)
+    || (!lockTop && lockBottom)
+    || (lockRight && !lockLeft);
+}
+
+export function canEditGadgetHorizontalLocks(gadget: GadgetResizeLockLike, win: WindowResizeLockLike | undefined): boolean {
+  if (!gadget.resizeSource) return false;
+  if (gadget.parentId) return false;
+  if (!win) return false;
+  if (!Number.isFinite(win.w) || win.w <= 0) return false;
+  if (!Number.isFinite(gadget.x) || !Number.isFinite(gadget.w)) return false;
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w);
+  if (!baseXRaw || !baseWRaw) return false;
+  const verticalArgs = buildCurrentVerticalResizeArgs(gadget);
+  if (!verticalArgs) return false;
+  return true;
+}
+
+export function buildGadgetHorizontalLockResizeUpdate(
+  gadget: GadgetResizeLockLike,
+  win: WindowResizeLockLike,
+  nextLockLeft: boolean,
+  nextLockRight: boolean
+): GadgetResizeRawUpdate | undefined {
+  if (!canEditGadgetHorizontalLocks(gadget, win)) return undefined;
+
+  const lockTop = gadget.lockTop !== false;
+  const lockBottom = gadget.lockBottom === true;
+  if (!shouldEmitResizeGadget(nextLockLeft, nextLockRight, lockTop, lockBottom)) {
+    return { deleteResize: true };
+  }
+
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w);
+  const verticalArgs = buildCurrentVerticalResizeArgs(gadget);
+  if (!baseXRaw || !baseWRaw || !verticalArgs?.yRaw || !verticalArgs.hRaw) return undefined;
+
+  const rightAnchorXRaw = usesWidthResizeReference(gadget.resizeXRaw)
+    ? gadget.resizeXRaw?.trim()
+    : buildTopLevelRightAnchorXRaw(gadget, win);
+  const stretchWidthRaw = usesWidthResizeReference(gadget.resizeWRaw)
+    ? gadget.resizeWRaw?.trim()
+    : buildTopLevelStretchWidthRaw(gadget, win);
+
+  const xRaw = nextLockLeft ? baseXRaw : rightAnchorXRaw;
+  const wRaw = nextLockLeft && nextLockRight ? stretchWidthRaw : baseWRaw;
+  if (!xRaw || !wRaw) return undefined;
+
+  return {
+    xRaw,
+    yRaw: verticalArgs.yRaw,
+    wRaw,
+    hRaw: verticalArgs.hRaw
+  };
 }

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -1174,4 +1174,23 @@ test("roundtrips combined splitter container updates in fixture 07", () => {
   assert.equal(splitter?.state, 80);
   assert.equal(left?.splitterId, "#SplitMain");
   assert.equal(right?.splitterId, "#SplitMain");
+});
+
+
+test("deletes an existing ResizeGadget line when lock editing no longer requires it", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, FormWindowWidth - 310, 50, 80, 24)
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetDelete(document.asTextDocument(), "#BtnStretch");
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+
+  assert.doesNotMatch(patchedText, /ResizeGadget\(#BtnStretch/);
+  assert.match(patchedText, /ButtonGadget\(#BtnStretch, 10, 50, 80, 24, "Stretch"\)/);
 });

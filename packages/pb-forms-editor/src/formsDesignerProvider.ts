@@ -22,6 +22,8 @@ import {
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
+  applyResizeGadgetDelete,
+  applyResizeGadgetRawUpdate,
   applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
@@ -69,6 +71,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetEventProc: "setGadgetEventProc",
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
+  setGadgetResizeRaw: "setGadgetResizeRaw",
   setWindowRect: "setWindowRect",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
@@ -131,6 +134,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -535,6 +539,29 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           postError(`State editing is currently only enabled for SplitterGadget, CheckBoxGadget and OptionGadget entries.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw: {
+          const gadget = lastModel?.gadgets.find(entry => entry.id === msg.id);
+          if (!gadget) {
+            postError(`Could not find gadget '${msg.id}' for ResizeGadget update${rangeInfo}.`);
+            return;
+          }
+          if (!gadget.resizeSource) {
+            postError(`Could not update locks for '${msg.id}'. No existing ResizeGadget(...) line was parsed${rangeInfo}.`);
+            return;
+          }
+
+          const edit = msg.deleteResize
+            ? applyResizeGadgetDelete(document, msg.id, sr)
+            : applyResizeGadgetRawUpdate(document, msg.id, {
+                xRaw: msg.xRaw ?? "",
+                yRaw: msg.yRaw ?? "",
+                wRaw: msg.wRaw ?? "",
+                hRaw: msg.hRaw ?? ""
+              }, sr);
+          await applyEditOrError(edit, `Could not patch ResizeGadget(...) for gadget '${msg.id}'${rangeInfo}.`);
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent: {
