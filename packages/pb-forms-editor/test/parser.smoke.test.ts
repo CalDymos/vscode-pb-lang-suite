@@ -942,6 +942,27 @@ EndProcedure
 });
 
 
+test("preserves raw ResizeGadget expressions and source ranges for later lock write paths", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const stretch = doc.gadgets.find(g => g.id === "#BtnStretch");
+
+  assert.ok(stretch);
+  assert.equal(stretch?.resizeXRaw, "10");
+  assert.equal(stretch?.resizeYRaw, "ToolBarHeight(0) + 10");
+  assert.equal(stretch?.resizeWRaw, "FormWindowWidth - 40");
+  assert.equal(stretch?.resizeHRaw, "FormWindowHeight - 120");
+  assert.equal(typeof stretch?.resizeSource?.line, "number");
+});
+
+
 test("preserves raw gadget rect expressions for future resize lock regeneration", () => {
   const src = `; Form Designer for PureBasic - 6.30
 ; EnableExplicit

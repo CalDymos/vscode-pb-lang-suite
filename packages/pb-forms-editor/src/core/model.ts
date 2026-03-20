@@ -103,6 +103,11 @@ export interface Gadget {
   lockRight?: boolean;
   lockTop?: boolean;
   lockBottom?: boolean;
+  resizeXRaw?: string;
+  resizeYRaw?: string;
+  resizeWRaw?: string;
+  resizeHRaw?: string;
+  resizeSource?: SourceRange;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];

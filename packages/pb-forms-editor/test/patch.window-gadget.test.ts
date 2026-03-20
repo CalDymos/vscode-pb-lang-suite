@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -41,6 +41,37 @@ test("roundtrips window rect changes via procedure defaults", () => {
   assert.equal(parsed.window?.y, 6);
   assert.equal(parsed.window?.w, 300);
   assert.equal(parsed.window?.h, 200);
+});
+
+test("roundtrips existing ResizeGadget raw expressions without touching constructor geometry", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetRawUpdate(document.asTextDocument(), "#BtnStretch", {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 18",
+    wRaw: "FormWindowWidth - 60",
+    hRaw: "FormWindowHeight - 140"
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const parsed = parseFormDocument(patchedText);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnStretch");
+
+  assert.match(patchedText, /ResizeGadget\(#BtnStretch, 10, ToolBarHeight\(0\) \+ 18, FormWindowWidth - 60, FormWindowHeight - 140\)/);
+  assert.match(patchedText, /ButtonGadget\(#BtnStretch, 10, 50, 80, 24, "Stretch"\)/);
+  assert.equal(gadget?.resizeYRaw, "ToolBarHeight(0) + 18");
+  assert.equal(gadget?.resizeWRaw, "FormWindowWidth - 60");
+  assert.equal(gadget?.resizeHRaw, "FormWindowHeight - 140");
+  assert.equal(gadget?.y, 50);
+  assert.equal(gadget?.w, 80);
 });
 
 test("roundtrips normal gadget rect changes", () => {

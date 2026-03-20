@@ -1022,6 +1022,40 @@ export function applyRectPatch(
   return edit;
 }
 
+export type GadgetResizeRawArgs = {
+  xRaw: string;
+  yRaw: string;
+  wRaw: string;
+  hRaw: string;
+};
+
+export function applyResizeGadgetRawUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetResizeRawArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  const xRaw = normalizeOptionalRaw(args.xRaw);
+  const yRaw = normalizeOptionalRaw(args.yRaw);
+  const wRaw = normalizeOptionalRaw(args.wRaw);
+  const hRaw = normalizeOptionalRaw(args.hRaw);
+  if (!xRaw || !yRaw || !wRaw || !hRaw) return undefined;
+
+  params[1] = xRaw;
+  params[2] = yRaw;
+  params[3] = wRaw;
+  params[4] = hRaw;
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
 export function applyWindowRectPatch(
   document: vscode.TextDocument,
   windowKey: string,

@@ -611,6 +611,12 @@ export function parseFormDocument(text: string): FormDocument {
           const widthRaw = (p[3] ?? "").trim();
           const heightRaw = (p[4] ?? "").trim();
 
+          g.resizeXRaw = xRaw || undefined;
+          g.resizeYRaw = yRaw || undefined;
+          g.resizeWRaw = widthRaw || undefined;
+          g.resizeHRaw = heightRaw || undefined;
+          g.resizeSource = c.range;
+
           if (usesWidthResizeReference(xRaw)) {
             g.lockLeft = false;
             g.lockRight = true;
