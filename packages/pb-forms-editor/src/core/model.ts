@@ -58,6 +58,10 @@ export interface Gadget {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   textRaw?: string;      // raw caption/text expression from the gadget constructor
   text?: string;
   textVariable?: boolean;
@@ -135,6 +139,10 @@ export interface FormWindow {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   captionRaw?: string;       // raw caption expression from OpenWindow(...)
   caption?: string;          // canonical field matching original FormWindow\caption
   captionVariable?: boolean; // matches original FormWindow\captionvariable

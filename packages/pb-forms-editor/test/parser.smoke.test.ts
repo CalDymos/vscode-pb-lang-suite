@@ -940,3 +940,36 @@ EndProcedure
   assert.equal(stretch?.lockTop, true);
   assert.equal(stretch?.lockBottom, true);
 });
+
+
+test("preserves raw gadget rect expressions for future resize lock regeneration", () => {
+  const src = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain()
+  OpenWindow(#FrmMain, 0, 0, 320, 220, "RawRect")
+  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, 25, "Apply")
+EndProcedure
+`;
+
+  const doc = parseFormDocument(src);
+  const gadget = doc.gadgets.find(entry => entry.id === "#BtnApply");
+
+  assert.ok(gadget);
+  assert.equal(gadget?.xRaw, "10");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 10");
+  assert.equal(gadget?.wRaw, "FormWindowWidth - 40");
+  assert.equal(gadget?.hRaw, "25");
+  assert.equal(gadget?.x, 10);
+  assert.equal(gadget?.y, 0);
+  assert.equal(gadget?.w, 0);
+  assert.equal(gadget?.h, 25);
+});

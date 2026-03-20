@@ -1755,6 +1755,10 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
     y,
     w,
     h,
+    xRaw,
+    yRaw,
+    wRaw,
+    hRaw,
     captionRaw: captionRaw || undefined,
     caption,
     captionVariable,
@@ -1777,10 +1781,15 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const pbAny = firstParam === "#PB_Any";
   const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
 
-  const x = asNumber(p[1] ?? "") ?? 0;
-  const y = asNumber(p[2] ?? "") ?? 0;
-  const w = asNumber(p[3] ?? "") ?? 0;
-  const h = asNumber(p[4] ?? "") ?? 0;
+  const xRaw = (p[1] ?? "").trim();
+  const yRaw = (p[2] ?? "").trim();
+  const wRaw = (p[3] ?? "").trim();
+  const hRaw = (p[4] ?? "").trim();
+
+  const x = asNumber(xRaw) ?? 0;
+  const y = asNumber(yRaw) ?? 0;
+  const w = asNumber(wRaw) ?? 0;
+  const h = asNumber(hRaw) ?? 0;
 
   const ctor = parseGadgetConstructorDetails(kind, p);
   const literalText = unquoteString(ctor.textRaw ?? "");
@@ -1797,6 +1806,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     y,
     w,
     h,
+    xRaw,
+    yRaw,
+    wRaw,
+    hRaw,
     textRaw: ctor.textRaw,
     text,
     textVariable,
