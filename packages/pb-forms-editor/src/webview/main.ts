@@ -866,7 +866,7 @@ function confirmDestructiveAction(): void {
         widthRaw: field.widthRaw,
         textRaw: "",
         imageRaw: "",
-        flagsRaw: "",
+        flagsRaw: field.flagsRaw ?? "",
         progressBar: false,
         progressRaw: ""
       });
@@ -3301,11 +3301,7 @@ function saveImageReferencePicker() {
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
-        textRaw: "",
         imageRaw,
-        flagsRaw: field.flagsRaw ?? "",
-        progressBar: false,
-        progressRaw: ""
       });
       break;
     }
@@ -5881,10 +5877,7 @@ function renderProps() {
           v => {
             if (!selectedUi.canPatch) return;
             selectedUi.postFieldUpdate({
-              textRaw: v.trim().length ? toPbString(v) : "",
-              imageRaw: "",
-              progressBar: false,
-              progressRaw: ""
+              textRaw: v.trim().length ? toPbString(v) : ""
             });
           },
           {
@@ -5894,41 +5887,8 @@ function renderProps() {
         )
       ));
       propsEl.appendChild(row(
-        "ImageRaw",
-        textInput(
-          selectedField.imageRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({
-              textRaw: "",
-              imageRaw: v.trim(),
-              progressBar: false,
-              progressRaw: ""
-            });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw StatusBarImage reference for the selected field."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
         "ProgressValue",
         readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
-      ));
-      propsEl.appendChild(row(
-        "FlagsRaw",
-        textInput(
-          selectedField.flagsRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({ flagsRaw: v.trim() });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw AddStatusBarField flags for the selected field."
-          }
-        )
       ));
       propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImagePath)));
       const selectedImageActions = document.createElement("div");
@@ -5980,8 +5940,6 @@ function renderProps() {
           checked => {
             if (!selectedUi.canPatch) return;
             selectedUi.postFieldUpdate({
-              textRaw: checked ? "" : selectedField.textRaw ?? "",
-              imageRaw: checked ? "" : selectedField.imageRaw ?? "",
               progressBar: checked,
               progressRaw: checked ? (selectedField.progressRaw?.trim() || "0") : ""
             });
@@ -6032,10 +5990,10 @@ function renderProps() {
         label,
         fieldUi.editFn,
         fieldUi.delFn,
-        { label: "Label", onClick: fieldUi.statusTextFn, disabled: !fieldUi.statusTextFn, title: "Switch this field to a StatusBarText decoration." },
-        { label: "Progress", onClick: fieldUi.statusProgressFn, disabled: !fieldUi.statusProgressFn, title: "Switch this field to a StatusBarProgress decoration." },
+        { label: "Label", onClick: fieldUi.statusTextFn, disabled: !fieldUi.statusTextFn, title: "Edit the stored StatusBarText value for this field without clearing the other statusbar cells." },
+        { label: "Progress", onClick: fieldUi.statusProgressFn, disabled: !fieldUi.statusProgressFn, title: "Toggle the stored StatusBarProgress state for this field without clearing the other statusbar cells." },
         { label: "Clear", onClick: fieldUi.statusClearFn, disabled: !fieldUi.statusClearFn, title: "Remove text/image/progress decoration from this field." },
-        { label: "Set Image", onClick: fieldUi.statusSetImageFn, disabled: !fieldUi.statusSetImageFn, title: "Switch this field to a StatusBarImage decoration while preserving the field width." },
+        { label: "Set Image", onClick: fieldUi.statusSetImageFn, disabled: !fieldUi.statusSetImageFn, title: "Assign or update the stored StatusBarImage reference while preserving the other statusbar cells." },
         { label: "Use Existing", onClick: fieldUi.statusPickImageFn, disabled: !fieldUi.statusPickImageFn, title: "Select an image from the form image list and assign it to this field." },
         { label: "Choose File", onClick: fieldUi.statusChooseFileImageFn, disabled: !fieldUi.statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
         { label: "Create New", onClick: fieldUi.statusCreateImageFn, disabled: !fieldUi.statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },

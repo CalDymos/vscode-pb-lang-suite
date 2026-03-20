@@ -80,15 +80,27 @@ function normalizeStatusBarFieldMessageArgs(args: { widthRaw: string; progressBa
     return { ok: false as const, error: `StatusBar width accepts only a non-negative integer or ${STATUSBAR_WIDTH_IGNORE_LITERAL}.` };
   }
 
-  const progressBar = Boolean(args.progressBar);
+  const normalizedArgs: {
+    widthRaw: string;
+    progressBar?: boolean;
+    progressRaw?: string;
+    textRaw?: string;
+    imageRaw?: string;
+    flagsRaw?: string;
+  } = {
+    ...args,
+    widthRaw: parsedWidth.raw,
+  };
+
+  if (args.progressBar !== undefined || args.progressRaw !== undefined) {
+    const progressBar = Boolean(args.progressBar);
+    normalizedArgs.progressBar = progressBar;
+    normalizedArgs.progressRaw = normalizeStatusBarProgressRaw(progressBar, args.progressRaw);
+  }
+
   return {
     ok: true as const,
-    args: {
-      ...args,
-      widthRaw: parsedWidth.raw,
-      progressBar,
-      progressRaw: normalizeStatusBarProgressRaw(progressBar, args.progressRaw)
-    }
+    args: normalizedArgs
   };
 }
 
@@ -1264,7 +1276,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
           const insertEdit = applyImageInsert(document, { inline: msg.newInline, idRaw: msg.newImageIdRaw, imageRaw: msg.newImageRaw, assignedVar: msg.newAssignedVar }, sr);
           await applyPairedEditsOrError(
             assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
@@ -1343,7 +1355,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, textRaw: "", imageRaw: imageRef, progressBar: false, progressRaw: "" }, sr);
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: imageRef }, sr);
           const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: pickedImageRaw, assignedVar: msg.newAssignedVar }, sr);
           await applyPairedEditsOrError(
             assignEdit, `Could not patch image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
