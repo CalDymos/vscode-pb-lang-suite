@@ -3583,6 +3583,54 @@ function findAnchoredMenuEntryInsert(
   return { insertLine, indent: getLineIndent(document, insertLine) };
 }
 
+function buildPromotedSubMenuTextRaw(entry: FormMenuEntry): string {
+  if (typeof entry.text === "string") {
+    return quotePbString(entry.text);
+  }
+
+  const raw = entry.textRaw?.trim();
+  if (!raw?.length) return '""';
+  return normalizeMenuTextForShortcut(raw);
+}
+
+function applyMenuEntryInsertIntoLeafMenuItem(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  parentEntry: FormMenuEntry,
+  args: MenuEntryArgs
+): vscode.WorkspaceEdit | undefined {
+  const sourceLine = parentEntry.source?.line;
+  if (typeof sourceLine !== "number") return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const replacement = [
+    `${indent}${buildMenuEntryLine({ kind: MENU_ENTRY_KIND.OpenSubMenu, textRaw: buildPromotedSubMenuTextRaw(parentEntry) })}`,
+    `${indent}${buildMenuEntryLine(args)}`,
+    `${indent}CloseSubMenu()`
+  ].join("\n");
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.lineAt(sourceLine).range.start, document.lineAt(sourceLine).rangeIncludingLineBreak.end),
+    `${replacement}\n`
+  );
+
+  const parsed = parseFormDocument(document.getText());
+  const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars)
+    .filter(symbol => symbol !== parentEntry.idRaw?.trim());
+
+  const nextId = args.idRaw?.trim();
+  if (nextId?.startsWith("#") && !symbols.includes(nextId)) {
+    symbols.push(nextId);
+  }
+
+  applyMenuEnumPatch(edit, document, calls, symbols);
+  return edit;
+}
+
 function findMenuEntryBlockRange(
   document: vscode.TextDocument,
   calls: PbCall[],
@@ -3847,13 +3895,23 @@ export function applyMenuEntryInsert(
     : (indent: string) => `${indent}${buildMenuEntryLine(args)}`;
 
   let edit: vscode.WorkspaceEdit | undefined;
+  let menuEnumPatched = false;
 
   if (typeof insertOptions?.parentSourceLine === "number") {
-    const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, insertOptions.parentSourceLine);
-    if (!anchored) return undefined;
+    const parsed = parseFormDocument(document.getText());
+    const menu = parsed.menus.find(entry => entry.id === menuId);
+    const parentEntry = menu?.entries.find(entry => entry.source?.line === insertOptions.parentSourceLine);
 
-    edit = new vscode.WorkspaceEdit();
-    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}\n`);
+    if (parentEntry?.kind === MENU_ENTRY_KIND.MenuItem) {
+      edit = applyMenuEntryInsertIntoLeafMenuItem(document, calls, menuId, parentEntry, args);
+      menuEnumPatched = Boolean(edit);
+    } else {
+      const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, insertOptions.parentSourceLine);
+      if (!anchored) return undefined;
+
+      edit = new vscode.WorkspaceEdit();
+      edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}\n`);
+    }
   } else {
     edit = applySectionEntryInsert(
       document,
@@ -3868,7 +3926,7 @@ export function applyMenuEntryInsert(
   if (!edit) return undefined;
 
   const idRaw = args.idRaw?.trim();
-  if (idRaw?.startsWith("#")) {
+  if (!menuEnumPatched && idRaw?.startsWith("#")) {
     const parsed = parseFormDocument(document.getText());
     const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars);
     if (!symbols.includes(idRaw)) symbols.push(idRaw);

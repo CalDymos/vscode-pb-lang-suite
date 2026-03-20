@@ -339,6 +339,44 @@ test("roundtrips nested menu entry insert into submenu footer", () => {
   assert.match(patchedText, /MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
 });
 
+test("roundtrips menu entry insert into leaf menu item footer by promoting parent into submenu", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === menuId);
+  const leafItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuRecent1");
+  const parentSourceLine = leafItem?.source?.line;
+
+  assert.ok(menu, "Expected menu.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for leaf MenuItem entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent2",
+    textRaw: '"Pinned file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
+  assert.ok(updatedMenu, "Expected menu after promoted submenu insert.");
+
+  const promotedIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Last file");
+  const insertedIndex = updatedMenu!.entries.findIndex((entry) => entry.idRaw === "#MenuRecent2");
+  const closeIndex = updatedMenu!.entries.findIndex((entry, index) => index > promotedIndex && entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+
+  assert.ok(promotedIndex >= 0, "Expected leaf MenuItem to become OpenSubMenu.");
+  assert.ok(insertedIndex > promotedIndex, "Expected inserted child after promoted OpenSubMenu.");
+  assert.ok(closeIndex > insertedIndex, "Expected inserted child before promoted CloseSubMenu.");
+  assert.equal(updatedMenu!.entries[promotedIndex]?.level, 2);
+  assert.equal(updatedMenu!.entries[insertedIndex]?.level, 3);
+  assert.equal(updatedMenu!.entries.some((entry) => entry.idRaw === "#MenuRecent1"), false);
+  assert.match(patchedText, /OpenSubMenu\("Last file"\)\r?\n\s*MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
+  assert.match(patchedText, /Enumeration FormMenu[\s\S]*#MenuOpen[\s\S]*#MenuRecent2[\s\S]*EndEnumeration/);
+  assert.doesNotMatch(patchedText, /#MenuRecent1/);
+});
+
 test("roundtrips menu entry insert into empty submenu footer", () => {
   const text = [
     '; Form Designer for PureBasic - 6.30',
