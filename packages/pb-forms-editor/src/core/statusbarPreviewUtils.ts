@@ -18,6 +18,13 @@ export type StatusBarFieldLike = {
   progressRaw?: string;
 };
 
+export type StatusBarProgressPreviewMetrics = {
+  progress: number;
+  trackWidth: number;
+  trackHeight: number;
+  fillWidth: number;
+};
+
 export function parseStatusBarWidth(widthRaw: string | undefined): number | null {
   const trimmed = (widthRaw ?? "").trim();
   if (!trimmed.length || trimmed === "#PB_Ignore") return null;
@@ -70,4 +77,19 @@ export function getStatusBarFieldDisplaySummary(field: StatusBarFieldLike): stri
     default:
       return kind;
   }
+}
+
+function parseStatusBarProgress(progressRaw: string | undefined): number {
+  const parsed = Number((progressRaw ?? "").trim());
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(100, Math.trunc(parsed)));
+}
+
+export function getStatusBarProgressPreviewMetrics(fieldWidth: number, fieldHeight: number, progressRaw: string | undefined): StatusBarProgressPreviewMetrics {
+  const trackWidth = Math.max(8, Math.trunc(fieldWidth) - 4);
+  const trackHeight = Math.max(6, Math.trunc(fieldHeight) - 10);
+  const innerWidth = Math.max(0, trackWidth - 2);
+  const progress = parseStatusBarProgress(progressRaw);
+  const fillWidth = Math.max(0, Math.round((innerWidth * progress) / 100));
+  return { progress, trackWidth, trackHeight, fillWidth };
 }

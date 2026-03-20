@@ -37,6 +37,7 @@ import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
   getStatusBarFieldDisplaySummary,
+  getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth
 } from "../core/statusbarPreviewUtils";
 import {
@@ -3498,8 +3499,6 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const fieldWidths = getStatusBarFieldWidths(statusbar, rect.w);
 
   let x = rect.x;
-  const progressY = rect.y + 5;
-  const progressH = Math.max(4, rect.h - 10);
   const imageY = rect.y + 4;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
@@ -3524,14 +3523,27 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillText(textLabel, textX, rect.y + Math.min(rect.h - 6, 15));
     } else if (field.progressBar) {
-      const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
+      const progressMetrics = getStatusBarProgressPreviewMetrics(fieldW, rect.h, field.progressRaw ?? "0");
+      const trackX = x + 2;
+      const trackY = rect.y + Math.max(3, Math.trunc((rect.h - progressMetrics.trackHeight) / 2));
       ctx.save();
-      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = fg;
+      ctx.globalAlpha = 0.14;
+      ctx.fillRect(trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight);
+      ctx.strokeStyle = fg;
+      ctx.globalAlpha = 0.4;
+      ctx.strokeRect(trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1);
       ctx.strokeStyle = border;
-      ctx.strokeRect(x + 0.5, progressY + 0.5, Math.max(8, fieldW - 1), progressH - 1);
-      ctx.fillStyle = accent;
       ctx.globalAlpha = 0.45;
-      ctx.fillRect(x + 1, progressY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 3) * progress) / 100)), Math.max(2, progressH - 2));
+      ctx.beginPath();
+      ctx.moveTo(trackX + 1, trackY + progressMetrics.trackHeight - 0.5);
+      ctx.lineTo(trackX + progressMetrics.trackWidth - 1, trackY + progressMetrics.trackHeight - 0.5);
+      ctx.stroke();
+      if (progressMetrics.fillWidth > 0) {
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.78;
+        ctx.fillRect(trackX + 1, trackY + 1, progressMetrics.fillWidth, Math.max(2, progressMetrics.trackHeight - 2));
+      }
       ctx.restore();
     } else {
       ctx.save();
