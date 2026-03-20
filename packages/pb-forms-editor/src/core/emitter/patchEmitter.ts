@@ -3546,12 +3546,14 @@ function findAnchoredMenuEntryInsert(
 
   const parentLevel = Math.max(0, parentEntry.level ?? 0);
   let insertLine: number | undefined;
+  let insertBoundaryEntry: (typeof menu.entries)[number] | undefined;
 
   for (let i = parentIndex + 1; i < menu.entries.length; i++) {
     const entry = menu.entries[i];
     const level = Math.max(0, entry.level ?? 0);
     if (level <= parentLevel) {
       insertLine = entry.source?.line;
+      insertBoundaryEntry = entry;
       break;
     }
   }
@@ -3564,6 +3566,17 @@ function findAnchoredMenuEntryInsert(
       insertLine: Math.min(document.lineCount, insertAfterLine + 1),
       indent: getLineIndent(document, insertAfterLine)
     };
+  }
+
+  if (
+    parentEntry.kind === MENU_ENTRY_KIND.OpenSubMenu
+    && insertBoundaryEntry?.kind === MENU_ENTRY_KIND.CloseSubMenu
+    && Math.max(0, insertBoundaryEntry.level ?? 0) === parentLevel
+  ) {
+    const parentLine = parentEntry.source?.line;
+    if (typeof parentLine === "number" && isLineInCreateSection(calls, parentLine, "createmenu", menuId)) {
+      return { insertLine, indent: getLineIndent(document, insertLine) };
+    }
   }
 
   if (!isLineInCreateSection(calls, insertLine, "createmenu", menuId)) return undefined;

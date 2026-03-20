@@ -387,6 +387,49 @@ test("roundtrips menu entry insert into empty submenu footer", () => {
   assert.match(patchedText, /OpenSubMenu\("Recent"\)\r?\n\s*MenuItem\(#MenuRecent1, "Last file"\)\r?\n\s*CloseSubMenu\(\)/);
 });
 
+test("roundtrips menu entry insert into empty submenu footer with placeholder comment before close", () => {
+  const text = [
+    '; Form Designer for PureBasic - 6.30',
+    'Enumeration FormMenu',
+    '  #MenuOpen',
+    'EndEnumeration',
+    '',
+    'Procedure OpenFrmMain()',
+    '  CreateImageMenu(0, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  OpenSubMenu("Recent")',
+    '  ; placeholder for future entries',
+    '  CloseSubMenu()',
+    'EndProcedure',
+    '',
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === menuId);
+  const emptySubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const parentSourceLine = emptySubMenu?.source?.line;
+
+  assert.ok(menu, "Expected CreateImageMenu section.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for empty OpenSubMenu entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent2",
+    textRaw: '"Pinned file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
+  assert.ok(updatedMenu, "Expected menu after commented empty submenu insert.");
+  assert.match(
+    patchedText,
+    /OpenSubMenu\("Recent"\)\r?\n\s*; placeholder for future entries\r?\n\s*MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/
+  );
+});
+
 test("roundtrips submenu insert with generated closing line", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const args: MenuEntryArgs = {
