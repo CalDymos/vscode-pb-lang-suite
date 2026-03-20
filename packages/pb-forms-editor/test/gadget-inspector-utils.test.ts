@@ -9,6 +9,7 @@ import {
   canEditGadgetColors,
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
+  getCustomGadgetHelpDisplay,
   getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -99,4 +100,9 @@ test("formats parsed gadget font metadata into a compact display summary", () =>
   );
   assert.equal(getGadgetFontDisplaySummary({ gadgetFontRaw: "FontID(#FontBody)" }), "FontID(#FontBody)");
   assert.equal(getGadgetFontDisplaySummary({}), "");
+});
+
+
+test("returns the original custom-gadget help placeholder line", () => {
+  assert.equal(getCustomGadgetHelpDisplay(), "%id% %x% %y% %w% %h% %txt% %hwnd% ");
 });

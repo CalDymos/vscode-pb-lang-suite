@@ -75,6 +75,7 @@ import {
   canEditGadgetCheckedState,
   canEditGadgetColors,
   canEditGadgetText,
+  getCustomGadgetHelpDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
@@ -6257,6 +6258,19 @@ function renderProps() {
             renderProps();
           },
           { title: "Matches the original CreateCode property and patches both the custom gadget marker template and the generated creation line." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "Help",
+        textInput(
+          getCustomGadgetHelpDisplay(),
+          () => {},
+          {
+            disabled: true,
+            title: "Matches the original readonly Help field for custom gadgets."
+          }
         )
       )
     );

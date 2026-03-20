@@ -162,6 +162,11 @@ export function buildGadgetTooltipRaw(value: string, isVariable: boolean): strin
   return value.length ? quotePbStringLiteral(value) : undefined;
 }
 
+
+export function getCustomGadgetHelpDisplay(): string {
+  return "%id% %x% %y% %w% %h% %txt% %hwnd% ";
+}
+
 export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
   if (gadget.gadgetFontRaw?.trim()) {
     if (gadget.gadgetFont && Number.isFinite(gadget.gadgetFontSize)) {
