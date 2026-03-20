@@ -468,6 +468,8 @@ const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
+const infoHintEl = document.getElementById("infoHint") as HTMLDivElement;
+const infoSelectionEl = document.getElementById("infoSelection") as HTMLDivElement;
 
 let model: Model = { gadgets: [], images: [] };
 
@@ -1100,7 +1102,6 @@ function renderAfterInit() {
   renderParentSelector();
   renderList();
   renderProps();
-  renderDiagnostics();
 }
 
 function menuEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
@@ -1419,6 +1420,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
 
   if (msg.type === "error") {
     errEl.textContent = msg.message;
+    renderInfoPanel();
   }
 });
 
@@ -1454,6 +1456,102 @@ function renderDiagnostics() {
 
   diagEl.innerHTML = rows.join("\n");
   diagEl.style.display = "block";
+}
+
+function getSelectionSummary(): string {
+  const sel = selection;
+  if (!sel) return "No selection";
+
+  if (sel.kind === "window") {
+    return `Window ${model.window?.id ?? ""}`.trim();
+  }
+
+  if (sel.kind === "gadget") {
+    const gadget = model.gadgets.find(it => it.id === sel.id);
+    return gadget ? `${gadget.kind} ${gadget.id}` : "No selection";
+  }
+
+  if (sel.kind === "menu") {
+    return `Menu ${sel.id}`;
+  }
+
+  if (sel.kind === "menuEntry") {
+    const menu = (model.menus ?? []).find(it => it.id === sel.menuId);
+    const entry = menu?.entries?.[sel.entryIndex];
+    if (!entry) return "No selection";
+    const label = entry.idRaw || entry.textRaw || entry.kind;
+    return `${entry.kind} ${label}`.trim();
+  }
+
+  if (sel.kind === "toolbar") {
+    return `ToolBar ${sel.id}`;
+  }
+
+  if (sel.kind === "toolBarEntry") {
+    const toolBar = (model.toolbars ?? []).find(it => it.id === sel.toolBarId);
+    const entry = toolBar?.entries?.[sel.entryIndex];
+    if (!entry) return "No selection";
+    const label = entry.idRaw || entry.textRaw || entry.kind;
+    return `${entry.kind} ${label}`.trim();
+  }
+
+  if (sel.kind === "statusbar") {
+    return `StatusBar ${sel.id}`;
+  }
+
+  if (sel.kind === "statusBarField") {
+    const statusBar = (model.statusbars ?? []).find(it => it.id === sel.statusBarId);
+    const field = statusBar?.fields?.[sel.fieldIndex];
+    if (!field) return "No selection";
+    const label = field.textRaw || field.widthRaw || `Field ${sel.fieldIndex + 1}`;
+    return `StatusBarField ${label}`.trim();
+  }
+
+  if (sel.kind === "images") {
+    return "Images";
+  }
+
+  if (sel.kind === "image") {
+    return `Image ${sel.id}`;
+  }
+
+  return "No selection";
+}
+
+function getContextualInfoHint(): string {
+  const sel = selection;
+  if (!sel) {
+    return "Select a window, gadget or top-level entry to inspect and edit its properties.";
+  }
+
+  switch (sel.kind) {
+    case "window":
+      return "Window properties, layout values and PureBasic window flags can be edited here.";
+    case "gadget":
+      return "Drag or resize gadgets in the canvas. AddGadgetItem/AddGadgetColumn patching remains available for supported gadget kinds.";
+    case "menu":
+    case "menuEntry":
+      return "Menu entries can be inserted, edited or deleted from the current selection.";
+    case "toolbar":
+    case "toolBarEntry":
+      return "Toolbar entries can be inserted, edited or deleted from the current selection.";
+    case "statusbar":
+    case "statusBarField":
+      return "StatusBar fields can be inserted, edited or deleted from the current selection.";
+    case "images":
+    case "image":
+      return "Image references can be added, updated or reassigned from the current selection.";
+    default:
+      return "Review the current selection and update its available properties.";
+  }
+}
+
+function renderInfoPanel() {
+  renderDiagnostics();
+  infoHintEl.textContent = getContextualInfoHint();
+  infoSelectionEl.textContent = getSelectionSummary();
+  const message = (errEl.textContent ?? "").trim();
+  errEl.style.display = message ? "block" : "none";
 }
 
 function escapeHtml(s: string): string {
@@ -4411,6 +4509,7 @@ function getEditableSplitterState(g: Gadget): number {
 
 function renderProps() {
   propsEl.innerHTML = "";
+  renderInfoPanel();
 
   const section = (title: string) => {
     const h = document.createElement("div");
@@ -4421,12 +4520,6 @@ function renderProps() {
 
   const sel = selection;
   if (!sel) {
-    propsEl.appendChild(section("Selection"));
-    const empty = document.createElement("div");
-    empty.className = "muted";
-    empty.style.margin = "8px 0 0";
-    empty.textContent = "No selection";
-    propsEl.appendChild(empty);
     return;
   }
 
@@ -6219,14 +6312,14 @@ function renderProps() {
   }
 
   if (sel.kind !== "gadget") {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
+    propsEl.innerHTML = "";
     return;
   }
 
   const selId = sel.id;
   const g = model.gadgets.find(it => it.id === selId);
   if (!g) {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
+    propsEl.innerHTML = "";
     return;
   }
 

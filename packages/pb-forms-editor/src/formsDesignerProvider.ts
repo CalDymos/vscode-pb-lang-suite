@@ -1349,12 +1349,31 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       .sev.info { color: var(--vscode-notificationsInfoIcon-foreground); }
 
       .err {
-        color: #b00020;
+        display: none;
+        margin: 10px 0 8px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--vscode-notificationsErrorIcon-foreground);
+        background: var(--vscode-editorWidget-background);
+        color: var(--vscode-editorWidget-foreground);
         font-size: 12px;
         white-space: pre-wrap;
       }
 
       .subHeader { margin-top: 14px; font-weight: 700; padding: 4px 6px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background); }
+
+      .infoSubHeader {
+        margin-top: 10px;
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        opacity: .85;
+      }
+
+      .infoSubBody {
+        margin: 6px 0 0;
+      }
 
       .miniList {
         border: 1px solid var(--vscode-panel-border);
@@ -1421,10 +1440,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       <div class="canvasWrap"><canvas id="designer"></canvas></div>
       <div id="panelResizer" class="panelResizer" aria-hidden="true"></div>
       <div class="panel">
-        <div id="diag" class="diag" style="display:none"></div>
-
         <div class="subHeader">Info</div>
-        <div class="muted" style="margin:8px 0 10px">Drag/resize gadgets. Items/Columns patching is supported for AddGadgetItem/AddGadgetColumn.</div>
+        <div id="diag" class="diag" style="display:none"></div>
+        <div id="err" class="err"></div>
+        <div id="infoHint" class="muted" style="margin:8px 0 10px"></div>
+        <div class="infoSubHeader">Selection</div>
+        <div id="infoSelection" class="muted infoSubBody"></div>
         <div id="props"></div>
 
         <div class="list">
@@ -1436,8 +1457,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           </div>
           <div id="list"></div>
         </div>
-
-        <div id="err" class="err"></div>
       </div>
     </div>
 
