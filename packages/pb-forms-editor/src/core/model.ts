@@ -332,11 +332,28 @@ export const ENUM_NAMES = {
 export const PBFD_MENU_ENTRY_KINDS = [MENU_ENTRY_KIND.MenuTitle, MENU_ENTRY_KIND.MenuItem, MENU_ENTRY_KIND.MenuBar, MENU_ENTRY_KIND.OpenSubMenu, MENU_ENTRY_KIND.CloseSubMenu] as const;
 export const PBFD_TOOLBAR_ENTRY_KINDS = [TOOLBAR_ENTRY_KIND.ToolBarButton, TOOLBAR_ENTRY_KIND.ToolBarImageButton, TOOLBAR_ENTRY_KIND.ToolBarStandardButton, TOOLBAR_ENTRY_KIND.ToolBarSeparator, TOOLBAR_ENTRY_KIND.ToolBarToolTip] as const;
 export const PBFD_CONTAINER_GADGET_KINDS = [GADGET_KIND.ContainerGadget, GADGET_KIND.PanelGadget, GADGET_KIND.ScrollAreaGadget] as const;
+export const PBFD_WINDOW_KNOWN_FLAGS = [
+  "#PB_Window_SystemMenu",
+  "#PB_Window_MinimizeGadget",
+  "#PB_Window_MaximizeGadget",
+  "#PB_Window_SizeGadget",
+  "#PB_Window_Invisible",
+  "#PB_Window_TitleBar",
+  "#PB_Window_Tool",
+  "#PB_Window_BorderLess",
+  "#PB_Window_ScreenCentered",
+  "#PB_Window_WindowCentered",
+  "#PB_Window_Maximize",
+  "#PB_Window_Minimize",
+  "#PB_Window_NoGadgets",
+  "#PB_Window_NoActivate",
+] as const;
 export const PBFD_ENUM_NAMES = ENUM_NAMES;
 
 export const PBFD_SYMBOLS = {
   menuEntryKinds: PBFD_MENU_ENTRY_KINDS,
   toolBarEntryKinds: PBFD_TOOLBAR_ENTRY_KINDS,
   containerGadgetKinds: PBFD_CONTAINER_GADGET_KINDS,
+  windowKnownFlags: PBFD_WINDOW_KNOWN_FLAGS,
   enumNames: PBFD_ENUM_NAMES
 } as const;

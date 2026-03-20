@@ -38,6 +38,8 @@ import {
   applyWindowEventProcUpdate,
   applyWindowEventUpdate,
   applyWindowGenerateEventLoopUpdate,
+  applyWindowOpenArgsUpdate,
+  applyWindowPropertyUpdate,
   applyWindowVariableNamePatch,
   applyWindowPbAnyToggle,
   applyWindowRectPatch
@@ -73,6 +75,8 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetStateRaw: "setGadgetStateRaw",
   setGadgetResizeRaw: "setGadgetResizeRaw",
   setWindowRect: "setWindowRect",
+  setWindowOpenArgs: "setWindowOpenArgs",
+  setWindowProperties: "setWindowProperties",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
   setWindowVariableName: "setWindowVariableName",
@@ -136,6 +140,8 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
@@ -417,6 +423,26 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect: {
           const edit = applyWindowRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
           await applyEditOrError(edit, `Could not patch window '${msg.id}'. No matching OpenWindow call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs: {
+          const edit = applyWindowOpenArgsUpdate(document, msg.windowKey, {
+            captionRaw: msg.captionRaw,
+            flagsExpr: msg.flagsExpr,
+            parentRaw: msg.parentRaw
+          }, sr);
+          await applyEditOrError(edit, `Could not patch OpenWindow arguments for window '${msg.windowKey}'. No matching OpenWindow call found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties: {
+          const edit = applyWindowPropertyUpdate(document, msg.windowKey, {
+            hiddenRaw: msg.hiddenRaw,
+            disabledRaw: msg.disabledRaw,
+            colorRaw: msg.colorRaw
+          }, sr);
+          await applyEditOrError(edit, `Could not patch window property lines for '${msg.windowKey}'. No matching OpenWindow call found${rangeInfo}.`);
           return;
         }
 
@@ -1205,7 +1231,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       .root {
         display: grid;
-        grid-template-columns: 1fr 360px;
+        grid-template-columns: minmax(0, 1fr) 6px minmax(300px, var(--pbfd-panel-width, 360px));
         height: 100vh;
       }
 
@@ -1221,12 +1247,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         display: block;
       }
 
+      .panelResizer {
+        cursor: col-resize;
+        background: var(--vscode-panel-border);
+        opacity: 0.35;
+      }
+
+      .panelResizer:hover,
+      .panelResizer.dragging {
+        opacity: 1;
+        background: var(--vscode-focusBorder);
+      }
+
       .panel {
         border-left: 1px solid var(--vscode-panel-border);
         background: var(--vscode-sideBar-background);
         color: var(--vscode-sideBar-foreground);
         padding: 10px;
         overflow: auto;
+        min-width: 300px;
       }
 
       .row {
@@ -1313,7 +1352,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         white-space: pre-wrap;
       }
 
-      .subHeader { margin-top: 10px; font-weight: 600; }
+      .subHeader { margin-top: 14px; font-weight: 700; padding: 4px 6px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background); }
 
       .miniList {
         border: 1px solid var(--vscode-panel-border);
@@ -1378,6 +1417,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
   <body>
     <div class="root">
       <div class="canvasWrap"><canvas id="designer"></canvas></div>
+      <div id="panelResizer" class="panelResizer" aria-hidden="true"></div>
       <div class="panel">
         <div id="diag" class="diag" style="display:none"></div>
 

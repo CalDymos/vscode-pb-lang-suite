@@ -93,6 +93,10 @@ import {
   retainPanelActiveItems,
   syncPanelActiveItemsForSelection
 } from "../core/webviewStateUtils";
+import {
+  buildWindowFlagsExpr,
+  parseWindowCustomFlagsInput
+} from "../core/windowInspectorUtils";
 
 type SourceRange = { line: number };
 
@@ -188,7 +192,24 @@ type WindowModel = {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
+  captionRaw?: string;
+  captionVariable?: boolean;
   title?: string;
+  flagsExpr?: string;
+  knownFlags?: string[];
+  customFlags?: string[];
+  hiddenRaw?: string;
+  hidden?: boolean;
+  disabledRaw?: string;
+  disabled?: boolean;
+  parentRaw?: string;
+  parent?: string;
+  colorRaw?: string;
+  color?: number;
   eventFile?: string;
   eventProc?: string;
   generateEventLoop?: boolean;
@@ -315,6 +336,8 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetStateRaw: "setGadgetStateRaw",
   setGadgetResizeRaw: "setGadgetResizeRaw",
   setWindowRect: "setWindowRect",
+  setWindowOpenArgs: "setWindowOpenArgs",
+  setWindowProperties: "setWindowProperties",
   toggleWindowPbAny: "toggleWindowPbAny",
   setWindowEnumValue: "setWindowEnumValue",
   setWindowVariableName: "setWindowVariableName",
@@ -385,6 +408,8 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
@@ -609,6 +634,7 @@ type PbfdSymbols = {
   menuEntryKinds: readonly string[];
   toolBarEntryKinds: readonly string[];
   containerGadgetKinds: readonly string[];
+  windowKnownFlags?: readonly string[];
   enumNames?: { windows: string; gadgets: string };
 };
 
@@ -653,6 +679,34 @@ function menuEntryKindHint(): string {
 
 function toolBarEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.toolBarEntryKinds.join("/")})`;
+}
+
+function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
+  return isVariable ? value.trim() : toPbString(value);
+}
+
+function getWindowCurrentFlagsExpr(win: WindowModel): string | undefined {
+  return buildWindowFlagsExpr(win.knownFlags ?? [], (win.customFlags ?? []).join(" | "));
+}
+
+function postWindowOpenArgs(win: WindowModel, updates: { captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
+  post({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs,
+    windowKey: win.id,
+    captionRaw: Object.prototype.hasOwnProperty.call(updates, "captionRaw") ? updates.captionRaw : (win.captionRaw ?? buildWindowCaptionRaw(win.title ?? "", Boolean(win.captionVariable))),
+    flagsExpr: Object.prototype.hasOwnProperty.call(updates, "flagsExpr") ? updates.flagsExpr : getWindowCurrentFlagsExpr(win),
+    parentRaw: Object.prototype.hasOwnProperty.call(updates, "parentRaw") ? updates.parentRaw : (win.parentRaw ?? "")
+  });
+}
+
+function postWindowProperties(win: WindowModel, updates: { hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }) {
+  post({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties,
+    windowKey: win.id,
+    hiddenRaw: Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? updates.hiddenRaw : (win.hiddenRaw ?? ""),
+    disabledRaw: Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? updates.disabledRaw : (win.disabledRaw ?? ""),
+    colorRaw: Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? updates.colorRaw : (win.colorRaw ?? "")
+  });
 }
 
 type ImageUsage = {
@@ -4444,133 +4498,180 @@ function renderProps() {
       return;
     }
 
-    const variableName = (model.window.variable ?? model.window.firstParam.replace(/^#/, "")).trim() || "Window_0";
+    const win = model.window;
+    const variableName = (win.variable ?? win.firstParam.replace(/^#/, "")).trim() || "Window_0";
     const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
+    const knownFlags = new Set(win.knownFlags ?? []);
+    const customFlagsValue = (win.customFlags ?? []).join(" | ");
 
-    propsEl.appendChild(row("Key", readonlyInput(model.window.id)));
-    propsEl.appendChild(
-      row("#PB_Any", checkboxInput(model.window.pbAny, v => {
+    propsEl.appendChild(section("Properties"));
+    propsEl.appendChild(row("#PB_Any", checkboxInput(win.pbAny, v => {
+      vscode.postMessage({
+        type: "toggleWindowPbAny",
+        windowKey: win.id,
+        toPbAny: v,
+        variableName,
+        enumSymbol,
+        enumValueRaw: win.enumValueRaw
+      });
+    })));
+
+    propsEl.appendChild(row("Variable", textInput(variableName, v => {
+      vscode.postMessage({
+        type: "setWindowVariableName",
+        variableName: v.trim().length ? v.trim() : undefined
+      });
+    })));
+
+    propsEl.appendChild(row(
+      "Caption is a variable?",
+      checkboxInput(Boolean(win.captionVariable), checked => {
         if (!model.window) return;
-        vscode.postMessage({
-          type: "toggleWindowPbAny",
-          windowKey: model.window.id,
-          toPbAny: v,
-          variableName,
-          enumSymbol,
-          enumValueRaw: model.window.enumValueRaw
-        });
-      }))
-    );
+        win.captionVariable = checked;
+        const nextCaptionRaw = buildWindowCaptionRaw(win.title ?? "", checked);
+        win.captionRaw = nextCaptionRaw;
+        postWindowOpenArgs(win, { captionRaw: nextCaptionRaw });
+        renderProps();
+      })
+    ));
 
-    propsEl.appendChild(
-      row("Variable", textInput(variableName ?? "", v => {
+    propsEl.appendChild(row(
+      "Caption",
+      textInput(win.title ?? "", v => {
+        if (!model.window) return;
+        win.title = v;
+        const nextCaptionRaw = buildWindowCaptionRaw(v, Boolean(win.captionVariable));
+        win.captionRaw = nextCaptionRaw;
+        postWindowOpenArgs(win, { captionRaw: nextCaptionRaw });
+      })
+    ));
+
+    if (!win.pbAny) {
+      propsEl.appendChild(row("Enum Value", textInput(win.enumValueRaw ?? "", v => {
         vscode.postMessage({
-          type: "setWindowVariableName",
-          variableName: v.trim().length ? v.trim() : undefined
+          type: "setWindowEnumValue",
+          enumSymbol,
+          enumValueRaw: v.trim().length ? v.trim() : undefined
         });
-      }))
-    );
-    if (!model.window.pbAny) {
-      propsEl.appendChild(
-        row("Enum Value", textInput(model.window.enumValueRaw ?? "", v => {
-          vscode.postMessage({
-            type: "setWindowEnumValue",
-            enumSymbol,
-            enumValueRaw: v.trim().length ? v.trim() : undefined
-          });
-        }))
-      );
+      })));
     }
 
-    propsEl.appendChild(row("Title", readonlyInput(model.window.title ?? "")));
-    propsEl.appendChild(
-      row("Event File", textInput(model.window.eventFile ?? "", v => {
+    propsEl.appendChild(section("Layout"));
+    propsEl.appendChild(row("X", numberInput(win.x, v => { if (!model.window) return; win.x = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Y", numberInput(win.y, v => { if (!model.window) return; win.y = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Hidden", checkboxInput(Boolean(win.hiddenRaw), checked => {
+      if (!model.window) return;
+      win.hiddenRaw = checked ? (win.hiddenRaw?.trim() || "1") : "";
+      postWindowProperties(win, { hiddenRaw: checked ? (win.hiddenRaw?.trim() || "1") : "" });
+      renderProps();
+    })));
+    propsEl.appendChild(row("Disabled", checkboxInput(Boolean(win.disabledRaw), checked => {
+      if (!model.window) return;
+      win.disabledRaw = checked ? (win.disabledRaw?.trim() || "1") : "";
+      postWindowProperties(win, { disabledRaw: checked ? (win.disabledRaw?.trim() || "1") : "" });
+      renderProps();
+    })));
+    propsEl.appendChild(row("Parent", textInput(win.parentRaw ?? win.parent ?? "", v => {
+      if (!model.window) return;
+      const trimmed = v.trim();
+      win.parentRaw = trimmed || undefined;
+      postWindowOpenArgs(win, { parentRaw: trimmed || "" });
+    })));
+    propsEl.appendChild(row("Color", textInput(win.colorRaw ?? (typeof win.color === "number" ? String(win.color) : ""), v => {
+      if (!model.window) return;
+      const trimmed = v.trim();
+      win.colorRaw = trimmed || undefined;
+      postWindowProperties(win, { colorRaw: trimmed || "" });
+    }, { title: "Patch the raw SetWindowColor value for the selected window." })));
+    const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
+    const windowEventProcHint = hasEventGadgetBlock ? "" : EVENT_UI_HINT.eventGadgetMissing;
+    const hasEventMenuBlockForLoop = Boolean(win.hasEventMenuBlock);
+    const hasEventGadgetCasesForLoop = Boolean(win.hasEventGadgetCaseBranches);
+    const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
+    const generateEventLoopDisableHint = getGenerateEventLoopDisableHint(win);
+    propsEl.appendChild(row(
+      "Generate events procedure?",
+      checkboxInput(
+        Boolean(win.generateEventLoop),
+        v => {
+          if (!model.window) return;
+          if (!v && Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) return;
+          win.generateEventLoop = v;
+          if (!v) {
+            if (!win.hasEventMenuBlock) win.hasEventGadgetBlock = false;
+            if (!win.hasEventMenuBlock) win.hasEventGadgetCaseBranches = false;
+          } else {
+            win.hasEventGadgetBlock = true;
+          }
+          post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
+          renderProps();
+        },
+        {
+          disabled: Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop,
+          title: Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop ? generateEventLoopDisableHint : ""
+        }
+      )
+    ));
+    propsEl.appendChild(row(
+      "Event procedure",
+      textInput(
+        win.eventProc ?? "",
+        v => {
+          if (!model.window || !hasEventGadgetBlock) return;
+          const trimmed = v.trim();
+          win.eventProc = trimmed || undefined;
+          post({ type: "setWindowEventProc", windowKey: win.id, eventProc: trimmed.length ? trimmed : undefined });
+          renderProps();
+        },
+        { disabled: !hasEventGadgetBlock, title: windowEventProcHint }
+      )
+    ));
+    propsEl.appendChild(row(
+      "Event File",
+      textInput(win.eventFile ?? "", v => {
         if (!model.window) return;
         const trimmed = v.trim();
-        model.window.eventFile = trimmed || undefined;
-        post({
-          type: "setWindowEventFile",
-          windowKey: model.window.id,
-          eventFile: trimmed.length ? toPbString(trimmed) : undefined
-        });
+        win.eventFile = trimmed || undefined;
+        post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
         renderProps();
-      }))
-    );
-    const hasEventGadgetBlock = Boolean(model.window.hasEventGadgetBlock);
-    const windowEventProcHint = hasEventGadgetBlock
-      ? ""
-      : EVENT_UI_HINT.eventGadgetMissing;
-    propsEl.appendChild(
-      row(
-        "Event Proc",
-        textInput(
-          model.window.eventProc ?? "",
-          v => {
-            if (!model.window || !hasEventGadgetBlock) return;
-            const trimmed = v.trim();
-            model.window.eventProc = trimmed || undefined;
-            post({
-              type: "setWindowEventProc",
-              windowKey: model.window.id,
-              eventProc: trimmed.length ? trimmed : undefined
-            });
-            renderProps();
-          },
-          { disabled: !hasEventGadgetBlock, title: windowEventProcHint }
-        )
-      )
-    );
+      })
+    ));
     if (!hasEventGadgetBlock) {
       propsEl.appendChild(mutedNote(windowEventProcHint));
     }
-    const hasEventMenuBlockForLoop = Boolean(model.window.hasEventMenuBlock);
-    const hasEventGadgetCasesForLoop = Boolean(model.window.hasEventGadgetCaseBranches);
-    const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
-    const generateEventLoopDisableHint = getGenerateEventLoopDisableHint(model.window);
-    propsEl.appendChild(
-      row(
-        "Generate Event Loop",
-        checkboxInput(
-          Boolean(model.window.generateEventLoop),
-          v => {
-            if (!model.window) return;
-            if (!v && Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) return;
-            model.window.generateEventLoop = v;
-            if (!v) {
-              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetBlock = false;
-              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetCaseBranches = false;
-            } else {
-              model.window.hasEventGadgetBlock = true;
-            }
-            post({
-              type: "setWindowGenerateEventLoop",
-              windowKey: model.window.id,
-              enabled: v
-            });
-            renderProps();
-          },
-          {
-            disabled: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop,
-            title: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop ? generateEventLoopDisableHint : ""
-          }
-        )
-      )
-    );
-    if (Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) {
+    if (Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) {
       propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
     }
-    propsEl.appendChild(
-      row("X", numberInput(model.window.x, v => { if (!model.window) return; model.window.x = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("Y", numberInput(model.window.y, v => { if (!model.window) return; model.window.y = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("W", numberInput(model.window.w, v => { if (!model.window) return; model.window.w = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("H", numberInput(model.window.h, v => { if (!model.window) return; model.window.h = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
+
+    propsEl.appendChild(section("Constants"));
+    for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
+      propsEl.appendChild(row(
+        flag,
+        checkboxInput(knownFlags.has(flag), checked => {
+          if (!model.window) return;
+          const nextKnown = new Set(model.window.knownFlags ?? []);
+          if (checked) nextKnown.add(flag);
+          else nextKnown.delete(flag);
+          model.window.knownFlags = (PBFD_SYMBOLS.windowKnownFlags ?? []).filter(entry => nextKnown.has(entry));
+          const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
+          model.window.flagsExpr = nextExpr;
+          postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+          renderProps();
+        })
+      ));
+    }
+    propsEl.appendChild(row(
+      "Custom Flags",
+      textInput(customFlagsValue, v => {
+        if (!model.window) return;
+        model.window.customFlags = parseWindowCustomFlagsInput(v);
+        const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
+        model.window.flagsExpr = nextExpr;
+        postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB" })
+    ));
     return;
   }
 
@@ -7003,6 +7104,36 @@ function clampPos(v: number): number {
 function clamp(v: number, min: number, max: number): number {
   if (!Number.isFinite(v)) return min;
   return Math.max(min, Math.min(max, v));
+}
+
+function setupPanelResize() {
+  const resizer = document.getElementById("panelResizer");
+  if (!resizer) return;
+  let dragging = false;
+  const applyWidth = (clientX: number) => {
+    const nextWidth = clamp(window.innerWidth - clientX - 3, 300, Math.max(300, Math.min(900, window.innerWidth - 220)));
+    document.documentElement.style.setProperty("--pbfd-panel-width", `${Math.trunc(nextWidth)}px`);
+  };
+  const onMove = (ev: PointerEvent) => {
+    if (!dragging) return;
+    applyWidth(ev.clientX);
+  };
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.style.cursor = "";
+  };
+  resizer.addEventListener("pointerdown", ev => {
+    dragging = true;
+    resizer.classList.add("dragging");
+    document.body.style.cursor = "col-resize";
+    (resizer as HTMLElement).setPointerCapture?.(ev.pointerId);
+    applyWidth(ev.clientX);
+  });
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
 }
 
 function asInt(v: any): number {
