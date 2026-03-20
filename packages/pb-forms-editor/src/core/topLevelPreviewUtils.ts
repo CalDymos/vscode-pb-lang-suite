@@ -406,6 +406,13 @@ export function resolveTopLevelChromeHit(args: {
   statusBarRect?: PreviewRectLike | null;
   statusBarFieldRects?: PreviewEntryRectLike[];
 }): TopLevelChromeHitLike | null {
+  if (args.menuId) {
+    const entryHit = resolvePreviewRectListHit(args.menuEntryRects, args.x, args.y);
+    if (entryHit) {
+      return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
+    }
+  }
+
   if (!args.windowHit) return null;
 
   if (args.statusBarId && args.statusBarRect && rectContainsPoint(args.statusBarRect, args.x, args.y)) {
@@ -416,14 +423,8 @@ export function resolveTopLevelChromeHit(args: {
     return { selection: { kind: "statusbar", id: args.statusBarId }, rect: args.statusBarRect };
   }
 
-  if (args.menuId) {
-    const entryHit = resolvePreviewRectListHit(args.menuEntryRects, args.x, args.y);
-    if (entryHit) {
-      return { selection: { kind: "menuEntry", menuId: entryHit.ownerId, entryIndex: entryHit.index }, rect: entryHit };
-    }
-    if (args.menuRect && rectContainsPoint(args.menuRect, args.x, args.y)) {
-      return { selection: { kind: "menu", id: args.menuId }, rect: args.menuRect };
-    }
+  if (args.menuId && args.menuRect && rectContainsPoint(args.menuRect, args.x, args.y)) {
+    return { selection: { kind: "menu", id: args.menuId }, rect: args.menuRect };
   }
 
   if (args.toolBarId && args.toolBarRect && rectContainsPoint(args.toolBarRect, args.x, args.y)) {
@@ -476,7 +477,6 @@ export function resolveMenuFooterHit(args: {
   menuRect?: PreviewRectLike | null;
   footerRects?: PreviewMenuFooterRectLike[];
 }): PreviewMenuFooterRectLike | null {
-  if (!args.windowHit || !args.menuRect) return null;
   return resolvePreviewRectListHit(args.footerRects, args.x, args.y);
 }
 
