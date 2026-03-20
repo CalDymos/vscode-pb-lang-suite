@@ -51,9 +51,15 @@ export type GadgetResizeLockLike = {
   lockBottom?: boolean;
 };
 
+export type PbFormSkinLike = "windows" | "linux" | "macos";
+
 export type WindowResizeLockLike = {
   w: number;
   h?: number;
+  menuCount?: number;
+  toolbarCount?: number;
+  statusBarCount?: number;
+  platformSkin?: PbFormSkinLike;
 };
 
 export type GadgetResizeRawUpdate = {
@@ -212,6 +218,67 @@ export function getGadgetFontDisplaySummary(gadget: GadgetFontLike): string {
     return gadget.gadgetFontRaw.trim();
   }
   return "";
+}
+
+const PB_FORM_SKIN_CONSTANTS: Readonly<Record<PbFormSkinLike, { statusHeight: number; menuHeight: number; toolBarPaddingHeight: number }>> = {
+  windows: { statusHeight: 23, menuHeight: 22, toolBarPaddingHeight: 24 },
+  linux: { statusHeight: 26, menuHeight: 28, toolBarPaddingHeight: 38 },
+  macos: { statusHeight: 24, menuHeight: 23, toolBarPaddingHeight: 36 }
+};
+
+function getTopLevelStretchHeightDynamicParts(win: WindowResizeLockLike): string[] {
+  const parts: string[] = [];
+  const menuCount = win.menuCount ?? 0;
+  const toolbarCount = win.toolbarCount ?? 0;
+  const statusBarCount = win.statusBarCount ?? 0;
+  const skin = win.platformSkin;
+
+  if (menuCount > 0) {
+    parts.push('MenuHeight()');
+  }
+  if (toolbarCount > 0 && skin === 'windows') {
+    parts.push(`ToolBarHeight(${toolbarCount - 1})`);
+  }
+  if (statusBarCount > 0) {
+    parts.push(`StatusBarHeight(${statusBarCount - 1})`);
+  }
+
+  return parts;
+}
+
+function buildTopLevelStretchHeightRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
+  const skin = win.platformSkin;
+  const winH = win.h;
+  if (!skin || typeof winH !== 'number' || !Number.isFinite(winH) || winH <= 0 || !Number.isFinite(gadget.h)) {
+    return undefined;
+  }
+
+  const constants = PB_FORM_SKIN_CONSTANTS[skin];
+  const menuCount = win.menuCount ?? 0;
+  const toolbarCount = win.toolbarCount ?? 0;
+  const statusBarCount = win.statusBarCount ?? 0;
+  const dynamicParts = getTopLevelStretchHeightDynamicParts(win);
+
+  let value = Math.trunc(winH - gadget.h);
+  if (statusBarCount > 0) {
+    value -= constants.statusHeight;
+  }
+
+  if (skin === 'windows') {
+    if (toolbarCount > 0) {
+      value -= constants.toolBarPaddingHeight;
+    }
+    if (menuCount > 0) {
+      value -= constants.menuHeight;
+    }
+  } else if (skin === 'linux') {
+    if (menuCount > 0) {
+      value -= constants.menuHeight;
+    }
+  }
+
+  const suffix = dynamicParts.length ? ` - ${dynamicParts.join(' - ')}` : '';
+  return `FormWindowHeight${suffix} - ${value}`;
 }
 
 function usesWidthResizeReference(raw: string | undefined): boolean {
@@ -374,7 +441,7 @@ export function buildGadgetVerticalLockResizeUpdate(
     : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined);
   const stretchHeightRaw = usesHeightResizeReference(gadget.resizeHRaw)
     ? gadget.resizeHRaw?.trim()
-    : undefined;
+    : (win ? buildTopLevelStretchHeightRaw(gadget, win) : undefined);
 
   if (!nextLockBottom) {
     return {

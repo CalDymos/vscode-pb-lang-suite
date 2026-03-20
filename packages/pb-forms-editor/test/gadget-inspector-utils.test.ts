@@ -309,7 +309,7 @@ test("derives the original top-level bottom-anchor formula from the preserved co
   });
 });
 
-test("rejects vertical lock transitions that would require inventing missing raw formulas", () => {
+test("rebuilds the original top-level stretch-height formula for the current host skin", () => {
   const update = buildGadgetVerticalLockResizeUpdate({
     x: 10,
     y: 20,
@@ -328,7 +328,65 @@ test("rejects vertical lock transitions that would require inventing missing raw
     resizeYRaw: "20",
     resizeWRaw: "80",
     resizeHRaw: "24"
-  }, { w: 320, h: 220 }, true, true);
+  }, { w: 320, h: 220, menuCount: 1, toolbarCount: 1, statusBarCount: 1, platformSkin: "windows" }, true, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "FormWindowHeight - MenuHeight() - ToolBarHeight(0) - StatusBarHeight(0) - 127"
+  });
+});
+
+test("uses the original linux height constants when rebuilding a top-level stretch-height formula", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320, h: 220, menuCount: 1, toolbarCount: 1, statusBarCount: 1, platformSkin: "linux" }, true, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "FormWindowHeight - MenuHeight() - StatusBarHeight(0) - 142"
+  });
+});
+
+test("keeps blocking top-level stretch-height synthesis when the host skin is unknown", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320, h: 220, menuCount: 1, toolbarCount: 1, statusBarCount: 1 }, true, true);
 
   assert.equal(update, undefined);
 });
