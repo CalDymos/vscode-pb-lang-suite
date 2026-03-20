@@ -43,6 +43,25 @@ test("roundtrips window rect changes via procedure defaults", () => {
   assert.equal(parsed.window?.h, 200);
 });
 
+
+test("patches window X/Y raw values through procedure defaults for #PB_Ignore parity", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowOpenArgsUpdate(document, "#FrmMain", {
+      xRaw: "#PB_Ignore",
+      yRaw: "24"
+    })
+  );
+
+  assert.match(patchedText, /Procedure OpenFrmMain\(x = #PB_Ignore, y = 24, width = 220, height = 140\)/);
+  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.xRaw, "#PB_Ignore");
+  assert.equal(parsed.window?.yRaw, "24");
+  assert.equal(parsed.window?.x, 0);
+  assert.equal(parsed.window?.y, 24);
+});
+
 test("roundtrips existing ResizeGadget raw expressions without touching constructor geometry", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)

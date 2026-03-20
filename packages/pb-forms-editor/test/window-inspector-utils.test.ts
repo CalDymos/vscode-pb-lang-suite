@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, parseWindowCustomFlagsInput, WINDOW_KNOWN_FLAGS } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -38,4 +38,32 @@ test('window known flags list matches original PureBasic declaration order', () 
     '#PB_Window_NoGadgets',
     '#PB_Window_NoActivate'
   ]);
+});
+
+
+test('window X/Y inspector values prefer #PB_Ignore over the internal sentinel', () => {
+  assert.equal(getWindowPositionInspectorValue('#PB_Ignore', 0), WINDOW_POSITION_IGNORE_LITERAL);
+  assert.equal(getWindowPositionInspectorValue(undefined, -65535), WINDOW_POSITION_IGNORE_LITERAL);
+  assert.equal(getWindowPositionInspectorValue('12', 12), '12');
+});
+
+test('window X/Y inspector input accepts integers and #PB_Ignore only', () => {
+  assert.deepEqual(parseWindowPositionInspectorInput('#PB_Ignore'), {
+    ok: true,
+    raw: '#PB_Ignore',
+    previewValue: 0,
+    isIgnore: true,
+  });
+
+  assert.deepEqual(parseWindowPositionInspectorInput('-24'), {
+    ok: true,
+    raw: '-24',
+    previewValue: -24,
+    isIgnore: false,
+  });
+
+  assert.deepEqual(parseWindowPositionInspectorInput('ScreenCentered'), {
+    ok: false,
+    error: 'Only integer values or #PB_Ignore are supported.'
+  });
 });

@@ -95,7 +95,10 @@ import {
 } from "../core/webviewStateUtils";
 import {
   buildWindowFlagsExpr,
-  parseWindowCustomFlagsInput
+  getWindowPositionInspectorValue,
+  parseWindowCustomFlagsInput,
+  parseWindowPositionInspectorInput,
+  WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
 
 type SourceRange = { line: number };
@@ -408,7 +411,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -691,10 +694,14 @@ function getWindowCurrentFlagsExpr(win: WindowModel): string | undefined {
   return buildWindowFlagsExpr(win.knownFlags ?? [], (win.customFlags ?? []).join(" | "));
 }
 
-function postWindowOpenArgs(win: WindowModel, updates: { captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
+function postWindowOpenArgs(win: WindowModel, updates: { xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs,
     windowKey: win.id,
+    ...(Object.prototype.hasOwnProperty.call(updates, "xRaw") ? { xRaw: updates.xRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "yRaw") ? { yRaw: updates.yRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "wRaw") ? { wRaw: updates.wRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "hRaw") ? { hRaw: updates.hRaw } : {}),
     captionRaw: Object.prototype.hasOwnProperty.call(updates, "captionRaw") ? updates.captionRaw : (win.captionRaw ?? buildWindowCaptionRaw(win.title ?? "", Boolean(win.captionVariable))),
     flagsExpr: Object.prototype.hasOwnProperty.call(updates, "flagsExpr") ? updates.flagsExpr : getWindowCurrentFlagsExpr(win),
     parentRaw: Object.prototype.hasOwnProperty.call(updates, "parentRaw") ? updates.parentRaw : (win.parentRaw ?? "")
@@ -709,6 +716,36 @@ function postWindowProperties(win: WindowModel, updates: { hiddenRaw?: string; d
     disabledRaw: Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? updates.disabledRaw : (win.disabledRaw ?? ""),
     colorRaw: Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? updates.colorRaw : (win.colorRaw ?? "")
   });
+}
+
+function clearInfoError(): void {
+  if (!(errEl.textContent ?? "").trim().length) return;
+  errEl.textContent = "";
+  renderInfoPanel();
+}
+
+function postWindowPositionRaw(win: WindowModel, axis: "x" | "y", rawValue: string): void {
+  const parsed = parseWindowPositionInspectorInput(rawValue);
+  if (!parsed.ok) {
+    errEl.textContent = `Window ${axis.toUpperCase()} accepts only an integer or ${WINDOW_POSITION_IGNORE_LITERAL}.`;
+    renderInfoPanel();
+    return;
+  }
+
+  clearInfoError();
+
+  if (axis === "x") {
+    win.xRaw = parsed.raw;
+    win.x = parsed.previewValue;
+    postWindowOpenArgs(win, { xRaw: parsed.raw });
+  } else {
+    win.yRaw = parsed.raw;
+    win.y = parsed.previewValue;
+    postWindowOpenArgs(win, { yRaw: parsed.raw });
+  }
+
+  render();
+  renderProps();
 }
 
 type ImageUsage = {
@@ -4655,8 +4692,14 @@ function renderProps() {
     }
 
     propsEl.appendChild(section("Layout"));
-    propsEl.appendChild(row("X", numberInput(win.x, v => { if (!model.window) return; win.x = asInt(v); postWindowRect(); render(); renderProps(); })));
-    propsEl.appendChild(row("Y", numberInput(win.y, v => { if (!model.window) return; win.y = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("X", textInput(getWindowPositionInspectorValue(win.xRaw, win.x), v => {
+      if (!model.window) return;
+      postWindowPositionRaw(win, "x", v);
+    }, { title: `Use integers or ${WINDOW_POSITION_IGNORE_LITERAL} like the original PureBasic Property Grid.` })));
+    propsEl.appendChild(row("Y", textInput(getWindowPositionInspectorValue(win.yRaw, win.y), v => {
+      if (!model.window) return;
+      postWindowPositionRaw(win, "y", v);
+    }, { title: `Use integers or ${WINDOW_POSITION_IGNORE_LITERAL} like the original PureBasic Property Grid.` })));
     propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
     propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
     propsEl.appendChild(row("Hidden", checkboxInput(Boolean(win.hiddenRaw), checked => {

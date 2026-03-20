@@ -339,6 +339,20 @@ EndProcedure
   assert.equal(doc.window?.parent, "#FrmParent");
 });
 
+test("parses #PB_Ignore window positions while preserving raw OpenWindow arguments", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmIgnore(x = #PB_Ignore, y = 24, width = 220, height = 140)
+  OpenWindow(#FrmIgnore, x, y, width, height, "Ignore")
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  assert.equal(doc.window?.xRaw, "#PB_Ignore");
+  assert.equal(doc.window?.yRaw, "24");
+  assert.equal(doc.window?.x, 0);
+  assert.equal(doc.window?.y, 24);
+});
+
 test("normalizes non-WindowID OpenWindow parent references with leading equals", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;

@@ -140,7 +140,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
@@ -428,6 +428,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs: {
           const edit = applyWindowOpenArgsUpdate(document, msg.windowKey, {
+            xRaw: msg.xRaw,
+            yRaw: msg.yRaw,
+            wRaw: msg.wRaw,
+            hRaw: msg.hRaw,
             captionRaw: msg.captionRaw,
             flagsExpr: msg.flagsExpr,
             parentRaw: msg.parentRaw

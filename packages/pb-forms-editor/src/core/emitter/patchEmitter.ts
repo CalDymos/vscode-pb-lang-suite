@@ -172,6 +172,10 @@ export interface WindowPropertyArgs {
 }
 
 export interface WindowOpenArgs {
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   captionRaw?: string;
   flagsExpr?: string;
   parentRaw?: string;
@@ -1128,6 +1132,60 @@ export function applyWindowOpenArgsUpdate(
 
   const params = splitParams(call.args);
   if (params.length < 6) return undefined;
+
+  const hasLayoutUpdate = args.xRaw !== undefined || args.yRaw !== undefined || args.wRaw !== undefined || args.hRaw !== undefined;
+  if (hasLayoutUpdate) {
+    const xRaw = normalizeOptionalRaw(args.xRaw);
+    const yRaw = normalizeOptionalRaw(args.yRaw);
+    const wRaw = normalizeOptionalRaw(args.wRaw);
+    const hRaw = normalizeOptionalRaw(args.hRaw);
+
+    const p1 = (params[1] ?? "").trim().toLowerCase();
+    const p2 = (params[2] ?? "").trim().toLowerCase();
+    const p3 = (params[3] ?? "").trim().toLowerCase();
+    const p4 = (params[4] ?? "").trim().toLowerCase();
+    const usesProcDefaults = p1 === "x" && p2 === "y" && p3 === "width" && p4 === "height";
+
+    if (usesProcDefaults) {
+      const procUpdates: Record<string, string> = {};
+      if (args.xRaw !== undefined) {
+        if (!xRaw) return undefined;
+        procUpdates.x = xRaw;
+      }
+      if (args.yRaw !== undefined) {
+        if (!yRaw) return undefined;
+        procUpdates.y = yRaw;
+      }
+      if (args.wRaw !== undefined) {
+        if (!wRaw) return undefined;
+        procUpdates.width = wRaw;
+      }
+      if (args.hRaw !== undefined) {
+        if (!hRaw) return undefined;
+        procUpdates.height = hRaw;
+      }
+      return Object.keys(procUpdates).length ? tryPatchProcedureDefaults(document, call.range.line, procUpdates) : undefined;
+    }
+
+    if (args.xRaw !== undefined) {
+      if (!xRaw) return undefined;
+      params[1] = xRaw;
+    }
+    if (args.yRaw !== undefined) {
+      if (!yRaw) return undefined;
+      params[2] = yRaw;
+    }
+    if (args.wRaw !== undefined) {
+      if (!wRaw) return undefined;
+      params[3] = wRaw;
+    }
+    if (args.hRaw !== undefined) {
+      if (!hRaw) return undefined;
+      params[4] = hRaw;
+    }
+
+    return replaceCallArgsEdit(document, call, params);
+  }
 
   const captionRaw = normalizeOptionalRaw(args.captionRaw) ?? (params[5]?.trim().length ? params[5].trim() : '""');
   const parentRaw = normalizeOptionalRaw(args.parentRaw);
