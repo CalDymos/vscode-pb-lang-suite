@@ -82,6 +82,11 @@ import {
   getGadgetTooltipInspectorValue
 } from "../core/gadgetInspectorUtils";
 
+import {
+  hasRectChanged,
+  retainPanelActiveItems
+} from "../core/webviewStateUtils";
+
 type SourceRange = { line: number };
 
 type GadgetItem = {
@@ -1112,6 +1117,10 @@ function resolvePendingStatusBarFieldSelection() {
 }
 
 function sanitizeSelectionAfterModelUpdate() {
+  const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
+  panelActiveItems.clear();
+  retainedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
+
   const sel = selection;
   if (sel && sel.kind === "gadget") {
     const selId = sel.id;
@@ -1224,7 +1233,7 @@ function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
 }
 
 type DragState =
-  | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number }
+  | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "menuEntry";
       menuId: string;
@@ -1258,7 +1267,7 @@ type DragState =
       startW: number;
       startH: number;
     }
-  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number }
+  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "window";
       mode: "resize";
@@ -1310,7 +1319,9 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "init") {
     errEl.textContent = "";
     model = msg.model;
+    const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
+    retainedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
     scrollAreaOffsets.clear();
 
     if (msg.settings) {
@@ -1796,7 +1807,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     } else if (chromeHit.zone === "scrollAreaVBar" || chromeHit.zone === "scrollAreaHBar") {
@@ -1824,7 +1837,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     } else {
@@ -1863,7 +1878,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     }
@@ -1898,7 +1915,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: wr.x,
-        startY: wr.y
+        startY: wr.y,
+        startW: wr.w,
+        startH: wr.h
       };
       canvas.style.cursor = "move";
     } else {
@@ -2150,13 +2169,21 @@ window.addEventListener("mouseup", () => {
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (g) {
-      applyDropSnapRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
-      postGadgetRect(g);
+      const startRect = { x: d.startX, y: d.startY, w: d.startW, h: d.startH };
+      if (hasRectChanged(g, startRect)) {
+        applyDropSnapRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
+        if (hasRectChanged(g, startRect)) {
+          postGadgetRect(g);
+        }
+      }
     }
-  } else {
-    if (model.window) {
+  } else if (model.window) {
+    const startRect = { x: d.startX, y: d.startY, w: d.startW, h: d.startH };
+    if (hasRectChanged(model.window, startRect)) {
       applyDropSnapRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
-      postWindowRect();
+      if (hasRectChanged(model.window, startRect)) {
+        postWindowRect();
+      }
     }
   }
 
