@@ -1685,7 +1685,7 @@ function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, 
 }
 
 function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
-  const update = buildGadgetVerticalLockResizeUpdate(g, nextLockTop, nextLockBottom);
+  const update = buildGadgetVerticalLockResizeUpdate(g, model.window, nextLockTop, nextLockBottom);
   if (!update) return;
 
   g.lockTop = nextLockTop;
@@ -6266,8 +6266,8 @@ function renderProps() {
     )
   );
   const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, model.window);
-  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, !Boolean(g.lockTop), Boolean(g.lockBottom));
-  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, Boolean(g.lockTop), !Boolean(g.lockBottom));
+  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, model.window, !Boolean(g.lockTop), Boolean(g.lockBottom));
+  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, model.window, Boolean(g.lockTop), !Boolean(g.lockBottom));
   propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
   }, {
@@ -6289,20 +6289,20 @@ function renderProps() {
   }, {
     disabled: !verticalLockTopToggle,
     title: verticalLockTopToggle
-      ? "Matches the original LockTop property for the already parsed vertical ResizeGadget(...) forms. Only verified state changes with preserved raw formulas are enabled."
-      : "LockTop editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas without inventing new codepadding expressions."
+      ? "Matches the original LockTop property for the already parsed vertical ResizeGadget(...) forms. Verified state changes now include horizontal-only fallbacks and top-level bottom-anchor transitions rebuilt from the preserved constructor y expression; unsupported cases remain blocked."
+      : "LockTop editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas, plus top-level bottom-anchor transitions reconstructed from the preserved constructor y expression, without inventing new codepaddingheight expressions."
   })));
   propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), v => {
     applyLocalGadgetVerticalLockUpdate(g, Boolean(g.lockTop), v);
   }, {
     disabled: !verticalLockBottomToggle,
     title: verticalLockBottomToggle
-      ? "Matches the original LockBottom property for the already parsed vertical ResizeGadget(...) forms. Only verified state changes with preserved raw formulas are enabled."
-      : "LockBottom editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas without inventing new codepadding expressions."
+      ? "Matches the original LockBottom property for the already parsed vertical ResizeGadget(...) forms. Verified state changes now include horizontal-only fallbacks and top-level bottom-anchor transitions rebuilt from the preserved constructor y expression; unsupported cases remain blocked."
+      : "LockBottom editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas, plus top-level bottom-anchor transitions reconstructed from the preserved constructor y expression, without inventing new codepaddingheight expressions."
   })));
   propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
-    ? "LockLeft / LockRight patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom are now enabled only for vertical state changes that can be rebuilt from already parsed ResizeGadget(...) formulas; unsupported transitions remain blocked."
-    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Editing is currently enabled only for transitions that can be rebuilt safely from already parsed top-level ResizeGadget(...) formulas."
+    ? "LockLeft / LockRight patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom now also support horizontal-only fallbacks and top-level bottom-anchor transitions that can be rebuilt from the preserved constructor y expression; unsupported transitions still remain blocked until the original codepaddingheight formulas are verified."
+    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Editing is currently enabled only for transitions that can be rebuilt safely from already parsed top-level ResizeGadget(...) formulas or from the preserved top-level constructor y expression."
   ));
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));

@@ -53,6 +53,7 @@ export type GadgetResizeLockLike = {
 
 export type WindowResizeLockLike = {
   w: number;
+  h?: number;
 };
 
 export type GadgetResizeRawUpdate = {
@@ -269,6 +270,26 @@ function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike): { xRaw?
   return { xRaw, wRaw };
 }
 
+function buildTopLevelBottomAnchorYRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
+  const winH = win.h;
+  if (!Number.isFinite(gadget.y) || typeof winH !== "number" || !Number.isFinite(winH) || winH <= 0) return undefined;
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y);
+  if (!baseYRaw) return undefined;
+
+  const trimmed = baseYRaw.trim();
+  const baseOffset = Math.trunc(winH - gadget.y);
+  if (/^-?\d+$/.test(trimmed)) {
+    return `FormWindowHeight - ${baseOffset}`;
+  }
+
+  const toolbarMatch = trimmed.match(/^ToolBarHeight\((\d+)\)\s*\+\s*-?\d+$/);
+  if (toolbarMatch) {
+    return `ToolBarHeight(${toolbarMatch[1]}) + FormWindowHeight - ${baseOffset}`;
+  }
+
+  return undefined;
+}
+
 function shouldEmitResizeGadget(lockLeft: boolean, lockRight: boolean, lockTop: boolean, lockBottom: boolean): boolean {
   return (lockRight && lockLeft)
     || (lockTop && lockBottom)
@@ -330,12 +351,12 @@ export function buildGadgetHorizontalLockResizeUpdate(
 
 export function buildGadgetVerticalLockResizeUpdate(
   gadget: GadgetResizeLockLike,
+  win: WindowResizeLockLike | undefined,
   nextLockTop: boolean,
   nextLockBottom: boolean
 ): GadgetResizeRawUpdate | undefined {
   if (!gadget.resizeSource) return undefined;
   if (gadget.parentId) return undefined;
-  if (!nextLockTop && !nextLockBottom) return undefined;
 
   const lockLeft = gadget.lockLeft !== false;
   const lockRight = gadget.lockRight === true;
@@ -350,7 +371,7 @@ export function buildGadgetVerticalLockResizeUpdate(
 
   const bottomAnchorYRaw = usesHeightResizeReference(gadget.resizeYRaw)
     ? gadget.resizeYRaw?.trim()
-    : undefined;
+    : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined);
   const stretchHeightRaw = usesHeightResizeReference(gadget.resizeHRaw)
     ? gadget.resizeHRaw?.trim()
     : undefined;

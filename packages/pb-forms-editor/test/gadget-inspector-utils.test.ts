@@ -215,7 +215,7 @@ test("builds a vertical resize update that safely drops stretch-height back to t
     resizeYRaw: "20",
     resizeWRaw: "80",
     resizeHRaw: "FormWindowHeight - 120"
-  }, true, false);
+  }, { w: 320, h: 220 }, true, false);
 
   assert.deepEqual(update, { deleteResize: true });
 });
@@ -239,11 +239,71 @@ test("preserves current horizontal resize formulas when a verified vertical lock
     resizeYRaw: "20",
     resizeWRaw: "80",
     resizeHRaw: "FormWindowHeight - 120"
-  }, true, false);
+  }, { w: 320, h: 220 }, true, false);
 
   assert.deepEqual(update, {
     xRaw: "FormWindowWidth - 310",
     yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+
+test("preserves horizontal-only ResizeGadget emission when both vertical locks are turned off", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: false,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "FormWindowWidth - 310",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320, h: 220 }, false, false);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("derives the original top-level bottom-anchor formula from the preserved constructor y expression", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 10,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 10",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: true,
+    resizeXRaw: "10",
+    resizeYRaw: "ToolBarHeight(0) + 10",
+    resizeWRaw: "80",
+    resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
+  }, { w: 320, h: 220 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
     wRaw: "80",
     hRaw: "24"
   });
@@ -268,7 +328,7 @@ test("rejects vertical lock transitions that would require inventing missing raw
     resizeYRaw: "20",
     resizeWRaw: "80",
     resizeHRaw: "24"
-  }, true, true);
+  }, { w: 320, h: 220 }, true, true);
 
   assert.equal(update, undefined);
 });
