@@ -1321,6 +1321,25 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       .miniActions button {
         flex: 1;
       }
+
+      .row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .check input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+        vertical-align: middle;
+      }
     </style>
   </head>
   <body>
