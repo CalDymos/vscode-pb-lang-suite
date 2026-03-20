@@ -185,7 +185,7 @@ test("builds default statusbar preview insert args", () => {
   assert.deepEqual(getStatusBarPreviewInsertArgs("progress"), {
     widthRaw: "120",
     progressBar: true,
-    progressRaw: "50"
+    progressRaw: "0"
   });
 });
 

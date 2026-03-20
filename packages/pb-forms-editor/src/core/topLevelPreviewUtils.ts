@@ -314,7 +314,7 @@ export function getStatusBarPreviewInsertArgs(
     case "label":
       return { widthRaw: "120", textRaw: '"StatusBarField"' };
     case "progress":
-      return { widthRaw: "120", progressBar: true, progressRaw: "50" };
+      return { widthRaw: "120", progressBar: true, progressRaw: "0" };
   }
 }
 

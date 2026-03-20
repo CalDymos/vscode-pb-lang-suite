@@ -41,6 +41,12 @@ import {
   parseStatusBarWidth
 } from "../core/statusbarPreviewUtils";
 import {
+  getStatusBarProgressInspectorValue,
+  normalizeStatusBarProgressRaw,
+  parseStatusBarWidthInspectorInput,
+  STATUSBAR_WIDTH_IGNORE_LITERAL
+} from "../core/statusbarInspectorUtils";
+import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
   canEditToolBarTooltip,
@@ -5731,6 +5737,7 @@ function renderProps() {
         progressRaw?: string;
       }) => {
         if (!canPatch) return;
+        const nextProgressBar = patch.progressBar ?? Boolean(field.progressBar);
         post({
           type: "updateStatusBarField",
           statusBarId: sb.id,
@@ -5739,8 +5746,8 @@ function renderProps() {
           textRaw: patch.textRaw ?? field.textRaw ?? "",
           imageRaw: patch.imageRaw ?? field.imageRaw ?? "",
           flagsRaw: patch.flagsRaw ?? field.flagsRaw ?? "",
-          progressBar: patch.progressBar ?? Boolean(field.progressBar),
-          progressRaw: patch.progressRaw ?? field.progressRaw ?? ""
+          progressBar: nextProgressBar,
+          progressRaw: normalizeStatusBarProgressRaw(nextProgressBar, patch.progressRaw ?? field.progressRaw ?? "")
         });
       };
 
@@ -5906,23 +5913,8 @@ function renderProps() {
         )
       ));
       propsEl.appendChild(row(
-        "ProgressRaw",
-        textInput(
-          selectedField.progressRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({
-              textRaw: "",
-              imageRaw: "",
-              progressBar: true,
-              progressRaw: v.trim() || "0"
-            });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw StatusBarProgress value for the selected field."
-          }
-        )
+        "ProgressValue",
+        readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
       ));
       propsEl.appendChild(row(
         "FlagsRaw",
@@ -5996,7 +5988,7 @@ function renderProps() {
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Match the original ProgressBar checkbox for the selected statusbar field."
+            title: "Match the original ProgressBar checkbox for the selected statusbar field. The stored value remains 0."
           }
         )
       ));

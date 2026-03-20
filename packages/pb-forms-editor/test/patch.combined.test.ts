@@ -1035,6 +1035,27 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 });
 
 
+test("core statusbar patcher still preserves explicit progress raw values when used directly", () => {
+  const { text, statusBar, statusBarId } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
+      widthRaw: "120",
+      progressBar: true,
+      progressRaw: "75",
+      flagsRaw: "#PB_StatusBar_Raised"
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.progressBar, true);
+  assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "75");
+  assert.match(patchedText, /StatusBarProgress\(0, 1, 75, #PB_StatusBar_Raised\)/);
+});
+
 test("roundtrips statusbar field switch from progress to label and clears old progress decoration", () => {
   const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;

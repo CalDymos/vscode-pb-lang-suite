@@ -61,6 +61,11 @@ import {
   isValidPbVariableReference,
   requiresPbVariableValidation
 } from "./core/propertyValidationUtils";
+import {
+  normalizeStatusBarProgressRaw,
+  parseStatusBarWidthInspectorInput,
+  STATUSBAR_WIDTH_IGNORE_LITERAL
+} from "./core/statusbarInspectorUtils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"
@@ -68,6 +73,24 @@ const CONFIG_KEYS = {
 
 const ALLOWED_MENU_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.menuEntryKinds);
 const ALLOWED_TOOLBAR_ENTRY_KINDS: ReadonlySet<string> = new Set(PBFD_SYMBOLS.toolBarEntryKinds);
+
+function normalizeStatusBarFieldMessageArgs(args: { widthRaw: string; progressBar?: boolean; progressRaw?: string; textRaw?: string; imageRaw?: string; flagsRaw?: string }) {
+  const parsedWidth = parseStatusBarWidthInspectorInput(args.widthRaw);
+  if (!parsedWidth.ok) {
+    return { ok: false as const, error: `StatusBar width accepts only a non-negative integer or ${STATUSBAR_WIDTH_IGNORE_LITERAL}.` };
+  }
+
+  const progressBar = Boolean(args.progressBar);
+  return {
+    ok: true as const,
+    args: {
+      ...args,
+      widthRaw: parsedWidth.raw,
+      progressBar,
+      progressRaw: normalizeStatusBarProgressRaw(progressBar, args.progressRaw)
+    }
+  };
+}
 
 function normalizeFsPathForCompare(filePath: string): string {
   const normalized = vscode.Uri.file(filePath).fsPath;
@@ -899,27 +922,37 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField: {
-          const edit = applyStatusBarFieldInsert(document, msg.statusBarId, {
+          const normalized = normalizeStatusBarFieldMessageArgs({
             widthRaw: msg.widthRaw,
             textRaw: msg.textRaw,
             imageRaw: msg.imageRaw,
             flagsRaw: msg.flagsRaw,
             progressBar: msg.progressBar,
             progressRaw: msg.progressRaw,
-          }, sr);
+          });
+          if (!normalized.ok) {
+            postError(normalized.error);
+            return;
+          }
+          const edit = applyStatusBarFieldInsert(document, msg.statusBarId, normalized.args, sr);
           await applyEditOrError(edit, `Could not insert statusbar field for statusbar '${msg.statusBarId}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField: {
-          const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, {
+          const normalized = normalizeStatusBarFieldMessageArgs({
             widthRaw: msg.widthRaw,
             textRaw: msg.textRaw,
             imageRaw: msg.imageRaw,
             flagsRaw: msg.flagsRaw,
             progressBar: msg.progressBar,
             progressRaw: msg.progressRaw,
-          }, sr);
+          });
+          if (!normalized.ok) {
+            postError(normalized.error);
+            return;
+          }
+          const edit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, normalized.args, sr);
           await applyEditOrError(
             edit,
             `Could not update statusbar field for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`
