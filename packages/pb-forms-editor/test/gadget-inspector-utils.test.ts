@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildGadgetCheckedStateRaw,
   buildGadgetHorizontalLockResizeUpdate,
+  buildGadgetVerticalLockResizeUpdate,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
@@ -192,4 +193,82 @@ test("returns a delete instruction when horizontal locks no longer require Resiz
   }, { w: 320 }, true, false);
 
   assert.deepEqual(update, { deleteResize: true });
+});
+
+
+test("builds a vertical resize update that safely drops stretch-height back to the base gadget height", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: true,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "FormWindowHeight - 120"
+  }, true, false);
+
+  assert.deepEqual(update, { deleteResize: true });
+});
+
+test("preserves current horizontal resize formulas when a verified vertical lock transition is patched", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: false,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: true,
+    resizeXRaw: "FormWindowWidth - 310",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "FormWindowHeight - 120"
+  }, true, false);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("rejects vertical lock transitions that would require inventing missing raw formulas", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, true, true);
+
+  assert.equal(update, undefined);
 });

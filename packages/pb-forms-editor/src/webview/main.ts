@@ -73,6 +73,7 @@ import {
 import {
   buildGadgetCheckedStateRaw,
   buildGadgetHorizontalLockResizeUpdate,
+  buildGadgetVerticalLockResizeUpdate,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
@@ -1663,6 +1664,32 @@ function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, 
 
   g.lockLeft = nextLockLeft;
   g.lockRight = nextLockRight;
+
+  if (update.deleteResize) {
+    g.resizeXRaw = undefined;
+    g.resizeYRaw = undefined;
+    g.resizeWRaw = undefined;
+    g.resizeHRaw = undefined;
+    g.resizeSource = undefined;
+    postGadgetResizeRaw(g.id, { deleteResize: true });
+  } else {
+    g.resizeXRaw = update.xRaw;
+    g.resizeYRaw = update.yRaw;
+    g.resizeWRaw = update.wRaw;
+    g.resizeHRaw = update.hRaw;
+    postGadgetResizeRaw(g.id, update);
+  }
+
+  render();
+  renderProps();
+}
+
+function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
+  const update = buildGadgetVerticalLockResizeUpdate(g, nextLockTop, nextLockBottom);
+  if (!update) return;
+
+  g.lockTop = nextLockTop;
+  g.lockBottom = nextLockBottom;
 
   if (update.deleteResize) {
     g.resizeXRaw = undefined;
@@ -6239,6 +6266,8 @@ function renderProps() {
     )
   );
   const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, model.window);
+  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, !Boolean(g.lockTop), Boolean(g.lockBottom));
+  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, Boolean(g.lockTop), !Boolean(g.lockBottom));
   propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
   }, {
@@ -6255,11 +6284,25 @@ function renderProps() {
       ? "Matches the original LockRight property and patches an existing ResizeGadget(...) line using the original top-level horizontal anchor formulas."
       : "Horizontal lock editing currently requires an existing top-level ResizeGadget(...) line with preserved raw geometry expressions."
   })));
-  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), () => {}, { disabled: true, title: "Matches the original LockTop property derived from the parsed ResizeGadget(...) logic. The verified write path for vertical locks remains staged separately because it depends on the original height-padding formulas from codeviewer.pb." })));
-  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), () => {}, { disabled: true, title: "Matches the original LockBottom property derived from the parsed ResizeGadget(...) logic. The verified write path for vertical locks remains staged separately because it depends on the original height-padding formulas from codeviewer.pb." })));
-  propsEl.appendChild(mutedNote(canEditHorizontalLocks
-    ? "LockLeft / LockRight now patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom stay readonly until the original vertical ResizeGadgets formulas are wired in safely."
-    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Horizontal editing is currently enabled only for top-level gadgets that already have a ResizeGadget(...) line; vertical editing remains staged separately."
+  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
+    applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
+  }, {
+    disabled: !verticalLockTopToggle,
+    title: verticalLockTopToggle
+      ? "Matches the original LockTop property for the already parsed vertical ResizeGadget(...) forms. Only verified state changes with preserved raw formulas are enabled."
+      : "LockTop editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas without inventing new codepadding expressions."
+  })));
+  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), v => {
+    applyLocalGadgetVerticalLockUpdate(g, Boolean(g.lockTop), v);
+  }, {
+    disabled: !verticalLockBottomToggle,
+    title: verticalLockBottomToggle
+      ? "Matches the original LockBottom property for the already parsed vertical ResizeGadget(...) forms. Only verified state changes with preserved raw formulas are enabled."
+      : "LockBottom editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas without inventing new codepadding expressions."
+  })));
+  propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
+    ? "LockLeft / LockRight patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom are now enabled only for vertical state changes that can be rebuilt from already parsed ResizeGadget(...) formulas; unsupported transitions remain blocked."
+    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Editing is currently enabled only for transitions that can be rebuilt safely from already parsed top-level ResizeGadget(...) formulas."
   ));
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));

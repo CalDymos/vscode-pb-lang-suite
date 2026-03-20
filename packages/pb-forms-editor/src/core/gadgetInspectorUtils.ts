@@ -255,6 +255,20 @@ function buildCurrentVerticalResizeArgs(gadget: GadgetResizeLockLike): { yRaw?: 
   return { yRaw, hRaw };
 }
 
+function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike): { xRaw?: string; wRaw?: string } | undefined {
+  const lockLeft = gadget.lockLeft !== false;
+  const lockRight = gadget.lockRight === true;
+  const xRaw = lockLeft
+    ? getBaseRectRaw(gadget.xRaw, gadget.x)
+    : gadget.resizeXRaw?.trim();
+  const wRaw = lockLeft && lockRight
+    ? gadget.resizeWRaw?.trim()
+    : getBaseRectRaw(gadget.wRaw, gadget.w);
+
+  if (!xRaw || !wRaw) return undefined;
+  return { xRaw, wRaw };
+}
+
 function shouldEmitResizeGadget(lockLeft: boolean, lockRight: boolean, lockTop: boolean, lockBottom: boolean): boolean {
   return (lockRight && lockLeft)
     || (lockTop && lockBottom)
@@ -311,5 +325,60 @@ export function buildGadgetHorizontalLockResizeUpdate(
     yRaw: verticalArgs.yRaw,
     wRaw,
     hRaw: verticalArgs.hRaw
+  };
+}
+
+export function buildGadgetVerticalLockResizeUpdate(
+  gadget: GadgetResizeLockLike,
+  nextLockTop: boolean,
+  nextLockBottom: boolean
+): GadgetResizeRawUpdate | undefined {
+  if (!gadget.resizeSource) return undefined;
+  if (gadget.parentId) return undefined;
+  if (!nextLockTop && !nextLockBottom) return undefined;
+
+  const lockLeft = gadget.lockLeft !== false;
+  const lockRight = gadget.lockRight === true;
+  if (!shouldEmitResizeGadget(lockLeft, lockRight, nextLockTop, nextLockBottom)) {
+    return { deleteResize: true };
+  }
+
+  const horizontalArgs = buildCurrentHorizontalResizeArgs(gadget);
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y);
+  const baseHRaw = getBaseRectRaw(gadget.hRaw, gadget.h);
+  if (!horizontalArgs?.xRaw || !horizontalArgs.wRaw || !baseYRaw || !baseHRaw) return undefined;
+
+  const bottomAnchorYRaw = usesHeightResizeReference(gadget.resizeYRaw)
+    ? gadget.resizeYRaw?.trim()
+    : undefined;
+  const stretchHeightRaw = usesHeightResizeReference(gadget.resizeHRaw)
+    ? gadget.resizeHRaw?.trim()
+    : undefined;
+
+  if (!nextLockBottom) {
+    return {
+      xRaw: horizontalArgs.xRaw,
+      yRaw: baseYRaw,
+      wRaw: horizontalArgs.wRaw,
+      hRaw: baseHRaw
+    };
+  }
+
+  if (!nextLockTop) {
+    if (!bottomAnchorYRaw) return undefined;
+    return {
+      xRaw: horizontalArgs.xRaw,
+      yRaw: bottomAnchorYRaw,
+      wRaw: horizontalArgs.wRaw,
+      hRaw: baseHRaw
+    };
+  }
+
+  if (!stretchHeightRaw) return undefined;
+  return {
+    xRaw: horizontalArgs.xRaw,
+    yRaw: baseYRaw,
+    wRaw: horizontalArgs.wRaw,
+    hRaw: stretchHeightRaw
   };
 }
