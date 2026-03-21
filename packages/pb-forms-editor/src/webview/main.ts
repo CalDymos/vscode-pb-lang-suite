@@ -110,6 +110,7 @@ import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference
 } from "../core/propertyValidationUtils";
+import { getStatusBarCurrentImageEditState } from "../core/statusbarImageInspectorUtils";
 
 type SourceRange = { line: number };
 
@@ -5854,6 +5855,8 @@ function renderProps() {
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
+      const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
+      const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
 
       propsEl.appendChild(section("Selected Field"));
       propsEl.appendChild(row(
@@ -5890,7 +5893,31 @@ function renderProps() {
         "ProgressValue",
         readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
       ));
-      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImagePath)));
+      const currentImageControl = selectedImageEditState.canDirectEdit && selectedUi.statusImage
+        ? textInput(
+            selectedImagePath,
+            value => {
+              if (!selectedUi.statusImage || typeof selectedUi.statusImage.source?.line !== "number") return;
+              post({
+                type: "updateImage",
+                sourceLine: selectedUi.statusImage.source.line,
+                inline: false,
+                idRaw: selectedUi.statusImage.firstParam,
+                imageRaw: toPbString(value),
+                assignedVar: selectedUi.statusImage.pbAny ? selectedUi.statusImage.variable : undefined
+              });
+            },
+            {
+              title: selectedImageEditState.reason,
+              placeholder: "image.png"
+            }
+          )
+        : readonlyInput(selectedImagePath);
+      currentImageControl.title = selectedImageEditState.reason ?? "";
+      propsEl.appendChild(row("CurrentImage", currentImageControl));
+      if (!selectedImageEditState.canDirectEdit && selectedImageEditState.reason) {
+        propsEl.appendChild(mutedNote(selectedImageEditState.reason));
+      }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
       const useExistingBtn = document.createElement("button");
