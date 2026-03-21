@@ -106,6 +106,7 @@ import {
   parseWindowPositionInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
+import { cssHexToPbRgbRaw, pbColorNumberToCssHex } from "../core/colorInspectorUtils";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference
@@ -4773,12 +4774,40 @@ function renderProps() {
       win.parentRaw = trimmed || undefined;
       postWindowOpenArgs(win, { parentRaw: trimmed || "" });
     })));
-    propsEl.appendChild(row("Color", textInput(win.colorRaw ?? (typeof win.color === "number" ? String(win.color) : ""), v => {
+    const windowColorInput = textInput(win.colorRaw ?? (typeof win.color === "number" ? String(win.color) : ""), v => {
       if (!model.window) return;
       const trimmed = v.trim();
       win.colorRaw = trimmed || undefined;
       postWindowProperties(win, { colorRaw: trimmed || "" });
-    }, { title: "Patch the raw SetWindowColor value for the selected window." })));
+      renderProps();
+    }, { title: "Matches the original window Color cell. Typed edits still patch the SetWindowColor raw value directly." });
+    const windowColorPicker = document.createElement("input");
+    windowColorPicker.type = "color";
+    windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
+    windowColorPicker.title = "Matches the original ColorRequester-backed window Color cell and writes an RGB(...) literal.";
+    windowColorPicker.onchange = () => {
+      if (!model.window) return;
+      const nextColorRaw = cssHexToPbRgbRaw(windowColorPicker.value);
+      if (!nextColorRaw) return;
+      win.colorRaw = nextColorRaw;
+      postWindowProperties(win, { colorRaw: nextColorRaw });
+      renderProps();
+    };
+    const clearWindowColorBtn = document.createElement("button");
+    clearWindowColorBtn.textContent = "Remove";
+    clearWindowColorBtn.disabled = !(win.colorRaw?.trim() || typeof win.color === "number");
+    clearWindowColorBtn.title = clearWindowColorBtn.disabled
+      ? "No SetWindowColor value is currently set."
+      : "Matches the original #Menu_RemoveColor action and removes the SetWindowColor line.";
+    clearWindowColorBtn.onclick = () => {
+      if (!model.window) return;
+      win.colorRaw = undefined;
+      win.color = undefined;
+      postWindowProperties(win, { colorRaw: "" });
+      renderProps();
+    };
+    propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
+    propsEl.appendChild(mutedNote("The original window Color row uses a color picker and a separate remove action; choosing a color writes an RGB(...) literal, while Remove clears the SetWindowColor line."));
     const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
     const windowEventProcHint = hasEventGadgetBlock ? "" : EVENT_UI_HINT.eventGadgetMissing;
     const hasEventMenuBlockForLoop = Boolean(win.hasEventMenuBlock);
