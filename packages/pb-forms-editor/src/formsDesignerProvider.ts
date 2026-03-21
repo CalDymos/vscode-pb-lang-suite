@@ -62,6 +62,10 @@ import {
   requiresPbVariableValidation
 } from "./core/propertyValidationUtils";
 import {
+  parseWindowColorInspectorInput,
+  WINDOW_COLOR_LITERAL_ERROR_MESSAGE
+} from "./core/colorInspectorUtils";
+import {
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
@@ -573,6 +577,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return false;
       };
 
+      const validateWindowColorRaw = (raw: string | undefined): boolean => {
+        const parsed = parseWindowColorInspectorInput(raw);
+        if (parsed.ok) return true;
+        postError(WINDOW_COLOR_LITERAL_ERROR_MESSAGE);
+        return false;
+      };
+
       switch (msg.type) {
         case WEBVIEW_TO_EXT_MSG_TYPE.ready:
           sendInit();
@@ -614,6 +625,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties: {
+          if (Object.prototype.hasOwnProperty.call(msg, "colorRaw") && !validateWindowColorRaw(msg.colorRaw)) {
+            return;
+          }
           const edit = applyWindowPropertyUpdate(document, msg.windowKey, {
             hiddenRaw: msg.hiddenRaw,
             disabledRaw: msg.disabledRaw,
