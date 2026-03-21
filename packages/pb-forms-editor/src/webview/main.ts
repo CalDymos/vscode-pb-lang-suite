@@ -109,9 +109,9 @@ import {
 } from "../core/windowInspectorUtils";
 import {
   cssHexToPbRgbRaw,
+  getWindowColorInspectorDisplay,
   parseWindowColorInspectorInput,
-  pbColorNumberToCssHex,
-  WINDOW_COLOR_LITERAL_ERROR_MESSAGE
+  pbColorNumberToCssHex
 } from "../core/colorInspectorUtils";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
@@ -4786,19 +4786,8 @@ function renderProps() {
       win.parentRaw = trimmed || undefined;
       postWindowOpenArgs(win, { parentRaw: trimmed || "" });
     })));
-    const windowColorInput = textInput(win.colorRaw ?? "", v => {
-      if (!model.window) return;
-      const parsed = parseWindowColorInspectorInput(v);
-      if (!parsed.ok) {
-        setInfoError(WINDOW_COLOR_LITERAL_ERROR_MESSAGE);
-        return;
-      }
-      clearInfoError();
-      win.colorRaw = parsed.raw;
-      win.color = parsed.previewColor;
-      postWindowProperties(win, { colorRaw: parsed.raw ?? "" });
-      renderProps();
-    }, { title: "Matches the original window Color cell. Typed edits accept only RGB(r,g,b) or $hex literals." });
+    const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
+    windowColorInput.title = "Matches the original custom Color cell. Direct text editing is intentionally disabled; use the picker or Remove.";
     const windowColorPicker = document.createElement("input");
     windowColorPicker.type = "color";
     windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
@@ -4831,7 +4820,7 @@ function renderProps() {
       renderProps();
     };
     propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
-    propsEl.appendChild(mutedNote("The original window Color row uses a color picker and a separate remove action; typed edits are limited to RGB(...) or $hex literals, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
+    propsEl.appendChild(mutedNote("The original window Color row is a custom color-picker cell with a separate remove action; direct text editing stays disabled here, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
     const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
     const windowEventProcHint = hasEventGadgetBlock ? "" : EVENT_UI_HINT.eventGadgetMissing;
     const hasEventMenuBlockForLoop = Boolean(win.hasEventMenuBlock);

@@ -59,3 +59,7 @@ export function parseWindowColorInspectorInput(value: string | undefined):
 function toHex(value: number): string {
   return value.toString(16).padStart(2, "0");
 }
+
+export function getWindowColorInspectorDisplay(raw: string | undefined): string {
+  return (raw ?? "").trim();
+}

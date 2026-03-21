@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cssHexToPbRgbRaw,
+  getWindowColorInspectorDisplay,
   normalizeCssHexColor,
   parseWindowColorInspectorInput,
   pbColorNumberToCssHex,
@@ -37,4 +38,9 @@ test('parseWindowColorInspectorInput rejects unsupported raw expressions', () =>
   assert.deepEqual(parseWindowColorInspectorInput('RGB(17,34)'), { ok: false });
   assert.deepEqual(parseWindowColorInspectorInput('RGB(17,34,999)'), { ok: false });
   assert.equal(WINDOW_COLOR_LITERAL_ERROR_MESSAGE, 'Window Color accepts only RGB(r,g,b) or a $hex literal.');
+});
+
+test("getWindowColorInspectorDisplay keeps the saved raw value without enabling edits", () => {
+  assert.equal(getWindowColorInspectorDisplay(" RGB(1,2,3) "), "RGB(1,2,3)");
+  assert.equal(getWindowColorInspectorDisplay(undefined), "");
 });
