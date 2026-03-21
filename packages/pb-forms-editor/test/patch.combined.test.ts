@@ -1571,6 +1571,35 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(ImgState\)\)/);
 });
 
+
+test("roundtrips statusbar CurrentImage rebind to an existing parsed image and removes the orphaned image entry", () => {
+  const { text, parsed: initial, statusBarId } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_3");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
+
+  assert.equal(typeof imageField?.source?.line, "number", "Expected source line for the statusbar image field.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old CatchImage entry.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(#Img_FrmImages_0)",
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!)
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
+  const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_0");
+  const removedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_3");
+
+  assert.ok(updatedField, "Expected the statusbar field to point at the existing LoadImage entry.");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_0\)\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
+});
+
 test("roundtrips image pbAny toggle updates button image gadget references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_1")?.source?.line;

@@ -240,7 +240,8 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
   chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
   chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
-  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage"
+  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage",
+  rebindStatusBarFieldImage: "rebindStatusBarFieldImage"
 } as const;
 
 type WebviewToExtensionMessage =
@@ -298,7 +299,8 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };
 
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
@@ -1284,6 +1286,33 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           );
           return;
         }
+        case WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage: {
+          const model = lastModel;
+          const assignEdit = applyStatusBarFieldUpdate(document, msg.statusBarId, msg.sourceLine, { widthRaw: msg.widthRaw, imageRaw: msg.imageRaw }, sr);
+          const oldImageUsageCount = msg.oldImageId
+            ? [
+                ...(model?.gadgets ?? []).filter((entry) => entry.imageId === msg.oldImageId),
+                ...((model?.menus ?? []).flatMap((menu) => menu.entries.filter((entry) => entry.iconId === msg.oldImageId))),
+                ...((model?.toolbars ?? []).flatMap((toolBar) => toolBar.entries.filter((entry) => entry.iconId === msg.oldImageId))),
+                ...((model?.statusbars ?? []).flatMap((statusBar) => statusBar.fields.filter((field) => field.imageId === msg.oldImageId))),
+              ].length
+            : 0;
+          const cleanupEdit = msg.oldImageId && oldImageUsageCount === 1 && typeof msg.oldImageSourceLine === "number"
+            ? applyImageDelete(document, msg.oldImageSourceLine, sr)
+            : undefined;
+
+          if (cleanupEdit) {
+            await applyPairedEditsOrError(
+              assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`,
+              cleanupEdit, `Could not clean the previous image entry for statusbar '${msg.statusBarId}'. No matching LoadImage/CatchImage call found${rangeInfo}.`,
+            );
+            return;
+          }
+
+          await applyEditOrError(assignEdit, `Could not rebind image argument for statusbar '${msg.statusBarId}'. No matching AddStatusBarField call found${rangeInfo}.`);
+          return;
+        }
+
 
         case WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage: {
           if (!ensureMenuEntryKind(msg.kind)) return;
