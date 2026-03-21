@@ -103,6 +103,7 @@ import {
   buildWindowFlagsExpr,
   getWindowPositionInspectorValue,
   parseWindowCustomFlagsInput,
+  parseWindowVariableNameInspectorInput,
   parseWindowPositionInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
@@ -4701,9 +4702,15 @@ function renderProps() {
     })));
 
     propsEl.appendChild(row("Variable", textInput(variableName, v => {
+      const parsed = parseWindowVariableNameInspectorInput(v, variableName);
+      if (!parsed.ok) {
+        clearInfoError();
+        renderProps();
+        return;
+      }
       vscode.postMessage({
         type: "setWindowVariableName",
-        variableName: v.trim().length ? v.trim() : undefined
+        variableName: parsed.value
       });
     })));
 

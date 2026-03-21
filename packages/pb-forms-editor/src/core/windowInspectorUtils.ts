@@ -61,6 +61,25 @@ export function getWindowPositionInspectorValue(raw: string | undefined, value: 
   return String(Math.trunc(value));
 }
 
+export type ParsedWindowVariableNameInput =
+  | { ok: true; value: string }
+  | { ok: false; fallbackValue: string };
+
+export function parseWindowVariableNameInspectorInput(raw: string, currentValue: string): ParsedWindowVariableNameInput {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return {
+      ok: false,
+      fallbackValue: currentValue.trim(),
+    };
+  }
+
+  return {
+    ok: true,
+    value: trimmed,
+  };
+}
+
 export type ParsedWindowPositionInput =
   | { ok: true; raw: string; previewValue: number; isIgnore: boolean }
   | { ok: false; error: string };

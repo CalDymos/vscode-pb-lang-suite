@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -65,5 +65,17 @@ test('window X/Y inspector input accepts integers and #PB_Ignore only', () => {
   assert.deepEqual(parseWindowPositionInspectorInput('ScreenCentered'), {
     ok: false,
     error: 'Only integer values or #PB_Ignore are supported.'
+  });
+});
+
+test('window variable inspector input restores the current value when cleared', () => {
+  assert.deepEqual(parseWindowVariableNameInspectorInput('', 'Window_0'), {
+    ok: false,
+    fallbackValue: 'Window_0'
+  });
+
+  assert.deepEqual(parseWindowVariableNameInspectorInput('  winMain  ', 'Window_0'), {
+    ok: true,
+    value: 'winMain'
   });
 });
