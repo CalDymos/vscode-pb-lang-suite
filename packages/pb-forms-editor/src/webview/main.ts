@@ -112,6 +112,7 @@ import {
 } from "../core/propertyValidationUtils";
 import {
   getStatusBarCurrentImageEditState,
+  resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
 } from "../core/statusbarImageInspectorUtils";
@@ -468,7 +469,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
@@ -5916,47 +5917,74 @@ function renderProps() {
           }
 
           const rebind = resolveStatusBarCurrentImageRebind(model.images ?? [], value, selectedField.imageId);
-          if (!rebind.matchedImage) {
-            setInfoError(rebind.reason ?? (selectedImageEditState.reason ?? "CurrentImage stays readonly for this image reference."));
-            renderProps();
+          if (rebind.matchedImage) {
+            if (rebind.matchedImage.id === selectedField.imageId) {
+              clearInfoError();
+              renderProps();
+              return;
+            }
+
+            clearInfoError();
+            post({
+              type: "rebindStatusBarFieldImage",
+              statusBarId: sb.id,
+              sourceLine: selectedField.source!.line,
+              widthRaw: selectedField.widthRaw,
+              imageRaw: `ImageID(${rebind.matchedImage.id})`,
+              oldImageId: selectedField.imageId,
+              oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+                selectedField.imageId,
+                selectedImageUsageCount,
+                selectedUi.statusImage?.source?.line,
+                rebind.matchedImage.id
+              ) ? selectedUi.statusImage?.source?.line : undefined
+            });
             return;
           }
 
-          if (rebind.matchedImage.id === selectedField.imageId) {
-            clearInfoError();
+          const createResolution = resolveStatusBarCurrentImageCreate(
+            model.images ?? [],
+            value,
+            model.window?.id,
+            model.window?.variable
+          );
+          if (!createResolution.imageIdRaw || !createResolution.imageRaw) {
+            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "CurrentImage stays readonly for this image reference."));
             renderProps();
             return;
           }
 
           clearInfoError();
           post({
-            type: "rebindStatusBarFieldImage",
+            type: "createAndAssignStatusBarFieldImage",
             statusBarId: sb.id,
             sourceLine: selectedField.source!.line,
             widthRaw: selectedField.widthRaw,
-            imageRaw: `ImageID(${rebind.matchedImage.id})`,
+            newInline: false,
+            newImageIdRaw: createResolution.imageIdRaw,
+            newImageRaw: createResolution.imageRaw,
             oldImageId: selectedField.imageId,
             oldImageSourceLine: shouldCleanupStatusBarReboundImage(
               selectedField.imageId,
               selectedImageUsageCount,
               selectedUi.statusImage?.source?.line,
-              rebind.matchedImage.id
+              createResolution.imageIdRaw
             ) ? selectedUi.statusImage?.source?.line : undefined
           });
         },
         {
           title: selectedImageEditState.canDirectEdit
             ? selectedImageEditState.reason
-            : "Enter an existing parsed image path or data label to rebind this field. Use Choose File/Create New for a new image entry.",
+            : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.",
           placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png"
         }
       );
       currentImageControl.title = selectedImageEditState.canDirectEdit
         ? (selectedImageEditState.reason ?? "")
-        : "Enter an existing parsed image path or data label to rebind this field. Use Choose File/Create New for a new image entry.";
+        : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.";
       propsEl.appendChild(row("CurrentImage", currentImageControl));
       if (!selectedImageEditState.canDirectEdit) {
-        propsEl.appendChild(mutedNote("For shared or CatchImage references, CurrentImage rebinds only to an existing parsed image entry here. Use Choose File/Create New for a new image path."));
+        propsEl.appendChild(mutedNote("For shared or CatchImage references, CurrentImage can rebind to an existing parsed image entry here, or auto-create a new LoadImage entry for quoted/path-like file strings. Use Create New for inline labels or custom image ids."));
       }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   getStatusBarCurrentImageEditState,
+  resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
 } from "../src/core/statusbarImageInspectorUtils";
@@ -76,4 +77,27 @@ test("cleans the previous image entry only for unique rebinding targets", () => 
   assert.equal(shouldCleanupStatusBarReboundImage("#ImgState", 2, 42, "#ImgOpen"), false);
   assert.equal(shouldCleanupStatusBarReboundImage("#ImgState", 1, undefined, "#ImgOpen"), false);
   assert.equal(shouldCleanupStatusBarReboundImage("#ImgState", 1, 42, "#ImgState"), false);
+});
+
+
+test("auto-creates a new LoadImage entry for a path-like CurrentImage string", () => {
+  const resolution = resolveStatusBarCurrentImageCreate(
+    [
+      { id: "#Img_FrmImages_0", imageRaw: '"open.png"' },
+      { id: "#Img_FrmImages_1", imageRaw: '"save.png"' },
+      { id: "#Img_FrmImages_3", imageRaw: '?Img_FrmImages_3', inline: true },
+    ],
+    "./icons/new.png",
+    "#FrmImages"
+  );
+
+  assert.equal(resolution.imageIdRaw, "#Img_FrmImages_2");
+  assert.equal(resolution.imageRaw, '"./icons/new.png"');
+});
+
+test("rejects ambiguous non-path CurrentImage strings for automatic creation", () => {
+  const resolution = resolveStatusBarCurrentImageCreate([], "ImgInlineLabel", "#FrmImages");
+
+  assert.equal(resolution.imageIdRaw, undefined);
+  assert.match(resolution.reason ?? "", /Create New/i);
 });

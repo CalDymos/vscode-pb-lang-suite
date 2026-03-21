@@ -24,6 +24,53 @@ export interface StatusBarCurrentImageRebindResolution {
   reason?: string;
 }
 
+export interface StatusBarCurrentImageCreateResolution {
+  imageIdRaw?: string;
+  imageRaw?: string;
+  reason?: string;
+}
+
+function parseCurrentImageLoadPath(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed.length) return undefined;
+
+  const quoted = /^~?"([\s\S]*)"$/.exec(trimmed);
+  if (quoted) {
+    return quoted[1].replace(/""/g, '"');
+  }
+
+  if (/[.\/]/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return undefined;
+}
+
+function sanitizeImageWindowBase(windowVariable: string | undefined, windowId: string | undefined): string {
+  const rawBase = (windowVariable?.trim() || windowId?.trim().replace(/^#/, '') || 'FormWindow')
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/^_+/, '');
+
+  const safeBase = rawBase.length ? rawBase : 'FormWindow';
+  return /^\d/.test(safeBase) ? `FormWindow_${safeBase}` : safeBase;
+}
+
+function buildNextGeneratedImageIdRaw(
+  images: StatusBarCurrentImageRebindCandidate[],
+  windowVariable: string | undefined,
+  windowId: string | undefined
+): string {
+  const base = sanitizeImageWindowBase(windowVariable, windowId);
+  const usedIds = new Set(images.map((candidate) => candidate.id.toLowerCase()));
+
+  let index = 0;
+  while (usedIds.has(`#img_${base}_${index}`.toLowerCase())) {
+    index += 1;
+  }
+
+  return `#Img_${base}_${index}`;
+}
+
 function normalizeCurrentImageInput(raw: string, inline: boolean): string {
   const trimmed = raw.trim();
   if (!trimmed.length) return "";
@@ -115,6 +162,26 @@ export function resolveStatusBarCurrentImageRebind(
   }
 
   return { matchedImage };
+}
+
+
+export function resolveStatusBarCurrentImageCreate(
+  images: StatusBarCurrentImageRebindCandidate[],
+  nextValue: string,
+  windowId: string | undefined,
+  windowVariable?: string
+): StatusBarCurrentImageCreateResolution {
+  const loadPath = parseCurrentImageLoadPath(nextValue);
+  if (!loadPath) {
+    return {
+      reason: "CurrentImage can auto-create a new LoadImage entry here only for quoted or path-like file strings. Use Create New for inline labels or custom image ids."
+    };
+  }
+
+  return {
+    imageIdRaw: buildNextGeneratedImageIdRaw(images, windowVariable, windowId),
+    imageRaw: `"${loadPath.replace(/"/g, '""')}"`,
+  };
 }
 
 export function shouldCleanupStatusBarReboundImage(

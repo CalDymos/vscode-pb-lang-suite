@@ -1600,6 +1600,44 @@ test("roundtrips statusbar CurrentImage rebind to an existing parsed image and r
   assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
 });
 
+
+test("roundtrips statusbar CurrentImage auto-create for a new path-like string and removes the orphaned image entry", () => {
+  const { text, parsed: initial, statusBarId } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_3");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
+
+  assert.equal(typeof imageField?.source?.line, "number", "Expected source line for the statusbar image field.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old CatchImage entry.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(#Img_FrmImages_2)",
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmImages_2",
+      imageRaw: '"./icons/new.png"',
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
+  const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_2");
+  const insertedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_2");
+  const removedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_3");
+
+  assert.ok(updatedField, "Expected the statusbar field to point at the newly inserted LoadImage entry.");
+  assert.ok(insertedImage, "Expected the new LoadImage entry to be inserted.");
+  assert.equal(insertedImage?.image, "./icons/new.png");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2, "\.\/icons\/new\.png"\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_2\)\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
+});
+
 test("roundtrips image pbAny toggle updates button image gadget references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_1")?.source?.line;
