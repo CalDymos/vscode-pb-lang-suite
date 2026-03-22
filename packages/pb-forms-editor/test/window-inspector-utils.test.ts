@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -78,4 +78,13 @@ test('window variable inspector input restores the current value when cleared', 
     ok: true,
     value: 'winMain'
   });
+});
+
+
+test('window hidden/disabled inspector state prefers parsed booleans and treats raw 0 as unchecked', () => {
+  assert.equal(getWindowBooleanInspectorState('0', undefined), false);
+  assert.equal(getWindowBooleanInspectorState('1', undefined), true);
+  assert.equal(getWindowBooleanInspectorState('HiddenExpr()', undefined), true);
+  assert.equal(getWindowBooleanInspectorState('1', false), false);
+  assert.equal(getWindowBooleanInspectorState(undefined, true), true);
 });

@@ -104,6 +104,7 @@ import {
   getWindowPositionInspectorValue,
   parseWindowCustomFlagsInput,
   parseWindowVariableNameInspectorInput,
+  getWindowBooleanInspectorState,
   parseWindowPositionInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
@@ -4761,16 +4762,18 @@ function renderProps() {
     }, { title: `Use integers or ${WINDOW_POSITION_IGNORE_LITERAL} like the original PureBasic Property Grid.` })));
     propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
     propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
-    propsEl.appendChild(row("Hidden", checkboxInput(Boolean(win.hiddenRaw), checked => {
+    propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
       if (!model.window) return;
-      win.hiddenRaw = checked ? (win.hiddenRaw?.trim() || "1") : "";
-      postWindowProperties(win, { hiddenRaw: checked ? (win.hiddenRaw?.trim() || "1") : "" });
+      win.hidden = checked;
+      win.hiddenRaw = checked ? "1" : "";
+      postWindowProperties(win, { hiddenRaw: checked ? "1" : "" });
       renderProps();
     })));
-    propsEl.appendChild(row("Disabled", checkboxInput(Boolean(win.disabledRaw), checked => {
+    propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
       if (!model.window) return;
-      win.disabledRaw = checked ? (win.disabledRaw?.trim() || "1") : "";
-      postWindowProperties(win, { disabledRaw: checked ? (win.disabledRaw?.trim() || "1") : "" });
+      win.disabled = checked;
+      win.disabledRaw = checked ? "1" : "";
+      postWindowProperties(win, { disabledRaw: checked ? "1" : "" });
       renderProps();
     })));
     propsEl.appendChild(row("Parent", textInput(win.parentRaw ?? win.parent ?? "", v => {

@@ -80,6 +80,19 @@ export function parseWindowVariableNameInspectorInput(raw: string, currentValue:
   };
 }
 
+export function getWindowBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed || trimmed === '0') {
+    return false;
+  }
+
+  return true;
+}
+
 export type ParsedWindowPositionInput =
   | { ok: true; raw: string; previewValue: number; isIgnore: boolean }
   | { ok: false; error: string };
