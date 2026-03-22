@@ -4822,7 +4822,6 @@ function renderProps() {
     propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
     propsEl.appendChild(mutedNote("The original window Color row is a custom color-picker cell with a separate remove action; direct text editing stays disabled here, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
     const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
-    const windowEventProcHint = hasEventGadgetBlock ? "" : EVENT_UI_HINT.eventGadgetMissing;
     const hasEventMenuBlockForLoop = Boolean(win.hasEventMenuBlock);
     const hasEventGadgetCasesForLoop = Boolean(win.hasEventGadgetCaseBranches);
     const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
@@ -4856,22 +4855,18 @@ function renderProps() {
         win.eventProc ?? "",
         getProcedureSuggestions(),
         v => {
-          if (!model.window || !hasEventGadgetBlock) return;
+          if (!model.window) return;
           const trimmed = v.trim();
           win.eventProc = trimmed || undefined;
           post({ type: "setWindowEventProc", windowKey: win.id, eventProc: trimmed.length ? trimmed : undefined });
           renderProps();
         },
         {
-          disabled: !hasEventGadgetBlock,
-          title: windowEventProcHint || "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
+          title: "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
           placeholder: "Type or pick a procedure"
         }
       )
     ));
-    if (!hasEventGadgetBlock) {
-      propsEl.appendChild(mutedNote(windowEventProcHint));
-    }
     if (Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) {
       propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
     }
