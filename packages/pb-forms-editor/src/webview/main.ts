@@ -101,11 +101,12 @@ import {
 } from "../core/webviewStateUtils";
 import {
   buildWindowFlagsExpr,
+  getWindowBooleanInspectorState,
   getWindowPositionInspectorValue,
   parseWindowCustomFlagsInput,
-  parseWindowVariableNameInspectorInput,
-  getWindowBooleanInspectorState,
+  parseWindowParentInspectorInput,
   parseWindowPositionInspectorInput,
+  parseWindowVariableNameInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
 } from "../core/windowInspectorUtils";
 import {
@@ -711,7 +712,7 @@ function toolBarEntryKindHint(): string {
 }
 
 function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
-  return isVariable ? value.trim() : toPbString(value);
+  return isVariable ? value : toPbString(value);
 }
 
 function getWindowCurrentFlagsExpr(win: WindowModel): string | undefined {
@@ -4712,7 +4713,7 @@ function renderProps() {
       "Caption is a variable?",
       checkboxInput(Boolean(win.captionVariable), checked => {
         if (!model.window) return;
-        if (checked && !ensureValidPbVariableReference((win.title ?? "").trim())) {
+        if (checked && !ensureValidPbVariableReference(win.title ?? "")) {
           renderProps();
           return;
         }
@@ -4729,7 +4730,7 @@ function renderProps() {
       "Caption",
       textInput(win.title ?? "", v => {
         if (!model.window) return;
-        if (Boolean(win.captionVariable) && !ensureValidPbVariableReference(v.trim())) {
+        if (Boolean(win.captionVariable) && !ensureValidPbVariableReference(v)) {
           renderProps();
           return;
         }
@@ -4778,9 +4779,9 @@ function renderProps() {
     })));
     propsEl.appendChild(row("Parent", textInput(win.parentRaw ?? win.parent ?? "", v => {
       if (!model.window) return;
-      const trimmed = v.trim();
-      win.parentRaw = trimmed || undefined;
-      postWindowOpenArgs(win, { parentRaw: trimmed || "" });
+      const parsed = parseWindowParentInspectorInput(v);
+      win.parentRaw = parsed.storedValue;
+      postWindowOpenArgs(win, { parentRaw: parsed.raw });
     })));
     const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
     windowColorInput.title = "Matches the original custom Color cell. Direct text editing is intentionally disabled; use the picker or Remove.";

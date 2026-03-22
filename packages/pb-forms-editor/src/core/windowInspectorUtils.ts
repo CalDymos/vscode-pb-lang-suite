@@ -65,6 +65,19 @@ export type ParsedWindowVariableNameInput =
   | { ok: true; value: string }
   | { ok: false; fallbackValue: string };
 
+
+export type ParsedWindowParentInput = {
+  raw: string;
+  storedValue: string | undefined;
+};
+
+export function parseWindowParentInspectorInput(raw: string): ParsedWindowParentInput {
+  return {
+    raw,
+    storedValue: raw.length ? raw : undefined,
+  };
+}
+
 export function parseWindowVariableNameInspectorInput(raw: string, currentValue: string): ParsedWindowVariableNameInput {
   const trimmed = raw.trim();
   if (!trimmed) {

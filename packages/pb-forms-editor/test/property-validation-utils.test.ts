@@ -52,3 +52,10 @@ test("exposes the shared wrong-variable-name message for inspector and provider 
   assert.match(PB_WRONG_VARIABLE_NAME_MESSAGE, /Wrong variable name/i);
   assert.match(PB_WRONG_VARIABLE_NAME_MESSAGE, /Spaces and/);
 });
+
+
+test("isValidPbVariableReference rejects leading and trailing spaces without trimming", () => {
+  assert.equal(isValidPbVariableReference(" MyVar"), false);
+  assert.equal(isValidPbVariableReference("MyVar "), false);
+  assert.equal(isValidPbVariableReference("MyVar"), true);
+});

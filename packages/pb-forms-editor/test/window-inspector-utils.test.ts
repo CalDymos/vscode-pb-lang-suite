@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -88,3 +88,24 @@ test('window hidden/disabled inspector state prefers parsed booleans and treats 
   assert.equal(getWindowBooleanInspectorState('1', false), false);
   assert.equal(getWindowBooleanInspectorState(undefined, true), true);
 });
+
+
+test('window parent inspector input keeps the original text unchanged instead of trimming it', () => {
+  assert.deepEqual(parseWindowParentInspectorInput('WindowID(#FrmParent)'), {
+    raw: 'WindowID(#FrmParent)',
+    storedValue: 'WindowID(#FrmParent)'
+  });
+
+  assert.deepEqual(parseWindowParentInspectorInput('  WindowID(#FrmParent)  '), {
+    raw: '  WindowID(#FrmParent)  ',
+    storedValue: '  WindowID(#FrmParent)  '
+  });
+
+  assert.deepEqual(parseWindowParentInspectorInput(''), {
+    raw: '',
+    storedValue: undefined
+  });
+});
+
+
+

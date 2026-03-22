@@ -572,7 +572,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       const validateVariableRaw = (raw: string | undefined, fieldLabel: string): boolean => {
         if (!requiresPbVariableValidation(raw)) return true;
-        if (isValidPbVariableReference(raw!.trim())) return true;
+        if (isValidPbVariableReference(raw!)) return true;
         postError(`${fieldLabel}: ${PB_WRONG_VARIABLE_NAME_MESSAGE}`);
         return false;
       };
