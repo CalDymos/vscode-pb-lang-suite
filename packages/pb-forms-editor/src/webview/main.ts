@@ -4792,6 +4792,9 @@ function renderProps() {
     windowColorPicker.type = "color";
     windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
     windowColorPicker.title = "Choose a window color. The value is saved as RGB(...).";
+    windowColorPicker.style.width = "40px";
+    windowColorPicker.style.minWidth = "40px";
+    windowColorPicker.style.padding = "0";
     windowColorPicker.onchange = () => {
       if (!model.window) return;
       const nextColorRaw = cssHexToPbRgbRaw(windowColorPicker.value);
@@ -7302,10 +7305,15 @@ function inputWithActions(input: HTMLElement, ...actions: HTMLElement[]) {
   wrap.style.alignItems = "center";
   wrap.style.gap = "6px";
   wrap.style.width = "100%";
-  input.style.flex = "1 1 auto";
+  wrap.style.minWidth = "0";
+  input.style.flex = "1 1 0";
+  input.style.minWidth = "0";
+  input.style.width = "auto";
   wrap.appendChild(input);
   for (const action of actions) {
     action.style.flex = "0 0 auto";
+    action.style.width = "auto";
+    action.style.minWidth = "fit-content";
     wrap.appendChild(action);
   }
   return wrap;
