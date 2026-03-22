@@ -699,13 +699,6 @@ function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entry
   return hasEventMenuBlock ? "" : EVENT_UI_HINT.eventMenuMissing;
 }
 
-function getGenerateEventLoopDisableHint(win?: WindowModel): string {
-  if (!win) return "";
-  if (win.hasEventMenuBlock) return EVENT_UI_HINT.generateEventLoopMenuBlock;
-  if (win.hasEventGadgetCaseBranches) return EVENT_UI_HINT.generateEventLoopGadgetCases;
-  return "";
-}
-
 const PBFD_SYMBOLS: PbfdSymbols = pbfdWindow.__PBFD_SYMBOLS__;
 
 function menuEntryKindHint(): string {
@@ -4822,32 +4815,20 @@ function renderProps() {
     propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
     propsEl.appendChild(mutedNote("The original window Color row is a custom color-picker cell with a separate remove action; direct text editing stays disabled here, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
     const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
-    const hasEventMenuBlockForLoop = Boolean(win.hasEventMenuBlock);
-    const hasEventGadgetCasesForLoop = Boolean(win.hasEventGadgetCaseBranches);
-    const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
-    const generateEventLoopDisableHint = getGenerateEventLoopDisableHint(win);
     propsEl.appendChild(row(
       "Generate events procedure?",
-      checkboxInput(
-        Boolean(win.generateEventLoop),
-        v => {
-          if (!model.window) return;
-          if (!v && Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) return;
-          win.generateEventLoop = v;
-          if (!v) {
-            if (!win.hasEventMenuBlock) win.hasEventGadgetBlock = false;
-            if (!win.hasEventMenuBlock) win.hasEventGadgetCaseBranches = false;
-          } else {
-            win.hasEventGadgetBlock = true;
-          }
-          post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
-          renderProps();
-        },
-        {
-          disabled: Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop,
-          title: Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop ? generateEventLoopDisableHint : ""
+      checkboxInput(Boolean(win.generateEventLoop), v => {
+        if (!model.window) return;
+        win.generateEventLoop = v;
+        if (!v) {
+          if (!win.hasEventMenuBlock) win.hasEventGadgetBlock = false;
+          if (!win.hasEventMenuBlock) win.hasEventGadgetCaseBranches = false;
+        } else {
+          win.hasEventGadgetBlock = true;
         }
-      )
+        post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
+        renderProps();
+      })
     ));
     propsEl.appendChild(row(
       "SelectProc",
@@ -4867,10 +4848,6 @@ function renderProps() {
         }
       )
     ));
-    if (Boolean(win.generateEventLoop) && !canDisableGenerateEventLoop) {
-      propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
-    }
-
     propsEl.appendChild(createSubSection("Event File"));
     const eventFileInput = textInput(
       win.eventFile ?? "",
