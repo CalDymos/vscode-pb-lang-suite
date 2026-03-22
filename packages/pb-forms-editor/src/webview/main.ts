@@ -4819,18 +4819,11 @@ function renderProps() {
     };
     propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
     propsEl.appendChild(mutedNote("The original window Color row is a custom color-picker cell with a separate remove action; direct text editing stays disabled here, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
-    const hasEventGadgetBlock = Boolean(win.hasEventGadgetBlock);
     propsEl.appendChild(row(
       "Generate events procedure?",
       checkboxInput(Boolean(win.generateEventLoop), v => {
         if (!model.window) return;
         win.generateEventLoop = v;
-        if (!v) {
-          if (!win.hasEventMenuBlock) win.hasEventGadgetBlock = false;
-          if (!win.hasEventMenuBlock) win.hasEventGadgetCaseBranches = false;
-        } else {
-          win.hasEventGadgetBlock = true;
-        }
         post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
         renderProps();
       })
