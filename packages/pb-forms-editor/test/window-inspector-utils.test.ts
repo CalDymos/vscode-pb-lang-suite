@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -109,3 +109,16 @@ test('window parent inspector input keeps the original text unchanged instead of
 
 
 
+
+
+test('parseWindowEventProcInspectorInput preserves surrounding whitespace', () => {
+  assert.deepEqual(parseWindowEventProcInspectorInput('  HandleMain  '), {
+    raw: '  HandleMain  ',
+    storedValue: '  HandleMain  ' 
+  });
+
+  assert.deepEqual(parseWindowEventProcInspectorInput(''), {
+    raw: '',
+    storedValue: undefined
+  });
+});

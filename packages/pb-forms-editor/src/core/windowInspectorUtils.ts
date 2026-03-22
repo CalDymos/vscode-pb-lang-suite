@@ -71,7 +71,19 @@ export type ParsedWindowParentInput = {
   storedValue: string | undefined;
 };
 
+export type ParsedWindowEventProcInput = {
+  raw: string;
+  storedValue: string | undefined;
+};
+
 export function parseWindowParentInspectorInput(raw: string): ParsedWindowParentInput {
+  return {
+    raw,
+    storedValue: raw.length ? raw : undefined,
+  };
+}
+
+export function parseWindowEventProcInspectorInput(raw: string): ParsedWindowEventProcInput {
   return {
     raw,
     storedValue: raw.length ? raw : undefined,

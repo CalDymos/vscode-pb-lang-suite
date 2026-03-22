@@ -1973,6 +1973,11 @@ function normalizeOptionalRaw(raw: string | undefined): string | undefined {
   return trimmed && trimmed.length ? trimmed : undefined;
 }
 
+function normalizeOptionalGridString(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return raw.length ? raw : undefined;
+}
+
 function cloneWindowForProperties(window: FormWindow): FormWindow {
   return { ...window };
 }
@@ -2440,7 +2445,7 @@ export function applyWindowEventProcUpdate(
   const block = findWindowDefaultHandlerBlock(document, context.eventProc);
   if (!block) return undefined;
 
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
     ? buildWindowEventProcCall(window, normalizedEventProc, context.usesSeparateEventProc)
     : undefined;

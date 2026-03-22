@@ -104,6 +104,7 @@ import {
   getWindowBooleanInspectorState,
   getWindowPositionInspectorValue,
   parseWindowCustomFlagsInput,
+  parseWindowEventProcInspectorInput,
   parseWindowParentInspectorInput,
   parseWindowPositionInspectorInput,
   parseWindowVariableNameInspectorInput,
@@ -4841,9 +4842,9 @@ function renderProps() {
         getProcedureSuggestions(),
         v => {
           if (!model.window) return;
-          const trimmed = v.trim();
-          win.eventProc = trimmed || undefined;
-          post({ type: "setWindowEventProc", windowKey: win.id, eventProc: trimmed.length ? trimmed : undefined });
+          const parsed = parseWindowEventProcInspectorInput(v);
+          win.eventProc = parsed.storedValue;
+          post({ type: "setWindowEventProc", windowKey: win.id, eventProc: parsed.storedValue });
           renderProps();
         },
         {
