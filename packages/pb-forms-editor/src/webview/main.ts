@@ -1599,14 +1599,14 @@ function getSelectionSummary(): string {
 function getContextualInfoHint(): string {
   const sel = selection;
   if (!sel) {
-    return "Select a window, gadget or top-level entry to inspect and edit its properties.";
+    return "Select a window, gadget or top-level entry to view and edit its properties.";
   }
 
   switch (sel.kind) {
     case "window":
-      return "Window properties, layout values, SelectProc suggestions and PureBasic window flags can be edited here.";
+      return "Edit window settings, size and position, event procedure, and window flags here.";
     case "gadget":
-      return "Drag or resize gadgets in the canvas. AddGadgetItem/AddGadgetColumn patching remains available for supported gadget kinds.";
+      return "Drag or resize gadgets in the canvas. Edit supported items and columns in the inspector.";
     case "menu":
     case "menuEntry":
       return "Menu entries can be inserted, edited or deleted from the current selection.";
@@ -4759,11 +4759,11 @@ function renderProps() {
     propsEl.appendChild(row("X", textInput(getWindowPositionInspectorValue(win.xRaw, win.x), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "x", v);
-    }, { title: `Use integers or ${WINDOW_POSITION_IGNORE_LITERAL} like the original PureBasic Property Grid.` })));
+    }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
     propsEl.appendChild(row("Y", textInput(getWindowPositionInspectorValue(win.yRaw, win.y), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "y", v);
-    }, { title: `Use integers or ${WINDOW_POSITION_IGNORE_LITERAL} like the original PureBasic Property Grid.` })));
+    }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
     propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
     propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
     propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
@@ -4787,11 +4787,11 @@ function renderProps() {
       postWindowOpenArgs(win, { parentRaw: parsed.raw });
     })));
     const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
-    windowColorInput.title = "Matches the original custom Color cell. Direct text editing is intentionally disabled; use the picker or Remove.";
+    windowColorInput.title = "Use the color picker to choose a window color, or Remove to clear it.";
     const windowColorPicker = document.createElement("input");
     windowColorPicker.type = "color";
     windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
-    windowColorPicker.title = "Matches the original ColorRequester-backed window Color cell and writes an RGB(...) literal.";
+    windowColorPicker.title = "Choose a window color. The value is saved as RGB(...).";
     windowColorPicker.onchange = () => {
       if (!model.window) return;
       const nextColorRaw = cssHexToPbRgbRaw(windowColorPicker.value);
@@ -4809,8 +4809,8 @@ function renderProps() {
     clearWindowColorBtn.textContent = "Remove";
     clearWindowColorBtn.disabled = !(win.colorRaw?.trim() || typeof win.color === "number");
     clearWindowColorBtn.title = clearWindowColorBtn.disabled
-      ? "No SetWindowColor value is currently set."
-      : "Matches the original #Menu_RemoveColor action and removes the SetWindowColor line.";
+      ? "No window color is set."
+      : "Remove the current window color.";
     clearWindowColorBtn.onclick = () => {
       if (!model.window) return;
       clearInfoError();
@@ -4820,7 +4820,7 @@ function renderProps() {
       renderProps();
     };
     propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
-    propsEl.appendChild(mutedNote("The original window Color row is a custom color-picker cell with a separate remove action; direct text editing stays disabled here, the picker writes RGB(...), and Remove clears the SetWindowColor line."));
+    propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
     propsEl.appendChild(row(
       "Generate events procedure?",
       checkboxInput(Boolean(win.generateEventLoop), v => {
@@ -4843,7 +4843,7 @@ function renderProps() {
           renderProps();
         },
         {
-          title: "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
+          title: "Choose an existing procedure or type a procedure name.",
           placeholder: "Type or pick a procedure"
         }
       )
@@ -4859,7 +4859,7 @@ function renderProps() {
         renderProps();
       },
       {
-        title: "Auxiliary XIncludeFile patch path. The original PureBasic Property Grid does not expose Event File as a normal row.",
+        title: "Path to the event include file for this window.",
         placeholder: "events/form-events.pbi"
       }
     );
@@ -4867,16 +4867,16 @@ function renderProps() {
     removeEventFileBtn.textContent = "Remove";
     removeEventFileBtn.disabled = !Boolean(win.eventFile?.trim());
     removeEventFileBtn.title = removeEventFileBtn.disabled
-      ? "No auxiliary XIncludeFile is currently set."
-      : "Matches the original #Menu_RemoveEventFile popup action and removes the auxiliary XIncludeFile line.";
+      ? "No event file is set."
+      : "Remove the current event file include.";
     removeEventFileBtn.onclick = () => {
       if (!model.window || !win.eventFile?.trim()) return;
       win.eventFile = undefined;
       post({ type: "setWindowEventFile", windowKey: win.id, eventFile: undefined });
       renderProps();
     };
-    propsEl.appendChild(row("XIncludeFile", inputWithActions(eventFileInput, removeEventFileBtn)));
-    propsEl.appendChild(mutedNote("Event File stays available as an auxiliary XIncludeFile path, but it is intentionally separated from the original SelectProc property row. The explicit Remove action mirrors the original #Menu_RemoveEventFile popup path."));
+    propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
+    propsEl.appendChild(mutedNote("Use this field to keep an event include file linked to the window. Remove clears it."));
 
     propsEl.appendChild(section("Constants"));
     for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
@@ -5041,7 +5041,7 @@ function renderProps() {
           {
             disabled: !selectedCanEditId,
             title: selectedEntry.kind === "MenuItem"
-              ? "Patch the raw MenuItem id token for the selected entry."
+              ? "Edit the id used by the selected menu entry."
               : "Only MenuItem exposes an editable constant in the current parsed model."
           }
         )
@@ -5057,7 +5057,7 @@ function renderProps() {
           {
             disabled: !selectedCanEditName,
             title: selectedCanEditName
-              ? "Patch the menu caption/title for the selected entry."
+              ? "Edit the text shown for the selected menu entry."
               : "MenuBar and CloseSubMenu are structural entries without an editable name field."
           }
         )
@@ -5073,7 +5073,7 @@ function renderProps() {
           {
             disabled: !selectedCanEditShortcut,
             title: selectedEntry.kind === "MenuItem"
-              ? "Patch the optional MenuItem shortcut suffix."
+              ? "Edit the shortcut text shown for the selected menu entry."
               : "Only MenuItem supports the parsed shortcut field."
           }
         )
@@ -5210,7 +5210,7 @@ function renderProps() {
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
-        { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
+        { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Edit the image reference used by this menu entry." : "Only MenuItem supports a parsed image argument." },
         { label: "Use Existing", onClick: menuPickImageFn, disabled: !menuPickImageFn, title: e.kind === "MenuItem" ? "Select an image from the form image list." : "Only MenuItem supports a parsed image argument." },
         { label: "Choose File", onClick: menuChooseFileImageFn, disabled: !menuChooseFileImageFn, title: e.kind === "MenuItem" ? "Select a file, create a new LoadImage entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Create New", onClick: menuCreateImageFn, disabled: !menuCreateImageFn, title: e.kind === "MenuItem" ? "Create a new form image entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
@@ -5440,7 +5440,7 @@ function renderProps() {
           {
             disabled: !canEditSelectedId,
             title: canEditSelectedId
-              ? "Patch the raw toolbar button id without using a browser prompt."
+              ? "Edit the toolbar entry id."
               : "Toolbar separators do not expose an editable id field."
           }
         )
@@ -5456,8 +5456,8 @@ function renderProps() {
           {
             disabled: !canEditSelectedText,
             title: canEditSelectedText
-              ? "Patch the raw toolbar caption/tooltip text without using a browser prompt."
-              : "Only ToolBarButton and ToolBarToolTip expose editable text in the original toolbar structure."
+              ? "Edit the text shown for this toolbar entry."
+              : "Only toolbar buttons and tooltip rows have editable text."
           }
         )
       ));
@@ -5472,8 +5472,8 @@ function renderProps() {
           {
             disabled: !canEditSelectedIconRaw,
             title: canEditSelectedIconRaw
-              ? "Patch the raw toolbar icon argument without using a browser prompt."
-              : "Only toolbar button kinds with an icon argument expose this field."
+              ? "Edit the image reference used by this toolbar entry."
+              : "Only toolbar entries with an image argument can be edited here."
           }
         )
       ));
@@ -5494,8 +5494,8 @@ function renderProps() {
           {
             disabled: !canEditSelectedTooltip,
             title: canEditToolBarTooltip(selectedEntry)
-              ? "Patch the tooltip linked to this toolbar entry."
-              : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field."
+              ? "Edit the tooltip shown for this toolbar entry."
+              : "This entry type does not have a separate tooltip field."
           }
         )
       ));
@@ -5538,7 +5538,7 @@ function renderProps() {
         checkboxInput(
           selectedEntry.kind === "ToolBarSeparator",
           () => {},
-          { disabled: true, title: "Toolbar separators are structural entries in the original designer." }
+          { disabled: true, title: "Separators are structural entries and cannot be edited here." }
         )
       ));
       propsEl.appendChild(row(
@@ -5659,8 +5659,8 @@ function renderProps() {
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
-        { label: "Tooltip", onClick: toolBarTooltipFn, disabled: !toolBarTooltipFn, title: canEditToolBarTooltip(e) ? "Patch the tooltip linked to this toolbar entry." : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field." },
-        { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
+        { label: "Tooltip", onClick: toolBarTooltipFn, disabled: !toolBarTooltipFn, title: canEditToolBarTooltip(e) ? "Edit the tooltip shown for this toolbar entry." : "This entry type does not have a separate tooltip field." },
+        { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Edit the image reference used by this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Choose File", onClick: toolBarChooseFileImageFn, disabled: !toolBarChooseFileImageFn, title: e.kind === "ToolBarImageButton" ? "Select a file, create a new LoadImage entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Create New", onClick: toolBarCreateImageFn, disabled: !toolBarCreateImageFn, title: e.kind === "ToolBarImageButton" ? "Create a new form image entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
@@ -5890,7 +5890,7 @@ function renderProps() {
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Patch the raw AddStatusBarField width for the selected field."
+            title: "Width of the selected status bar field. Use #PB_Ignore to let the size adjust automatically."
           }
         )
       ));
@@ -5906,7 +5906,7 @@ function renderProps() {
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Match the original statusbar text field for the current selection."
+            title: "Text shown in the selected status bar field."
           }
         )
       ));
@@ -5963,7 +5963,7 @@ function renderProps() {
             model.window?.variable
           );
           if (!createResolution.imageIdRaw || !createResolution.imageRaw) {
-            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "CurrentImage stays readonly for this image reference."));
+            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "This image reference cannot be edited directly here."));
             renderProps();
             return;
           }
@@ -5998,7 +5998,7 @@ function renderProps() {
         : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.";
       propsEl.appendChild(row("CurrentImage", currentImageControl));
       if (!selectedImageEditState.canDirectEdit) {
-        propsEl.appendChild(mutedNote("For shared or CatchImage references, CurrentImage can rebind to an existing parsed image entry here, or auto-create a new LoadImage entry for quoted/path-like file strings. Use Create New for inline labels or custom image ids."));
+        propsEl.appendChild(mutedNote("For shared or CatchImage references, you can rebind to an existing image here. For file paths, a new LoadImage entry can be created automatically. Use Create New for inline labels or custom image ids."));
       }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
@@ -6055,7 +6055,7 @@ function renderProps() {
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Match the original ProgressBar checkbox for the selected statusbar field. The stored value remains 0."
+            title: "Show this field as a progress bar. The preview value stays at 0 here."
           }
         )
       ));
@@ -6194,7 +6194,7 @@ function renderProps() {
       "First Param",
       imageEditorOpen
         ? textInput(imageDraft.idRaw, v => updateImageEditorDraft({ idRaw: v }), {
-            title: "Patch the first image argument (#ImgName or #PB_Any) without using a browser prompt."
+            title: "Edit the first image argument (#ImgName or #PB_Any)."
           })
         : readonlyInput(img.firstParam)
     ));
@@ -6210,7 +6210,7 @@ function renderProps() {
       "Image Raw",
       imageEditorOpen
         ? textInput(imageDraft.imageRaw, v => updateImageEditorDraft({ imageRaw: v }), {
-            title: "Patch the raw LoadImage/CatchImage argument without using a browser prompt."
+            title: "Edit the image source used by this entry."
           })
         : readonlyInput(img.imageRaw)
     ));
@@ -6603,7 +6603,7 @@ function renderProps() {
           v => {
             applyLocalGadgetTextUpdate(g, v, Boolean(g.textVariable));
           },
-          { title: "Matches the original Caption / CaptionIsVariable property pair and patches the gadget constructor argument." }
+          { title: "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression." }
         )
       )
     );
@@ -6625,7 +6625,7 @@ function renderProps() {
         v => {
           applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
         },
-        { title: "Matches the original Tooltip / TooltipIsVariable property pair and patches GadgetToolTip(...)." }
+        { title: "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression." }
       )
     )
   );
@@ -6640,7 +6640,7 @@ function renderProps() {
         render();
         renderProps();
       }, {
-        title: g.hiddenRaw && g.hidden === undefined ? "The source currently uses a non-literal HideGadget expression. Toggling here rewrites it to 1 or 0." : "Matches the original Hidden property and patches HideGadget(...)."
+        title: g.hiddenRaw && g.hidden === undefined ? "This gadget currently uses a custom hide expression. Changing it here replaces it with 1 or 0." : "Show or hide this gadget."
       })
     )
   );
@@ -6654,7 +6654,7 @@ function renderProps() {
         render();
         renderProps();
       }, {
-        title: g.disabledRaw && g.disabled === undefined ? "The source currently uses a non-literal DisableGadget expression. Toggling here rewrites it to 1 or 0." : "Matches the original Disabled property and patches DisableGadget(...)."
+        title: g.disabledRaw && g.disabled === undefined ? "This gadget currently uses a custom disable expression. Changing it here replaces it with 1 or 0." : "Enable or disable this gadget."
       })
     )
   );
@@ -6667,39 +6667,39 @@ function renderProps() {
   }, {
     disabled: !canEditHorizontalLocks,
     title: canEditHorizontalLocks
-      ? "Matches the original LockLeft property and patches an existing ResizeGadget(...) line using the original top-level horizontal anchor formulas."
-      : "Horizontal lock editing currently requires an existing top-level ResizeGadget(...) line with preserved raw geometry expressions."
+      ? "Keep the gadget anchored to the left when the window is resized."
+      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
   })));
   propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
     applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
   }, {
     disabled: !canEditHorizontalLocks,
     title: canEditHorizontalLocks
-      ? "Matches the original LockRight property and patches an existing ResizeGadget(...) line using the original top-level horizontal anchor formulas."
-      : "Horizontal lock editing currently requires an existing top-level ResizeGadget(...) line with preserved raw geometry expressions."
+      ? "Keep the gadget anchored to the right when the window is resized."
+      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
   })));
   propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
     applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
   }, {
     disabled: !verticalLockTopToggle,
     title: verticalLockTopToggle
-      ? "Matches the original LockTop property for the already parsed vertical ResizeGadget(...) forms. Verified state changes now include horizontal-only fallbacks, top-level bottom-anchor transitions rebuilt from the preserved constructor y expression, and top-level stretch-height transitions rebuilt from the original codeviewer.pb skin formulas."
-      : "LockTop editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas or from the original top-level codeviewer.pb height formulas for the current host skin."
+      ? "Keep the gadget anchored to the top when the window is resized."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), v => {
     applyLocalGadgetVerticalLockUpdate(g, Boolean(g.lockTop), v);
   }, {
     disabled: !verticalLockBottomToggle,
     title: verticalLockBottomToggle
-      ? "Matches the original LockBottom property for the already parsed vertical ResizeGadget(...) forms. Verified state changes now include horizontal-only fallbacks, top-level bottom-anchor transitions rebuilt from the preserved constructor y expression, and top-level stretch-height transitions rebuilt from the original codeviewer.pb skin formulas."
-      : "LockBottom editing is currently only enabled for vertical state changes that can be rebuilt from the already parsed ResizeGadget(...) formulas or from the original top-level codeviewer.pb height formulas for the current host skin."
+      ? "Keep the gadget anchored to the bottom when the window is resized."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
-    ? "LockLeft / LockRight patch existing top-level ResizeGadget(...) lines directly. LockTop / LockBottom now also support horizontal-only fallbacks, top-level bottom-anchor transitions rebuilt from the preserved constructor y expression, and top-level stretch-height transitions rebuilt from the original codeviewer.pb formulas for the current host skin."
-    : "LockLeft / LockRight / LockTop / LockBottom are parsed from existing ResizeGadget(...) logic. Editing is currently enabled only for transitions that can be rebuilt safely from already parsed top-level ResizeGadget(...) formulas or from the original top-level codeviewer.pb formulas for the current host skin."
+    ? "These lock options update an existing ResizeGadget(...) line for this gadget."
+    : "Lock editing is available only when the existing ResizeGadget(...) setup can be updated safely."
   ));
   if (hasExpressionVisibility) {
-    propsEl.appendChild(mutedNote("Non-literal Hidden/Disabled expressions are preserved while untouched. Editing them here rewrites the value to 1 or 0."));
+    propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
   }
 
   propsEl.appendChild(
@@ -6713,13 +6713,13 @@ function renderProps() {
           postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
           renderProps();
         },
-        { title: "Patch the raw SetGadgetFont(..., FontID(...)) argument directly." }
+        { title: "Edit the font expression used for this gadget." }
       )
     )
   );
   const gadgetFontSummary = getGadgetFontDisplaySummary(g);
   if (gadgetFontSummary) {
-    propsEl.appendChild(mutedNote(`Parsed font: ${gadgetFontSummary}`));
+    propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
   }
 
   if (canEditColors) {
@@ -6734,7 +6734,7 @@ function renderProps() {
             postGadgetProperties(g.id, { frontColorRaw: trimmed || undefined });
             renderProps();
           },
-          { title: "Patch the raw SetGadgetColor(..., #PB_Gadget_FrontColor, ...) expression directly." }
+          { title: "Edit the front color expression used for this gadget." }
         )
       )
     );
@@ -6749,7 +6749,7 @@ function renderProps() {
             postGadgetProperties(g.id, { backColorRaw: trimmed || undefined });
             renderProps();
           },
-          { title: "Patch the raw SetGadgetColor(..., #PB_Gadget_BackColor, ...) expression directly." }
+          { title: "Edit the background color expression used for this gadget." }
         )
       )
     );
@@ -6795,13 +6795,13 @@ function renderProps() {
           renderProps();
         }, {
           title: hasExpressionChecked
-            ? "The source currently uses a non-literal SetGadgetState expression. Toggling here rewrites it to the original saved Checked form."
-            : "Matches the original Checked property and patches SetGadgetState(...)."
+            ? "This gadget currently uses a custom checked expression. Changing it here replaces it with a simple checked/unchecked value."
+            : "Set whether this gadget starts checked."
         })
       )
     );
     if (hasExpressionChecked) {
-      propsEl.appendChild(mutedNote("Non-literal Checked expressions are preserved while untouched. Editing them here rewrites the state to the original saved form or removes SetGadgetState(...)."));
+      propsEl.appendChild(mutedNote("Custom checked expressions stay unchanged until you edit them here. Editing replaces them with a simple checked/unchecked value or removes the line."));
     }
   }
 
@@ -6814,7 +6814,7 @@ function renderProps() {
           () => {},
           {
             disabled: true,
-            title: "The original Property Grid shows a SelectGadget combo entry, but the persisted form only stores InitCode/CreateCode. The current value is derived from the parsed custom creation call name."
+            title: "Shows the parsed custom gadget creation call. Change InitCode or CreateCode below to adjust the saved custom gadget setup."
           }
         )
       )
@@ -6830,7 +6830,7 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customInitRaw: trimmed.length ? trimmed : "" });
             renderProps();
           },
-          { title: "Matches the original InitCode property and patches the custom gadget initialisation line." }
+          { title: "Initialization code written before the custom gadget is created." }
         )
       )
     );
@@ -6849,7 +6849,7 @@ function renderProps() {
             postCustomGadgetCode(g.id, { customCreateRaw: trimmed });
             renderProps();
           },
-          { title: "Matches the original CreateCode property and patches both the custom gadget marker template and the generated creation line." }
+          { title: "Creation code used to build this custom gadget." }
         )
       )
     );
@@ -6861,12 +6861,12 @@ function renderProps() {
           () => {},
           {
             disabled: true,
-            title: "Matches the original readonly Help field for custom gadgets."
+            title: "Reference placeholders that can be used in custom gadget code."
           }
         )
       )
     );
-    propsEl.appendChild(mutedNote("SelectGadget is not reconstructed from the saved form. InitCode and CreateCode are the persisted original custom-gadget fields."));
+    propsEl.appendChild(mutedNote("The saved form keeps InitCode and CreateCode. SelectGadget is shown for reference only."));
   }
 
   const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
@@ -6892,7 +6892,7 @@ function renderProps() {
         },
         {
           disabled: !hasEventGadgetBlock,
-          title: gadgetEventProcHint || "Matches the original editable SelectProc combo box; suggestions come from readable Procedure definitions.",
+          title: gadgetEventProcHint || "Choose an existing procedure or type a procedure name.",
           placeholder: "Type or pick a procedure"
         }
       )
@@ -6940,7 +6940,7 @@ function renderProps() {
         })
       )
     );
-    propsEl.appendChild(mutedNote("Matches the original SplitterPosition property and writes SetGadgetState(...)."));
+    propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
   }
 
   // Items editor (minimal UI)
@@ -6951,25 +6951,25 @@ function renderProps() {
     propsEl.appendChild(row(
       "Item Text",
       textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
-        title: "Patch the gadget item text without using a browser prompt."
+        title: "Edit the text for this item."
       })
     ));
     propsEl.appendChild(row(
       "Position",
       textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
-        title: "Patch the raw gadget item position without using a browser prompt."
+        title: "Edit the position used for this item."
       })
     ));
     propsEl.appendChild(row(
       "Image Raw",
       textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
-        title: "Patch the optional gadget item image reference without using a browser prompt."
+        title: "Edit the optional image reference for this item."
       })
     ));
     propsEl.appendChild(row(
       "Flags Raw",
       textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
-        title: "Patch the optional gadget item flags without using a browser prompt."
+        title: "Edit the optional flags for this item."
       })
     ));
 
@@ -7053,19 +7053,19 @@ function renderProps() {
     propsEl.appendChild(row(
       "Column Title",
       textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
-        title: "Patch the column title without using a browser prompt."
+        title: "Edit the column title."
       })
     ));
     propsEl.appendChild(row(
       "Column Index",
       textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
-        title: "Patch the raw column index without using a browser prompt."
+        title: "Edit the column index."
       })
     ));
     propsEl.appendChild(row(
       "Width",
       textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
-        title: "Patch the raw column width without using a browser prompt."
+        title: "Edit the column width."
       })
     ));
 
