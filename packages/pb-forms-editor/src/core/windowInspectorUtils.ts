@@ -91,17 +91,16 @@ export function parseWindowEventProcInspectorInput(raw: string): ParsedWindowEve
 }
 
 export function parseWindowVariableNameInspectorInput(raw: string, currentValue: string): ParsedWindowVariableNameInput {
-  const trimmed = raw.trim();
-  if (!trimmed) {
+  if (!raw.length) {
     return {
       ok: false,
-      fallbackValue: currentValue.trim(),
+      fallbackValue: currentValue,
     };
   }
 
   return {
     ok: true,
-    value: trimmed,
+    value: raw,
   };
 }
 

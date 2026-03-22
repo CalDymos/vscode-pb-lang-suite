@@ -1621,7 +1621,7 @@ export function applyWindowVariableNamePatch(
   variableName: string,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const newVar = variableName.trim();
+  const newVar = variableName;
   if (!newVar.length) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);

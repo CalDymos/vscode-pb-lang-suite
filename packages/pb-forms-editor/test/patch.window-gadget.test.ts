@@ -998,6 +998,27 @@ EndProcedure
   assert.equal(parsed.window?.pbAny, true);
 });
 
+
+test("preserves leading and trailing spaces when patching a window variable name", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormWindow
+  #Window_0
+EndEnumeration
+
+Procedure OpenWindow_0(x = 0, y = 0, width = 220, height = 140)
+  If OpenWindow(#Window_0, x, y, width, height, "Window Basic")
+  EndIf
+EndProcedure
+`;
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyWindowVariableNamePatch(document, '  winMain  ')
+  );
+
+  assert.match(patchedText, /OpenWindow\(#  winMain  , x, y, width, height, "Window Basic"\)/);
+});
+
 test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
   const text = `; Form Designer for PureBasic - 6.30
 

@@ -76,7 +76,12 @@ test('window variable inspector input restores the current value when cleared', 
 
   assert.deepEqual(parseWindowVariableNameInspectorInput('  winMain  ', 'Window_0'), {
     ok: true,
-    value: 'winMain'
+    value: '  winMain  '
+  });
+
+  assert.deepEqual(parseWindowVariableNameInspectorInput('', '  Window_0  '), {
+    ok: false,
+    fallbackValue: '  Window_0  '
   });
 });
 

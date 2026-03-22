@@ -661,7 +661,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName: {
-          if (msg.variableName === undefined || !msg.variableName.trim().length) {
+          if (msg.variableName === undefined || !msg.variableName.length) {
             postError(`Could not patch FormWindow variable name. Empty variable name is not allowed${rangeInfo}.`);
             return;
           }

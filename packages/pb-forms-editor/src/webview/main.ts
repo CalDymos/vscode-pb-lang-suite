@@ -4680,7 +4680,7 @@ function renderProps() {
     }
 
     const win = model.window;
-    const variableName = (win.variable ?? win.firstParam.replace(/^#/, "")).trim() || "Window_0";
+    const variableName = (win.variable ?? win.firstParam.replace(/^#/, "")) || "Window_0";
     const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
     const knownFlags = new Set(win.knownFlags ?? []);
     const customFlagsValue = (win.customFlags ?? []).join(" | ");
