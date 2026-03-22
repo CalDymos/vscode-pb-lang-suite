@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, getWindowVariableInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -66,6 +66,12 @@ test('window X/Y inspector input accepts integers and #PB_Ignore only', () => {
     ok: false,
     error: 'Only integer values or #PB_Ignore are supported.'
   });
+});
+
+test('window variable inspector display uses the exact parsed variable without fallback synthesis', () => {
+  assert.equal(getWindowVariableInspectorValue('Window_Main'), 'Window_Main');
+  assert.equal(getWindowVariableInspectorValue('  Window_Main  '), '  Window_Main  ');
+  assert.equal(getWindowVariableInspectorValue(undefined), '');
 });
 
 test('window variable inspector input restores the current value when cleared', () => {

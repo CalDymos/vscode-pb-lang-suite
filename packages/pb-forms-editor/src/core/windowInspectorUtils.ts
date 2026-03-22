@@ -65,6 +65,9 @@ export type ParsedWindowVariableNameInput =
   | { ok: true; value: string }
   | { ok: false; fallbackValue: string };
 
+export function getWindowVariableInspectorValue(currentValue: string | undefined): string {
+  return currentValue ?? '';
+}
 
 export type ParsedWindowParentInput = {
   raw: string;

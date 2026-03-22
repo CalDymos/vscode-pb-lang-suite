@@ -103,6 +103,7 @@ import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
   getWindowPositionInspectorValue,
+  getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
   parseWindowEventProcInspectorInput,
   parseWindowParentInspectorInput,
@@ -4697,8 +4698,9 @@ function renderProps() {
       });
     })));
 
-    propsEl.appendChild(row("Variable", textInput(variableName, v => {
-      const parsed = parseWindowVariableNameInspectorInput(v, variableName);
+    const windowVariableInputValue = getWindowVariableInspectorValue(win.variable);
+    propsEl.appendChild(row("Variable", textInput(windowVariableInputValue, v => {
+      const parsed = parseWindowVariableNameInspectorInput(v, windowVariableInputValue);
       if (!parsed.ok) {
         clearInfoError();
         renderProps();
