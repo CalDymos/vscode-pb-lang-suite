@@ -128,6 +128,7 @@ import {
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
 } from "../core/statusbarImageInspectorUtils";
+import { getTopLevelSelectedImageInspectorConfig } from "../core/topLevelImageInspectorUtils";
 
 type SourceRange = { line: number };
 
@@ -4946,7 +4947,7 @@ function renderProps() {
       const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
       const selectedCanEditEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock;
       const selectedImage = findImageEntryById(selectedEntry.iconId);
-      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "menu");
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("menuEntry");
       const hasOwn = (obj: object, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
       const postSelectedMenuUpdate = (updates: { idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }) => {
         if (!selectedCanPatch || typeof selectedEntry.source?.line !== "number") return;
@@ -4981,57 +4982,17 @@ function renderProps() {
       };
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const selectedUseExistingBtn = document.createElement("button");
-      selectedUseExistingBtn.textContent = "Use Existing";
-      selectedUseExistingBtn.disabled = !selectedCanEditImage;
-      selectedUseExistingBtn.title = selectedCanEditImage
-        ? "Select an image from the form image list and assign it to this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedUseExistingBtn.onclick = () => {
-        if (!selectedCanEditImage) return;
-        openImageReferencePicker({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
-      };
-      selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
-      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       selectedChooseFileBtn.disabled = !selectedCanEditImage;
       selectedChooseFileBtn.title = selectedCanEditImage
-        ? "Select a file, create a new LoadImage entry and assign it to this menu entry."
+        ? selectedImageInspectorConfig.changeImageButtonTitle
         : "Only MenuItem supports a parsed image argument.";
       selectedChooseFileBtn.onclick = () => {
         if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
         openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
-      const selectedCreateNewBtn = document.createElement("button");
-      selectedCreateNewBtn.textContent = "Create New";
-      selectedCreateNewBtn.disabled = !selectedCanEditImage;
-      selectedCreateNewBtn.title = selectedCanEditImage
-        ? "Create a new form image entry and assign it to this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedCreateNewBtn.onclick = () => {
-        if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "create");
-      };
-      selectedImageActions.appendChild(selectedCreateNewBtn);
-      const selectedClearBtn = document.createElement("button");
-      selectedClearBtn.textContent = "Clear";
-      selectedClearBtn.disabled = !selectedCanEditImage;
-      selectedClearBtn.title = selectedCanEditImage
-        ? "Remove the parsed image reference from this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedClearBtn.onclick = () => {
-        if (!selectedCanEditImage) return;
-        postSelectedMenuUpdate({ iconRaw: "" });
-      };
-      selectedImageActions.appendChild(selectedClearBtn);
-      if (selectedImage) {
-        const selectedJumpImageBtn = document.createElement("button");
-        selectedJumpImageBtn.textContent = "Image";
-        selectedJumpImageBtn.title = selectedImageTitle;
-        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
-        selectedImageActions.appendChild(selectedJumpImageBtn);
-      }
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -5338,73 +5299,25 @@ function renderProps() {
     if (selectedEntry) {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
       const selectedImage = findImageEntryById(selectedEntry.iconId);
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("toolBarEntry");
       const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
       const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
       const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
 
       const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "toolbar");
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const selectedUseExistingBtn = document.createElement("button");
-      selectedUseExistingBtn.textContent = "Use Existing";
-      selectedUseExistingBtn.disabled = !canEditSelectedImage;
-      selectedUseExistingBtn.title = canEditSelectedImage
-        ? "Select an image from the form image list and assign it to this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedUseExistingBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageReferencePicker({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
-      };
-      selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
-      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       selectedChooseFileBtn.disabled = !canEditSelectedImage;
       selectedChooseFileBtn.title = canEditSelectedImage
-        ? "Select a file, create a new LoadImage entry and assign it to this toolbar button."
+        ? selectedImageInspectorConfig.changeImageButtonTitle
         : "Only ToolBarImageButton supports a parsed image reference.";
       selectedChooseFileBtn.onclick = () => {
         if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
         openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
-      const selectedCreateNewBtn = document.createElement("button");
-      selectedCreateNewBtn.textContent = "Create New";
-      selectedCreateNewBtn.disabled = !canEditSelectedImage;
-      selectedCreateNewBtn.title = canEditSelectedImage
-        ? "Create a new form image entry and assign it to this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedCreateNewBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "create");
-      };
-      selectedImageActions.appendChild(selectedCreateNewBtn);
-      const selectedClearBtn = document.createElement("button");
-      selectedClearBtn.textContent = "Clear";
-      selectedClearBtn.disabled = !canEditSelectedImage;
-      selectedClearBtn.title = canEditSelectedImage
-        ? "Remove the parsed image reference from this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedClearBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        post({
-          type: "updateToolBarEntry",
-          toolBarId: t.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          iconRaw: "",
-          toggle: selectedEntry.toggle,
-        });
-      };
-      selectedImageActions.appendChild(selectedClearBtn);
-      if (selectedImage) {
-        const selectedJumpImageBtn = document.createElement("button");
-        selectedJumpImageBtn.textContent = "Image";
-        selectedJumpImageBtn.title = selectedImageTitle;
-        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
-        selectedImageActions.appendChild(selectedJumpImageBtn);
-      }
 
       const postSelectedToolBarEntryUpdate = (patch: {
         idRaw?: string;
@@ -5879,6 +5792,7 @@ function renderProps() {
       : undefined;
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("statusBarField");
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
       const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
@@ -6006,37 +5920,12 @@ function renderProps() {
       }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const useExistingBtn = document.createElement("button");
-      useExistingBtn.textContent = "Use Existing";
-      useExistingBtn.disabled = !selectedUi.statusPickImageFn;
-      useExistingBtn.title = "Select an image from the form image list and assign it to this statusbar field.";
-      useExistingBtn.onclick = () => selectedUi.statusPickImageFn?.();
-      selectedImageActions.appendChild(useExistingBtn);
       const chooseFileBtn = document.createElement("button");
-      chooseFileBtn.textContent = "Choose File";
+      chooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       chooseFileBtn.disabled = !selectedUi.statusChooseFileImageFn;
-      chooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this statusbar field.";
+      chooseFileBtn.title = selectedImageInspectorConfig.changeImageButtonTitle;
       chooseFileBtn.onclick = () => selectedUi.statusChooseFileImageFn?.();
       selectedImageActions.appendChild(chooseFileBtn);
-      const createNewBtn = document.createElement("button");
-      createNewBtn.textContent = "Create New";
-      createNewBtn.disabled = !selectedUi.statusCreateImageFn;
-      createNewBtn.title = "Create a new form image entry and assign it to this statusbar field.";
-      createNewBtn.onclick = () => selectedUi.statusCreateImageFn?.();
-      selectedImageActions.appendChild(createNewBtn);
-      const clearImageBtn = document.createElement("button");
-      clearImageBtn.textContent = "Clear";
-      clearImageBtn.disabled = !selectedUi.statusClearFn;
-      clearImageBtn.title = "Remove text/image/progress decoration from this field.";
-      clearImageBtn.onclick = () => selectedUi.statusClearFn?.();
-      selectedImageActions.appendChild(clearImageBtn);
-      if (selectedUi.statusImage) {
-        const jumpImageBtn = document.createElement("button");
-        jumpImageBtn.textContent = "Image";
-        jumpImageBtn.title = selectedUi.statusImageTitle;
-        jumpImageBtn.onclick = () => selectImageById(selectedUi.statusImage!.id);
-        selectedImageActions.appendChild(jumpImageBtn);
-      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();

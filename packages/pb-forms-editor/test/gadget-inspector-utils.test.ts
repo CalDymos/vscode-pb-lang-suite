@@ -105,6 +105,43 @@ test("returns the original range/scrollarea field labels for constructor-bound g
   assert.equal(getGadgetCtorRangeFieldLabels("ButtonGadget"), undefined);
 });
 
+
+
+test("covers the full original constructor-range gadget matrix after the FD-042c audit", () => {
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("SpinGadget"), {
+    minLabel: "Min",
+    maxLabel: "Max",
+    title: "Matches the original Min / Max constructor arguments."
+  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("TrackBarGadget"), {
+    minLabel: "Min",
+    maxLabel: "Max",
+    title: "Matches the original Min / Max constructor arguments."
+  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollBarGadget"), {
+    minLabel: "Min",
+    maxLabel: "Max",
+    title: "Matches the original Min / Max constructor arguments."
+  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ProgressBarGadget"), {
+    minLabel: "Min",
+    maxLabel: "Max",
+    title: "Matches the original Min / Max constructor arguments."
+  });
+  assert.deepEqual(getGadgetCtorRangeFieldLabels("ScrollAreaGadget"), {
+    minLabel: "InnerWidth",
+    maxLabel: "InnerHeight",
+    title: "Matches the original InnerWidth / InnerHeight constructor arguments."
+  });
+});
+
+test("keeps the checked-state matrix limited to the original checkbox and option gadgets", () => {
+  assert.equal(canEditGadgetCheckedState("CheckBoxGadget"), true);
+  assert.equal(canEditGadgetCheckedState("OptionGadget"), true);
+  assert.equal(canEditGadgetCheckedState("CustomGadget"), false);
+  assert.equal(canEditGadgetCheckedState("ButtonGadget"), false);
+});
+
 test("resolves constructor-bound gadget field inspector values from raw or parsed numbers", () => {
   assert.equal(getGadgetCtorRangeInspectorValue("MinValue", 5), "MinValue");
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, 95), "95");
