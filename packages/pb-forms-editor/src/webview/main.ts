@@ -5079,7 +5079,7 @@ function renderProps() {
             post({
               type: "setMenuEntryEvent",
               entryIdRaw: selectedEntry.idRaw,
-              eventProc: v.trim().length ? v.trim() : undefined
+              eventProc: v.length ? v : undefined
             });
           },
           {
@@ -5560,7 +5560,7 @@ function renderProps() {
             post({
               type: "setToolBarEntryEvent",
               entryIdRaw: selectedEntry.idRaw,
-              eventProc: v.trim().length ? v.trim() : undefined
+              eventProc: v.length ? v : undefined
             });
           },
           {

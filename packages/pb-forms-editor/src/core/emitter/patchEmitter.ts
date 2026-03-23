@@ -2552,7 +2552,7 @@ export function applyMenuEntryEventUpdate(
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
     ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
     : undefined;
@@ -2597,7 +2597,7 @@ export function applyToolBarEntryEventUpdate(
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
     ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
     : undefined;
