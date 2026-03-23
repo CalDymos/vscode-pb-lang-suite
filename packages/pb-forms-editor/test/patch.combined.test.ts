@@ -1572,6 +1572,77 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
 });
 
 
+test("roundtrips toolbar CurrentImage rebind to an existing parsed image and removes the orphaned image entry", () => {
+  const { text, parsed: initial, toolBarId } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
+
+  assert.equal(typeof imageButton?.source?.line, "number", "Expected source line for the toolbar image button.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old toolbar image entry.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, toolBarId, imageButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: imageButton!.idRaw,
+      iconRaw: "ImageID(#Img_FrmImages_0)",
+      toggle: imageButton!.toggle,
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!)
+  );
+
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const removedImage = parsed.images.find((entry) => entry.id === "Img_FrmImages_2");
+
+  assert.equal(updatedButton?.iconId, "#Img_FrmImages_0");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmImages_0\)\)/);
+  assert.doesNotMatch(patchedText, /Img_FrmImages_2 = LoadImage\(#PB_Any,\s*"save\.png"\)/);
+});
+
+
+test("roundtrips toolbar CurrentImage auto-create for a new path-like string and removes the orphaned image entry", () => {
+  const { text, parsed: initial, toolBarId } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
+
+  assert.equal(typeof imageButton?.source?.line, "number", "Expected source line for the toolbar image button.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old toolbar image entry.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, toolBarId, imageButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: imageButton!.idRaw,
+      iconRaw: "ImageID(#Img_FrmImages_4)",
+      toggle: imageButton!.toggle,
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmImages_4",
+      imageRaw: '"./icons/save-alt.png"',
+    })
+  );
+
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const insertedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_4");
+  const removedImage = parsed.images.find((entry) => entry.id === "Img_FrmImages_2");
+
+  assert.equal(updatedButton?.iconId, "#Img_FrmImages_4");
+  assert.ok(insertedImage, "Expected the new toolbar LoadImage entry to be inserted.");
+  assert.equal(insertedImage?.image, "./icons/save-alt.png");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_4,\s*"\.\/icons\/save-alt\.png"\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmImages_4\)\)/);
+  assert.doesNotMatch(patchedText, /Img_FrmImages_2 = LoadImage\(#PB_Any,\s*"save\.png"\)/);
+});
+
+
 test("roundtrips statusbar CurrentImage rebind to an existing parsed image and removes the orphaned image entry", () => {
   const { text, parsed: initial, statusBarId } = parseImageFixture();
   const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);

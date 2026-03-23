@@ -421,6 +421,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
   chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
   chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage",
+  rebindToolBarEntryImage: "rebindToolBarEntryImage",
   rebindStatusBarFieldImage: "rebindStatusBarFieldImage"
 } as const;
 
@@ -482,11 +483,12 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
@@ -3417,6 +3419,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine: entry.iconId ? findImageEntryById(entry.iconId)?.source?.line : undefined,
         });
       }
       else {
@@ -5307,6 +5311,9 @@ function renderProps() {
       const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
 
       const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
+      const selectedImagePath = selectedImage?.image ?? selectedImage?.imageRaw ?? ((selectedEntry.iconRaw ?? "") === "0" ? "" : (selectedEntry.iconRaw ?? ""));
+      const selectedImageUsageCount = selectedEntry.iconId ? countImageUsages(selectedEntry.iconId) : 0;
+      const selectedImageEditState = getStatusBarCurrentImageEditState(selectedImage, selectedImageUsageCount);
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
       const selectedChooseFileBtn = document.createElement("button");
@@ -5408,7 +5415,96 @@ function renderProps() {
           }
         )
       ));
-      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")));
+      const currentImageControl = textInput(
+        selectedImagePath,
+        value => {
+          if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+
+          if (selectedImageEditState.canDirectEdit && selectedImage && typeof selectedImage.source?.line === "number") {
+            clearInfoError();
+            post({
+              type: "updateImage",
+              sourceLine: selectedImage.source.line,
+              inline: false,
+              idRaw: selectedImage.firstParam,
+              imageRaw: toPbString(value),
+              assignedVar: selectedImage.pbAny ? selectedImage.variable : undefined
+            });
+            return;
+          }
+
+          const rebind = resolveStatusBarCurrentImageRebind(model.images ?? [], value, selectedEntry.iconId);
+          if (rebind.matchedImage) {
+            if (rebind.matchedImage.id === selectedEntry.iconId) {
+              clearInfoError();
+              renderProps();
+              return;
+            }
+
+            clearInfoError();
+            post({
+              type: "rebindToolBarEntryImage",
+              toolBarId: t.id,
+              sourceLine: selectedEntry.source.line,
+              kind: selectedEntry.kind,
+              idRaw: selectedEntry.idRaw,
+              toggle: selectedEntry.toggle,
+              iconRaw: `ImageID(${rebind.matchedImage.id})`,
+              oldImageId: selectedEntry.iconId,
+              oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+                selectedEntry.iconId,
+                selectedImageUsageCount,
+                selectedImage?.source?.line,
+                rebind.matchedImage.id
+              ) ? selectedImage?.source?.line : undefined
+            });
+            return;
+          }
+
+          const createResolution = resolveStatusBarCurrentImageCreate(
+            model.images ?? [],
+            value,
+            model.window?.id,
+            model.window?.variable
+          );
+          if (!createResolution.imageIdRaw || !createResolution.imageRaw) {
+            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "This image reference cannot be edited directly here."));
+            renderProps();
+            return;
+          }
+
+          clearInfoError();
+          post({
+            type: "createAndAssignToolBarEntryImage",
+            toolBarId: t.id,
+            sourceLine: selectedEntry.source.line,
+            kind: selectedEntry.kind,
+            idRaw: selectedEntry.idRaw,
+            toggle: selectedEntry.toggle,
+            newInline: false,
+            newImageIdRaw: createResolution.imageIdRaw,
+            newImageRaw: createResolution.imageRaw,
+            oldImageId: selectedEntry.iconId,
+            oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+              selectedEntry.iconId,
+              selectedImageUsageCount,
+              selectedImage?.source?.line,
+              createResolution.imageIdRaw
+            ) ? selectedImage?.source?.line : undefined
+          });
+        },
+        {
+          disabled: !canEditSelectedImage,
+          title: selectedImageEditState.canDirectEdit
+            ? selectedImageEditState.reason
+            : "Enter an existing parsed image path to rebind this toolbar entry, or a quoted/path-like file string to auto-create a new LoadImage entry.",
+          placeholder: selectedImage?.inline ? "ImgInlineLabel" : "image.png"
+        }
+      );
+      currentImageControl.title = selectedImageEditState.canDirectEdit
+        ? (selectedImageEditState.reason ?? "")
+        : "Enter an existing parsed image path to rebind this toolbar entry, or a quoted/path-like file string to auto-create a new LoadImage entry.";
+      propsEl.appendChild(row("CurrentImage", currentImageControl));
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
