@@ -296,11 +296,21 @@ export interface SelectedToolBarInspectorFieldConfig {
   showIconRawField: boolean;
 }
 
+export interface SelectedStatusBarInspectorFieldConfig {
+  showProgressValueField: boolean;
+}
+
 export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
   return {
     captionLabel: "Caption",
     showTextField: false,
     showIconRawField: false,
+  };
+}
+
+export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarInspectorFieldConfig {
+  return {
+    showProgressValueField: false,
   };
 }
 

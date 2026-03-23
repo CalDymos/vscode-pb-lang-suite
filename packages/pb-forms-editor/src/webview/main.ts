@@ -66,6 +66,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
@@ -5881,6 +5882,7 @@ function renderProps() {
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("statusBarField");
+      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig();
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
       const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
       const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
@@ -5916,10 +5918,12 @@ function renderProps() {
           }
         )
       ));
-      propsEl.appendChild(row(
-        "ProgressValue",
-        readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
-      ));
+      if (selectedFieldConfig.showProgressValueField) {
+        propsEl.appendChild(row(
+          "ProgressValue",
+          readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
+        ));
+      }
       const currentImageControl = textInput(
         selectedImagePath,
         value => {

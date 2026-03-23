@@ -19,6 +19,7 @@ import {
   getMenuVisibleEntries,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedStatusBarInspectorFieldConfig,
   resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolvePreviewRectListHit,
@@ -179,6 +180,12 @@ test("selected toolbar inspector follows the original caption/current-image row 
   assert.equal(config.captionLabel, "Caption");
   assert.equal(config.showTextField, false);
   assert.equal(config.showIconRawField, false);
+});
+
+test("selected statusbar inspector omits the non-original ProgressValue helper row", () => {
+  const config = getSelectedStatusBarInspectorFieldConfig();
+
+  assert.equal(config.showProgressValueField, false);
 });
 
 test("builds default statusbar preview insert args", () => {
