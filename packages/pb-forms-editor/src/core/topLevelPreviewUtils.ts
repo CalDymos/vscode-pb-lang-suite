@@ -300,6 +300,33 @@ export interface SelectedStatusBarInspectorFieldConfig {
   showProgressValueField: boolean;
 }
 
+export interface TopLevelSelectProcEditState {
+  canEdit: boolean;
+  title: string;
+}
+
+export function getTopLevelSelectProcEditState(
+  hasEventMenuBlock: boolean,
+  idRaw: string | undefined,
+  entryLabel: "menu" | "toolbar" = "menu"
+): TopLevelSelectProcEditState {
+  if (!idRaw || idRaw.trim().length === 0) {
+    return {
+      canEdit: false,
+      title: entryLabel === "menu"
+        ? "Only menu entries with a parsed id can be patched safely."
+        : "Only toolbar entries with a parsed id can be patched safely."
+    };
+  }
+
+  return {
+    canEdit: true,
+    title: hasEventMenuBlock
+      ? "Choose an existing procedure or type a procedure name."
+      : "Choose an existing procedure or type a procedure name. Writing it back still requires a parsed Select EventMenu() block in the source."
+  };
+}
+
 export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
   return {
     captionLabel: "Caption",

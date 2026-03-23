@@ -68,6 +68,7 @@ import {
   getStatusBarPreviewInsertArgs,
   getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
+  getTopLevelSelectProcEditState,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   resolveMenuFooterHit,
@@ -691,7 +692,7 @@ if (!pbfdWindow.__PBFD_SYMBOLS__) {
 
 const EVENT_UI_HINT = {
   eventGadgetMissing: "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.",
-  eventMenuMissing: "Event editing requires an existing Select EventMenu() block.",
+  eventMenuMissing: "No parsed Select EventMenu() block was found. Procedure names remain editable here, but writing them back still requires such a block.",
   menuIdRequired: "Only menu entries with ids can have event procedures.",
   toolBarIdRequired: "Only toolbar entries with ids can have event procedures.",
   generateEventLoopMenuBlock: "Cannot disable while a Select EventMenu() block exists.",
@@ -703,10 +704,7 @@ function getProcedureSuggestions(): string[] {
 }
 
 function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entryLabel: "menu" | "toolbar" = "menu"): string {
-  if (!idRaw) {
-    return entryLabel === "menu" ? EVENT_UI_HINT.menuIdRequired : EVENT_UI_HINT.toolBarIdRequired;
-  }
-  return hasEventMenuBlock ? "" : EVENT_UI_HINT.eventMenuMissing;
+  return getTopLevelSelectProcEditState(hasEventMenuBlock, idRaw, entryLabel).title;
 }
 
 const PBFD_SYMBOLS: PbfdSymbols = pbfdWindow.__PBFD_SYMBOLS__;
@@ -4951,7 +4949,8 @@ function renderProps() {
       const selectedCanEditName = selectedCanPatch && (selectedEntry.kind === "MenuItem" || selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu");
       const selectedCanEditShortcut = selectedCanPatch && selectedEntry.kind === "MenuItem";
       const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock;
+      const selectedEventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "menu");
+      const selectedCanEditEvent = selectedEventEditState.canEdit;
       const selectedImage = findImageEntryById(selectedEntry.iconId);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("menuEntry");
       const hasOwn = (obj: object, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
@@ -5085,7 +5084,7 @@ function renderProps() {
           },
           {
             disabled: !selectedCanEditEvent,
-            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "menu")
+            title: selectedEventEditState.title
           }
         )
       ));
@@ -5146,12 +5145,13 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
+      const eventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, e.idRaw, "menu");
+      const eventFn = eventEditState.canEdit && e.kind !== "ToolBarToolTip"
         ? () => {
             setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
         : undefined;
-      const menuEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "menu");
+      const menuEventTitle = eventEditState.title;
       const menuImage = findImageEntryById(e.iconId);
       const menuImageTitle = getImageReferenceHint(e.iconId, "menu");
 
@@ -5309,7 +5309,10 @@ function renderProps() {
       const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig();
       const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
       const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
+      const selectedEventEditState = selectedEntry.kind === "ToolBarToolTip"
+        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
+        : getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar");
+      const canEditSelectedEvent = selectedEventEditState.canEdit;
 
       const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
       const selectedImagePath = selectedImage?.image ?? selectedImage?.imageRaw ?? ((selectedEntry.iconRaw ?? "") === "0" ? "" : (selectedEntry.iconRaw ?? ""));
@@ -5562,7 +5565,7 @@ function renderProps() {
           },
           {
             disabled: !canEditSelectedEvent,
-            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "toolbar")
+            title: selectedEventEditState.title
           }
         )
       ));
@@ -5625,7 +5628,10 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
+      const eventEditState = e.kind === "ToolBarToolTip"
+        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
+        : getTopLevelSelectProcEditState(hasEventMenuBlock, e.idRaw, "toolbar");
+      const eventFn = eventEditState.canEdit
         ? () => {
             setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
@@ -5635,7 +5641,7 @@ function renderProps() {
             setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
-      const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
+      const toolBarEventTitle = eventEditState.title;
       const toolBarImage = findImageEntryById(e.iconId);
       const toolBarImageTitle = getImageReferenceHint(e.iconId, "toolbar");
 

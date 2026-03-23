@@ -20,6 +20,7 @@ import {
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
   getSelectedStatusBarInspectorFieldConfig,
+  getTopLevelSelectProcEditState,
   resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolvePreviewRectListHit,
@@ -186,6 +187,21 @@ test("selected statusbar inspector omits the non-original ProgressValue helper r
   const config = getSelectedStatusBarInspectorFieldConfig();
 
   assert.equal(config.showProgressValueField, false);
+});
+
+test("top-level SelectProc remains editable without an EventMenu block when an id exists", () => {
+  assert.deepEqual(getTopLevelSelectProcEditState(false, "#MenuItem_Open", "menu"), {
+    canEdit: true,
+    title: "Choose an existing procedure or type a procedure name. Writing it back still requires a parsed Select EventMenu() block in the source."
+  });
+  assert.deepEqual(getTopLevelSelectProcEditState(true, "#MenuItem_Open", "menu"), {
+    canEdit: true,
+    title: "Choose an existing procedure or type a procedure name."
+  });
+  assert.deepEqual(getTopLevelSelectProcEditState(false, "   ", "toolbar"), {
+    canEdit: false,
+    title: "Only toolbar entries with a parsed id can be patched safely."
+  });
 });
 
 test("builds default statusbar preview insert args", () => {
