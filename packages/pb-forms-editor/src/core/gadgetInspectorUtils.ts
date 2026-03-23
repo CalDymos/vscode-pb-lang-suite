@@ -24,6 +24,15 @@ export type GadgetCtorRangeLike = {
   max?: number;
 };
 
+export type GadgetCurrentImageLike = {
+  imageRaw?: string;
+};
+
+export type GadgetImageEntryLike = {
+  image?: string;
+  imageRaw?: string;
+};
+
 export type GadgetCtorRangeFieldLabels = {
   minLabel: string;
   maxLabel: string;
@@ -184,6 +193,12 @@ export function getGadgetCtorRangeInspectorValue(raw: string | undefined, fallba
   const trimmed = raw?.trim();
   if (trimmed?.length) return trimmed;
   return Number.isFinite(fallback) ? String(fallback) : "";
+}
+
+export function getGadgetCurrentImageDisplay(gadget: GadgetCurrentImageLike, imageEntry?: GadgetImageEntryLike): string {
+  const resolved = imageEntry?.image ?? imageEntry?.imageRaw;
+  if (typeof resolved === "string" && resolved.trim().length) return resolved;
+  return gadget.imageRaw?.trim() ?? "";
 }
 
 export function buildGadgetTextRaw(value: string, isVariable: boolean): string {

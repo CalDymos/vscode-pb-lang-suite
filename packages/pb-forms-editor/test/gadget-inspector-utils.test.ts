@@ -13,6 +13,7 @@ import {
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getGadgetCurrentImageDisplay,
   getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -83,6 +84,12 @@ test("resolves constructor-bound gadget field inspector values from raw or parse
   assert.equal(getGadgetCtorRangeInspectorValue("MinValue", 5), "MinValue");
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, 95), "95");
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, undefined), "");
+});
+
+test("prefers the parsed form image path for gadget CurrentImage display", () => {
+  assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgOpen)" }, { image: "images/open.png" }), "images/open.png");
+  assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgInline)" }, { imageRaw: "?toolbar_open" }), "?toolbar_open");
+  assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "0" }), "0");
 });
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");

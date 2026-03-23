@@ -87,6 +87,7 @@ import {
   canEditGadgetHorizontalLocks,
   canEditGadgetText,
   getCustomGadgetHelpDisplay,
+  getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
@@ -6505,28 +6506,15 @@ function renderProps() {
   propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
   propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
-  const gadgetImageRawInput = isImageCapableGadget
-    ? textInput(
-        g.imageRaw ?? "",
-        v => {
-          if (!isImageCapableGadget) return;
-          const normalized = normalizeImageReference(v);
-          if (!normalized.imageRaw) return;
-          g.imageRaw = normalized.imageRaw;
-          g.imageId = normalized.imageId;
-          post({
-            type: "setGadgetImageRaw",
-            id: g.id,
-            imageRaw: normalized.imageRaw
-          });
-          renderProps();
-        },
-        { title: "Use a raw image argument such as ImageID(#ImgOpen) or 0." }
-      )
-    : readonlyInput(g.imageRaw ?? "");
-  propsEl.appendChild(row("Image Raw", gadgetImageRawInput));
-  propsEl.appendChild(row("Image Id", readonlyInput(g.imageId ?? "")));
   const gadgetImage = findImageEntryById(g.imageId);
+  if (isImageCapableGadget) {
+    propsEl.appendChild(
+      row(
+        "CurrentImage",
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+      )
+    );
+  }
   const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
   const gadgetImageActions = document.createElement("div");
   gadgetImageActions.className = "row-actions";
@@ -6567,7 +6555,11 @@ function renderProps() {
     selectImageById(gadgetImage.id);
   };
   gadgetImageActions.appendChild(gadgetImageBtn);
-  propsEl.appendChild(row("", gadgetImageActions));
+  if (isImageCapableGadget) {
+    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
+  } else {
+    propsEl.appendChild(row("", gadgetImageActions));
+  }
   if (isImageReferencePickerOpenFor({ kind: "gadget", gadgetId: g.id })) {
     const pendingEl = createPendingImageReferencePickerEl();
     if (pendingEl) propsEl.appendChild(pendingEl);
@@ -6580,7 +6572,7 @@ function renderProps() {
     propsEl.appendChild(mutedNote(gadgetImageHint));
   }
   if (isImageCapableGadget) {
-    propsEl.appendChild(mutedNote("Image-capable gadgets accept raw image expressions such as ImageID(#ImgOpen) or 0."));
+    propsEl.appendChild(mutedNote("CurrentImage shows the parsed form image entry when available. Use ChangeImage to rebind the gadget or create a new image entry."));
   }
 
   const canEditCaption = canEditGadgetText(g.kind);
