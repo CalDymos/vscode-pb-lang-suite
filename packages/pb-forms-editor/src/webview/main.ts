@@ -7312,8 +7312,8 @@ function inputWithActions(input: HTMLElement, ...actions: HTMLElement[]) {
   wrap.appendChild(input);
   for (const action of actions) {
     action.style.flex = "0 0 auto";
-    action.style.width = "auto";
-    action.style.minWidth = "fit-content";
+    if (!action.style.width) action.style.width = "auto";           // ← Set to "auto" if not already set
+    if (!action.style.minWidth) action.style.minWidth = "fit-content"; // ← Set to "auto" if not already set
     wrap.appendChild(action);
   }
   return wrap;
