@@ -1119,7 +1119,6 @@ function assignMenuOrToolBarEvent(doc: FormDocument, rawCase: string, proc: stri
     for (const entry of menu.entries) {
       if (entry.idRaw === caseRaw) {
         entry.event = proc;
-        return;
       }
     }
   }
@@ -1128,7 +1127,6 @@ function assignMenuOrToolBarEvent(doc: FormDocument, rawCase: string, proc: stri
     for (const entry of toolBar.entries) {
       if (entry.idRaw === caseRaw) {
         entry.event = proc;
-        return;
       }
     }
   }

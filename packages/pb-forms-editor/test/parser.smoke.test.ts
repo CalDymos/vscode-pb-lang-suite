@@ -481,6 +481,38 @@ test("parses fixtures/smoke/15-object-event-bindings.pbf", () => {
   assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
 });
 
+test("assigns shared EventMenu cases to matching menu and toolbar entries", () => {
+  const text = `; Form Designer for PureBasic - 6.20
+;
+Procedure Open_Test()
+  If OpenWindow(#Window_0, 0, 0, 320, 240, "Test", #PB_Window_SystemMenu)
+    If CreateMenu(0, WindowID(#Window_0))
+      MenuItem(#SharedAction, "Shared")
+    EndIf
+    If CreateToolBar(0, WindowID(#Window_0))
+      ToolBarImageButton(#SharedAction, 0)
+    EndIf
+  EndIf
+EndProcedure
+
+Procedure Test_Events(event)
+  Select EventMenu()
+    Case #SharedAction
+      HandleShared()
+  EndSelect
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#SharedAction");
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.idRaw === "#SharedAction");
+
+  assert.ok(menuItem, "Expected shared menu item.");
+  assert.ok(toolBarButton, "Expected shared toolbar entry.");
+  assert.equal(menuItem?.event, "HandleShared");
+  assert.equal(toolBarButton?.event, "HandleShared");
+});
+
 
 test("keeps event-block presence flags undefined when no event selects exist", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
