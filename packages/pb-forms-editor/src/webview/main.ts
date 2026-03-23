@@ -6779,13 +6779,13 @@ function renderProps() {
         "SelectGadget",
         editableComboInput(
           g.customSelectName ?? "",
-          g.customSelectName?.length ? [g.customSelectName] : [],
+          [],
           v => {
             g.customSelectName = v.length ? v : undefined;
             renderProps();
           },
           {
-            title: "Matches the original CustomGadget combobox row. The current saved-form path still persists InitCode and CreateCode below."
+            title: "Shows the original CustomGadget combobox row. In the current PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
           }
         )
       )
@@ -6835,7 +6835,7 @@ function renderProps() {
         )
       )
     );
-    propsEl.appendChild(mutedNote("SelectGadget now follows the original combobox row; the saved custom gadget code still comes from InitCode and CreateCode."));
+    propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
   }
 
   propsEl.appendChild(
