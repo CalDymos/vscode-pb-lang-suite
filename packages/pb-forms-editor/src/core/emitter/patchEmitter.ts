@@ -2506,7 +2506,7 @@ export function applyGadgetEventProcUpdate(
 
   const caseRaw = gadget.id;
   const branch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, (raw) => raw === caseRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
     ? buildGadgetEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
     : undefined;

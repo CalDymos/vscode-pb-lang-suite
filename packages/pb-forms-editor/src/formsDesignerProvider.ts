@@ -48,6 +48,7 @@ import {
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
+import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
 import { readImageDimensions } from "./core/imageDimensionUtils";
 import {
   discoverProcedureSourcePaths,
@@ -1221,22 +1222,30 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const existingImage = resolveExistingLoadImageByFilePath(lastModel?.images, picked.fsPath);
+          const imageRef = buildImageReferenceFromEntry(existingImage)
+            ?? buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
           const assignEdit = applyGadgetOpenArgsUpdate(document, msg.id, { imageRaw: imageRef }, sr);
-          const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
-          if (!await applyPairedEditsOrError(
-            assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
-            insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
-          )) {
-            return;
+          if (existingImage) {
+            if (!await applyEditOrError(assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`)) {
+              return;
+            }
+          } else {
+            const insertEdit = applyImageInsert(document, { inline: false, idRaw: msg.newImageIdRaw, imageRaw: picked.imageRaw, assignedVar: msg.newAssignedVar }, sr);
+            if (!await applyPairedEditsOrError(
+              assignEdit, `Could not patch image argument for gadget '${msg.id}'. No matching image-capable gadget constructor found${rangeInfo}.`,
+              insertEdit, `Could not insert image entry for gadget '${msg.id}'. No suitable insertion point found${rangeInfo}.`,
+            )) {
+              return;
+            }
           }
 
-          // Resize is non-fatal and applied separately after the atomic assign+insert.
+          // Resize is non-fatal and applied separately after the assign path.
           if (msg.resizeToImage) {
             try {
               const dims = await readImageDimensions(picked.fsPath);

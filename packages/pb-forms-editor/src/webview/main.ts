@@ -85,8 +85,8 @@ import {
   canEditGadgetCheckedState,
   canEditGadgetColors,
   canEditGadgetHorizontalLocks,
-  canEditGadgetText,
   getCustomGadgetHelpDisplay,
+  getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
@@ -1870,7 +1870,7 @@ function postGadgetResizeRaw(
 
 
 function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolean): void {
-  if (isVariable && !ensureValidPbVariableReference(value.trim())) {
+  if (isVariable && !ensureValidPbVariableReference(value)) {
     renderProps();
     return;
   }
@@ -1878,22 +1878,22 @@ function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolea
   const textRaw = buildGadgetTextRaw(value, isVariable);
   g.textRaw = textRaw;
   g.textVariable = isVariable;
-  g.text = isVariable ? value.trim() : value;
+  g.text = value;
   postGadgetOpenArgs(g.id, { textRaw });
   render();
   renderProps();
 }
 
 function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boolean): void {
-  if (isVariable && !ensureValidPbVariableReference(value.trim())) {
+  if (isVariable && !ensureValidPbVariableReference(value)) {
     renderProps();
     return;
   }
 
   const tooltipRaw = buildGadgetTooltipRaw(value, isVariable);
   g.tooltipRaw = tooltipRaw;
-  g.tooltipVariable = isVariable && Boolean(tooltipRaw);
-  g.tooltip = tooltipRaw ? (isVariable ? value.trim() : value) : undefined;
+  g.tooltipVariable = isVariable && tooltipRaw !== undefined;
+  g.tooltip = tooltipRaw ? value : undefined;
   postGadgetProperties(g.id, { tooltipRaw });
   renderProps();
 }
@@ -6515,90 +6515,63 @@ function renderProps() {
       )
     );
   }
-  const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
   const gadgetImageActions = document.createElement("div");
   gadgetImageActions.className = "row-actions";
 
   if (isImageCapableGadget) {
-    const gadgetPickImageBtn = document.createElement("button");
-    gadgetPickImageBtn.textContent = "Use Existing Image";
-    gadgetPickImageBtn.disabled = !(model.images?.length);
-    gadgetPickImageBtn.title = model.images?.length ? "Select an image from the form image list." : "No image entries are defined in this form.";
-    gadgetPickImageBtn.onclick = () => {
-      openImageReferencePicker({ kind: "gadget", gadgetId: g.id }, g.imageId);
-    };
-    gadgetImageActions.appendChild(gadgetPickImageBtn);
-
-    const gadgetCreateImageBtn = document.createElement("button");
-    gadgetCreateImageBtn.textContent = "Create New Image";
-    gadgetCreateImageBtn.title = "Create a new form image entry and assign it to this gadget.";
-    gadgetCreateImageBtn.onclick = () => {
-      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "create");
-    };
-    gadgetImageActions.appendChild(gadgetCreateImageBtn);
-
     const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Choose File";
-    gadgetChooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this gadget. Optionally resize the gadget to the image size.";
+    gadgetChooseFileBtn.textContent = "Select";
+    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
     gadgetChooseFileBtn.onclick = () => {
       openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
+    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
   }
 
-  const gadgetImageBtn = document.createElement("button");
-  gadgetImageBtn.textContent = "Select Image";
-  gadgetImageBtn.disabled = !gadgetImage;
-  gadgetImageBtn.title = gadgetImage ? "" : gadgetImageHint;
-  gadgetImageBtn.onclick = () => {
-    if (!gadgetImage) return;
-    selectImageById(gadgetImage.id);
-  };
-  gadgetImageActions.appendChild(gadgetImageBtn);
-  if (isImageCapableGadget) {
-    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
-  } else {
-    propsEl.appendChild(row("", gadgetImageActions));
-  }
-  if (isImageReferencePickerOpenFor({ kind: "gadget", gadgetId: g.id })) {
-    const pendingEl = createPendingImageReferencePickerEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
-  }
   if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
     const pendingEl = createPendingImageAssignmentDraftEl();
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
-  if (gadgetImageHint) {
-    propsEl.appendChild(mutedNote(gadgetImageHint));
-  }
-  if (isImageCapableGadget) {
-    propsEl.appendChild(mutedNote("CurrentImage shows the parsed form image entry when available. Use ChangeImage to rebind the gadget or create a new image entry."));
-  }
 
-  const canEditCaption = canEditGadgetText(g.kind);
+  const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);
   const canEditChecked = canEditGadgetCheckedState(g.kind);
   const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
   const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
 
-  if (canEditCaption) {
+  if (captionField) {
     propsEl.appendChild(
       row(
         "Caption Is Variable",
         checkboxInput(Boolean(g.textVariable), v => {
           applyLocalGadgetTextUpdate(g, getGadgetTextInspectorValue(g), v);
+        }, {
+          disabled: !captionField.variableToggleEditable,
+          title: captionField.variableToggleEditable
+            ? "Treat this value as a variable or expression instead of a string literal."
+            : "This gadget keeps the original callback field behavior and does not expose a variable toggle here."
         })
       )
     );
     propsEl.appendChild(
       row(
-        "Caption",
+        captionField.label,
         textInput(
           getGadgetTextInspectorValue(g),
           v => {
             applyLocalGadgetTextUpdate(g, v, Boolean(g.textVariable));
           },
-          { title: "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression." }
+          {
+            disabled: !captionField.textEditable,
+            title: captionField.label === "Mask"
+              ? "Mask text passed to this DateGadget."
+              : captionField.label === "Callback"
+                ? "Callback procedure passed to this Scintilla gadget."
+                : captionField.textEditable
+                  ? "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression."
+                  : "This gadget keeps the original readonly caption field behavior."
+          }
         )
       )
     );
@@ -6864,10 +6837,6 @@ function renderProps() {
     propsEl.appendChild(mutedNote("The saved form keeps InitCode and CreateCode. SelectGadget is shown for reference only."));
   }
 
-  const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
-  const gadgetEventProcHint = hasEventGadgetBlock
-    ? ""
-    : EVENT_UI_HINT.eventGadgetMissing;
   propsEl.appendChild(
     row(
       "SelectProc",
@@ -6875,27 +6844,21 @@ function renderProps() {
         g.eventProc ?? "",
         getProcedureSuggestions(),
         v => {
-          if (!hasEventGadgetBlock) return;
-          const trimmed = v.trim();
-          g.eventProc = trimmed || undefined;
+          g.eventProc = v.length ? v : undefined;
           post({
             type: "setGadgetEventProc",
             id: g.id,
-            eventProc: trimmed.length ? trimmed : undefined
+            eventProc: v.length ? v : undefined
           });
           renderProps();
         },
         {
-          disabled: !hasEventGadgetBlock,
-          title: gadgetEventProcHint || "Choose an existing procedure or type a procedure name.",
+          title: "Choose an existing procedure or type a procedure name.",
           placeholder: "Type or pick a procedure"
         }
       )
     )
   );
-  if (!hasEventGadgetBlock) {
-    propsEl.appendChild(mutedNote(gadgetEventProcHint));
-  }
 
   if (g.parentId) {
     const btn = document.createElement("button");
@@ -7162,7 +7125,14 @@ function createPendingImageReferencePickerEl() {
 function createPendingImageAssignmentDraftEl() {
   if (!pendingImageAssignmentDraft) return null;
   const wrap = document.createElement("div");
-  wrap.appendChild(createSubSection(pendingImageAssignmentDraft.mode === "create" ? "Create and Assign Image" : "Choose File and Assign Image"));
+  const isGadgetChooseFile = pendingImageAssignmentDraft.mode === "chooseFile" && pendingImageAssignmentDraft.target.kind === "gadget";
+  wrap.appendChild(createSubSection(
+    pendingImageAssignmentDraft.mode === "create"
+      ? "Create and Assign Image"
+      : isGadgetChooseFile
+        ? "Change Image"
+        : "Choose File and Assign Image"
+  ));
   if (pendingImageAssignmentDraft.mode === "create") {
     wrap.appendChild(row(
       "Kind",
@@ -7176,22 +7146,24 @@ function createPendingImageAssignmentDraftEl() {
       )
     ));
   }
-  else {
+  else if (!isGadgetChooseFile) {
     wrap.appendChild(row("Kind", readonlyInput("LoadImage")));
   }
-  wrap.appendChild(row(
-    "First Param",
-    textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
-      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
-    })
-  ));
-  if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+  if (!isGadgetChooseFile) {
     wrap.appendChild(row(
-      "Assigned Var",
-      textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
-        title: "Variable name receiving the #PB_Any image handle."
+      "First Param",
+      textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
+        title: "Use either a fixed image id like #ImgOpen or #PB_Any."
       })
     ));
+    if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+      wrap.appendChild(row(
+        "Assigned Var",
+        textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
+          title: "Variable name receiving the #PB_Any image handle."
+        })
+      ));
+    }
   }
   if (pendingImageAssignmentDraft.mode === "create") {
     wrap.appendChild(row(
@@ -7214,7 +7186,7 @@ function createPendingImageAssignmentDraftEl() {
   const actions = document.createElement("div");
   actions.className = "miniActions";
   const saveBtn = document.createElement("button");
-  saveBtn.textContent = pendingImageAssignmentDraft.mode === "create" ? "Create" : "Continue";
+  saveBtn.textContent = pendingImageAssignmentDraft.mode === "create" ? "Create" : (isGadgetChooseFile ? "Choose File" : "Continue");
   saveBtn.onclick = () => saveImageAssignmentDraft();
   actions.appendChild(saveBtn);
   const cancelBtn = document.createElement("button");

@@ -39,6 +39,12 @@ export type GadgetCtorRangeFieldLabels = {
   title: string;
 };
 
+export type GadgetCaptionFieldConfig = {
+  label: string;
+  textEditable: boolean;
+  variableToggleEditable: boolean;
+};
+
 export type GadgetResizeLockLike = {
   parentId?: string;
   x: number;
@@ -201,18 +207,33 @@ export function getGadgetCurrentImageDisplay(gadget: GadgetCurrentImageLike, ima
   return gadget.imageRaw?.trim() ?? "";
 }
 
+export function getGadgetCaptionFieldConfig(kind: string | undefined): GadgetCaptionFieldConfig | undefined {
+  if (kind === "CanvasGadget") {
+    return { label: "Caption", textEditable: false, variableToggleEditable: true };
+  }
+  if (!canEditGadgetText(kind)) return undefined;
+  switch (kind) {
+    case "DateGadget":
+      return { label: "Mask", textEditable: true, variableToggleEditable: true };
+    case "ScintillaGadget":
+      return { label: "Callback", textEditable: true, variableToggleEditable: false };
+    case "EditorGadget":
+      return { label: "Caption", textEditable: false, variableToggleEditable: true };
+    default:
+      return { label: "Caption", textEditable: true, variableToggleEditable: true };
+  }
+}
+
 export function buildGadgetTextRaw(value: string, isVariable: boolean): string {
   if (isVariable) {
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : '""';
+    return value;
   }
   return quotePbStringLiteral(value);
 }
 
 export function buildGadgetTooltipRaw(value: string, isVariable: boolean): string | undefined {
   if (isVariable) {
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : undefined;
+    return value.length ? value : undefined;
   }
   return value.length ? quotePbStringLiteral(value) : undefined;
 }

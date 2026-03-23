@@ -13,6 +13,7 @@ import {
   canEditGadgetText,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeInspectorValue,
   getGadgetFontDisplaySummary,
@@ -51,18 +52,42 @@ test("builds original saved checked-state raw values for checkbox and option gad
   assert.equal(buildGadgetCheckedStateRaw("ImageGadget", true), undefined);
 });
 
-test("builds gadget caption raw values for literal and variable modes", () => {
+test("builds gadget caption raw values for literal and variable modes without trimming variable input", () => {
   assert.equal(buildGadgetTextRaw("Hello", false), '"Hello"');
   assert.equal(buildGadgetTextRaw("VarCaption$", true), "VarCaption$");
   assert.equal(buildGadgetTextRaw("", false), '""');
-  assert.equal(buildGadgetTextRaw("   ", true), '""');
+  assert.equal(buildGadgetTextRaw("  VarCaption$  ", true), "  VarCaption$  ");
 });
 
-test("builds gadget tooltip raw values for literal, variable and cleared modes", () => {
+test("builds gadget tooltip raw values for literal, variable and cleared modes without trimming variable input", () => {
   assert.equal(buildGadgetTooltipRaw("Tooltip text", false), '"Tooltip text"');
   assert.equal(buildGadgetTooltipRaw("Tooltip$", true), "Tooltip$");
   assert.equal(buildGadgetTooltipRaw("", false), undefined);
-  assert.equal(buildGadgetTooltipRaw("   ", true), undefined);
+  assert.equal(buildGadgetTooltipRaw("  Tooltip$  ", true), "  Tooltip$  ");
+});
+
+test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {
+  assert.deepEqual(getGadgetCaptionFieldConfig("DateGadget"), {
+    label: "Mask",
+    textEditable: true,
+    variableToggleEditable: true
+  });
+  assert.deepEqual(getGadgetCaptionFieldConfig("ScintillaGadget"), {
+    label: "Callback",
+    textEditable: true,
+    variableToggleEditable: false
+  });
+  assert.deepEqual(getGadgetCaptionFieldConfig("EditorGadget"), {
+    label: "Caption",
+    textEditable: false,
+    variableToggleEditable: true
+  });
+  assert.deepEqual(getGadgetCaptionFieldConfig("CanvasGadget"), {
+    label: "Caption",
+    textEditable: false,
+    variableToggleEditable: true
+  });
+  assert.equal(getGadgetCaptionFieldConfig("ImageGadget"), undefined);
 });
 
 

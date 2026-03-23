@@ -568,7 +568,7 @@ test("roundtrips gadget event proc update inside existing EventGadget block", ()
     applyGadgetEventProcUpdate(document, "#BtnApply", "HandleApplyUpdated")
   );
 
-  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\(EventType\(\)\)/s);
+  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\s*\(EventType\(\)\)/s);
   const button = parsed.gadgets.find((g) => g.id === "#BtnApply");
   assert.equal(button?.eventProc, "HandleApplyUpdated");
 });
@@ -583,6 +583,17 @@ test("roundtrips gadget event proc removal by deleting the Case branch", () => {
   assert.doesNotMatch(patchedText, /Case #BtnApply/);
   assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply")?.eventProc, undefined);
   assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+test("preserves the exact gadget event proc grid string without trimming", () => {
+  const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetEventProcUpdate(document, "#BtnApply", "  HandleApplyUpdated  ")
+  );
+
+  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\s*\(EventType\(\)\)/s);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply")?.eventProc, "HandleApplyUpdated");
 });
 
 test("roundtrips gadget event proc insertion before existing window Default branch", () => {
@@ -742,7 +753,7 @@ test("roundtrips combined object event binding updates in fixture 15", () => {
   const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
 
   assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpenUpdated\(EventMenu\(\)\)\s+Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
-  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\(EventType\(\)\)/s);
+  assert.match(patchedText, /Case #BtnApply\s+HandleApplyUpdated\s*\(EventType\(\)\)/s);
   assert.equal(button?.eventProc, "HandleApplyUpdated");
   assert.equal(menuItem?.event, "HandleMenuOpenUpdated");
   assert.equal(toolBarButton?.event, "HandleToolbarRefreshUpdated");
