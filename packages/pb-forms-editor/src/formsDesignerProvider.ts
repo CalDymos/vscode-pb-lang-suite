@@ -692,7 +692,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             postError(`Could not patch custom gadget code for '${msg.id}'. The current selection is not a parsed CustomGadget${rangeInfo}.`);
             return;
           }
-          if (msg.customCreateRaw !== undefined && !msg.customCreateRaw.trim().length) {
+          if (msg.customCreateRaw !== undefined && !msg.customCreateRaw.length) {
             postError(`Custom gadget CreateCode must not be empty.`);
             return;
           }

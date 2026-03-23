@@ -101,3 +101,18 @@ test("patches custom gadget move and rect edits through the generated creation l
   const resized = applyWorkspaceEditToText(CUSTOM_GADGET_FIXTURE, rectEdit!);
   assert.match(resized, /FancyWidget\(#Fancy, 8, 18, 140, 30, "Caption"\)/);
 });
+
+
+test("preserves exact non-empty InitCode and CreateCode grid strings", () => {
+  const document = new FakeTextDocument(CUSTOM_GADGET_FIXTURE);
+  const edit = applyCustomGadgetCodeUpdate(document.asTextDocument(), "#Fancy", {
+    customInitRaw: "InitOtherWidget()  ",
+    customCreateRaw: " OtherWidget(%id%, %x%, %y%, %w%, %h%, %txt%)  "
+  });
+
+  assert.ok(edit);
+  const updated = applyWorkspaceEditToText(CUSTOM_GADGET_FIXTURE, edit!);
+  assert.ok(updated.includes("InitOtherWidget()  \n"));
+  assert.ok(updated.includes("Custom gadget creation (do not remove this line)  OtherWidget(%id%, %x%, %y%, %w%, %h%, %txt%)  \n"));
+  assert.ok(updated.includes('  OtherWidget(#Fancy, 10, 20, 130, 24, "Caption")  \n'));
+});

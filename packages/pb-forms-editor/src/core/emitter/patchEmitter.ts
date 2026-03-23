@@ -1287,7 +1287,7 @@ function buildCustomGadgetTextReplacement(gadget: Gadget): string {
 }
 
 function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string | undefined {
-  const templateRaw = normalizeOptionalRaw(gadget.customCreateRaw);
+  const templateRaw = normalizeOptionalGridString(gadget.customCreateRaw);
   if (!templateRaw) return undefined;
 
   const idRaw = buildCustomGadgetIdRaw(gadget);
@@ -1402,10 +1402,10 @@ export function applyCustomGadgetCodeUpdate(
 
   const nextGadget: Gadget = { ...gadget };
   if (args.customInitRaw !== undefined) {
-    nextGadget.customInitRaw = normalizeOptionalRaw(args.customInitRaw);
+    nextGadget.customInitRaw = normalizeOptionalGridString(args.customInitRaw);
   }
   if (args.customCreateRaw !== undefined) {
-    nextGadget.customCreateRaw = normalizeOptionalRaw(args.customCreateRaw);
+    nextGadget.customCreateRaw = normalizeOptionalGridString(args.customCreateRaw);
   }
 
   const edit = new vscode.WorkspaceEdit();

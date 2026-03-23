@@ -6777,12 +6777,15 @@ function renderProps() {
     propsEl.appendChild(
       row(
         "SelectGadget",
-        textInput(
+        editableComboInput(
           g.customSelectName ?? "",
-          () => {},
+          g.customSelectName?.length ? [g.customSelectName] : [],
+          v => {
+            g.customSelectName = v.length ? v : undefined;
+            renderProps();
+          },
           {
-            disabled: true,
-            title: "Shows the parsed custom gadget creation call. Change InitCode or CreateCode below to adjust the saved custom gadget setup."
+            title: "Matches the original CustomGadget combobox row. The current saved-form path still persists InitCode and CreateCode below."
           }
         )
       )
@@ -6793,9 +6796,8 @@ function renderProps() {
         textInput(
           g.customInitRaw ?? "",
           v => {
-            const trimmed = v.trim();
-            g.customInitRaw = trimmed || undefined;
-            postCustomGadgetCode(g.id, { customInitRaw: trimmed.length ? trimmed : "" });
+            g.customInitRaw = v.length ? v : undefined;
+            postCustomGadgetCode(g.id, { customInitRaw: v });
             renderProps();
           },
           { title: "Initialization code written before the custom gadget is created." }
@@ -6808,13 +6810,12 @@ function renderProps() {
         textInput(
           g.customCreateRaw ?? "",
           v => {
-            const trimmed = v.trim();
-            if (!trimmed.length) {
+            if (!v.length) {
               renderProps();
               return;
             }
-            g.customCreateRaw = trimmed;
-            postCustomGadgetCode(g.id, { customCreateRaw: trimmed });
+            g.customCreateRaw = v;
+            postCustomGadgetCode(g.id, { customCreateRaw: v });
             renderProps();
           },
           { title: "Creation code used to build this custom gadget." }
@@ -6834,7 +6835,7 @@ function renderProps() {
         )
       )
     );
-    propsEl.appendChild(mutedNote("The saved form keeps InitCode and CreateCode. SelectGadget is shown for reference only."));
+    propsEl.appendChild(mutedNote("SelectGadget now follows the original combobox row; the saved custom gadget code still comes from InitCode and CreateCode."));
   }
 
   propsEl.appendChild(
