@@ -23,6 +23,7 @@ import {
   resolvePreviewRectHit,
   resolvePreviewRectListHit,
   resolveTopLevelChromeHit,
+  getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   unquotePbString,
@@ -170,6 +171,14 @@ test("exposes editable tooltip rows only for real toolbar command entries", () =
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarSeparator", idRaw: "#TbSep" }), false);
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarToolTip", idRaw: "#TbOpen" }), false);
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarImageButton", idRaw: "   " }), false);
+});
+
+test("selected toolbar inspector follows the original caption/current-image row set", () => {
+  const config = getSelectedToolBarInspectorFieldConfig();
+
+  assert.equal(config.captionLabel, "Caption");
+  assert.equal(config.showTextField, false);
+  assert.equal(config.showIconRawField, false);
 });
 
 test("builds default statusbar preview insert args", () => {

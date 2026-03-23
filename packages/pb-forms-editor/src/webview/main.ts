@@ -66,6 +66,7 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   resolveMenuFooterHit,
@@ -5300,6 +5301,7 @@ function renderProps() {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
       const selectedImage = findImageEntryById(selectedEntry.iconId);
       const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("toolBarEntry");
+      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig();
       const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
       const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
       const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
@@ -5338,12 +5340,6 @@ function renderProps() {
         });
       };
       const canEditSelectedId = selectedCanPatch && selectedEntry.kind !== "ToolBarSeparator";
-      const canEditSelectedText = selectedCanPatch && (selectedEntry.kind === "ToolBarButton" || selectedEntry.kind === "ToolBarToolTip");
-      const canEditSelectedIconRaw = selectedCanPatch && (
-        selectedEntry.kind === "ToolBarStandardButton"
-        || selectedEntry.kind === "ToolBarButton"
-        || selectedEntry.kind === "ToolBarImageButton"
-      );
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -5362,40 +5358,36 @@ function renderProps() {
           }
         )
       ));
+      if (selectedFieldConfig.showTextField) {
+        propsEl.appendChild(row(
+          "Text",
+          textInput(
+            selectedEntry.text ?? "",
+            v => {
+              postSelectedToolBarEntryUpdate({ textRaw: v.trim().length ? toPbString(v) : "" });
+            },
+            {
+              title: "Edit the text shown for this toolbar entry."
+            }
+          )
+        ));
+      }
+      if (selectedFieldConfig.showIconRawField) {
+        propsEl.appendChild(row(
+          "IconRaw",
+          textInput(
+            selectedEntry.iconRaw ?? "",
+            v => {
+              postSelectedToolBarEntryUpdate({ iconRaw: v.trim() });
+            },
+            {
+              title: "Edit the image reference used by this toolbar entry."
+            }
+          )
+        ));
+      }
       propsEl.appendChild(row(
-        "Text",
-        textInput(
-          selectedEntry.text ?? "",
-          v => {
-            if (!canEditSelectedText) return;
-            postSelectedToolBarEntryUpdate({ textRaw: v.trim().length ? toPbString(v) : "" });
-          },
-          {
-            disabled: !canEditSelectedText,
-            title: canEditSelectedText
-              ? "Edit the text shown for this toolbar entry."
-              : "Only toolbar buttons and tooltip rows have editable text."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
-        "IconRaw",
-        textInput(
-          selectedEntry.iconRaw ?? "",
-          v => {
-            if (!canEditSelectedIconRaw) return;
-            postSelectedToolBarEntryUpdate({ iconRaw: v.trim() });
-          },
-          {
-            disabled: !canEditSelectedIconRaw,
-            title: canEditSelectedIconRaw
-              ? "Edit the image reference used by this toolbar entry."
-              : "Only toolbar entries with an image argument can be edited here."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
-        "Tooltip",
+        selectedFieldConfig.captionLabel,
         textInput(
           selectedEntry.tooltip ?? "",
           v => {
@@ -5411,8 +5403,8 @@ function renderProps() {
           {
             disabled: !canEditSelectedTooltip,
             title: canEditToolBarTooltip(selectedEntry)
-              ? "Edit the tooltip shown for this toolbar entry."
-              : "This entry type does not have a separate tooltip field."
+              ? "Edit the caption stored for this toolbar entry."
+              : "This entry type does not expose an editable caption field."
           }
         )
       ));

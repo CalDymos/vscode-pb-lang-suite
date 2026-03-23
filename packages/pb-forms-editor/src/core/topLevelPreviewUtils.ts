@@ -290,6 +290,20 @@ export function canEditToolBarTooltip(entry: ToolBarEntryLike): boolean {
     && entry.idRaw.trim().length > 0;
 }
 
+export interface SelectedToolBarInspectorFieldConfig {
+  captionLabel: string;
+  showTextField: boolean;
+  showIconRawField: boolean;
+}
+
+export function getSelectedToolBarInspectorFieldConfig(): SelectedToolBarInspectorFieldConfig {
+  return {
+    captionLabel: "Caption",
+    showTextField: false,
+    showIconRawField: false,
+  };
+}
+
 export function getToolBarPreviewInsertArgs(
   toolBar: ToolBarModelLike,
   action: ToolBarPreviewInsertAction
