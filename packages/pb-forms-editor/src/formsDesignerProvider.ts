@@ -1612,8 +1612,84 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         background: var(--vscode-sideBar-background);
         color: var(--vscode-sideBar-foreground);
         padding: 10px;
-        overflow: auto;
         min-width: 300px;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow: hidden;
+      }
+
+      .panelTopSection {
+        min-height: 100px;
+        height: var(--pbfd-panel-top-height, 230px);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .panelTopTabs {
+        display: flex;
+        gap: 4px;
+      }
+
+      .panelTopTab {
+        width: auto;
+        padding: 4px 10px;
+        border-radius: 6px 6px 0 0;
+        border-bottom: 0;
+        background: var(--vscode-editorWidget-background);
+        color: var(--vscode-sideBar-foreground);
+      }
+
+      .panelTopTab.active {
+        background: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-activeSelectionForeground);
+      }
+
+      .panelTopBody {
+        flex: 1;
+        min-height: 0;
+        border: 1px solid var(--vscode-panel-border);
+        background: var(--vscode-editorWidget-background);
+        overflow: hidden;
+      }
+
+      .panelTopTabPanel {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        padding: 8px;
+        overflow: hidden;
+      }
+
+      .panelTopTabPanel[hidden] {
+        display: none;
+      }
+
+      .panelSectionResizer {
+        flex: 0 0 6px;
+        border-radius: 999px;
+        background: transparent;
+        cursor: row-resize;
+        touch-action: none;
+        user-select: none;
+        opacity: 0.65;
+      }
+
+      .panelSectionResizer:hover,
+      .panelSectionResizer.dragging {
+        opacity: 1;
+        background: var(--vscode-focusBorder);
+      }
+
+      .panelBody {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
       }
 
       .row {
@@ -1650,6 +1726,78 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       }
 
       .list { margin-top: 12px; }
+
+      .panelInlineHint {
+        margin: 0 0 8px;
+      }
+
+      .toolboxTree,
+      .objectsTree {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .toolboxCategory {
+        margin-bottom: 10px;
+      }
+
+      .toolboxCategoryTitle {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .toolboxItem {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 8px;
+        align-items: center;
+        padding: 4px 6px;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .toolboxItem:hover {
+        background: var(--vscode-list-hoverBackground);
+      }
+
+      .toolboxItem.selected {
+        background: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-activeSelectionForeground);
+      }
+
+      .toolboxItem.pending {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: -1px;
+      }
+
+      .toolboxItem.disabled {
+        cursor: default;
+        opacity: 0.75;
+      }
+
+      .toolboxItem.disabled:hover {
+        background: transparent;
+      }
+
+      .toolboxIcon {
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 3px;
+        border: 1px solid var(--vscode-panel-border);
+        background: var(--vscode-sideBar-background);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .toolboxActions {
+        margin-top: 8px;
+      }
 
       .treeItem {
         display: grid;
@@ -1840,38 +1988,39 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       <div class="canvasWrap"><canvas id="designer"></canvas></div>
       <div id="panelResizer" class="panelResizer" aria-hidden="true"></div>
       <div class="panel">
-        <div class="subHeader">Info</div>
-        <div id="diag" class="diag" style="display:none"></div>
-        <div id="err" class="err"></div>
-        <div id="infoHint" class="muted" style="margin:8px 0 10px"></div>
-        <div class="infoSubHeader">Selection</div>
-        <div id="infoSelection" class="muted infoSubBody"></div>
-        <div id="props"></div>
-
-        <div class="list">
-          <div class="subHeader">Insert Gadget</div>
-          <div class="muted" style="margin:8px 0 8px">Choose a gadget, then click in the canvas to place it.</div>
-          <div class="row" style="grid-template-columns: 110px 1fr;">
-            <div>Kind</div>
-            <select id="insertGadgetKind"></select>
+        <div id="panelTopSection" class="panelTopSection">
+          <div class="panelTopTabs" role="tablist" aria-label="Inspector top panel">
+            <button id="toolboxTabButton" class="panelTopTab active" type="button" role="tab" aria-selected="true">Toolbox</button>
+            <button id="objectsTabButton" class="panelTopTab" type="button" role="tab" aria-selected="false">Objects</button>
           </div>
-          <div class="row" style="grid-template-columns: 110px 1fr;">
-            <div></div>
-            <div class="row-actions">
-              <button id="insertGadgetButton" type="button">Place on canvas</button>
-              <button id="cancelInsertGadgetButton" type="button" style="display:none">Cancel</button>
+          <div class="panelTopBody">
+            <div id="toolboxTabPanel" class="panelTopTabPanel" role="tabpanel">
+              <div class="muted panelInlineHint">Choose a gadget in the toolbox, then use Place on canvas to insert it.</div>
+              <div id="toolboxList" class="toolboxTree"></div>
+              <div class="toolboxActions row-actions">
+                <button id="insertGadgetButton" type="button">Place on canvas</button>
+                <button id="cancelInsertGadgetButton" type="button" style="display:none">Cancel</button>
+              </div>
+            </div>
+            <div id="objectsTabPanel" class="panelTopTabPanel" role="tabpanel" hidden>
+              <div class="muted panelInlineHint">Select Parent lets you quickly navigate to a container/root.</div>
+              <div class="row" style="grid-template-columns: 110px 1fr;">
+                <div>Select Parent</div>
+                <select id="parentSel"></select>
+              </div>
+              <div id="list" class="objectsTree"></div>
             </div>
           </div>
         </div>
-
-        <div class="list">
-          <div class="subHeader">Hierarchy</div>
-          <div class="muted" style="margin:8px 0 8px">Select Parent lets you quickly navigate to a container/root.</div>
-          <div class="row" style="grid-template-columns: 110px 1fr;">
-            <div>Select Parent</div>
-            <select id="parentSel"></select>
-          </div>
-          <div id="list"></div>
+        <div id="panelSectionResizer" class="panelSectionResizer" aria-hidden="true"></div>
+        <div id="panelBody" class="panelBody">
+          <div class="subHeader">Info</div>
+          <div id="diag" class="diag" style="display:none"></div>
+          <div id="err" class="err"></div>
+          <div id="infoHint" class="muted" style="margin:8px 0 10px"></div>
+          <div class="infoSubHeader">Selection</div>
+          <div id="infoSelection" class="muted infoSubBody"></div>
+          <div id="props"></div>
         </div>
       </div>
     </div>

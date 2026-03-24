@@ -109,10 +109,15 @@ import {
   buildInsertedGadgetIdentity,
   canHostInsertedGadgets,
   getGadgetInsertLabel,
-  getInsertableGadgetKinds,
   isInsertableGadgetKind,
-  shouldInsertGadgetAsPbAny
+  shouldInsertGadgetAsPbAny,
+  type InsertableGadgetKind
 } from "../core/gadgetInsertUtils";
+import {
+  getDefaultToolboxPanelKind,
+  getToolboxPanelCategories,
+  type ToolboxPanelTabId
+} from "../core/toolboxPanelUtils";
 import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
 import {
   buildWindowFlagsExpr,
@@ -524,10 +529,18 @@ function post(msg: WebviewToExtensionMessage) {
 
 const canvas = document.getElementById("designer") as HTMLCanvasElement;
 const canvasWrap = canvas.parentElement as HTMLDivElement;
+const panelEl = document.querySelector(".panel") as HTMLDivElement | null;
+const panelTopSectionEl = document.getElementById("panelTopSection") as HTMLDivElement | null;
+const panelSectionResizerEl = document.getElementById("panelSectionResizer") as HTMLDivElement | null;
+const panelBodyEl = document.getElementById("panelBody") as HTMLDivElement | null;
+const toolboxTabButtonEl = document.getElementById("toolboxTabButton") as HTMLButtonElement | null;
+const objectsTabButtonEl = document.getElementById("objectsTabButton") as HTMLButtonElement | null;
+const toolboxTabPanelEl = document.getElementById("toolboxTabPanel") as HTMLDivElement | null;
+const objectsTabPanelEl = document.getElementById("objectsTabPanel") as HTMLDivElement | null;
+const toolboxListEl = document.getElementById("toolboxList") as HTMLDivElement | null;
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
-const insertGadgetKindEl = document.getElementById("insertGadgetKind") as HTMLSelectElement;
 const insertGadgetButtonEl = document.getElementById("insertGadgetButton") as HTMLButtonElement;
 const cancelInsertGadgetButtonEl = document.getElementById("cancelInsertGadgetButton") as HTMLButtonElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
@@ -598,6 +611,13 @@ let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null
 let pendingGadgetSelection: PendingGadgetSelection | null = null;
 let pendingInsertGadgetKind: string | null = null;
 let pendingSplitterInsertConfig: PendingSplitterInsertConfig | null = null;
+let activeTopPanelTab: ToolboxPanelTabId = "toolbox";
+let selectedToolboxKind: InsertableGadgetKind = getDefaultToolboxPanelKind();
+
+function setActiveTopPanelTab(tab: ToolboxPanelTabId): void {
+  activeTopPanelTab = tab;
+  renderTopPanelTabs();
+}
 
 type PendingImageEditor = {
   sourceLine: number;
@@ -1488,31 +1508,88 @@ function requestInsertGadgetPlacement(kind: string): void {
   setPendingInsertGadgetKind(kind);
 }
 
-function renderInsertGadgetControls(): void {
-  if (!insertGadgetKindEl || !insertGadgetButtonEl || !cancelInsertGadgetButtonEl) return;
-
-  const kinds = getInsertableGadgetKinds();
-  if (!insertGadgetKindEl.options.length) {
-    for (const kind of kinds) {
-      const option = document.createElement("option");
-      option.value = kind;
-      option.textContent = getGadgetInsertLabel(kind);
-      insertGadgetKindEl.appendChild(option);
-    }
+function getSelectedToolboxKind(): InsertableGadgetKind {
+  if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+    return pendingInsertGadgetKind;
   }
 
-  const selectedKind = pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)
-    ? pendingInsertGadgetKind
-    : (insertGadgetKindEl.value && isInsertableGadgetKind(insertGadgetKindEl.value)
-      ? insertGadgetKindEl.value
-      : kinds[0]);
+  if (!isInsertableGadgetKind(selectedToolboxKind)) {
+    selectedToolboxKind = getDefaultToolboxPanelKind();
+  }
 
-  insertGadgetKindEl.value = selectedKind;
-  insertGadgetKindEl.disabled = pendingInsertGadgetKind !== null;
+  return selectedToolboxKind;
+}
+
+function renderTopPanelTabs(): void {
+  if (!toolboxTabButtonEl || !objectsTabButtonEl || !toolboxTabPanelEl || !objectsTabPanelEl) return;
+
+  const toolboxActive = activeTopPanelTab === "toolbox";
+  toolboxTabButtonEl.classList.toggle("active", toolboxActive);
+  toolboxTabButtonEl.setAttribute("aria-selected", toolboxActive ? "true" : "false");
+  objectsTabButtonEl.classList.toggle("active", !toolboxActive);
+  objectsTabButtonEl.setAttribute("aria-selected", toolboxActive ? "false" : "true");
+  toolboxTabPanelEl.hidden = !toolboxActive;
+  objectsTabPanelEl.hidden = toolboxActive;
+}
+
+function renderInsertGadgetControls(): void {
+  if (!toolboxListEl || !insertGadgetButtonEl || !cancelInsertGadgetButtonEl) return;
+
+  const selectedKind = getSelectedToolboxKind();
+  toolboxListEl.innerHTML = "";
+
+  for (const category of getToolboxPanelCategories()) {
+    const categoryEl = document.createElement("div");
+    categoryEl.className = "toolboxCategory";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "toolboxCategoryTitle";
+    titleEl.textContent = category.title;
+    categoryEl.appendChild(titleEl);
+
+    for (const entry of category.items) {
+      const itemEl = document.createElement("div");
+      const isSelected = entry.kind === selectedKind;
+      itemEl.className = `toolboxItem${isSelected ? " selected" : ""}${entry.enabled ? "" : " disabled"}${pendingInsertGadgetKind && entry.kind === selectedKind ? " pending" : ""}`;
+      if (entry.enabled && entry.kind) {
+        itemEl.setAttribute("role", "button");
+        itemEl.tabIndex = 0;
+      }
+
+      const iconEl = document.createElement("div");
+      iconEl.className = "toolboxIcon";
+      iconEl.textContent = entry.iconText;
+
+      const labelEl = document.createElement("div");
+      labelEl.textContent = entry.label;
+
+      itemEl.appendChild(iconEl);
+      itemEl.appendChild(labelEl);
+
+      const activate = () => {
+        if (!entry.enabled || !entry.kind) return;
+        selectedToolboxKind = entry.kind;
+        renderInsertGadgetControls();
+      };
+
+      itemEl.onclick = () => activate();
+      itemEl.onkeydown = event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        activate();
+      };
+
+      categoryEl.appendChild(itemEl);
+    }
+
+    toolboxListEl.appendChild(categoryEl);
+  }
+
   insertGadgetButtonEl.textContent = pendingInsertGadgetKind
     ? `Place ${getGadgetInsertLabel(selectedKind)} in canvas`
     : "Place on canvas";
-  insertGadgetButtonEl.onclick = () => requestInsertGadgetPlacement(insertGadgetKindEl.value);
+  insertGadgetButtonEl.disabled = pendingInsertGadgetKind !== null;
+  insertGadgetButtonEl.onclick = () => requestInsertGadgetPlacement(selectedKind);
   cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
   cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);
 }
@@ -1535,18 +1612,21 @@ function renderListAndParentSelector() {
   renderList();
   renderParentSelector();
   renderInsertGadgetControls();
+  renderTopPanelTabs();
 }
 
 function renderSelectionUiWithParentSelector() {
   render();
   renderList();
   renderParentSelector();
+  renderTopPanelTabs();
   renderProps();
 }
 
 function renderSelectionUiWithoutParentSelector() {
   render();
   renderList();
+  renderTopPanelTabs();
   renderProps();
 }
 
@@ -1555,6 +1635,7 @@ function renderAfterInit() {
   renderParentSelector();
   renderList();
   renderInsertGadgetControls();
+  renderTopPanelTabs();
   renderProps();
 }
 
@@ -8193,6 +8274,65 @@ function setupPanelResize() {
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", stop);
   window.addEventListener("pointercancel", stop);
+}
+
+function setupTopPanelResize(): void {
+  if (!panelEl || !panelTopSectionEl || !panelSectionResizerEl || !panelBodyEl) return;
+
+  let dragging = false;
+  let activePointerId: number | null = null;
+
+  const applyHeight = (clientY: number) => {
+    const resizerHeight = panelSectionResizerEl.getBoundingClientRect().height || 6;
+    const panelGap = Number.parseFloat(getComputedStyle(panelEl).gap || "0") || 0;
+    const maxHeight = Math.max(100, panelEl.clientHeight - resizerHeight - panelGap * 2 - 100);
+    const topStart = panelTopSectionEl.getBoundingClientRect().top;
+    const nextHeight = clamp(clientY - topStart, 100, maxHeight);
+    document.documentElement.style.setProperty("--pbfd-panel-top-height", `${Math.trunc(nextHeight)}px`);
+  };
+
+  const clampCurrentHeight = () => {
+    const currentHeight = panelTopSectionEl.getBoundingClientRect().height;
+    const resizerHeight = panelSectionResizerEl.getBoundingClientRect().height || 6;
+    const panelGap = Number.parseFloat(getComputedStyle(panelEl).gap || "0") || 0;
+    const maxHeight = Math.max(100, panelEl.clientHeight - resizerHeight - panelGap * 2 - 100);
+    const nextHeight = clamp(currentHeight, 100, maxHeight);
+    document.documentElement.style.setProperty("--pbfd-panel-top-height", `${Math.trunc(nextHeight)}px`);
+  };
+
+  const onMove = (ev: PointerEvent) => {
+    if (!dragging) return;
+    applyHeight(ev.clientY);
+  };
+
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    panelSectionResizerEl.classList.remove("dragging");
+    document.body.style.cursor = "";
+    if (activePointerId !== null) {
+      panelSectionResizerEl.releasePointerCapture?.(activePointerId);
+      activePointerId = null;
+    }
+  };
+
+  panelSectionResizerEl.addEventListener("pointerdown", ev => {
+    ev.preventDefault();
+    dragging = true;
+    activePointerId = ev.pointerId;
+    panelSectionResizerEl.classList.add("dragging");
+    document.body.style.cursor = "row-resize";
+    panelSectionResizerEl.setPointerCapture?.(ev.pointerId);
+    applyHeight(ev.clientY);
+  });
+  panelSectionResizerEl.addEventListener("pointermove", onMove);
+  panelSectionResizerEl.addEventListener("pointerup", stop);
+  panelSectionResizerEl.addEventListener("pointercancel", stop);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
+  window.addEventListener("resize", clampCurrentHeight);
+  clampCurrentHeight();
 }
 
 function asInt(v: any): number {
