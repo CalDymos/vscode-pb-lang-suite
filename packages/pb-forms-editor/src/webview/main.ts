@@ -5008,7 +5008,7 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!selectedCanEditId) return;
-            postSelectedMenuUpdate({ idRaw: v.trim() });
+            postSelectedMenuUpdate({ idRaw: v });
           },
           {
             disabled: !selectedCanEditId,
@@ -5361,7 +5361,7 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!canEditSelectedId) return;
-            postSelectedToolBarEntryUpdate({ idRaw: v.trim() });
+            postSelectedToolBarEntryUpdate({ idRaw: v });
           },
           {
             disabled: !canEditSelectedId,

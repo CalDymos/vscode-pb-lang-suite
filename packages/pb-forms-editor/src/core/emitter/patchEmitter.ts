@@ -348,9 +348,9 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
     case MENU_ENTRY_KIND.MenuTitle:
       return `MenuTitle(${(args.textRaw ?? "\"\"").trim()})`;
     case MENU_ENTRY_KIND.MenuItem: {
-      const id = (args.idRaw ?? "0").trim();
-      const text = appendMenuShortcut((args.textRaw ?? "\"\"").trim(), args.shortcut);
-      const icon = args.iconRaw?.trim();
+      const id = args.idRaw ?? "0";
+      const text = appendMenuShortcut(args.textRaw ?? "\"\"", args.shortcut);
+      const icon = args.iconRaw;
       return icon ? `MenuItem(${id}, ${text}, ${icon})` : `MenuItem(${id}, ${text})`;
     }
     case MENU_ENTRY_KIND.MenuBar:
@@ -493,15 +493,15 @@ function applyMenuEnumPatch(
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
-  const id = (args.idRaw ?? "0").trim();
-  const icon = (args.iconRaw ?? "0").trim();
+  const id = args.idRaw ?? "0";
+  const icon = args.iconRaw ?? "0";
   const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
   return `ToolBarImageButton(${id}, ${icon}${toggle})`;
 }
 
 function buildToolBarToolTipLine(toolBarId: string | undefined, args: ToolBarEntryArgs): string {
-  const id = (args.idRaw ?? "0").trim();
-  const text = (args.textRaw ?? "\"\"").trim();
+  const id = args.idRaw ?? "0";
+  const text = args.textRaw ?? "\"\"";
   return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
 }
 
@@ -511,7 +511,7 @@ function buildToolBarEntryLines(args: ToolBarEntryArgs, toolBarId?: string): str
       return [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton })];
     case TOOLBAR_ENTRY_KIND.ToolBarButton: {
       const lines = [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, toggle: false })];
-      const text = args.textRaw?.trim();
+      const text = args.textRaw;
       if (text?.length) {
         lines.push(buildToolBarToolTipLine(toolBarId, {
           kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,

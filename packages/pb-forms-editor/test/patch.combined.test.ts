@@ -1855,3 +1855,44 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
   assert.equal(statusField?.imageId, "#Img_FrmMain_1");
   assert.equal(statusField?.flagsRaw, "#PB_StatusBar_Raised");
 });
+
+
+test("preserves raw menu constants without pre-trimming during selected-entry style updates", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuOpen, "Open")
+EndProcedure
+`;
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menuId, 4, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "  #MenuOpenRenamed  ",
+      textRaw: '"Open"'
+    })
+  );
+
+  assert.match(patchedText, /MenuItem\(  #MenuOpenRenamed  , "Open"\)/);
+});
+
+test("preserves raw toolbar variables without pre-trimming during selected-entry style updates", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbOpen, 0)
+EndProcedure
+`;
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryUpdate(document, toolBarId, 4, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: "  #TbOpenRenamed  ",
+      iconRaw: "0"
+    })
+  );
+
+  assert.match(patchedText, /ToolBarImageButton\(  #TbOpenRenamed  , 0\)/);
+});
