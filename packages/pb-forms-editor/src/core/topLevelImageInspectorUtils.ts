@@ -2,6 +2,8 @@ export type TopLevelSelectedImageInspectorTarget = "menuEntry" | "toolBarEntry" 
 
 export interface TopLevelSelectedImageInspectorConfig {
   currentImageEditable: boolean;
+  currentImageTitle: string;
+  currentImageHint?: string;
   changeImageButtonLabel: string;
   changeImageButtonTitle: string;
   showExpertActions: boolean;
@@ -14,6 +16,8 @@ export function getTopLevelSelectedImageInspectorConfig(target: TopLevelSelected
     case "menuEntry":
       return {
         currentImageEditable: false,
+        currentImageTitle: "Use Select to change the image for this menu entry.",
+        currentImageHint: "Direct text editing is not available here. Use Select to choose a file and assign it to this menu entry.",
         changeImageButtonLabel: "Select",
         changeImageButtonTitle: "Choose a file for this menu entry.",
         showExpertActions: false,
@@ -23,6 +27,7 @@ export function getTopLevelSelectedImageInspectorConfig(target: TopLevelSelected
     case "toolBarEntry":
       return {
         currentImageEditable: false,
+        currentImageTitle: "Use Select to choose a file for this toolbar button.",
         changeImageButtonLabel: "Select",
         changeImageButtonTitle: "Choose a file for this toolbar button.",
         showExpertActions: false,
@@ -32,6 +37,7 @@ export function getTopLevelSelectedImageInspectorConfig(target: TopLevelSelected
     case "statusBarField":
       return {
         currentImageEditable: true,
+        currentImageTitle: "Edit or rebind the image used by this status bar field.",
         changeImageButtonLabel: "Select",
         changeImageButtonTitle: "Choose a file for this statusbar field.",
         showExpertActions: false,

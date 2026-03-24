@@ -5061,8 +5061,14 @@ function renderProps() {
       ));
       propsEl.appendChild(row(
         "CurrentImage",
-        readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")
+        readonlyInput(
+          selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "",
+          selectedImageInspectorConfig.currentImageTitle
+        )
       ));
+      if (selectedImageInspectorConfig.currentImageHint) {
+        propsEl.appendChild(mutedNote(selectedImageInspectorConfig.currentImageHint));
+      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
@@ -7275,10 +7281,11 @@ function inputWithActions(input: HTMLElement, ...actions: HTMLElement[]) {
   return wrap;
 }
 
-function readonlyInput(value: string) {
+function readonlyInput(value: string, title = "") {
   const i = document.createElement("input");
   i.value = value;
   i.readOnly = true;
+  i.title = title;
   return i;
 }
 
