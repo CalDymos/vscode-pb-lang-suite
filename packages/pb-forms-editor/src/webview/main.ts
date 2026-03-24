@@ -1313,11 +1313,6 @@ function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | unde
   }
 
   const deletedIds = collectGadgetDeleteIds(gadget.id);
-  const deletedGadgets = model.gadgets.filter(entry => deletedIds.has(entry.id));
-
-  if (deletedGadgets.some(entry => entry.kind === "CustomGadget")) {
-    return "Custom gadgets are not covered by the current delete path yet.";
-  }
 
   const externalSplitter = model.gadgets.find(entry => {
     if (deletedIds.has(entry.id) || entry.kind !== "SplitterGadget") return false;

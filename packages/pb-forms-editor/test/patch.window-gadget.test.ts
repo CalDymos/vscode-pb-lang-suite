@@ -373,6 +373,95 @@ EndProcedure
   assert.equal(parsed.gadgets.length, 0);
 });
 
+test("deletes a custom gadget including the original marker pair", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Fancy
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ; 0 Custom gadget initialisation (do Not remove this line)
+  InitFancyWidget()
+  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)
+  FancyWidget(#Fancy, 10, 20, 90, 24, "Fancy")
+  GadgetToolTip(#Fancy, "Run")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#Fancy")
+  );
+
+  assert.doesNotMatch(patchedText, /#Fancy/);
+  assert.doesNotMatch(patchedText, /Custom gadget initialisation/);
+  assert.doesNotMatch(patchedText, /InitFancyWidget\(\)/);
+  assert.doesNotMatch(patchedText, /Custom gadget creation/);
+  assert.doesNotMatch(patchedText, /FancyWidget\(/);
+  assert.doesNotMatch(patchedText, /GadgetToolTip\(#Fancy/);
+  assert.equal(parsed.gadgets.length, 0);
+});
+
+test("deletes a container recursively when it contains a custom gadget", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #Fancy
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 200, 120)
+  ; 0 Custom gadget initialisation (do Not remove this line)
+  InitFancyWidget()
+  ; 0 Custom gadget creation (do not remove this line) FancyWidget(%id%, %x%, %y%, %w%, %h%, %txt%)
+  FancyWidget(#Fancy, 8, 8, 90, 24, "Fancy")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#Container_0")
+  );
+
+  assert.doesNotMatch(patchedText, /#Container_0/);
+  assert.doesNotMatch(patchedText, /#Fancy/);
+  assert.doesNotMatch(patchedText, /Custom gadget initialisation/);
+  assert.doesNotMatch(patchedText, /InitFancyWidget\(\)/);
+  assert.doesNotMatch(patchedText, /Custom gadget creation/);
+  assert.doesNotMatch(patchedText, /FancyWidget\(/);
+  assert.doesNotMatch(patchedText, /CloseGadgetList\(\)/);
+  assert.equal(parsed.gadgets.length, 0);
+});
+
+test("deletes a splitter gadget and keeps its referenced gadgets", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#SplitMain")
+  );
+
+  assert.doesNotMatch(patchedText, /#SplitMain/);
+  assert.doesNotMatch(patchedText, /SplitterGadget\(#SplitMain/);
+  assert.doesNotMatch(patchedText, /SetGadgetState\(#SplitMain/);
+
+  const left = parsed.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  assert.ok(left);
+  assert.ok(right);
+  assert.equal(left?.splitterId, undefined);
+  assert.equal(right?.splitterId, undefined);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#SplitMain"), undefined);
+});
+
 test("refuses to delete a gadget that is still referenced by another splitter", () => {
   const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
   const document = new FakeTextDocument(text);

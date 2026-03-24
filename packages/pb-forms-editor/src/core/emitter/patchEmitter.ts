@@ -1775,6 +1775,36 @@ function collectDeletedGadgetLineNumbers(
   return lines;
 }
 
+function collectDeletedCustomGadgetLineNumbers(
+  document: vscode.TextDocument,
+  deletedGadgets: readonly Gadget[]
+): Set<number> {
+  const lines = new Set<number>();
+
+  for (const gadget of deletedGadgets) {
+    if (gadget.kind !== "CustomGadget") continue;
+
+    if (typeof gadget.source?.line === "number") {
+      lines.add(gadget.source.line);
+    }
+
+    if (typeof gadget.customCreateMarkerSource?.line === "number") {
+      lines.add(gadget.customCreateMarkerSource.line);
+    }
+
+    if (typeof gadget.customInitSource?.line === "number") {
+      lines.add(gadget.customInitSource.line);
+
+      const markerLine = gadget.customInitSource.line - 1;
+      if (markerLine >= 0 && isCustomGadgetInitMarkerLine(document.lineAt(markerLine).text)) {
+        lines.add(markerLine);
+      }
+    }
+  }
+
+  return lines;
+}
+
 function collectMovedGadgetConstructorLineNumbers(
   calls: PbCall[],
   movedIds: ReadonlySet<string>,
@@ -1842,12 +1872,14 @@ export function applyGadgetDelete(
   const deletedIds = collectDeletedGadgetIds(parsed.gadgets, gadgetKey);
   const deletedGadgets = parsed.gadgets.filter(gadget => deletedIds.has(gadget.id));
 
-  if (deletedGadgets.some(gadget => gadget.kind === "CustomGadget")) return undefined;
   if (hasExternalSplitterReference(parsed.gadgets, deletedIds)) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
   const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
   const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds, gadgetListParentIds);
+  for (const line of collectDeletedCustomGadgetLineNumbers(document, deletedGadgets)) {
+    lineNumbers.add(line);
+  }
   if (!lineNumbers.size) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
