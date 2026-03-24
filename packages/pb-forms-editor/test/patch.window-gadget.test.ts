@@ -180,6 +180,71 @@ EndProcedure
   assert.equal(gadget?.y, 44);
 });
 
+test("inserts a new splitter gadget for two existing top-level siblings", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #TxtLeft
+  #TxtRight
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  StringGadget(#TxtLeft, 10, 40, 120, 25, "Left")
+  StringGadget(#TxtRight, 140, 40, 120, 25, "Right")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "SplitterGadget", 10, 80, undefined, undefined, undefined, {
+      gadget1Id: "#TxtLeft",
+      gadget2Id: "#TxtRight",
+    })
+  );
+
+  assert.match(patchedText, /SplitterGadget\(#Splitter_0, 10, 80, 100, 25, #TxtLeft, #TxtRight\)/);
+  assert.match(patchedText, /SetGadgetState\(#Splitter_0, 12\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Splitter_0");
+  assert.ok(gadget, "Expected inserted splitter gadget.");
+  assert.equal(gadget?.gadget1Id, "#TxtLeft");
+  assert.equal(gadget?.gadget2Id, "#TxtRight");
+  assert.equal(gadget?.stateRaw, "12");
+});
+
+test("rejects splitter insertion when the selected gadgets do not share the target parent", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Panel_0
+  #TxtInside
+  #TxtRoot
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#Panel_0, 10, 10, 200, 120)
+  AddGadgetItem(#Panel_0, -1, "Tab 1")
+  StringGadget(#TxtInside, 8, 8, 80, 20, "Inside")
+  CloseGadgetList()
+  StringGadget(#TxtRoot, 10, 150, 80, 20, "Root")
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetInsert(document, "SplitterGadget", 10, 80, "#Panel_0", 0, undefined, {
+    gadget1Id: "#TxtInside",
+    gadget2Id: "#TxtRoot",
+  });
+
+  assert.equal(edit, undefined);
+});
+
 test("deletes a top-level gadget together with its managed lines and event binding", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow

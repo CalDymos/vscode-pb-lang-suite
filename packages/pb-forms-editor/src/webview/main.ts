@@ -471,7 +471,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -586,11 +586,19 @@ type PendingGadgetSelection = {
   id: string;
 };
 
+type PendingSplitterInsertConfig = {
+  gadget1Id: string;
+  gadget2Id: string;
+  parentId?: string;
+  parentItem?: number;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
 let pendingGadgetSelection: PendingGadgetSelection | null = null;
 let pendingInsertGadgetKind: string | null = null;
+let pendingSplitterInsertConfig: PendingSplitterInsertConfig | null = null;
 
 type PendingImageEditor = {
   sourceLine: number;
@@ -667,6 +675,7 @@ let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
 let pendingDestructiveAction: PendingDestructiveAction | null = null;
 let pendingDestructiveDialogAction: PendingDestructiveAction | null = null;
 let destructiveDialogBackdropEl: HTMLDivElement | null = null;
+let splitterInsertDialogBackdropEl: HTMLDivElement | null = null;
 
 type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
 type GadgetCanvasContextMenuAction = {
@@ -1348,17 +1357,145 @@ function postInsertGadget(kind: string, x: number, y: number, parentId?: string,
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
   }
-  post({ type: "insertGadget", kind, x, y, parentId, parentItem });
+  post({
+    type: "insertGadget",
+    kind,
+    x,
+    y,
+    parentId,
+    parentItem,
+    gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
+    gadget2Id: pendingSplitterInsertConfig?.gadget2Id,
+  });
 }
 
 function setPendingInsertGadgetKind(kind: string | null): void {
   pendingInsertGadgetKind = kind && isInsertableGadgetKind(kind) ? kind : null;
   closeCanvasContextMenu();
   if (!pendingInsertGadgetKind) {
+    pendingSplitterInsertConfig = null;
     canvas.style.cursor = drag ? canvas.style.cursor : "default";
+  }
+  if (pendingInsertGadgetKind !== "SplitterGadget") {
+    pendingSplitterInsertConfig = null;
+  }
+  if (pendingInsertGadgetKind) {
+    errEl.textContent = "";
   }
   renderInsertGadgetControls();
   renderInfoPanel();
+}
+
+function getSplitterInsertCandidateLabel(gadget: Gadget): string {
+  return gadget.id;
+}
+
+function openSplitterInsertDialog(): void {
+  closeSplitterInsertDialog();
+
+  const candidates = model.gadgets.filter(gadget => !gadget.splitterId);
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) closeSplitterInsertDialog();
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = "Create Splitter";
+  dialog.appendChild(title);
+
+  dialog.appendChild(mutedNote("Choose two existing gadgets that are not already owned by another splitter. Both gadgets must currently belong to the same parent or panel tab."));
+
+  const validationEl = document.createElement("div");
+  validationEl.className = "muted";
+  validationEl.style.color = "var(--vscode-errorForeground)";
+
+  const createSelect = () => {
+    const sel = document.createElement("select");
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Select gadget...";
+    sel.appendChild(empty);
+    for (const gadget of candidates) {
+      const option = document.createElement("option");
+      option.value = gadget.id;
+      option.textContent = getSplitterInsertCandidateLabel(gadget);
+      sel.appendChild(option);
+    }
+    return sel;
+  };
+
+  const firstSel = createSelect();
+  const secondSel = createSelect();
+
+  const selectedGadgetId = selection && selection.kind === "gadget" ? selection.id : undefined;
+  const selectedGadget = selectedGadgetId ? model.gadgets.find(gadget => gadget.id === selectedGadgetId && !gadget.splitterId) : undefined;
+  if (selectedGadget) {
+    firstSel.value = selectedGadget.id;
+  }
+
+  dialog.appendChild(row("First Gadget", firstSel));
+  dialog.appendChild(row("Second Gadget", secondSel));
+  dialog.appendChild(validationEl);
+
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeSplitterInsertDialog();
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "Continue";
+  okBtn.onclick = () => {
+    const gadget1 = model.gadgets.find(gadget => gadget.id === firstSel.value);
+    const gadget2 = model.gadgets.find(gadget => gadget.id === secondSel.value);
+    if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) {
+      validationEl.textContent = "Select two different gadgets.";
+      return;
+    }
+    if (gadget1.splitterId || gadget2.splitterId) {
+      validationEl.textContent = "Only gadgets that are not already assigned to a splitter are currently allowed here.";
+      return;
+    }
+    if (gadget1.parentId !== gadget2.parentId || gadget1.parentItem !== gadget2.parentItem) {
+      validationEl.textContent = "Both gadgets must currently belong to the same parent and panel tab.";
+      return;
+    }
+    pendingSplitterInsertConfig = {
+      gadget1Id: gadget1.id,
+      gadget2Id: gadget2.id,
+      parentId: gadget1.parentId,
+      parentItem: gadget1.parentItem,
+    };
+    closeSplitterInsertDialog();
+    setPendingInsertGadgetKind("SplitterGadget");
+  };
+  actions.appendChild(cancelBtn);
+  actions.appendChild(okBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  splitterInsertDialogBackdropEl = backdrop;
+};
+
+function closeSplitterInsertDialog(): void {
+  splitterInsertDialogBackdropEl?.remove();
+  splitterInsertDialogBackdropEl = null;
+}
+
+function requestInsertGadgetPlacement(kind: string): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  if (kind === "SplitterGadget") {
+    openSplitterInsertDialog();
+    return;
+  }
+  setPendingInsertGadgetKind(kind);
 }
 
 function renderInsertGadgetControls(): void {
@@ -1385,7 +1522,7 @@ function renderInsertGadgetControls(): void {
   insertGadgetButtonEl.textContent = pendingInsertGadgetKind
     ? `Place ${getGadgetInsertLabel(selectedKind)} in canvas`
     : "Place on canvas";
-  insertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(insertGadgetKindEl.value);
+  insertGadgetButtonEl.onclick = () => requestInsertGadgetPlacement(insertGadgetKindEl.value);
   cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
   cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);
 }
@@ -1742,6 +1879,10 @@ document.addEventListener("keydown", event => {
     closeDestructiveDialog();
     return;
   }
+  if (splitterInsertDialogBackdropEl) {
+    closeSplitterInsertDialog();
+    return;
+  }
   if (pendingInsertGadgetKind) {
     setPendingInsertGadgetKind(null);
     return;
@@ -1883,6 +2024,9 @@ function getSelectionSummary(): string {
 
 function getContextualInfoHint(): string {
   if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+    if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
+      return `Click in the canvas to place a new Splitter for ${pendingSplitterInsertConfig.gadget1Id} and ${pendingSplitterInsertConfig.gadget2Id}. Press Escape to cancel placement mode.`;
+    }
     return `Click in the canvas to place a new ${getGadgetInsertLabel(pendingInsertGadgetKind)}. Press Escape to cancel placement mode.`;
   }
 
@@ -2560,6 +2704,9 @@ canvas.addEventListener("mousedown", (e) => {
     if (placement && isInsertableGadgetKind(pendingInsertGadgetKind)) {
       postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
       setPendingInsertGadgetKind(null);
+    } else if (pendingInsertGadgetKind === "SplitterGadget") {
+      errEl.textContent = "Place the splitter inside the same parent or panel tab as both selected gadgets.";
+      renderInfoPanel();
     }
     return;
   }
@@ -3319,6 +3466,7 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
 
 function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
   if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
+  if (pendingInsertGadgetKind === "SplitterGadget" && !pendingSplitterInsertConfig) return null;
   if (!hitWindow(mx, my)) return null;
 
   const { lx, ly } = toLocal(mx, my);
@@ -3353,15 +3501,27 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
       y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
     }
 
-    return {
+    const placement = {
       x,
       y,
       parentId: gadget.id,
       parentItem: gadget.kind === "PanelGadget" ? getPanelActiveItem(gadget) : undefined,
     };
+    if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
+      if (placement.parentId !== pendingSplitterInsertConfig.parentId || placement.parentItem !== pendingSplitterInsertConfig.parentItem) {
+        return null;
+      }
+    }
+    return placement;
   }
 
-  return { x: snappedLocalX, y: snappedLocalY };
+  const placement = { x: snappedLocalX, y: snappedLocalY };
+  if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
+    if ((pendingSplitterInsertConfig.parentId ?? undefined) !== undefined || (pendingSplitterInsertConfig.parentItem ?? undefined) !== undefined) {
+      return null;
+    }
+  }
+  return placement;
 }
 
 function drawContainerChrome(

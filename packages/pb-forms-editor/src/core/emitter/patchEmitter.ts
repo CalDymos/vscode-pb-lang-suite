@@ -1306,6 +1306,11 @@ function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
   }
 }
 
+type GadgetInsertExtraArgs = {
+  gadget1Id?: string;
+  gadget2Id?: string;
+};
+
 type GadgetInsertArgs = {
   kind: InsertableGadgetKind;
   x: number;
@@ -1362,8 +1367,9 @@ function buildInsertedGadgetStub(kind: InsertableGadgetKind, identity: ReturnTyp
 function buildInsertedGadgetBlock(
   args: GadgetInsertArgs,
   identity: ReturnType<typeof buildInsertedGadgetIdentity>,
-  indent: string
-): string {
+  indent: string,
+  extraArgs?: GadgetInsertExtraArgs
+): string | undefined {
   const x = String(Math.trunc(args.x));
   const y = String(Math.trunc(args.y));
   const w = "100";
@@ -1443,6 +1449,14 @@ ${indent}CloseGadgetList()
       return `${prefix}ScrollAreaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 300, 225, 1)
 ${indent}CloseGadgetList()
 `;
+    case "SplitterGadget": {
+      const gadget1Raw = extraArgs?.gadget1Id?.trim();
+      const gadget2Raw = extraArgs?.gadget2Id?.trim();
+      if (!gadget1Raw || !gadget2Raw || gadget1Raw === gadget2Raw) return undefined;
+      return `${prefix}SplitterGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${gadget1Raw}, ${gadget2Raw})
+${indent}SetGadgetState(${identity.id}, 12)
+`;
+    }
     case "WebViewGadget":
       return `${prefix}WebViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
@@ -1584,7 +1598,8 @@ export function applyGadgetInsert(
   y: number,
   parentId?: string,
   parentItem?: number,
-  scanRange?: ScanRange
+  scanRange?: ScanRange,
+  extraArgs?: GadgetInsertExtraArgs
 ): vscode.WorkspaceEdit | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
 
@@ -1599,6 +1614,18 @@ export function applyGadgetInsert(
   const proc = findProcedureBlock(document, openCall.range.line);
   if (!proc) return undefined;
 
+  if (kind === "SplitterGadget") {
+    const gadget1 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget1Id);
+    const gadget2 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget2Id);
+    if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) return undefined;
+    if (gadget1.splitterId || gadget2.splitterId) return undefined;
+    const sourceParentId = gadget1.parentId;
+    const sourceParentItem = gadget1.parentItem;
+    if (sourceParentId !== gadget2.parentId || sourceParentItem !== gadget2.parentItem) return undefined;
+    if ((parentId ?? undefined) !== (sourceParentId ?? undefined)) return undefined;
+    if ((parentItem ?? undefined) !== (sourceParentItem ?? undefined)) return undefined;
+  }
+
   const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets);
   const identity = buildInsertedGadgetIdentity(kind, parsed.gadgets, pbAny);
   const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
@@ -1611,7 +1638,8 @@ export function applyGadgetInsert(
     : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
   if (!anchor) return undefined;
 
-  const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent);
+  const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent, extraArgs);
+  if (!block) return undefined;
   const edit = new vscode.WorkspaceEdit();
   edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0), block);
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
