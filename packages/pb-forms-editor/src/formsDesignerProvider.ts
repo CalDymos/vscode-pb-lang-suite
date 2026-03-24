@@ -1767,6 +1767,31 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         opacity: 0.6;
       }
 
+      .destructiveDialogBackdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.32);
+      }
+
+      .destructiveDialog {
+        min-width: 320px;
+        max-width: min(420px, calc(100vw - 32px));
+        padding: 14px;
+        border-radius: 10px;
+        border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+        background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+      }
+
+      .destructiveDialogTitle {
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
       .row-actions {
         display: flex;
         flex-wrap: wrap;

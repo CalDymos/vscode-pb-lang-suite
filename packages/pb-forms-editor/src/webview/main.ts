@@ -134,7 +134,7 @@ import {
   shouldCleanupStatusBarReboundImage
 } from "../core/statusbarImageInspectorUtils";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/topLevelImageInspectorUtils";
-import { resolveTopLevelCanvasDeleteContextMenuAction } from "../core/topLevelContextMenuUtils";
+import { resolveTopLevelCanvasContextMenuActions } from "../core/topLevelContextMenuUtils";
 
 type SourceRange = { line: number };
 
@@ -639,18 +639,22 @@ let pendingImageInsertDraft: PendingImageInsertDraft | null = null;
 let pendingGadgetItemEditor: PendingGadgetItemEditor | null = null;
 let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
 let pendingDestructiveAction: PendingDestructiveAction | null = null;
+let pendingDestructiveDialogAction: PendingDestructiveAction | null = null;
+let destructiveDialogBackdropEl: HTMLDivElement | null = null;
 
-type PendingCanvasContextMenuAction = ReturnType<typeof resolveTopLevelCanvasDeleteContextMenuAction>;
+type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
+type CanvasContextMenuSelection = Extract<DesignerSelection, { kind: "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" }>;
 
 type PendingCanvasContextMenu = {
   x: number;
   y: number;
-  action: NonNullable<PendingCanvasContextMenuAction>;
-  selection: Extract<DesignerSelection, { kind: "menuEntry" | "toolBarEntry" | "statusBarField" }>;
+  actions: NonNullable<PendingCanvasContextMenuActions>;
+  selection: CanvasContextMenuSelection;
 };
 
 let pendingCanvasContextMenu: PendingCanvasContextMenu | null = null;
 let canvasContextMenuEl: HTMLDivElement | null = null;
+let canvasContextMenuIgnoreMouseDownTimeStamp: number | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -848,12 +852,7 @@ function closeDestructiveAction(): void {
   renderProps();
 }
 
-function confirmDestructiveAction(): void {
-  const action = pendingDestructiveAction;
-  if (!action) return;
-
-  pendingDestructiveAction = null;
-
+function executeDestructiveAction(action: PendingDestructiveAction): void {
   switch (action.kind) {
     case "deleteMenuEntry":
       post({
@@ -917,6 +916,83 @@ function confirmDestructiveAction(): void {
       post({ type: "deleteGadgetColumn", id: action.gadgetId, sourceLine: action.sourceLine });
       return;
   }
+}
+
+function confirmDestructiveAction(): void {
+  const action = pendingDestructiveAction;
+  if (!action) return;
+
+  pendingDestructiveAction = null;
+  executeDestructiveAction(action);
+}
+
+function renderDestructiveDialog(): void {
+  destructiveDialogBackdropEl?.remove();
+  destructiveDialogBackdropEl = null;
+
+  if (!pendingDestructiveDialogAction) return;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) {
+      closeDestructiveDialog();
+    }
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "alertdialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = "Confirm Delete";
+  dialog.appendChild(title);
+
+  dialog.appendChild(mutedNote(pendingDestructiveDialogAction.message));
+
+  const actions = document.createElement("div");
+  actions.className = "miniActions";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = pendingDestructiveDialogAction.confirmLabel;
+  confirmBtn.onclick = () => confirmDestructiveDialogAction();
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeDestructiveDialog();
+
+  actions.appendChild(confirmBtn);
+  actions.appendChild(cancelBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  destructiveDialogBackdropEl = backdrop;
+}
+
+function openDestructiveDialog(action: PendingDestructiveAction, nextSelection?: DesignerSelection): void {
+  pendingDestructiveDialogAction = action;
+  if (nextSelection) {
+    setSelectionAndRefresh(nextSelection);
+  } else {
+    renderProps();
+  }
+  renderDestructiveDialog();
+}
+
+function closeDestructiveDialog(): void {
+  pendingDestructiveDialogAction = null;
+  renderDestructiveDialog();
+}
+
+function confirmDestructiveDialogAction(): void {
+  const action = pendingDestructiveDialogAction;
+  if (!action) return;
+  pendingDestructiveDialogAction = null;
+  renderDestructiveDialog();
+  executeDestructiveAction(action);
 }
 
 function isMenuEntrySelection(sel: DesignerSelection, menuId: string, entryIndex: number): boolean {
@@ -1488,13 +1564,22 @@ function resizeCanvas() {
 
 window.addEventListener("mousedown", event => {
   if (!canvasContextMenuEl) return;
+  if (canvasContextMenuIgnoreMouseDownTimeStamp === event.timeStamp) {
+    canvasContextMenuIgnoreMouseDownTimeStamp = null;
+    return;
+  }
   const target = event.target;
   if (target instanceof Node && canvasContextMenuEl.contains(target)) return;
   closeCanvasContextMenu();
 });
 
 document.addEventListener("keydown", event => {
-  if (event.key === "Escape") closeCanvasContextMenu();
+  if (event.key !== "Escape") return;
+  if (pendingDestructiveDialogAction) {
+    closeDestructiveDialog();
+    return;
+  }
+  closeCanvasContextMenu();
 });
 
 window.addEventListener("resize", resizeCanvas);
@@ -1979,6 +2064,7 @@ function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, 
 
 function closeCanvasContextMenu(): void {
   pendingCanvasContextMenu = null;
+  canvasContextMenuIgnoreMouseDownTimeStamp = null;
   canvasContextMenuEl?.remove();
   canvasContextMenuEl = null;
 }
@@ -1993,69 +2079,128 @@ function renderCanvasContextMenu(): void {
   menuEl.className = "canvasContextMenu";
   menuEl.setAttribute("role", "menu");
 
-  const actionBtn = document.createElement("button");
-  actionBtn.type = "button";
-  actionBtn.className = "canvasContextMenuItem";
-  actionBtn.setAttribute("role", "menuitem");
-  actionBtn.textContent = pendingCanvasContextMenu.action.label;
-  actionBtn.disabled = !pendingCanvasContextMenu.action.enabled;
-  actionBtn.title = pendingCanvasContextMenu.action.title;
-  actionBtn.onclick = event => {
-    event.preventDefault();
-    event.stopPropagation();
-    const current = pendingCanvasContextMenu;
-    closeCanvasContextMenu();
-    if (!current || !current.action.enabled) return;
+  for (const action of pendingCanvasContextMenu.actions) {
+    const actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.className = "canvasContextMenuItem";
+    actionBtn.setAttribute("role", "menuitem");
+    actionBtn.textContent = action.label;
+    actionBtn.disabled = !action.enabled;
+    actionBtn.title = action.title;
+    actionBtn.onclick = event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const current = pendingCanvasContextMenu;
+      closeCanvasContextMenu();
+      if (!current || !action.enabled) return;
 
-    switch (current.action.kind) {
-      case "deleteMenuEntry":
-        if (typeof current.action.sourceLine !== "number") return;
-        openDestructiveAction(
-          {
+      switch (action.kind) {
+        case "deleteMenu":
+          openDestructiveDialog({
+            kind: "deleteMenu",
+            menuId: action.menuId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteMenuEntry":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
             kind: "deleteMenuEntry",
-            menuId: current.action.menuId,
-            entryIndex: current.action.entryIndex,
-            sourceLine: current.action.sourceLine,
-            entryKind: current.action.entryKind,
-            message: current.action.message,
-            confirmLabel: current.action.confirmLabel
-          },
-          current.selection
-        );
-        return;
-      case "deleteToolBarEntry":
-        if (typeof current.action.sourceLine !== "number") return;
-        openDestructiveAction(
-          {
+            menuId: action.menuId,
+            entryIndex: action.entryIndex,
+            sourceLine: action.sourceLine,
+            entryKind: action.entryKind,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteToolBar":
+          openDestructiveDialog({
+            kind: "deleteToolBar",
+            toolBarId: action.toolBarId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteToolBarEntry":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
             kind: "deleteToolBarEntry",
-            toolBarId: current.action.toolBarId,
-            entryIndex: current.action.entryIndex,
-            sourceLine: current.action.sourceLine,
-            entryKind: current.action.entryKind,
-            message: current.action.message,
-            confirmLabel: current.action.confirmLabel
-          },
-          current.selection
-        );
-        return;
-      case "deleteStatusBarField":
-        if (typeof current.action.sourceLine !== "number") return;
-        openDestructiveAction(
-          {
+            toolBarId: action.toolBarId,
+            entryIndex: action.entryIndex,
+            sourceLine: action.sourceLine,
+            entryKind: action.entryKind,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteStatusBar":
+          openDestructiveDialog({
+            kind: "deleteStatusBar",
+            statusBarId: action.statusBarId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteStatusBarField":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
             kind: "deleteStatusBarField",
-            statusBarId: current.action.statusBarId,
-            fieldIndex: current.action.fieldIndex,
-            sourceLine: current.action.sourceLine,
-            message: current.action.message,
-            confirmLabel: current.action.confirmLabel
-          },
-          current.selection
-        );
-        return;
-    }
-  };
+            statusBarId: action.statusBarId,
+            fieldIndex: action.fieldIndex,
+            sourceLine: action.sourceLine,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "insertToolBarButton": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "button"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertToolBarToggleButton": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "toggle"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertToolBarSeparator": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "separator"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertStatusBarImage": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("image"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+        case "insertStatusBarLabel": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("label"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+        case "insertStatusBarProgressBar": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("progress"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+      }
+    };
+    menuEl.appendChild(actionBtn);
+  }
 
-  menuEl.appendChild(actionBtn);
   canvasWrap.appendChild(menuEl);
 
   const wrapRect = canvasWrap.getBoundingClientRect();
@@ -2068,22 +2213,32 @@ function renderCanvasContextMenu(): void {
 }
 
 function openCanvasContextMenu(
-  hitSelection: Extract<DesignerSelection, { kind: "menuEntry" | "toolBarEntry" | "statusBarField" }>,
+  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string },
   x: number,
-  y: number
+  y: number,
+  triggerMouseDownTimeStamp?: number
 ): void {
-  const action = resolveTopLevelCanvasDeleteContextMenuAction({
-    selection: hitSelection,
+  const actions = resolveTopLevelCanvasContextMenuActions({
+    selection: target,
     menus: model.menus,
     toolbars: model.toolbars,
     statusbars: model.statusbars
   });
-  if (!action) {
+  if (!actions?.length) {
     closeCanvasContextMenu();
     return;
   }
 
-  pendingCanvasContextMenu = { x, y, action, selection: hitSelection };
+  const selection: CanvasContextMenuSelection = target.kind === "toolBarAddButton"
+    ? { kind: "toolbar", id: target.toolBarId }
+    : target.kind === "statusBarAddButton"
+      ? { kind: "statusbar", id: target.statusBarId }
+      : target;
+
+  pendingCanvasContextMenu = { x, y, actions, selection };
+  canvasContextMenuIgnoreMouseDownTimeStamp = typeof triggerMouseDownTimeStamp === "number"
+    ? triggerMouseDownTimeStamp
+    : null;
   renderCanvasContextMenu();
 }
 
@@ -2165,9 +2320,7 @@ canvas.addEventListener("contextmenu", (e) => {
     statusBarFieldRects: statusBarFieldPreviewRects
   });
 
-  if (topLevelChromeHit?.selection.kind === "menuEntry"
-    || topLevelChromeHit?.selection.kind === "toolBarEntry"
-    || topLevelChromeHit?.selection.kind === "statusBarField") {
+  if (topLevelChromeHit) {
     selection = topLevelChromeHit.selection;
     drag = null;
     canvas.style.cursor = "default";
@@ -2214,11 +2367,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (toolBarAddHit) {
     const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarAddHit.toolBarId);
     if (toolBar) {
-      postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "button"));
       selection = { kind: "toolbar", id: toolBar.id };
       drag = null;
       canvas.style.cursor = "default";
       renderSelectionUiWithoutParentSelector();
+      openCanvasContextMenu({ kind: "toolBarAddButton", toolBarId: toolBar.id }, mx, my, e.timeStamp);
       return;
     }
   }
@@ -2227,11 +2380,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (statusBarAddHit) {
     const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarAddHit.statusBarId);
     if (statusBar) {
-      postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("image"));
       selection = { kind: "statusbar", id: statusBar.id };
       drag = null;
       canvas.style.cursor = "default";
       renderSelectionUiWithoutParentSelector();
+      openCanvasContextMenu({ kind: "statusBarAddButton", statusBarId: statusBar.id }, mx, my, e.timeStamp);
       return;
     }
   }
