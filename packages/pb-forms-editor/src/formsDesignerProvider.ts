@@ -1738,6 +1738,35 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         flex: 1;
       }
 
+      .canvasContextMenu {
+        position: absolute;
+        z-index: 20;
+        min-width: 200px;
+        padding: 6px;
+        border-radius: 8px;
+        border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+        background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      }
+
+      .canvasContextMenuItem {
+        width: 100%;
+        text-align: left;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--vscode-menu-foreground, var(--vscode-editorWidget-foreground));
+        border: 1px solid transparent;
+      }
+
+      .canvasContextMenuItem:hover:not(:disabled) {
+        background: var(--vscode-list-hoverBackground);
+      }
+
+      .canvasContextMenuItem:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+
       .row-actions {
         display: flex;
         flex-wrap: wrap;

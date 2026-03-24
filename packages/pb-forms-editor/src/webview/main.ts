@@ -134,6 +134,7 @@ import {
   shouldCleanupStatusBarReboundImage
 } from "../core/statusbarImageInspectorUtils";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/topLevelImageInspectorUtils";
+import { resolveTopLevelCanvasDeleteContextMenuAction } from "../core/topLevelContextMenuUtils";
 
 type SourceRange = { line: number };
 
@@ -505,6 +506,7 @@ function post(msg: WebviewToExtensionMessage) {
 
 
 const canvas = document.getElementById("designer") as HTMLCanvasElement;
+const canvasWrap = canvas.parentElement as HTMLDivElement;
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
@@ -637,6 +639,18 @@ let pendingImageInsertDraft: PendingImageInsertDraft | null = null;
 let pendingGadgetItemEditor: PendingGadgetItemEditor | null = null;
 let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
 let pendingDestructiveAction: PendingDestructiveAction | null = null;
+
+type PendingCanvasContextMenuAction = ReturnType<typeof resolveTopLevelCanvasDeleteContextMenuAction>;
+
+type PendingCanvasContextMenu = {
+  x: number;
+  y: number;
+  action: NonNullable<PendingCanvasContextMenuAction>;
+  selection: Extract<DesignerSelection, { kind: "menuEntry" | "toolBarEntry" | "statusBarField" }>;
+};
+
+let pendingCanvasContextMenu: PendingCanvasContextMenu | null = null;
+let canvasContextMenuEl: HTMLDivElement | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -1472,6 +1486,17 @@ function resizeCanvas() {
   render();
 }
 
+window.addEventListener("mousedown", event => {
+  if (!canvasContextMenuEl) return;
+  const target = event.target;
+  if (target instanceof Node && canvasContextMenuEl.contains(target)) return;
+  closeCanvasContextMenu();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeCanvasContextMenu();
+});
+
 window.addEventListener("resize", resizeCanvas);
 
 window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>) => {
@@ -1952,6 +1977,116 @@ function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, 
   renderProps();
 }
 
+function closeCanvasContextMenu(): void {
+  pendingCanvasContextMenu = null;
+  canvasContextMenuEl?.remove();
+  canvasContextMenuEl = null;
+}
+
+function renderCanvasContextMenu(): void {
+  canvasContextMenuEl?.remove();
+  canvasContextMenuEl = null;
+
+  if (!pendingCanvasContextMenu) return;
+
+  const menuEl = document.createElement("div");
+  menuEl.className = "canvasContextMenu";
+  menuEl.setAttribute("role", "menu");
+
+  const actionBtn = document.createElement("button");
+  actionBtn.type = "button";
+  actionBtn.className = "canvasContextMenuItem";
+  actionBtn.setAttribute("role", "menuitem");
+  actionBtn.textContent = pendingCanvasContextMenu.action.label;
+  actionBtn.disabled = !pendingCanvasContextMenu.action.enabled;
+  actionBtn.title = pendingCanvasContextMenu.action.title;
+  actionBtn.onclick = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const current = pendingCanvasContextMenu;
+    closeCanvasContextMenu();
+    if (!current || !current.action.enabled) return;
+
+    switch (current.action.kind) {
+      case "deleteMenuEntry":
+        if (typeof current.action.sourceLine !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteMenuEntry",
+            menuId: current.action.menuId,
+            entryIndex: current.action.entryIndex,
+            sourceLine: current.action.sourceLine,
+            entryKind: current.action.entryKind,
+            message: current.action.message,
+            confirmLabel: current.action.confirmLabel
+          },
+          current.selection
+        );
+        return;
+      case "deleteToolBarEntry":
+        if (typeof current.action.sourceLine !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteToolBarEntry",
+            toolBarId: current.action.toolBarId,
+            entryIndex: current.action.entryIndex,
+            sourceLine: current.action.sourceLine,
+            entryKind: current.action.entryKind,
+            message: current.action.message,
+            confirmLabel: current.action.confirmLabel
+          },
+          current.selection
+        );
+        return;
+      case "deleteStatusBarField":
+        if (typeof current.action.sourceLine !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteStatusBarField",
+            statusBarId: current.action.statusBarId,
+            fieldIndex: current.action.fieldIndex,
+            sourceLine: current.action.sourceLine,
+            message: current.action.message,
+            confirmLabel: current.action.confirmLabel
+          },
+          current.selection
+        );
+        return;
+    }
+  };
+
+  menuEl.appendChild(actionBtn);
+  canvasWrap.appendChild(menuEl);
+
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const left = Math.max(4, Math.min(pendingCanvasContextMenu.x + 4, Math.max(4, wrapRect.width - menuEl.offsetWidth - 4)));
+  const top = Math.max(4, Math.min(pendingCanvasContextMenu.y + 4, Math.max(4, wrapRect.height - menuEl.offsetHeight - 4)));
+  menuEl.style.left = `${left}px`;
+  menuEl.style.top = `${top}px`;
+
+  canvasContextMenuEl = menuEl;
+}
+
+function openCanvasContextMenu(
+  hitSelection: Extract<DesignerSelection, { kind: "menuEntry" | "toolBarEntry" | "statusBarField" }>,
+  x: number,
+  y: number
+): void {
+  const action = resolveTopLevelCanvasDeleteContextMenuAction({
+    selection: hitSelection,
+    menus: model.menus,
+    toolbars: model.toolbars,
+    statusbars: model.statusbars
+  });
+  if (!action) {
+    closeCanvasContextMenu();
+    return;
+  }
+
+  pendingCanvasContextMenu = { x, y, action, selection: hitSelection };
+  renderCanvasContextMenu();
+}
+
 function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
   const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(), nextLockTop, nextLockBottom);
   if (!update) return;
@@ -2008,7 +2143,46 @@ function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value:
   renderProps();
 }
 
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const topLevelChromeHit = resolveTopLevelChromeHit({
+    x: mx,
+    y: my,
+    windowHit: hitWindow(mx, my),
+    menuId: getPrimaryMenu()?.id,
+    menuRect: chromeLayout?.menuBarRect ?? null,
+    menuEntryRects: menuEntryPreviewRects,
+    toolBarId: getPrimaryToolbar()?.id,
+    toolBarRect: chromeLayout?.toolBarRect ?? null,
+    toolBarEntryRects: toolBarEntryPreviewRects,
+    statusBarId: getPrimaryStatusbar()?.id,
+    statusBarRect: chromeLayout?.statusBarRect ?? null,
+    statusBarFieldRects: statusBarFieldPreviewRects
+  });
+
+  if (topLevelChromeHit?.selection.kind === "menuEntry"
+    || topLevelChromeHit?.selection.kind === "toolBarEntry"
+    || topLevelChromeHit?.selection.kind === "statusBarField") {
+    selection = topLevelChromeHit.selection;
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    openCanvasContextMenu(topLevelChromeHit.selection, mx, my);
+    return;
+  }
+
+  closeCanvasContextMenu();
+});
+
 canvas.addEventListener("mousedown", (e) => {
+  closeCanvasContextMenu();
+  if (e.button !== 0) return;
+
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
