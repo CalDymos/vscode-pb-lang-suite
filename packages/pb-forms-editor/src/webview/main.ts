@@ -107,6 +107,7 @@ import {
 } from "../core/webviewStateUtils";
 import {
   buildInsertedGadgetIdentity,
+  canHostInsertedGadgets,
   getGadgetInsertLabel,
   getInsertableGadgetKinds,
   isInsertableGadgetKind,
@@ -1400,8 +1401,6 @@ const MIN_GADGET_H = 8;
 // Keep this permissive; PB allows small windows, but avoid 0/negative sizes.
 const MIN_WIN_W = 40;
 const MIN_WIN_H = 40;
-
-const CONTAINER_KINDS = new Set(PBFD_SYMBOLS.containerGadgetKinds);
 
 type RectLike = { x: number; y: number; w: number; h: number };
 
@@ -3339,10 +3338,7 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
   const cache = new Map<string, GadgetPreviewLayout>();
   for (let i = model.gadgets.length - 1; i >= 0; i--) {
     const gadget = model.gadgets[i];
-    const isContainerParent = gadget.kind === "ContainerGadget"
-      || gadget.kind === "PanelGadget"
-      || gadget.kind === "ScrollAreaGadget";
-    if (!isContainerParent) continue;
+    if (!canHostInsertedGadgets(gadget)) continue;
 
     const layout = getGadgetPreviewLayout(gadget, metrics, cache);
     if (!layout.visible) continue;
@@ -5046,7 +5042,7 @@ function renderList() {
         || n.kind === "menu"
         || n.kind === "toolbar"
         || n.kind === "statusbar"
-        || (n.kind === "gadget" && CONTAINER_KINDS.has(gadgetMap.get(n.id)?.kind ?? ""));
+        || (n.kind === "gadget" && canHostInsertedGadgets(gadgetMap.get(n.id)));
       expanded.set(k, defaultExpanded);
     }
     return expanded.get(k)!;
@@ -5146,7 +5142,7 @@ function renderParentSelector() {
   }
 
   const containers = model.gadgets
-    .filter(g => CONTAINER_KINDS.has(g.kind))
+    .filter(g => canHostInsertedGadgets(g))
     .sort((a, b) => depthOf(a.id) - depthOf(b.id));
 
   for (const g of containers) {

@@ -149,6 +149,37 @@ EndProcedure
   assert.equal(gadget?.y, 44);
 });
 
+test("inserts a new child gadget into a frame gadget with #PB_Frame_Container", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Frame3D_0
+  #Text_0
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#Frame3D_0, 10, 10, 200, 120, "", #PB_Frame_Container)
+  TextGadget(#Text_0, 8, 8, 80, 20, "Inside")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "ButtonGadget", 22, 44, "#Frame3D_0")
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#Button_0, 22, 44, 100, 25, ""\)[\s\S]*CloseGadgetList\(\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Button_0");
+  assert.ok(gadget, "Expected inserted frame-container child gadget.");
+  assert.equal(gadget?.parentId, "#Frame3D_0");
+  assert.equal(gadget?.x, 22);
+  assert.equal(gadget?.y, 44);
+});
+
 test("deletes a top-level gadget together with its managed lines and event binding", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow
@@ -201,6 +232,35 @@ test("deletes a panel gadget recursively with all child gadgets and tab items", 
   assert.doesNotMatch(patchedText, /#StrTab1/);
   assert.doesNotMatch(patchedText, /#BtnTab2/);
   assert.doesNotMatch(patchedText, /AddGadgetItem\(#PnlMain/);
+  assert.doesNotMatch(patchedText, /CloseGadgetList\(\)/);
+  assert.equal(parsed.gadgets.length, 0);
+});
+
+test("deletes a frame gadget with #PB_Frame_Container recursively including CloseGadgetList", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Frame3D_0
+  #Text_0
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  FrameGadget(#Frame3D_0, 10, 10, 200, 120, "", #PB_Frame_Container)
+  TextGadget(#Text_0, 8, 8, 80, 20, "Inside")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#Frame3D_0")
+  );
+
+  assert.doesNotMatch(patchedText, /#Frame3D_0/);
+  assert.doesNotMatch(patchedText, /#Text_0/);
   assert.doesNotMatch(patchedText, /CloseGadgetList\(\)/);
   assert.equal(parsed.gadgets.length, 0);
 });

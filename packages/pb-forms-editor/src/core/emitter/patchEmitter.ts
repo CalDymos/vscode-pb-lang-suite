@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
-import { buildInsertedGadgetIdentity, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
+import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
@@ -96,7 +96,7 @@ function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.Worksp
     entries?: () => Array<[unknown, unknown[]]>;
     getOperations?: () => Array<{
       kind: "replace" | "insert" | "delete";
-      uri: unknown;
+      uri: vscode.Uri;
       range?: vscode.Range;
       position?: vscode.Position;
       newText?: string;
@@ -1319,8 +1319,18 @@ type GadgetInsertAnchor = {
   indent: string;
 };
 
-function isImplicitGadgetListStarter(name: string): boolean {
-  return name === "ContainerGadget" || name === "PanelGadget" || name === "ScrollAreaGadget";
+function buildGadgetListParentIds(gadgets: readonly Gadget[]): Set<string> {
+  const ids = new Set<string>();
+  for (const gadget of gadgets) {
+    if (canHostInsertedGadgets(gadget)) ids.add(gadget.id);
+  }
+  return ids;
+}
+
+function isImplicitGadgetListStarterCall(call: PbCall, gadgetListParentIds: ReadonlySet<string>): boolean {
+  if (!/gadget$/i.test(call.name)) return false;
+  const key = stableKey(call.assignedVar, splitParams(call.args));
+  return !!(key && gadgetListParentIds.has(key));
 }
 
 function isGadgetSectionCallName(nameLower: string): boolean {
@@ -1509,14 +1519,15 @@ function findChildSectionInsertAnchor(
   document: vscode.TextDocument,
   calls: PbCall[],
   proc: LineBlock,
-  parentId: string,
-  parentKind: InsertableGadgetKind | string,
+  parent: Gadget,
+  gadgetListParentIds: ReadonlySet<string>,
   parentItem?: number
 ): GadgetInsertAnchor | undefined {
+  const parentId = parent.id;
   const parentCreate = findCallByStableKey(calls, parentId, name => /gadget$/i.test(name));
   if (!parentCreate) return undefined;
 
-  if (parentKind === "PanelGadget") {
+  if (parent.kind === "PanelGadget") {
     const targetItem = typeof parentItem === "number" ? parentItem : 0;
     let depth = 1;
     let panelItemIndex = -1;
@@ -1537,14 +1548,14 @@ function findChildSectionInsertAnchor(
           return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
         }
       }
-      if (isImplicitGadgetListStarter(call.name)) {
+      if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
         depth += 1;
       }
     }
     return undefined;
   }
 
-  if (parentKind === "ContainerGadget" || parentKind === "ScrollAreaGadget") {
+  if (canHostInsertedGadgets(parent)) {
     let depth = 1;
     for (const call of calls) {
       if (call.range.line <= parentCreate.range.line) continue;
@@ -1557,7 +1568,7 @@ function findChildSectionInsertAnchor(
         }
         continue;
       }
-      if (isImplicitGadgetListStarter(call.name)) {
+      if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
         depth += 1;
       }
     }
@@ -1590,11 +1601,12 @@ export function applyGadgetInsert(
 
   const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets);
   const identity = buildInsertedGadgetIdentity(kind, parsed.gadgets, pbAny);
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
   const anchor = parentId
     ? (() => {
         const parent = parsed.gadgets.find(entry => entry.id === parentId);
-        if (!parent) return undefined;
-        return findChildSectionInsertAnchor(document, calls, proc, parentId, parent.kind, parentItem);
+        if (!parent || !canHostInsertedGadgets(parent)) return undefined;
+        return findChildSectionInsertAnchor(document, calls, proc, parent, gadgetListParentIds, parentItem);
       })()
     : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
   if (!anchor) return undefined;
@@ -1604,10 +1616,6 @@ export function applyGadgetInsert(
   edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0), block);
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
   return edit;
-}
-
-function isContainerLikeGadgetKind(kind: string): boolean {
-  return kind === "ContainerGadget" || kind === "PanelGadget" || kind === "ScrollAreaGadget";
 }
 
 function collectDeletedGadgetIds(gadgets: readonly Gadget[], rootId: string): Set<string> {
@@ -1628,7 +1636,11 @@ function collectDeletedGadgetIds(gadgets: readonly Gadget[], rootId: string): Se
   return deleted;
 }
 
-function collectDeletedContainerCloseLines(calls: PbCall[], deletedIds: ReadonlySet<string>): Set<number> {
+function collectDeletedContainerCloseLines(
+  calls: PbCall[],
+  deletedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
   const lines = new Set<number>();
   const stack: string[] = [];
 
@@ -1641,12 +1653,9 @@ function collectDeletedContainerCloseLines(calls: PbCall[], deletedIds: Readonly
       continue;
     }
 
-    if (/gadget$/i.test(call.name)) {
-      const params = splitParams(call.args);
-      const key = stableKey(call.assignedVar, params);
-      if (key && isContainerLikeGadgetKind(call.name)) {
-        stack.push(key);
-      }
+    if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
+      const key = stableKey(call.assignedVar, splitParams(call.args));
+      if (key) stack.push(key);
       continue;
     }
 
@@ -1661,7 +1670,11 @@ function collectDeletedContainerCloseLines(calls: PbCall[], deletedIds: Readonly
   return lines;
 }
 
-function collectDeletedGadgetLineNumbers(calls: PbCall[], deletedIds: ReadonlySet<string>): Set<number> {
+function collectDeletedGadgetLineNumbers(
+  calls: PbCall[],
+  deletedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
   const lines = new Set<number>();
 
   for (const call of calls) {
@@ -1686,7 +1699,7 @@ function collectDeletedGadgetLineNumbers(calls: PbCall[], deletedIds: ReadonlySe
     }
   }
 
-  for (const line of collectDeletedContainerCloseLines(calls, deletedIds)) {
+  for (const line of collectDeletedContainerCloseLines(calls, deletedIds, gadgetListParentIds)) {
     lines.add(line);
   }
 
@@ -1717,7 +1730,8 @@ export function applyGadgetDelete(
   if (hasExternalSplitterReference(parsed.gadgets, deletedIds)) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
-  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds);
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds, gadgetListParentIds);
   if (!lineNumbers.size) return undefined;
 
   const edit = new vscode.WorkspaceEdit();

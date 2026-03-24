@@ -25,6 +25,7 @@ import {
   ENUM_NAMES
 } from "../model";
 
+import { canHostInsertedGadgets } from "../gadgetInsertUtils";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { PbCall, scanCalls } from "./callScanner";
 
@@ -100,7 +101,7 @@ export function parseFormDocument(text: string): FormDocument {
 
 
   const pushImplicitParent = (g: Gadget) => {
-    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget) {
+    if (canHostInsertedGadgets(g)) {
       parentStack.push({
         id: g.id,
         kind: g.kind,

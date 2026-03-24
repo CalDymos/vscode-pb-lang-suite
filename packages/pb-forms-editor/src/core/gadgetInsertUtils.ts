@@ -1,3 +1,4 @@
+import { hasPbFlag } from "./topLevelPreviewUtils";
 import { GADGET_KIND, type Gadget, type GadgetKind } from "./model";
 
 export const PBFD_INSERTABLE_GADGET_KINDS = [
@@ -133,6 +134,14 @@ export function getGadgetInsertPrefix(kind: InsertableGadgetKind): string {
 
 export function getGadgetInsertLabel(kind: InsertableGadgetKind): string {
   return INSERT_LABEL_BY_KIND[kind];
+}
+
+export function canHostInsertedGadgets(gadget: { kind: string; flagsExpr?: string } | undefined): boolean {
+  if (!gadget) return false;
+  return gadget.kind === "ContainerGadget"
+    || gadget.kind === "PanelGadget"
+    || gadget.kind === "ScrollAreaGadget"
+    || (gadget.kind === "FrameGadget" && hasPbFlag(gadget.flagsExpr, "#PB_Frame_Container"));
 }
 
 function stripLeadingHash(value: string | undefined): string {
