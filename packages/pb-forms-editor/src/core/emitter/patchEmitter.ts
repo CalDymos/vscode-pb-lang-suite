@@ -90,6 +90,40 @@ function scanDocumentCalls(document: vscode.TextDocument, scanRange?: ScanRange)
   return scanCalls(document.getText(), scanRange);
 }
 
+function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.WorkspaceEdit | undefined): void {
+  if (!source) return;
+  const sourceWithOps = source as vscode.WorkspaceEdit & {
+    entries?: () => Array<[unknown, unknown[]]>;
+    getOperations?: () => Array<{
+      kind: "replace" | "insert" | "delete";
+      uri: unknown;
+      range?: vscode.Range;
+      position?: vscode.Position;
+      newText?: string;
+    }>;
+  };
+
+  if (typeof sourceWithOps.entries !== "function") {
+    const operations = sourceWithOps.getOperations?.() ?? [];
+    for (const operation of operations) {
+      if (operation.kind === "replace" && operation.range) {
+        target.replace(operation.uri, operation.range, operation.newText ?? "");
+      }
+      else if (operation.kind === "insert" && operation.position) {
+        target.insert(operation.uri, operation.position, operation.newText ?? "");
+      }
+      else if (operation.kind === "delete" && operation.range) {
+        target.delete(operation.uri, operation.range);
+      }
+    }
+    return;
+  }
+
+  for (const [uri, textEdits] of sourceWithOps.entries()) {
+    target.set(uri, [...target.get(uri), ...textEdits]);
+  }
+}
+
 function findCallByStableKey(
   calls: PbCall[],
   key: string,
@@ -1569,6 +1603,135 @@ export function applyGadgetInsert(
   const edit = new vscode.WorkspaceEdit();
   edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0), block);
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
+  return edit;
+}
+
+function isContainerLikeGadgetKind(kind: string): boolean {
+  return kind === "ContainerGadget" || kind === "PanelGadget" || kind === "ScrollAreaGadget";
+}
+
+function collectDeletedGadgetIds(gadgets: readonly Gadget[], rootId: string): Set<string> {
+  const deleted = new Set<string>();
+
+  const visit = (gadgetId: string) => {
+    if (deleted.has(gadgetId)) return;
+    deleted.add(gadgetId);
+
+    for (const gadget of gadgets) {
+      if (gadget.parentId === gadgetId) {
+        visit(gadget.id);
+      }
+    }
+  };
+
+  visit(rootId);
+  return deleted;
+}
+
+function collectDeletedContainerCloseLines(calls: PbCall[], deletedIds: ReadonlySet<string>): Set<number> {
+  const lines = new Set<number>();
+  const stack: string[] = [];
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+
+    if (nameLower === "opengadgetlist") {
+      const targetId = firstParamOfCall(call.args);
+      if (targetId.length) stack.push(targetId);
+      continue;
+    }
+
+    if (/gadget$/i.test(call.name)) {
+      const params = splitParams(call.args);
+      const key = stableKey(call.assignedVar, params);
+      if (key && isContainerLikeGadgetKind(call.name)) {
+        stack.push(key);
+      }
+      continue;
+    }
+
+    if (nameLower === "closegadgetlist") {
+      const targetId = stack.pop();
+      if (targetId && deletedIds.has(targetId)) {
+        lines.add(call.range.line);
+      }
+    }
+  }
+
+  return lines;
+}
+
+function collectDeletedGadgetLineNumbers(calls: PbCall[], deletedIds: ReadonlySet<string>): Set<number> {
+  const lines = new Set<number>();
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    let targetId: string | undefined;
+
+    if (/gadget$/i.test(call.name)) {
+      targetId = stableKey(call.assignedVar, splitParams(call.args));
+    }
+    else if (
+      nameLower === "addgadgetitem"
+      || nameLower === "addgadgetcolumn"
+      || nameLower === "resizegadget"
+      || nameLower === "opengadgetlist"
+      || GADGET_PROPERTY_NAMES.has(nameLower)
+    ) {
+      targetId = firstParamOfCall(call.args);
+    }
+
+    if (targetId && deletedIds.has(targetId)) {
+      lines.add(call.range.line);
+    }
+  }
+
+  for (const line of collectDeletedContainerCloseLines(calls, deletedIds)) {
+    lines.add(line);
+  }
+
+  return lines;
+}
+
+function hasExternalSplitterReference(gadgets: readonly Gadget[], deletedIds: ReadonlySet<string>): boolean {
+  return gadgets.some(gadget => {
+    if (deletedIds.has(gadget.id) || gadget.kind !== "SplitterGadget") return false;
+    return (gadget.gadget1Id && deletedIds.has(gadget.gadget1Id))
+      || (gadget.gadget2Id && deletedIds.has(gadget.gadget2Id));
+  });
+}
+
+export function applyGadgetDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
+  if (!target?.source) return undefined;
+
+  const deletedIds = collectDeletedGadgetIds(parsed.gadgets, gadgetKey);
+  const deletedGadgets = parsed.gadgets.filter(gadget => deletedIds.has(gadget.id));
+
+  if (deletedGadgets.some(gadget => gadget.kind === "CustomGadget")) return undefined;
+  if (hasExternalSplitterReference(parsed.gadgets, deletedIds)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds);
+  if (!lineNumbers.size) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (const line of [...lineNumbers].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  for (const gadget of deletedGadgets) {
+    if (!gadget.eventProc) continue;
+    appendWorkspaceEdit(edit, applyGadgetEventProcUpdate(document, gadget.id, undefined, scanRange));
+  }
+
+  const remainingGadgets = parsed.gadgets.filter(gadget => !deletedIds.has(gadget.id));
+  applyGadgetHeadPatchForGadgets(edit, document, remainingGadgets);
   return edit;
 }
 

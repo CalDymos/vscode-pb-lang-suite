@@ -228,6 +228,7 @@ type Gadget = {
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
+  source?: SourceRange;
 };
 
 type WindowModel = {
@@ -395,6 +396,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadget: "insertGadget",
+  deleteGadget: "deleteGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
   deleteGadgetItem: "deleteGadgetItem",
@@ -469,6 +471,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -642,6 +645,7 @@ type PendingGadgetColumnEditor = {
 };
 
 type PendingDestructiveAction =
+  | { kind: "deleteGadget"; gadgetId: string; message: string; confirmLabel: string }
   | { kind: "deleteMenuEntry"; menuId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
   | { kind: "deleteMenu"; menuId: string; message: string; confirmLabel: string }
   | { kind: "deleteToolBarEntry"; toolBarId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
@@ -664,12 +668,22 @@ let pendingDestructiveDialogAction: PendingDestructiveAction | null = null;
 let destructiveDialogBackdropEl: HTMLDivElement | null = null;
 
 type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
-type CanvasContextMenuSelection = Extract<DesignerSelection, { kind: "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" }>;
+type GadgetCanvasContextMenuAction = {
+  kind: "deleteGadget";
+  label: "Delete Gadget…";
+  title: string;
+  enabled: boolean;
+  gadgetId: string;
+  confirmLabel: "Delete Gadget";
+  message: string;
+};
+type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
+type CanvasContextMenuSelection = Extract<DesignerSelection, { kind: "gadget" | "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" }>;
 
 type PendingCanvasContextMenu = {
   x: number;
   y: number;
-  actions: NonNullable<PendingCanvasContextMenuActions>;
+  actions: CanvasContextMenuAction[];
   selection: CanvasContextMenuSelection;
 };
 
@@ -875,6 +889,9 @@ function closeDestructiveAction(): void {
 
 function executeDestructiveAction(action: PendingDestructiveAction): void {
   switch (action.kind) {
+    case "deleteGadget":
+      post({ type: "deleteGadget", id: action.gadgetId });
+      return;
     case "deleteMenuEntry":
       post({
         type: "deleteMenuEntry",
@@ -1262,6 +1279,66 @@ function getPredictedInsertedGadgetId(kind: string): string | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
   const pbAny = shouldInsertGadgetAsPbAny(model.gadgets);
   return buildInsertedGadgetIdentity(kind, model.gadgets, pbAny).id;
+}
+
+function collectGadgetDeleteIds(rootId: string): Set<string> {
+  const deleted = new Set<string>();
+
+  const visit = (gadgetId: string) => {
+    if (deleted.has(gadgetId)) return;
+    deleted.add(gadgetId);
+    for (const gadget of model.gadgets) {
+      if (gadget.parentId === gadgetId) {
+        visit(gadget.id);
+      }
+    }
+  };
+
+  visit(rootId);
+  return deleted;
+}
+
+function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | undefined {
+  if (!gadget) return "The selected gadget could not be resolved.";
+  if (typeof gadget.source?.line !== "number") {
+    return "Only parsed gadgets with a source line can be deleted.";
+  }
+
+  const deletedIds = collectGadgetDeleteIds(gadget.id);
+  const deletedGadgets = model.gadgets.filter(entry => deletedIds.has(entry.id));
+
+  if (deletedGadgets.some(entry => entry.kind === "CustomGadget")) {
+    return "Custom gadgets are not covered by the current delete path yet.";
+  }
+
+  const externalSplitter = model.gadgets.find(entry => {
+    if (deletedIds.has(entry.id) || entry.kind !== "SplitterGadget") return false;
+    return (entry.gadget1Id && deletedIds.has(entry.gadget1Id)) || (entry.gadget2Id && deletedIds.has(entry.gadget2Id));
+  });
+
+  if (externalSplitter) {
+    return "Gadgets referenced by another SplitterGadget are not covered by the current delete path yet.";
+  }
+
+  return undefined;
+}
+
+function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructiveAction | undefined {
+  const blockedReason = getGadgetDeleteBlockedReason(gadget);
+  if (!gadget || blockedReason) return undefined;
+
+  const deletedIds = collectGadgetDeleteIds(gadget.id);
+  const childCount = Math.max(0, deletedIds.size - 1);
+  const message = childCount > 0
+    ? `Delete gadget '${gadget.id}' and its ${childCount} child gadget${childCount === 1 ? "" : "s"}?`
+    : `Delete gadget '${gadget.id}'?`;
+
+  return {
+    kind: "deleteGadget",
+    gadgetId: gadget.id,
+    message,
+    confirmLabel: "Delete Gadget"
+  };
 }
 
 function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
@@ -2193,6 +2270,14 @@ function renderCanvasContextMenu(): void {
       if (!current || !action.enabled) return;
 
       switch (action.kind) {
+        case "deleteGadget":
+          openDestructiveDialog({
+            kind: "deleteGadget",
+            gadgetId: action.gadgetId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
         case "deleteMenu":
           openDestructiveDialog({
             kind: "deleteMenu",
@@ -2310,18 +2395,41 @@ function renderCanvasContextMenu(): void {
   canvasContextMenuEl = menuEl;
 }
 
+function resolveCanvasContextMenuActions(
+  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string }
+): CanvasContextMenuAction[] | null {
+  if (target.kind === "gadget") {
+    const gadget = model.gadgets.find(entry => entry.id === target.id);
+    if (!gadget) return null;
+
+    const blockedReason = getGadgetDeleteBlockedReason(gadget);
+    const action = buildGadgetDeleteAction(gadget);
+    return [{
+      kind: "deleteGadget",
+      label: "Delete Gadget…",
+      title: blockedReason ?? "Delete the currently selected gadget.",
+      enabled: !blockedReason,
+      gadgetId: gadget.id,
+      confirmLabel: "Delete Gadget",
+      message: action?.message ?? `Delete gadget '${gadget.id}'?`
+    }];
+  }
+
+  return resolveTopLevelCanvasContextMenuActions({
+    selection: target,
+    menus: model.menus,
+    toolbars: model.toolbars,
+    statusbars: model.statusbars
+  });
+}
+
 function openCanvasContextMenu(
   target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string },
   x: number,
   y: number,
   triggerMouseDownTimeStamp?: number
 ): void {
-  const actions = resolveTopLevelCanvasContextMenuActions({
-    selection: target,
-    menus: model.menus,
-    toolbars: model.toolbars,
-    statusbars: model.statusbars
-  });
+  const actions = resolveCanvasContextMenuActions(target);
   if (!actions?.length) {
     closeCanvasContextMenu();
     return;
@@ -2424,6 +2532,16 @@ canvas.addEventListener("contextmenu", (e) => {
     canvas.style.cursor = "default";
     renderSelectionUiWithoutParentSelector();
     openCanvasContextMenu(topLevelChromeHit.selection, mx, my);
+    return;
+  }
+
+  const gadgetHit = hitTestGadget(mx, my);
+  if (gadgetHit) {
+    selection = { kind: "gadget", id: gadgetHit.id };
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    openCanvasContextMenu({ kind: "gadget", id: gadgetHit.id }, mx, my);
     return;
   }
 
@@ -7346,6 +7464,22 @@ function renderProps() {
       )
     )
   );
+
+  const deleteGadgetBtn = document.createElement("button");
+  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
+  deleteGadgetBtn.textContent = "Delete Gadget";
+  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
+  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
+  deleteGadgetBtn.onclick = () => {
+    const action = buildGadgetDeleteAction(g);
+    if (!action) return;
+    openDestructiveAction(action);
+  };
+  propsEl.appendChild(row("Delete", deleteGadgetBtn));
+  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
 
   if (g.parentId) {
     const btn = document.createElement("button");

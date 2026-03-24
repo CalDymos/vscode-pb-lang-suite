@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -147,6 +147,69 @@ EndProcedure
   assert.equal(gadget?.parentItem, 0);
   assert.equal(gadget?.x, 22);
   assert.equal(gadget?.y, 44);
+});
+
+test("deletes a top-level gadget together with its managed lines and event binding", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 90, 25, "Apply")
+  GadgetToolTip(#BtnApply, "Run")
+  ResizeGadget(#BtnApply, 10, 20, #PB_Ignore, #PB_Ignore)
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_Gadget
+      Select EventGadget()
+        Case #BtnApply
+          HandleApply(EventType())
+      EndSelect
+  EndSelect
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#BtnApply")
+  );
+
+  assert.doesNotMatch(patchedText, /#BtnApply/);
+  assert.doesNotMatch(patchedText, /ButtonGadget\(#BtnApply/);
+  assert.doesNotMatch(patchedText, /GadgetToolTip\(#BtnApply/);
+  assert.doesNotMatch(patchedText, /ResizeGadget\(#BtnApply/);
+  assert.doesNotMatch(patchedText, /Case #BtnApply/);
+  assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply"), undefined);
+});
+
+test("deletes a panel gadget recursively with all child gadgets and tab items", () => {
+  const text = loadFixture("fixtures/smoke/05-container-panel.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#PnlMain")
+  );
+
+  assert.doesNotMatch(patchedText, /#PnlMain/);
+  assert.doesNotMatch(patchedText, /#TxtTab0/);
+  assert.doesNotMatch(patchedText, /#StrTab1/);
+  assert.doesNotMatch(patchedText, /#BtnTab2/);
+  assert.doesNotMatch(patchedText, /AddGadgetItem\(#PnlMain/);
+  assert.doesNotMatch(patchedText, /CloseGadgetList\(\)/);
+  assert.equal(parsed.gadgets.length, 0);
+});
+
+test("refuses to delete a gadget that is still referenced by another splitter", () => {
+  const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
+  const document = new FakeTextDocument(text);
+  const edit = applyGadgetDelete(document.asTextDocument(), "#TxtLeft");
+  assert.equal(edit, undefined);
 });
 
 test("roundtrips normal gadget rect changes", () => {
