@@ -356,6 +356,47 @@ EndProcedure
   assert.equal(inner?.parentId, "#Container_0");
 });
 
+test("reparents a splitter together with its referenced gadgets", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #TxtLeft
+  #TxtRight
+  #SplitMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 360, height = 240)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 220, 120)
+  CloseGadgetList()
+  StringGadget(#TxtLeft, 16, 20, 90, 25, "Left")
+  StringGadget(#TxtRight, 112, 20, 90, 25, "Right")
+  SplitterGadget(#SplitMain, 16, 56, 200, 100, #TxtLeft, #TxtRight)
+  SetGadgetState(#SplitMain, 80)
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetReparent(document, "#SplitMain", "#Container_0")
+  );
+
+  assert.match(patchedText, /ContainerGadget\(#Container_0, 10, 10, 220, 120\)[\s\S]*StringGadget\(#TxtLeft, 16, 20, 90, 25, "Left"\)[\s\S]*StringGadget\(#TxtRight, 112, 20, 90, 25, "Right"\)[\s\S]*SplitterGadget\(#SplitMain, 0, 0, 200, 100, #TxtLeft, #TxtRight\)[\s\S]*CloseGadgetList\(\)[\s\S]*SetGadgetState\(#SplitMain, 80\)/);
+  const left = parsed.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+  assert.equal(left?.parentId, "#Container_0");
+  assert.equal(right?.parentId, "#Container_0");
+  assert.equal(splitter?.parentId, "#Container_0");
+  assert.equal(splitter?.x, 0);
+  assert.equal(splitter?.y, 0);
+  assert.equal(left?.splitterId, "#SplitMain");
+  assert.equal(right?.splitterId, "#SplitMain");
+});
+
 test("rejects reparenting into the selected gadget subtree", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow

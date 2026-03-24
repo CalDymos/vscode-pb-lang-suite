@@ -1536,7 +1536,9 @@ function openSelectParentDialog(gadget: Gadget): void {
   title.className = "destructiveDialogTitle";
   title.textContent = `Change Parent — ${gadget.id}`;
   dialog.appendChild(title);
-  dialog.appendChild(mutedNote("This first reparenting cut follows the original Select Parent flow for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
+  dialog.appendChild(mutedNote(gadget.kind === "SplitterGadget"
+    ? "This Select Parent flow follows the original splitter special case: gadget1 and gadget2 are moved together with the splitter into the selected parent block, and the splitter itself resets to X/Y = 0,0."
+    : "This Select Parent flow follows the original path for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
 
   const validationEl = document.createElement("div");
   validationEl.className = "muted";

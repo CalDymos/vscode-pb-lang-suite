@@ -49,7 +49,7 @@ function collectDescendantIds(gadgets: readonly ReparentDialogGadgetLike[], root
 
 export function canOpenGadgetReparentDialog(gadget: { kind: string } | undefined): boolean {
   if (!gadget) return false;
-  return gadget.kind !== "SplitterGadget" && gadget.kind !== "CustomGadget";
+  return gadget.kind !== "CustomGadget";
 }
 
 export function getGadgetReparentParentOptions(

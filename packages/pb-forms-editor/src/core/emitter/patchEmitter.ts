@@ -1883,7 +1883,7 @@ export function applyGadgetReparent(
   const parsed = parseFormDocument(document.getText());
   const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
   if (!target?.source) return undefined;
-  if (target.kind === "SplitterGadget" || target.kind === "CustomGadget") return undefined;
+  if (target.kind === "CustomGadget") return undefined;
 
   const nextParentId = parentId ?? undefined;
   const nextParentItem = typeof parentItem === "number" ? Math.trunc(parentItem) : undefined;
@@ -1906,8 +1906,25 @@ export function applyGadgetReparent(
 
   const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
   const requestedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadgetKey);
+  const movedRootIds = [target.id];
 
-  if (nextParentId && requestedIds.has(nextParentId)) {
+  let splitterGadget1: Gadget | undefined;
+  let splitterGadget2: Gadget | undefined;
+  if (target.kind === "SplitterGadget") {
+    splitterGadget1 = target.gadget1Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget1Id) : undefined;
+    splitterGadget2 = target.gadget2Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget2Id) : undefined;
+    if (!splitterGadget1 || !splitterGadget2) return undefined;
+    movedRootIds.unshift(splitterGadget1.id, splitterGadget2.id);
+  }
+
+  const blockedTargetIds = new Set<string>(requestedIds);
+  for (const rootId of movedRootIds) {
+    for (const movedId of collectRequestedGadgetDeleteIds(parsed.gadgets, rootId)) {
+      blockedTargetIds.add(movedId);
+    }
+  }
+
+  if (nextParentId && blockedTargetIds.has(nextParentId)) {
     return undefined;
   }
 
@@ -1923,22 +1940,39 @@ export function applyGadgetReparent(
   const rootCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
   if (!rootCall) return undefined;
 
-  const movedLines = collectMovedGadgetConstructorLineNumbers(calls, requestedIds, gadgetListParentIds);
-  if (!movedLines.size) return undefined;
-
   const updatedRootLine = buildReparentedRootGadgetLine(rootCall);
   if (!updatedRootLine) return undefined;
 
   const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
   const edit = new vscode.WorkspaceEdit();
-  const movedBlock = buildLineBlockWithReplacements(
+  const movedBlocks: string[] = [];
+  const deletedLines = new Set<number>();
+
+  if (target.kind === "SplitterGadget") {
+    for (const gadget of [splitterGadget1!, splitterGadget2!]) {
+      const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadget.id);
+      const movedLines = collectMovedGadgetConstructorLineNumbers(calls, movedIds, gadgetListParentIds);
+      if (!movedLines.size) return undefined;
+      movedBlocks.push(buildLineBlock(document, movedLines));
+      for (const line of movedLines) {
+        deletedLines.add(line);
+      }
+    }
+  }
+
+  const movedLines = collectMovedGadgetConstructorLineNumbers(calls, requestedIds, gadgetListParentIds);
+  if (!movedLines.size) return undefined;
+  movedBlocks.push(buildLineBlockWithReplacements(
     document,
     movedLines,
     new Map([[rootCall.range.line, updatedRootLine]])
-  );
+  ));
+  for (const line of movedLines) {
+    deletedLines.add(line);
+  }
 
-  edit.insert(document.uri, anchorPos, movedBlock);
-  for (const line of [...movedLines].sort((a, b) => b - a)) {
+  edit.insert(document.uri, anchorPos, movedBlocks.join(""));
+  for (const line of [...deletedLines].sort((a, b) => b - a)) {
     edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
   }
 

@@ -46,9 +46,9 @@ test("excludes the selected gadget subtree from reparent target options", () => 
   assert.deepEqual(options.map(option => option.value), ["window"]);
 });
 
-test("rejects splitter and custom gadgets for the first select-parent workflow cut", () => {
+test("allows splitter gadgets but still blocks custom gadgets for select-parent", () => {
   assert.equal(canOpenGadgetReparentDialog(undefined), false);
-  assert.equal(canOpenGadgetReparentDialog({ kind: "SplitterGadget" }), false);
+  assert.equal(canOpenGadgetReparentDialog({ kind: "SplitterGadget" }), true);
   assert.equal(canOpenGadgetReparentDialog({ kind: "CustomGadget" }), false);
   assert.equal(canOpenGadgetReparentDialog({ kind: "ButtonGadget" }), true);
 });
