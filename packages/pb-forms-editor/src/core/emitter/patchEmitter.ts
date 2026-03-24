@@ -348,7 +348,7 @@ function buildMenuEntryLine(args: MenuEntryArgs): string {
     case MENU_ENTRY_KIND.MenuTitle:
       return `MenuTitle(${(args.textRaw ?? "\"\"").trim()})`;
     case MENU_ENTRY_KIND.MenuItem: {
-      const id = args.idRaw ?? "0";
+      const id = args.idRaw?.trim() || "0";
       const text = appendMenuShortcut(args.textRaw ?? "\"\"", args.shortcut);
       const icon = args.iconRaw;
       return icon ? `MenuItem(${id}, ${text}, ${icon})` : `MenuItem(${id}, ${text})`;
@@ -493,14 +493,14 @@ function applyMenuEnumPatch(
 }
 
 function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
-  const id = args.idRaw ?? "0";
+  const id = args.idRaw?.trim() || "0";
   const icon = args.iconRaw ?? "0";
   const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
   return `ToolBarImageButton(${id}, ${icon}${toggle})`;
 }
 
 function buildToolBarToolTipLine(toolBarId: string | undefined, args: ToolBarEntryArgs): string {
-  const id = args.idRaw ?? "0";
+  const id = args.idRaw?.trim() || "0";
   const text = args.textRaw ?? "\"\"";
   return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
 }
@@ -2551,7 +2551,7 @@ export function applyMenuEntryEventUpdate(
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
     ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
     : undefined;
@@ -2596,7 +2596,7 @@ export function applyToolBarEntryEventUpdate(
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
     ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
     : undefined;

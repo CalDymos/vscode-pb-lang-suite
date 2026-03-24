@@ -5008,7 +5008,8 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!selectedCanEditId) return;
-            postSelectedMenuUpdate({ idRaw: v });
+            const trimmed = v.trim();
+            postSelectedMenuUpdate({ idRaw: trimmed.length ? trimmed : (selectedEntry.idRaw ?? "") });
           },
           {
             disabled: !selectedCanEditId,
@@ -5081,7 +5082,7 @@ function renderProps() {
             post({
               type: "setMenuEntryEvent",
               entryIdRaw: selectedEntry.idRaw,
-              eventProc: v.length ? v : undefined
+              eventProc: v.trim().length ? v.trim() : undefined
             });
           },
           {
@@ -5361,7 +5362,8 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!canEditSelectedId) return;
-            postSelectedToolBarEntryUpdate({ idRaw: v });
+            const trimmed = v.trim();
+            postSelectedToolBarEntryUpdate({ idRaw: trimmed.length ? trimmed : (selectedEntry.idRaw ?? "") });
           },
           {
             disabled: !canEditSelectedId,
@@ -5562,7 +5564,7 @@ function renderProps() {
             post({
               type: "setToolBarEntryEvent",
               entryIdRaw: selectedEntry.idRaw,
-              eventProc: v.length ? v : undefined
+              eventProc: v.trim().length ? v.trim() : undefined
             });
           },
           {

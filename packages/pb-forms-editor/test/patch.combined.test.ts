@@ -1857,7 +1857,7 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
 });
 
 
-test("preserves raw menu constants without pre-trimming during selected-entry style updates", () => {
+test("trims menu constants during selected-entry style updates", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Menu")
@@ -1874,10 +1874,10 @@ EndProcedure
     })
   );
 
-  assert.match(patchedText, /MenuItem\(  #MenuOpenRenamed  , "Open"\)/);
+  assert.match(patchedText, /MenuItem\(#MenuOpenRenamed, "Open"\)/);
 });
 
-test("preserves raw toolbar variables without pre-trimming during selected-entry style updates", () => {
+test("trims toolbar variables during selected-entry style updates", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
@@ -1894,5 +1894,5 @@ EndProcedure
     })
   );
 
-  assert.match(patchedText, /ToolBarImageButton\(  #TbOpenRenamed  , 0\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpenRenamed, 0\)/);
 });

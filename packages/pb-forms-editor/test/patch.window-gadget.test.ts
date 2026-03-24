@@ -1256,7 +1256,7 @@ EndProcedure
 
 
 
-test('preserves surrounding whitespace for menu SelectProc updates', () => {
+test('trims surrounding whitespace for menu SelectProc updates', () => {
   const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
 
   const document = new FakeTextDocument(text);
@@ -1264,10 +1264,10 @@ test('preserves surrounding whitespace for menu SelectProc updates', () => {
   assert.ok(edit, 'Expected menu event proc edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  assert.match(patchedText, /Case #MenuOpen\s+  HandleMenuOpenUpdated  \(EventMenu\(\)\)/s);
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpenUpdated\(EventMenu\(\)\)/s);
 });
 
-test('preserves surrounding whitespace for toolbar SelectProc updates', () => {
+test('trims surrounding whitespace for toolbar SelectProc updates', () => {
   const text = loadFixture("fixtures/smoke/15-object-event-bindings.pbf");
 
   const document = new FakeTextDocument(text);
@@ -1275,7 +1275,7 @@ test('preserves surrounding whitespace for toolbar SelectProc updates', () => {
   assert.ok(edit, 'Expected toolbar event proc edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  assert.match(patchedText, /Case #TbRefresh\s+  HandleToolbarRefreshUpdated  \(EventMenu\(\)\)/s);
+  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
 });
 
 test('preserves surrounding whitespace for window SelectProc updates', () => {
