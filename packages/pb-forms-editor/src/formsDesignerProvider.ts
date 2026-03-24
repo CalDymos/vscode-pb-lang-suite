@@ -1675,6 +1675,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       }
 
       .panelTopTabPanel {
+        box-sizing: border-box;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -1821,6 +1822,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
       .toolboxActions {
         margin-top: 8px;
+        flex: 0 0 auto;
+        align-items: stretch;
+      }
+
+      .toolboxActions button {
+        min-height: 32px;
       }
 
       .treeItem {
@@ -2022,7 +2029,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
               <div class="muted panelInlineHint">Click a gadget to place it on the canvas. Double-click inserts it immediately at the original default position.</div>
               <div id="toolboxList" class="toolboxTree"></div>
               <div class="toolboxActions row-actions">
-                <button id="insertGadgetButton" type="button">Place on canvas</button>
                 <button id="cancelInsertGadgetButton" type="button" style="display:none">Cancel</button>
               </div>
             </div>

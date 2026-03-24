@@ -543,7 +543,6 @@ const toolboxListEl = document.getElementById("toolboxList") as HTMLDivElement |
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
-const insertGadgetButtonEl = document.getElementById("insertGadgetButton") as HTMLButtonElement;
 const cancelInsertGadgetButtonEl = document.getElementById("cancelInsertGadgetButton") as HTMLButtonElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
@@ -1548,7 +1547,7 @@ function renderTopPanelTabs(): void {
 }
 
 function renderInsertGadgetControls(): void {
-  if (!toolboxListEl || !insertGadgetButtonEl || !cancelInsertGadgetButtonEl) return;
+  if (!toolboxListEl || !cancelInsertGadgetButtonEl) return;
 
   const selectedKind = getSelectedToolboxKind();
   toolboxListEl.innerHTML = "";
@@ -1626,11 +1625,6 @@ function renderInsertGadgetControls(): void {
     toolboxListEl.appendChild(categoryEl);
   }
 
-  insertGadgetButtonEl.textContent = pendingInsertGadgetKind
-    ? `Place ${getGadgetInsertLabel(selectedKind)} in canvas`
-    : "Place on canvas";
-  insertGadgetButtonEl.disabled = pendingInsertGadgetKind !== null && pendingInsertGadgetKind === selectedKind;
-  insertGadgetButtonEl.onclick = () => requestInsertGadgetPlacement(selectedKind);
   cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
   cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);
 }
