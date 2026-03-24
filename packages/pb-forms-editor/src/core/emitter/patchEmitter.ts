@@ -1835,6 +1835,116 @@ function buildLineBlock(document: vscode.TextDocument, lineNumbers: ReadonlySet<
     .join("");
 }
 
+function buildUpdatedCallText(call: PbCall, params: string[]): string {
+  const rebuilt = `${call.name}(${params.join(", ")})`;
+  return call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : `${call.indent ?? ""}${rebuilt}`;
+}
+
+function buildLineBlockWithReplacements(
+  document: vscode.TextDocument,
+  lineNumbers: ReadonlySet<number>,
+  replacements: ReadonlyMap<number, string>
+): string {
+  const text = document.getText();
+  return [...lineNumbers]
+    .sort((a, b) => a - b)
+    .map(line => {
+      const replacement = replacements.get(line);
+      if (replacement !== undefined) {
+        const lineInfo = document.lineAt(line);
+        const hasBreak = lineInfo.rangeIncludingLineBreak.end.character !== lineInfo.range.end.character
+          || lineInfo.rangeIncludingLineBreak.end.line !== lineInfo.range.end.line;
+        return hasBreak ? `${replacement}\n` : replacement;
+      }
+
+      const lineInfo = document.lineAt(line);
+      const start = document.offsetAt(lineInfo.range.start);
+      const end = document.offsetAt(lineInfo.rangeIncludingLineBreak.end);
+      return text.slice(start, end);
+    })
+    .join("");
+}
+
+function buildReparentedRootGadgetLine(call: PbCall): string | undefined {
+  const params = splitParams(call.args);
+  if (params.length < 3) return undefined;
+  params[1] = "0";
+  params[2] = "0";
+  return buildUpdatedCallText(call, params);
+}
+
+export function applyGadgetReparent(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  parentId?: string,
+  parentItem?: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
+  if (!target?.source) return undefined;
+  if (target.kind === "SplitterGadget" || target.kind === "CustomGadget") return undefined;
+
+  const nextParentId = parentId ?? undefined;
+  const nextParentItem = typeof parentItem === "number" ? Math.trunc(parentItem) : undefined;
+  const currentParentId = target.parentId ?? undefined;
+  const currentParentItem = typeof target.parentItem === "number" ? target.parentItem : undefined;
+
+  if (currentParentId === nextParentId && currentParentItem === nextParentItem) {
+    return undefined;
+  }
+
+  const windowKey = parsed.window?.id;
+  if (!windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const requestedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadgetKey);
+
+  if (nextParentId && requestedIds.has(nextParentId)) {
+    return undefined;
+  }
+
+  const anchor = nextParentId
+    ? (() => {
+        const parent = parsed.gadgets.find(entry => entry.id === nextParentId);
+        if (!parent || !canHostInsertedGadgets(parent)) return undefined;
+        return findChildSectionInsertAnchor(document, calls, proc, parent, gadgetListParentIds, nextParentItem);
+      })()
+    : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
+  if (!anchor) return undefined;
+
+  const rootCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  if (!rootCall) return undefined;
+
+  const movedLines = collectMovedGadgetConstructorLineNumbers(calls, requestedIds, gadgetListParentIds);
+  if (!movedLines.size) return undefined;
+
+  const updatedRootLine = buildReparentedRootGadgetLine(rootCall);
+  if (!updatedRootLine) return undefined;
+
+  const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
+  const edit = new vscode.WorkspaceEdit();
+  const movedBlock = buildLineBlockWithReplacements(
+    document,
+    movedLines,
+    new Map([[rootCall.range.line, updatedRootLine]])
+  );
+
+  edit.insert(document.uri, anchorPos, movedBlock);
+  for (const line of [...movedLines].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  return edit;
+}
+
 export function applyGadgetDelete(
   document: vscode.TextDocument,
   gadgetKey: string,

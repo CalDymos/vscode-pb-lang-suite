@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -286,6 +286,101 @@ EndProcedure
   assert.equal(splitter?.gadget2Id, "#TxtRight");
   assert.equal(left?.splitterId, "#Splitter_0");
   assert.equal(right?.splitterId, "#Splitter_0");
+});
+
+test("reparents a normal gadget into a container and resets its origin", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 200, 120)
+  CloseGadgetList()
+  ButtonGadget(#BtnApply, 24, 36, 90, 25, "Apply")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetReparent(document, "#BtnApply", "#Container_0")
+  );
+
+  assert.match(patchedText, /ContainerGadget\(#Container_0, 10, 10, 200, 120\)[\s\S]*ButtonGadget\(#BtnApply, 0, 0, 90, 25, "Apply"\)[\s\S]*CloseGadgetList\(\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  assert.equal(gadget?.parentId, "#Container_0");
+  assert.equal(gadget?.x, 0);
+  assert.equal(gadget?.y, 0);
+});
+
+test("reparents a gadget subtree into a panel tab", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Panel_0
+  #Container_0
+  #TxtInner
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#Panel_0, 10, 10, 200, 120)
+  AddGadgetItem(#Panel_0, -1, "Tab 1")
+  AddGadgetItem(#Panel_0, -1, "Tab 2")
+  CloseGadgetList()
+  ContainerGadget(#Container_0, 12, 16, 120, 80)
+    TextGadget(#TxtInner, 6, 6, 80, 20, "Inner")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetReparent(document, "#Container_0", "#Panel_0", 1)
+  );
+
+  assert.match(patchedText, /AddGadgetItem\(#Panel_0, -1, "Tab 1"\)[\s\S]*AddGadgetItem\(#Panel_0, -1, "Tab 2"\)[\s\S]*ContainerGadget\(#Container_0, 0, 0, 120, 80\)[\s\S]*TextGadget\(#TxtInner, 6, 6, 80, 20, "Inner"\)[\s\S]*CloseGadgetList\(\)/);
+  const container = parsed.gadgets.find((g) => g.id === "#Container_0");
+  const inner = parsed.gadgets.find((g) => g.id === "#TxtInner");
+  assert.equal(container?.parentId, "#Panel_0");
+  assert.equal(container?.parentItem, 1);
+  assert.equal(container?.x, 0);
+  assert.equal(container?.y, 0);
+  assert.equal(inner?.parentId, "#Container_0");
+});
+
+test("rejects reparenting into the selected gadget subtree", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #InnerPanel
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 200, 120)
+    PanelGadget(#InnerPanel, 6, 6, 120, 80)
+    AddGadgetItem(#InnerPanel, -1, "Tab 1")
+    CloseGadgetList()
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyGadgetReparent(document, "#Container_0", "#InnerPanel", 0);
+
+  assert.equal(edit, undefined);
 });
 
 test("deletes a top-level gadget together with its managed lines and event binding", () => {

@@ -114,6 +114,10 @@ import {
   type InsertableGadgetKind
 } from "../core/gadgetInsertUtils";
 import {
+  canOpenGadgetReparentDialog,
+  getGadgetReparentParentOptions,
+} from "../core/gadgetReparentUtils";
+import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
   getImmediateToolboxInsertPosition,
@@ -405,6 +409,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadget: "insertGadget",
+  reparentGadget: "reparentGadget",
   deleteGadget: "deleteGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
@@ -480,6 +485,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -696,6 +702,7 @@ let pendingDestructiveAction: PendingDestructiveAction | null = null;
 let pendingDestructiveDialogAction: PendingDestructiveAction | null = null;
 let destructiveDialogBackdropEl: HTMLDivElement | null = null;
 let splitterInsertDialogBackdropEl: HTMLDivElement | null = null;
+let selectParentDialogBackdropEl: HTMLDivElement | null = null;
 
 type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
 type GadgetCanvasContextMenuAction = {
@@ -1500,6 +1507,125 @@ function openSplitterInsertDialog(): void {
 function closeSplitterInsertDialog(): void {
   splitterInsertDialogBackdropEl?.remove();
   splitterInsertDialogBackdropEl = null;
+}
+
+function closeSelectParentDialog(): void {
+  selectParentDialogBackdropEl?.remove();
+  selectParentDialogBackdropEl = null;
+}
+
+function openSelectParentDialog(gadget: Gadget): void {
+  if (!canOpenGadgetReparentDialog(gadget)) return;
+
+  closeSelectParentDialog();
+
+  const options = getGadgetReparentParentOptions(model.window, model.gadgets, gadget.id);
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) closeSelectParentDialog();
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = `Change Parent — ${gadget.id}`;
+  dialog.appendChild(title);
+  dialog.appendChild(mutedNote("This first reparenting cut follows the original Select Parent flow for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
+
+  const validationEl = document.createElement("div");
+  validationEl.className = "muted";
+  validationEl.style.color = "var(--vscode-errorForeground)";
+
+  const parentSelect = document.createElement("select");
+  const itemSelect = document.createElement("select");
+  const currentValue = gadget.parentId ? `gadget:${gadget.parentId}` : "window";
+
+  const renderItemOptions = () => {
+    const selectedOption = options.find(option => option.value === parentSelect.value) ?? options[0];
+    itemSelect.innerHTML = "";
+    const itemLabels = selectedOption?.itemLabels ?? [];
+
+    if (!itemLabels.length) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "(none)";
+      itemSelect.appendChild(empty);
+      itemSelect.disabled = true;
+      itemSelect.value = "";
+      return;
+    }
+
+    itemSelect.disabled = false;
+    for (let index = 0; index < itemLabels.length; index += 1) {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = itemLabels[index] || `Item ${index + 1}`;
+      itemSelect.appendChild(option);
+    }
+
+    const currentItem = selectedOption?.parentId === gadget.parentId && typeof gadget.parentItem === "number"
+      ? Math.max(0, Math.min(gadget.parentItem, itemLabels.length - 1))
+      : 0;
+    itemSelect.value = String(currentItem);
+  };
+
+  for (const optionInfo of options) {
+    const option = document.createElement("option");
+    option.value = optionInfo.value;
+    option.textContent = optionInfo.label;
+    parentSelect.appendChild(option);
+  }
+
+  parentSelect.value = options.some(option => option.value === currentValue) ? currentValue : "window";
+  parentSelect.onchange = () => {
+    validationEl.textContent = "";
+    renderItemOptions();
+  };
+  renderItemOptions();
+
+  dialog.appendChild(row("Parent", parentSelect));
+  dialog.appendChild(row("Parent Item", itemSelect));
+  dialog.appendChild(validationEl);
+
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeSelectParentDialog();
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "OK";
+  okBtn.onclick = () => {
+    const selectedOption = options.find(option => option.value === parentSelect.value);
+    if (!selectedOption) {
+      validationEl.textContent = "Select a valid parent.";
+      return;
+    }
+
+    const nextParentId = selectedOption.parentId;
+    const nextParentItem = selectedOption.itemLabels.length && !itemSelect.disabled
+      ? Number.parseInt(itemSelect.value || "0", 10)
+      : undefined;
+
+    post({
+      type: "reparentGadget",
+      id: gadget.id,
+      parentId: nextParentId,
+      parentItem: Number.isFinite(nextParentItem) ? nextParentItem : undefined,
+    });
+    closeSelectParentDialog();
+  };
+  actions.appendChild(cancelBtn);
+  actions.appendChild(okBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  selectParentDialogBackdropEl = backdrop;
 }
 
 function requestInsertGadgetPlacement(kind: string): void {
@@ -7742,6 +7868,19 @@ function renderProps() {
     };
     propsEl.appendChild(row("", btn));
   }
+
+  const changeParentBtn = document.createElement("button");
+  const canChangeParent = canOpenGadgetReparentDialog(g);
+  changeParentBtn.textContent = "Change Parent";
+  changeParentBtn.disabled = !canChangeParent;
+  changeParentBtn.title = canChangeParent
+    ? "Open the original-style Select Parent dialog for this gadget."
+    : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
+  changeParentBtn.onclick = () => {
+    if (!canChangeParent) return;
+    openSelectParentDialog(g);
+  };
+  propsEl.appendChild(row("", changeParentBtn));
 
   propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));

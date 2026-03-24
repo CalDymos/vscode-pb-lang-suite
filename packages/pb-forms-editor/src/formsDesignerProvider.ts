@@ -7,6 +7,7 @@ import {
   applyGadgetColumnUpdate,
   applyGadgetDelete,
   applyGadgetInsert,
+  applyGadgetReparent,
   applyGadgetOpenArgsUpdate,
   applyCustomGadgetCodeUpdate,
   applyGadgetPropertyUpdate,
@@ -224,6 +225,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
   insertGadget: "insertGadget",
+  reparentGadget: "reparentGadget",
   deleteGadget: "deleteGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
@@ -292,6 +294,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -855,6 +858,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
           const edit = applyGadgetInsert(document, msg.kind, msg.x, msg.y, msg.parentId, msg.parentItem, sr, { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id });
           await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget: {
+          const edit = applyGadgetReparent(document, msg.id, msg.parentId, msg.parentItem, sr);
+          await applyEditOrError(edit, `Could not change parent for gadget '${msg.id}'. No safe Select Parent patch path found${rangeInfo}.`);
           return;
         }
 
