@@ -766,6 +766,7 @@ type PbfdSymbols = {
 
 type PbfdWindow = Window & {
   __PBFD_SYMBOLS__?: PbfdSymbols;
+  __PBFD_TOOLBOX_ICON_URIS__?: Record<string, string>;
 };
 
 const pbfdWindow = window as PbfdWindow;
@@ -792,6 +793,7 @@ function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entry
 }
 
 const PBFD_SYMBOLS: PbfdSymbols = pbfdWindow.__PBFD_SYMBOLS__;
+const TOOLBOX_ICON_URIS: Record<string, string> = pbfdWindow.__PBFD_TOOLBOX_ICON_URIS__ ?? {};
 
 function menuEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.menuEntryKinds.join("/")})`;
@@ -1558,7 +1560,15 @@ function renderInsertGadgetControls(): void {
 
       const iconEl = document.createElement("div");
       iconEl.className = "toolboxIcon";
-      iconEl.textContent = entry.iconText;
+      const iconUri = entry.iconAsset ? TOOLBOX_ICON_URIS[entry.iconAsset] : undefined;
+      if (iconUri) {
+        const iconImgEl = document.createElement("img");
+        iconImgEl.src = iconUri;
+        iconImgEl.alt = "";
+        iconEl.appendChild(iconImgEl);
+      } else {
+        iconEl.textContent = entry.iconText;
+      }
 
       const labelEl = document.createElement("div");
       labelEl.textContent = entry.label;
@@ -8343,4 +8353,7 @@ function asInt(v: any): number {
 
 resizeCanvas();
 setupPanelResize();
+setupTopPanelResize();
+toolboxTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("toolbox"));
+objectsTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("objects"));
 vscode.postMessage({ type: "ready" });

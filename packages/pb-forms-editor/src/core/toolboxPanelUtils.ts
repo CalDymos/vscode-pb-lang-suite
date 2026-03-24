@@ -7,6 +7,7 @@ export interface ToolboxPanelItem {
   key: string;
   label: string;
   iconText: string;
+  iconAsset?: string;
   kind?: InsertableGadgetKind;
   enabled: boolean;
 }
@@ -28,11 +29,12 @@ function buildIconText(label: string): string {
   return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 }
 
-function item(label: string, kind?: InsertableGadgetKind, enabled = Boolean(kind)): ToolboxPanelItem {
+function item(label: string, kind?: InsertableGadgetKind, enabled = Boolean(kind), iconAsset?: string): ToolboxPanelItem {
   return {
     key: kind ?? label.replace(/\s+/g, "-"),
     label,
     iconText: buildIconText(label),
+    iconAsset,
     kind,
     enabled,
   };
@@ -43,57 +45,57 @@ const TOOLBOX_PANEL_CATEGORIES: readonly ToolboxPanelCategory[] = [
     id: "common-controls",
     title: "Common Controls",
     items: [
-      item("Cursor"),
-      item("Button", GADGET_KIND.ButtonGadget),
-      item("ButtonImage", GADGET_KIND.ButtonImageGadget),
-      item("Calendar", GADGET_KIND.CalendarGadget),
-      item("Canvas", GADGET_KIND.CanvasGadget),
-      item("CheckBox", GADGET_KIND.CheckBoxGadget),
-      item("ComboBox", GADGET_KIND.ComboBoxGadget),
-      item("Date", GADGET_KIND.DateGadget),
-      item("Editor", GADGET_KIND.EditorGadget),
-      item("Explorer Combo", GADGET_KIND.ExplorerComboGadget),
-      item("Explorer List", GADGET_KIND.ExplorerListGadget),
-      item("Explorer Tree", GADGET_KIND.ExplorerTreeGadget),
-      item("HyperLink", GADGET_KIND.HyperLinkGadget),
-      item("Image", GADGET_KIND.ImageGadget),
-      item("IP", GADGET_KIND.IPAddressGadget),
-      item("ListIcon", GADGET_KIND.ListIconGadget),
-      item("ListView", GADGET_KIND.ListViewGadget),
+      item("Cursor", undefined, false, "vd_cursor.png"),
+      item("Button", GADGET_KIND.ButtonGadget, true, "vd_buttongadget.png"),
+      item("ButtonImage", GADGET_KIND.ButtonImageGadget, true, "vd_buttonimagegadget.png"),
+      item("Calendar", GADGET_KIND.CalendarGadget, true, "vd_calendargadget.png"),
+      item("Canvas", GADGET_KIND.CanvasGadget, true, "vd_canvasgadget.png"),
+      item("CheckBox", GADGET_KIND.CheckBoxGadget, true, "vd_checkboxgadget.png"),
+      item("ComboBox", GADGET_KIND.ComboBoxGadget, true, "vd_comboboxgadget.png"),
+      item("Date", GADGET_KIND.DateGadget, true, "vd_dategadget.png"),
+      item("Editor", GADGET_KIND.EditorGadget, true, "vd_editorgadget.png"),
+      item("Explorer Combo", GADGET_KIND.ExplorerComboGadget, true, "vd_explorercombogadget.png"),
+      item("Explorer List", GADGET_KIND.ExplorerListGadget, true, "vd_explorerlistgadget.png"),
+      item("Explorer Tree", GADGET_KIND.ExplorerTreeGadget, true, "vd_explorertreegadget.png"),
+      item("HyperLink", GADGET_KIND.HyperLinkGadget, true, "vd_hyperlinkgadget.png"),
+      item("Image", GADGET_KIND.ImageGadget, true, "vd_imagegadget.png"),
+      item("IP", GADGET_KIND.IPAddressGadget, true, "vd_ipaddressgadget.png"),
+      item("ListIcon", GADGET_KIND.ListIconGadget, true, "vd_listicongadget.png"),
+      item("ListView", GADGET_KIND.ListViewGadget, true, "vd_listviewgadget.png"),
       item("OpenGL", GADGET_KIND.OpenGLGadget),
-      item("Option", GADGET_KIND.OptionGadget),
-      item("ProgressBar", GADGET_KIND.ProgressBarGadget),
+      item("Option", GADGET_KIND.OptionGadget, true, "vd_optiongadget.png"),
+      item("ProgressBar", GADGET_KIND.ProgressBarGadget, true, "vd_progressbargadget.png"),
       item("Scintilla", GADGET_KIND.ScintillaGadget),
-      item("ScrollBar", GADGET_KIND.ScrollBarGadget),
-      item("Spin", GADGET_KIND.SpinGadget),
-      item("String", GADGET_KIND.StringGadget),
-      item("Text", GADGET_KIND.TextGadget),
-      item("TrackBar", GADGET_KIND.TrackBarGadget),
-      item("Tree", GADGET_KIND.TreeGadget),
-      item("Web", GADGET_KIND.WebGadget),
-      item("WebView", GADGET_KIND.WebViewGadget),
+      item("ScrollBar", GADGET_KIND.ScrollBarGadget, true, "vd_scrollbargadget.png"),
+      item("Spin", GADGET_KIND.SpinGadget, true, "vd_spingadget.png"),
+      item("String", GADGET_KIND.StringGadget, true, "vd_stringgadget.png"),
+      item("Text", GADGET_KIND.TextGadget, true, "vd_textgadget.png"),
+      item("TrackBar", GADGET_KIND.TrackBarGadget, true, "vd_trackbargadget.png"),
+      item("Tree", GADGET_KIND.TreeGadget, true, "vd_treegadget.png"),
+      item("Web", GADGET_KIND.WebGadget, true, "vd_webgadget.png"),
+      item("WebView", GADGET_KIND.WebViewGadget, true, "vd_webgadget.png"),
     ],
   },
   {
     id: "containers",
     title: "Containers",
     items: [
-      item("Cursor"),
-      item("Container", GADGET_KIND.ContainerGadget),
-      item("Frame", GADGET_KIND.FrameGadget),
-      item("Panel", GADGET_KIND.PanelGadget),
-      item("ScrollArea", GADGET_KIND.ScrollAreaGadget),
-      item("Splitter", GADGET_KIND.SplitterGadget),
+      item("Cursor", undefined, false, "vd_cursor.png"),
+      item("Container", GADGET_KIND.ContainerGadget, true, "vd_containergadget.png"),
+      item("Frame", GADGET_KIND.FrameGadget, true, "vd_frame3dgadget.png"),
+      item("Panel", GADGET_KIND.PanelGadget, true, "vd_panelgadget.png"),
+      item("ScrollArea", GADGET_KIND.ScrollAreaGadget, true, "vd_scrollareagadget.png"),
+      item("Splitter", GADGET_KIND.SplitterGadget, true, "vd_splittergadget.png"),
     ],
   },
   {
     id: "menus-toolbars",
     title: "Menus & Toolbars",
     items: [
-      item("Cursor"),
-      item("ToolBar"),
-      item("StatusBar"),
-      item("Menu"),
+      item("Cursor", undefined, false, "vd_cursor.png"),
+      item("ToolBar", undefined, false, "vd_toolbar.png"),
+      item("StatusBar", undefined, false, "vd_status.png"),
+      item("Menu", undefined, false, "vd_menu.png"),
     ],
   },
 ] as const;

@@ -50,6 +50,7 @@ import {
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { isInsertableGadgetKind } from "./core/gadgetInsertUtils";
+import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
 import { readImageDimensions } from "./core/imageDimensionUtils";
@@ -134,6 +135,21 @@ function tryReadProcedureSourceTextSync(filePath: string | undefined): string | 
   } catch {
     return undefined;
   }
+}
+
+function buildToolboxIconUriMap(webview: vscode.Webview, extensionUri: vscode.Uri): Record<string, string> {
+  const iconUris: Record<string, string> = {};
+
+  for (const category of getToolboxPanelCategories()) {
+    for (const item of category.items) {
+      if (!item.iconAsset || iconUris[item.iconAsset]) continue;
+      iconUris[item.iconAsset] = webview.asWebviewUri(
+        vscode.Uri.joinPath(extensionUri, "icons", item.iconAsset)
+      ).toString();
+    }
+  }
+
+  return iconUris;
 }
 
 function getWorkspaceRootForDocument(documentUri: vscode.Uri): string | undefined {
@@ -1548,6 +1564,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     );
     const nonce = getNonce();
     const symbolsJson = JSON.stringify(PBFD_SYMBOLS);
+    const toolboxIconUrisJson = JSON.stringify(buildToolboxIconUriMap(webview, this.context.extensionUri));
 
     return `<!doctype html>
 <html>
@@ -1793,6 +1810,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         font-size: 10px;
         font-weight: 700;
         line-height: 1;
+        overflow: hidden;
+      }
+
+      .toolboxIcon img {
+        width: 16px;
+        height: 16px;
+        display: block;
       }
 
       .toolboxActions {
@@ -2025,7 +2049,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       </div>
     </div>
 
-    <script nonce="${nonce}">window.__PBFD_SYMBOLS__ = ${symbolsJson};</script>
+    <script nonce="${nonce}">window.__PBFD_SYMBOLS__ = ${symbolsJson}; window.__PBFD_TOOLBOX_ICON_URIS__ = ${toolboxIconUrisJson};</script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>
 </html>`;

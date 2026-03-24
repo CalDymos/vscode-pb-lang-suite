@@ -26,3 +26,16 @@ test("toolbox panel keeps the verified gadget order within the containers group"
 test("default toolbox panel kind stays on the first selectable common control", () => {
   assert.equal(getDefaultToolboxPanelKind(), "ButtonGadget");
 });
+
+test("toolbox panel keeps the verified vd icon bindings for representative entries", () => {
+  const categories = getToolboxPanelCategories();
+  const commonControls = categories.find(category => category.title === "Common Controls");
+  const containers = categories.find(category => category.title === "Containers");
+  const menusAndToolbars = categories.find(category => category.title === "Menus & Toolbars");
+
+  assert.equal(commonControls?.items.find(item => item.label === "Button")?.iconAsset, "vd_buttongadget.png");
+  assert.equal(commonControls?.items.find(item => item.label === "WebView")?.iconAsset, "vd_webgadget.png");
+  assert.equal(containers?.items.find(item => item.label === "Frame")?.iconAsset, "vd_frame3dgadget.png");
+  assert.equal(menusAndToolbars?.items.find(item => item.label === "ToolBar")?.iconAsset, "vd_toolbar.png");
+  assert.equal(menusAndToolbars?.items.find(item => item.label === "StatusBar")?.iconAsset, "vd_status.png");
+});
