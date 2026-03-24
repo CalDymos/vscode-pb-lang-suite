@@ -103,6 +103,14 @@ function toPbStringLiteral(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+export function buildOptionalInspectorLiteralRaw(value: string): string {
+  return value.length ? toPbStringLiteral(value) : "";
+}
+
+export function buildOptionalInspectorPlainValue(value: string): string | undefined {
+  return value.length ? value : undefined;
+}
+
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();

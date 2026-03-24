@@ -510,6 +510,26 @@ test("roundtrips menu entry update", () => {
 });
 
 
+test("preserves surrounding whitespace for menu shortcut updates", () => {
+  const { text, menu, menuId } = parseFixture();
+  const openItem = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.ok(openItem?.source?.line !== undefined, "Expected source line for existing menu item.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menuId, openItem!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: openItem!.idRaw,
+      textRaw: openItem!.textRaw,
+      shortcut: "  Ctrl+Shift+O  ",
+      iconRaw: openItem!.iconRaw,
+    })
+  );
+
+  const updatedItem = parsed.menus.find((m) => m.id === menuId)?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.equal(updatedItem?.shortcut, "  Ctrl+Shift+O  ");
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open" \+ Chr\(9\) \+ "  Ctrl\+Shift\+O  ", ImageID\(#Img_FrmMain_0\)\)/);
+});
+
 test("roundtrips menu entry update with preserved shortcut and icon", () => {
   const { text, menu, menuId } = parseFixture();
   const sourceLine = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem)?.source?.line;

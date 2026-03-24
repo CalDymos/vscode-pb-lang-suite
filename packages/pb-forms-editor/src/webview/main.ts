@@ -69,6 +69,8 @@ import {
   getSelectedStatusBarInspectorFieldConfig,
   getSelectedToolBarInspectorFieldConfig,
   getTopLevelSelectProcEditState,
+  buildOptionalInspectorLiteralRaw,
+  buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   resolveMenuFooterHit,
@@ -5038,7 +5040,7 @@ function renderProps() {
           selectedEntry.shortcut ?? "",
           v => {
             if (!selectedCanEditShortcut) return;
-            postSelectedMenuUpdate({ shortcut: v.trim() || undefined });
+            postSelectedMenuUpdate({ shortcut: buildOptionalInspectorPlainValue(v) });
           },
           {
             disabled: !selectedCanEditShortcut,
@@ -5375,7 +5377,7 @@ function renderProps() {
           textInput(
             selectedEntry.text ?? "",
             v => {
-              postSelectedToolBarEntryUpdate({ textRaw: v.trim().length ? toPbString(v) : "" });
+              postSelectedToolBarEntryUpdate({ textRaw: buildOptionalInspectorLiteralRaw(v) });
             },
             {
               title: "Edit the text shown for this toolbar entry."
@@ -5408,7 +5410,7 @@ function renderProps() {
               toolBarId: t.id,
               sourceLine: selectedEntry.source.line,
               entryIdRaw: selectedEntry.idRaw,
-              textRaw: v.trim().length ? toPbString(v) : ""
+              textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {
@@ -5915,7 +5917,7 @@ function renderProps() {
           v => {
             if (!selectedUi.canPatch) return;
             selectedUi.postFieldUpdate({
-              textRaw: v.trim().length ? toPbString(v) : ""
+              textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {

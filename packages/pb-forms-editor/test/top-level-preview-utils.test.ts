@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canEditToolBarTooltip,
+  buildOptionalInspectorLiteralRaw,
+  buildOptionalInspectorPlainValue,
   getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
   getOpenSubMenuBalance,
@@ -63,6 +65,14 @@ test("filters bound toolbar tooltip rows from the visible structure count", () =
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 2), true);
   assert.equal(shouldShowToolBarStructureEntry(toolBar, 3), true);
   assert.equal(getVisibleToolBarEntryCount(toolBar), 3);
+});
+
+test("preserves whitespace-only inspector text values when converting to raw payloads", () => {
+  assert.equal(buildOptionalInspectorLiteralRaw(""), "");
+  assert.equal(buildOptionalInspectorLiteralRaw("   "), '"   "');
+  assert.equal(buildOptionalInspectorLiteralRaw(' A "quoted" value '), '" A ""quoted"" value "');
+  assert.equal(buildOptionalInspectorPlainValue(""), undefined);
+  assert.equal(buildOptionalInspectorPlainValue("   "), "   ");
 });
 
 test("builds default menu labels, levels and insert args", () => {

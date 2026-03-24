@@ -338,10 +338,9 @@ function normalizeMenuTextForShortcut(textRaw: string): string {
 }
 
 function appendMenuShortcut(textRaw: string, shortcut: string | undefined): string {
-  const shortcutText = shortcut?.trim();
-  if (!shortcutText) return textRaw;
+  if (shortcut === undefined || shortcut.length === 0) return textRaw;
   const baseText = normalizeMenuTextForShortcut(textRaw);
-  return `${baseText} + Chr(9) + ${quotePbString(shortcutText)}`;
+  return `${baseText} + Chr(9) + ${quotePbString(shortcut)}`;
 }
 
 function buildMenuEntryLine(args: MenuEntryArgs): string {
