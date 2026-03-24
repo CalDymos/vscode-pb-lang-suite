@@ -114,7 +114,9 @@ import {
   type InsertableGadgetKind
 } from "../core/gadgetInsertUtils";
 import {
+  canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
+  getImmediateToolboxInsertPosition,
   getToolboxPanelCategories,
   type ToolboxPanelTabId
 } from "../core/toolboxPanelUtils";
@@ -1510,6 +1512,17 @@ function requestInsertGadgetPlacement(kind: string): void {
   setPendingInsertGadgetKind(kind);
 }
 
+function requestImmediateToolboxInsert(kind: string): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  if (!canImmediateInsertFromToolbox(kind)) return;
+
+  const point = getImmediateToolboxInsertPosition();
+  if (pendingInsertGadgetKind) {
+    setPendingInsertGadgetKind(null);
+  }
+  postInsertGadget(kind, point.x, point.y);
+}
+
 function getSelectedToolboxKind(): InsertableGadgetKind {
   if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
     return pendingInsertGadgetKind;
@@ -1580,9 +1593,27 @@ function renderInsertGadgetControls(): void {
         if (!entry.enabled || !entry.kind) return;
         selectedToolboxKind = entry.kind;
         renderInsertGadgetControls();
+        requestInsertGadgetPlacement(entry.kind);
       };
 
+      const immediateInsert = () => {
+        if (!entry.enabled || !entry.kind) return;
+        selectedToolboxKind = entry.kind;
+        renderInsertGadgetControls();
+        requestImmediateToolboxInsert(entry.kind);
+      };
+
+      if (entry.enabled && entry.kind) {
+        itemEl.title = entry.kind === "SplitterGadget"
+          ? "Click to choose the two splitter gadgets, then place the splitter in the canvas."
+          : "Click to place this gadget in the canvas. Double-click inserts it immediately at the default position.";
+      }
+
       itemEl.onclick = () => activate();
+      itemEl.ondblclick = event => {
+        event.preventDefault();
+        immediateInsert();
+      };
       itemEl.onkeydown = event => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
@@ -1598,7 +1629,7 @@ function renderInsertGadgetControls(): void {
   insertGadgetButtonEl.textContent = pendingInsertGadgetKind
     ? `Place ${getGadgetInsertLabel(selectedKind)} in canvas`
     : "Place on canvas";
-  insertGadgetButtonEl.disabled = pendingInsertGadgetKind !== null;
+  insertGadgetButtonEl.disabled = pendingInsertGadgetKind !== null && pendingInsertGadgetKind === selectedKind;
   insertGadgetButtonEl.onclick = () => requestInsertGadgetPlacement(selectedKind);
   cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
   cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);

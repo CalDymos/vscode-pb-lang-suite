@@ -104,6 +104,14 @@ export function getToolboxPanelCategories(): readonly ToolboxPanelCategory[] {
   return TOOLBOX_PANEL_CATEGORIES;
 }
 
+export function canImmediateInsertFromToolbox(kind: InsertableGadgetKind): boolean {
+  return kind !== GADGET_KIND.SplitterGadget;
+}
+
+export function getImmediateToolboxInsertPosition(): { x: number; y: number } {
+  return { x: 10, y: 10 };
+}
+
 export function getDefaultToolboxPanelKind(): InsertableGadgetKind {
   const firstSelectable = TOOLBOX_PANEL_CATEGORIES
     .flatMap(category => category.items)

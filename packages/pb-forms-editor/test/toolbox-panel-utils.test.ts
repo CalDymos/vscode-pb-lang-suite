@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getDefaultToolboxPanelKind, getToolboxPanelCategories } from "../src/core/toolboxPanelUtils";
+import { canImmediateInsertFromToolbox, getDefaultToolboxPanelKind, getImmediateToolboxInsertPosition, getToolboxPanelCategories } from "../src/core/toolboxPanelUtils";
 
 test("toolbox panel categories follow the verified original group order", () => {
   const categories = getToolboxPanelCategories();
@@ -38,4 +38,11 @@ test("toolbox panel keeps the verified vd icon bindings for representative entri
   assert.equal(containers?.items.find(item => item.label === "Frame")?.iconAsset, "vd_frame3dgadget.png");
   assert.equal(menusAndToolbars?.items.find(item => item.label === "ToolBar")?.iconAsset, "vd_toolbar.png");
   assert.equal(menusAndToolbars?.items.find(item => item.label === "StatusBar")?.iconAsset, "vd_status.png");
+});
+
+
+test("toolbox immediate insert keeps the verified original splitter exception and default position", () => {
+  assert.equal(canImmediateInsertFromToolbox("ButtonGadget"), true);
+  assert.equal(canImmediateInsertFromToolbox("SplitterGadget"), false);
+  assert.deepEqual(getImmediateToolboxInsertPosition(), { x: 10, y: 10 });
 });

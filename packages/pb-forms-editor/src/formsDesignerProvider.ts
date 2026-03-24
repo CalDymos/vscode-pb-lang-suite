@@ -2019,7 +2019,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           </div>
           <div class="panelTopBody">
             <div id="toolboxTabPanel" class="panelTopTabPanel" role="tabpanel">
-              <div class="muted panelInlineHint">Choose a gadget in the toolbox, then use Place on canvas to insert it.</div>
+              <div class="muted panelInlineHint">Click a gadget to place it on the canvas. Double-click inserts it immediately at the original default position.</div>
               <div id="toolboxList" class="toolboxTree"></div>
               <div class="toolboxActions row-actions">
                 <button id="insertGadgetButton" type="button">Place on canvas</button>
