@@ -106,6 +106,13 @@ import {
   syncPanelActiveItemsForSelection
 } from "../core/webviewStateUtils";
 import {
+  buildInsertedGadgetIdentity,
+  getGadgetInsertLabel,
+  getInsertableGadgetKinds,
+  isInsertableGadgetKind,
+  shouldInsertGadgetAsPbAny
+} from "../core/gadgetInsertUtils";
+import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
   getWindowPositionInspectorValue,
@@ -160,6 +167,9 @@ type GadgetColumn = {
 
 type Gadget = {
   id: string;
+  pbAny: boolean;
+  variable?: string;
+  firstParam: string;
   kind: string;
   parentId?: string;
   parentItem?: number;
@@ -384,6 +394,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setWindowEventProc: "setWindowEventProc",
   setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
+  insertGadget: "insertGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
   deleteGadgetItem: "deleteGadgetItem",
@@ -457,6 +468,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -510,6 +522,9 @@ const canvasWrap = canvas.parentElement as HTMLDivElement;
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
+const insertGadgetKindEl = document.getElementById("insertGadgetKind") as HTMLSelectElement;
+const insertGadgetButtonEl = document.getElementById("insertGadgetButton") as HTMLButtonElement;
+const cancelInsertGadgetButtonEl = document.getElementById("cancelInsertGadgetButton") as HTMLButtonElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
 const infoHintEl = document.getElementById("infoHint") as HTMLDivElement;
@@ -563,9 +578,15 @@ type PendingStatusBarFieldSelection = {
   progressRaw?: string;
 };
 
+type PendingGadgetSelection = {
+  id: string;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
+let pendingGadgetSelection: PendingGadgetSelection | null = null;
+let pendingInsertGadgetKind: string | null = null;
 
 type PendingImageEditor = {
   sourceLine: number;
@@ -1237,6 +1258,60 @@ function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: s
   });
 }
 
+function getPredictedInsertedGadgetId(kind: string): string | undefined {
+  if (!isInsertableGadgetKind(kind)) return undefined;
+  const pbAny = shouldInsertGadgetAsPbAny(model.gadgets);
+  return buildInsertedGadgetIdentity(kind, model.gadgets, pbAny).id;
+}
+
+function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  const predictedId = getPredictedInsertedGadgetId(kind);
+  if (predictedId) {
+    pendingGadgetSelection = { id: predictedId };
+  }
+  post({ type: "insertGadget", kind, x, y, parentId, parentItem });
+}
+
+function setPendingInsertGadgetKind(kind: string | null): void {
+  pendingInsertGadgetKind = kind && isInsertableGadgetKind(kind) ? kind : null;
+  closeCanvasContextMenu();
+  if (!pendingInsertGadgetKind) {
+    canvas.style.cursor = drag ? canvas.style.cursor : "default";
+  }
+  renderInsertGadgetControls();
+  renderInfoPanel();
+}
+
+function renderInsertGadgetControls(): void {
+  if (!insertGadgetKindEl || !insertGadgetButtonEl || !cancelInsertGadgetButtonEl) return;
+
+  const kinds = getInsertableGadgetKinds();
+  if (!insertGadgetKindEl.options.length) {
+    for (const kind of kinds) {
+      const option = document.createElement("option");
+      option.value = kind;
+      option.textContent = getGadgetInsertLabel(kind);
+      insertGadgetKindEl.appendChild(option);
+    }
+  }
+
+  const selectedKind = pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)
+    ? pendingInsertGadgetKind
+    : (insertGadgetKindEl.value && isInsertableGadgetKind(insertGadgetKindEl.value)
+      ? insertGadgetKindEl.value
+      : kinds[0]);
+
+  insertGadgetKindEl.value = selectedKind;
+  insertGadgetKindEl.disabled = pendingInsertGadgetKind !== null;
+  insertGadgetButtonEl.textContent = pendingInsertGadgetKind
+    ? `Place ${getGadgetInsertLabel(selectedKind)} in canvas`
+    : "Place on canvas";
+  insertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(insertGadgetKindEl.value);
+  cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
+  cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);
+}
+
 type Handle = ResizeHandle;
 
 const HANDLE_SIZE = 6;
@@ -1256,6 +1331,7 @@ type RectLike = { x: number; y: number; w: number; h: number };
 function renderListAndParentSelector() {
   renderList();
   renderParentSelector();
+  renderInsertGadgetControls();
 }
 
 function renderSelectionUiWithParentSelector() {
@@ -1275,6 +1351,7 @@ function renderAfterInit() {
   render();
   renderParentSelector();
   renderList();
+  renderInsertGadgetControls();
   renderProps();
 }
 
@@ -1364,6 +1441,16 @@ function resolvePendingStatusBarFieldSelection() {
   const matchIndex = (statusBar.fields ?? []).findIndex(field => statusBarFieldMatchesPendingSelection(field, pending));
   if (matchIndex >= 0) {
     selection = { kind: "statusBarField", statusBarId: pending.statusBarId, fieldIndex: matchIndex };
+  }
+}
+
+function resolvePendingGadgetSelection() {
+  const pending = pendingGadgetSelection;
+  if (!pending) return;
+  pendingGadgetSelection = null;
+  const gadget = model.gadgets.find(entry => entry.id === pending.id);
+  if (gadget) {
+    selection = { kind: "gadget", id: gadget.id };
   }
 }
 
@@ -1579,6 +1666,10 @@ document.addEventListener("keydown", event => {
     closeDestructiveDialog();
     return;
   }
+  if (pendingInsertGadgetKind) {
+    setPendingInsertGadgetKind(null);
+    return;
+  }
   closeCanvasContextMenu();
 });
 
@@ -1600,6 +1691,8 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
     }
     resolvePendingMenuEntrySelection();
     resolvePendingToolBarEntrySelection();
+    resolvePendingStatusBarFieldSelection();
+    resolvePendingGadgetSelection();
     // Validate selection after model refresh
     sanitizeSelectionAfterModelUpdate();
 
@@ -1713,6 +1806,10 @@ function getSelectionSummary(): string {
 }
 
 function getContextualInfoHint(): string {
+  if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+    return `Click in the canvas to place a new ${getGadgetInsertLabel(pendingInsertGadgetKind)}. Press Escape to cancel placement mode.`;
+  }
+
   const sel = selection;
   if (!sel) {
     return "Select a window, gadget or top-level entry to view and edit its properties.";
@@ -1742,6 +1839,7 @@ function getContextualInfoHint(): string {
 
 function renderInfoPanel() {
   renderDiagnostics();
+  renderInsertGadgetControls();
   infoHintEl.textContent = getContextualInfoHint();
   infoSelectionEl.textContent = getSelectionSummary();
   const message = (errEl.textContent ?? "").trim();
@@ -2340,6 +2438,15 @@ canvas.addEventListener("mousedown", (e) => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
+  if (pendingInsertGadgetKind) {
+    const placement = resolveGadgetInsertPlacement(mx, my);
+    if (placement && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+      postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
+      setPendingInsertGadgetKind(null);
+    }
+    return;
+  }
+
   const panelTabHit = hitTestPanelTab(mx, my, previewChromeMetrics);
   if (panelTabHit) {
     panelActiveItems.set(panelTabHit.panel.id, panelTabHit.index);
@@ -2623,6 +2730,11 @@ window.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+
+  if (pendingInsertGadgetKind) {
+    canvas.style.cursor = resolveGadgetInsertPlacement(mx, my) ? "crosshair" : "not-allowed";
+    return;
+  }
 
   if (!drag) {
     // Window handles have priority
@@ -3086,6 +3198,56 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
   }
 
   return null;
+}
+
+function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
+  if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
+  if (!hitWindow(mx, my)) return null;
+
+  const { lx, ly } = toLocal(mx, my);
+  const metrics = previewChromeMetrics;
+  const windowContentRect = getWindowContentPreviewRect(metrics);
+  const rawLocalX = lx - windowContentRect.x;
+  const rawLocalY = ly - windowContentRect.y;
+  const snappedLocalX = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
+  const snappedLocalY = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
+  const alignedX = windowContentRect.x + snappedLocalX;
+  const alignedY = windowContentRect.y + snappedLocalY;
+
+  if (!rectContainsPoint(windowContentRect, alignedX, alignedY)) {
+    return null;
+  }
+
+  const cache = new Map<string, GadgetPreviewLayout>();
+  for (let i = model.gadgets.length - 1; i >= 0; i--) {
+    const gadget = model.gadgets[i];
+    const isContainerParent = gadget.kind === "ContainerGadget"
+      || gadget.kind === "PanelGadget"
+      || gadget.kind === "ScrollAreaGadget";
+    if (!isContainerParent) continue;
+
+    const layout = getGadgetPreviewLayout(gadget, metrics, cache);
+    if (!layout.visible) continue;
+    if (!rectContainsPoint(layout.rect, alignedX, alignedY)) continue;
+    if (!rectContainsPoint(layout.clip, alignedX, alignedY)) continue;
+
+    const contentRect = getGadgetContentRect(gadget.kind, layout.rect, metrics);
+    let x = alignedX - contentRect.x;
+    let y = alignedY - contentRect.y;
+    if (gadget.kind === "ScrollAreaGadget") {
+      x += getScrollAreaOffsetX(gadget, layout.rect, metrics);
+      y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
+    }
+
+    return {
+      x,
+      y,
+      parentId: gadget.id,
+      parentItem: gadget.kind === "PanelGadget" ? getPanelActiveItem(gadget) : undefined,
+    };
+  }
+
+  return { x: snappedLocalX, y: snappedLocalY };
 }
 
 function drawContainerChrome(

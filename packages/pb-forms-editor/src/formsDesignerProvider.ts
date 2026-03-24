@@ -5,6 +5,7 @@ import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
   applyGadgetColumnUpdate,
+  applyGadgetInsert,
   applyGadgetOpenArgsUpdate,
   applyCustomGadgetCodeUpdate,
   applyGadgetPropertyUpdate,
@@ -47,6 +48,7 @@ import {
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
+import { isInsertableGadgetKind } from "./core/gadgetInsertUtils";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
 import { readImageDimensions } from "./core/imageDimensionUtils";
@@ -204,6 +206,7 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setWindowEventProc: "setWindowEventProc",
   setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
 
+  insertGadget: "insertGadget",
   insertGadgetItem: "insertGadgetItem",
   updateGadgetItem: "updateGadgetItem",
   deleteGadgetItem: "deleteGadgetItem",
@@ -270,6 +273,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -822,6 +826,16 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop: {
           const edit = applyWindowGenerateEventLoopUpdate(document, msg.windowKey, msg.enabled, sr);
           await applyEditOrError(edit, `Could not patch generate-event-loop flag for window '${msg.windowKey}'. No safe EventGadget patch path found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.insertGadget: {
+          if (!isInsertableGadgetKind(msg.kind)) {
+            postError(`Unsupported gadget kind '${msg.kind}'${rangeInfo}.`);
+            return;
+          }
+          const edit = applyGadgetInsert(document, msg.kind, msg.x, msg.y, msg.parentId, msg.parentItem, sr);
+          await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }
 
@@ -1824,6 +1838,22 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         <div class="infoSubHeader">Selection</div>
         <div id="infoSelection" class="muted infoSubBody"></div>
         <div id="props"></div>
+
+        <div class="list">
+          <div class="subHeader">Insert Gadget</div>
+          <div class="muted" style="margin:8px 0 8px">Choose a gadget, then click in the canvas to place it.</div>
+          <div class="row" style="grid-template-columns: 110px 1fr;">
+            <div>Kind</div>
+            <select id="insertGadgetKind"></select>
+          </div>
+          <div class="row" style="grid-template-columns: 110px 1fr;">
+            <div></div>
+            <div class="row-actions">
+              <button id="insertGadgetButton" type="button">Place on canvas</button>
+              <button id="cancelInsertGadgetButton" type="button" style="display:none">Cancel</button>
+            </div>
+          </div>
+        </div>
 
         <div class="list">
           <div class="subHeader">Hierarchy</div>

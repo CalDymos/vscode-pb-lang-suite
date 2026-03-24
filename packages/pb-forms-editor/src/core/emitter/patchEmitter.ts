@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
+import { buildInsertedGadgetIdentity, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
@@ -1269,6 +1270,306 @@ function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
     default:
       return undefined;
   }
+}
+
+type GadgetInsertArgs = {
+  kind: InsertableGadgetKind;
+  x: number;
+  y: number;
+  parentId?: string;
+  parentItem?: number;
+};
+
+type GadgetInsertAnchor = {
+  insertLine: number;
+  indent: string;
+};
+
+function isImplicitGadgetListStarter(name: string): boolean {
+  return name === "ContainerGadget" || name === "PanelGadget" || name === "ScrollAreaGadget";
+}
+
+function isGadgetSectionCallName(nameLower: string): boolean {
+  return /gadget$/i.test(nameLower)
+    || nameLower === "closegadgetlist"
+    || nameLower === "opengadgetlist"
+    || nameLower === "addgadgetitem"
+    || nameLower === "addgadgetcolumn"
+    || nameLower === "resizegadget"
+    || GADGET_PROPERTY_NAMES.has(nameLower);
+}
+
+function buildInsertedGadgetStub(kind: InsertableGadgetKind, identity: ReturnType<typeof buildInsertedGadgetIdentity>): Gadget {
+  return {
+    id: identity.id,
+    kind,
+    pbAny: identity.pbAny,
+    variable: identity.variable,
+    firstParam: identity.firstParam,
+    parentId: undefined,
+    parentItem: undefined,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+  };
+}
+
+function buildInsertedGadgetBlock(
+  args: GadgetInsertArgs,
+  identity: ReturnType<typeof buildInsertedGadgetIdentity>,
+  indent: string
+): string {
+  const x = String(Math.trunc(args.x));
+  const y = String(Math.trunc(args.y));
+  const w = "100";
+  const h = "25";
+  const idRaw = identity.idRaw;
+  const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
+  const callbackRaw = `@Callback_${identity.name}()`;
+
+  switch (args.kind) {
+    case "ButtonGadget":
+      return `${prefix}ButtonGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "ButtonImageGadget":
+      return `${prefix}ButtonImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case "StringGadget":
+      return `${prefix}StringGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "TextGadget":
+      return `${prefix}TextGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "CheckBoxGadget":
+      return `${prefix}CheckBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "OptionGadget":
+      return `${prefix}OptionGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "FrameGadget":
+      return `${prefix}FrameGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "ComboBoxGadget":
+      return `${prefix}ComboBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "ListViewGadget":
+      return `${prefix}ListViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "ListIconGadget":
+      return `${prefix}ListIconGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "Column 1", 100)
+`;
+    case "TreeGadget":
+      return `${prefix}TreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "EditorGadget":
+      return `${prefix}EditorGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "SpinGadget":
+      return `${prefix}SpinGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case "TrackBarGadget":
+      return `${prefix}TrackBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case "ProgressBarGadget":
+      return `${prefix}ProgressBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case "ImageGadget":
+      return `${prefix}ImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case "HyperLinkGadget":
+      return `${prefix}HyperLinkGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
+`;
+    case "CalendarGadget":
+      return `${prefix}CalendarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case "DateGadget":
+      return `${prefix}DateGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
+`;
+    case "ContainerGadget":
+      return `${prefix}ContainerGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+${indent}CloseGadgetList()
+`;
+    case "PanelGadget":
+      return `${prefix}PanelGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+${indent}AddGadgetItem(${identity.id}, -1, "Tab 1")
+${indent}CloseGadgetList()
+`;
+    case "ScrollAreaGadget":
+      return `${prefix}ScrollAreaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 300, 225, 1)
+${indent}CloseGadgetList()
+`;
+    case "WebViewGadget":
+      return `${prefix}WebViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "WebGadget":
+      return `${prefix}WebGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "OpenGLGadget":
+      return `${prefix}OpenGLGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "CanvasGadget":
+      return `${prefix}CanvasGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "ExplorerTreeGadget":
+      return `${prefix}ExplorerTreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "ExplorerListGadget":
+      return `${prefix}ExplorerListGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "ExplorerComboGadget":
+      return `${prefix}ExplorerComboGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case "IPAddressGadget":
+      return `${prefix}IPAddressGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case "ScrollBarGadget":
+      return `${prefix}ScrollBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0, 0)
+`;
+    case "ScintillaGadget":
+      return `${prefix}ScintillaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${callbackRaw})
+`;
+  }
+}
+
+function applyGadgetHeadPatchForGadgets(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  gadgets: Gadget[]
+): void {
+  const gadgetGlobalBlock = findGadgetGlobalBlock(document, gadgets);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetGlobalBlock,
+    findGadgetGlobalInsertLine(document),
+    buildGadgetGlobalBlock(gadgets)
+  );
+
+  const gadgetEnumBlock = findNamedEnumerationBlock(document, "FormGadget");
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetEnumBlock ? expandBlockWithTrailingBlank(document, gadgetEnumBlock) : undefined,
+    findGadgetEnumInsertLine(document),
+    buildGadgetEnumBlock(gadgets)
+  );
+}
+
+function findTopLevelGadgetInsertAnchor(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  openCall: PbCall,
+  proc: LineBlock
+): GadgetInsertAnchor {
+  const relevant = calls.filter(call => call.range.line >= openCall.range.line && call.range.line <= proc.endLine)
+    .filter(call => isGadgetSectionCallName(call.name.toLowerCase()));
+  const baseLine = relevant.length ? relevant[relevant.length - 1].range.line : openCall.range.line;
+  return {
+    insertLine: baseLine + 1,
+    indent: getLineIndent(document, baseLine),
+  };
+}
+
+function findChildSectionInsertAnchor(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  proc: LineBlock,
+  parentId: string,
+  parentKind: InsertableGadgetKind | string,
+  parentItem?: number
+): GadgetInsertAnchor | undefined {
+  const parentCreate = findCallByStableKey(calls, parentId, name => /gadget$/i.test(name));
+  if (!parentCreate) return undefined;
+
+  if (parentKind === "PanelGadget") {
+    const targetItem = typeof parentItem === "number" ? parentItem : 0;
+    let depth = 1;
+    let panelItemIndex = -1;
+    for (const call of calls) {
+      if (call.range.line <= parentCreate.range.line) continue;
+      if (call.range.line > proc.endLine) break;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower === "closegadgetlist") {
+        depth -= 1;
+        if (depth === 0) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+        continue;
+      }
+      if (depth === 1 && nameLower === "addgadgetitem" && firstParamOfCall(call.args) === parentId) {
+        panelItemIndex += 1;
+        if (panelItemIndex > targetItem) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+      }
+      if (isImplicitGadgetListStarter(call.name)) {
+        depth += 1;
+      }
+    }
+    return undefined;
+  }
+
+  if (parentKind === "ContainerGadget" || parentKind === "ScrollAreaGadget") {
+    let depth = 1;
+    for (const call of calls) {
+      if (call.range.line <= parentCreate.range.line) continue;
+      if (call.range.line > proc.endLine) break;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower === "closegadgetlist") {
+        depth -= 1;
+        if (depth === 0) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+        continue;
+      }
+      if (isImplicitGadgetListStarter(call.name)) {
+        depth += 1;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+export function applyGadgetInsert(
+  document: vscode.TextDocument,
+  kind: string,
+  x: number,
+  y: number,
+  parentId?: string,
+  parentItem?: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (!isInsertableGadgetKind(kind)) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const windowKey = parsed.window?.id;
+  if (!windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets);
+  const identity = buildInsertedGadgetIdentity(kind, parsed.gadgets, pbAny);
+  const anchor = parentId
+    ? (() => {
+        const parent = parsed.gadgets.find(entry => entry.id === parentId);
+        if (!parent) return undefined;
+        return findChildSectionInsertAnchor(document, calls, proc, parentId, parent.kind, parentItem);
+      })()
+    : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
+  if (!anchor) return undefined;
+
+  const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent);
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0), block);
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
+  return edit;
 }
 
 function buildCustomGadgetIdRaw(gadget: Gadget): string {
@@ -3333,24 +3634,7 @@ function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
 
 function applyGadgetHeadPatch(edit: vscode.WorkspaceEdit, document: vscode.TextDocument): void {
   const parsed = parseFormDocument(document.getText());
-
-  const gadgetGlobalBlock = findGadgetGlobalBlock(document, parsed.gadgets);
-  applyOptionalBlockPatch(
-    edit,
-    document,
-    gadgetGlobalBlock,
-    findGadgetGlobalInsertLine(document),
-    buildGadgetGlobalBlock(parsed.gadgets)
-  );
-
-  const gadgetEnumBlock = findNamedEnumerationBlock(document, "FormGadget");
-  applyOptionalBlockPatch(
-    edit,
-    document,
-    gadgetEnumBlock ? expandBlockWithTrailingBlank(document, gadgetEnumBlock) : undefined,
-    findGadgetEnumInsertLine(document),
-    buildGadgetEnumBlock(parsed.gadgets)
-  );
+  applyGadgetHeadPatchForGadgets(edit, document, parsed.gadgets);
 }
 
 function findImageGlobalBlock(document: vscode.TextDocument, images: FormImage[]): LineBlock | undefined {

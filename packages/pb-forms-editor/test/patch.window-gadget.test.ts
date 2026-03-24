@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/formParser";
-import { applyGadgetEventProcUpdate, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
+import { applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patchEmitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -91,6 +91,62 @@ EndProcedure
   assert.equal(gadget?.resizeHRaw, "FormWindowHeight - 140");
   assert.equal(gadget?.y, 50);
   assert.equal(gadget?.w, 80);
+});
+
+test("inserts a new top-level gadget with original defaults", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "ButtonGadget", 12, 34)
+  );
+
+  assert.match(patchedText, /Enumeration FormGadget\s+  #Button_0\s+EndEnumeration/s);
+  assert.match(patchedText, /ButtonGadget\(#Button_0, 12, 34, 100, 25, ""\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Button_0");
+  assert.ok(gadget, "Expected inserted button gadget.");
+  assert.equal(gadget?.kind, "ButtonGadget");
+  assert.equal(gadget?.x, 12);
+  assert.equal(gadget?.y, 34);
+  assert.equal(gadget?.w, 100);
+  assert.equal(gadget?.h, 25);
+});
+
+test("inserts a new panel child into the active panel item", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Panel_0
+  #Text_0
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  PanelGadget(#Panel_0, 10, 10, 200, 120)
+  AddGadgetItem(#Panel_0, -1, "Tab 1")
+  TextGadget(#Text_0, 8, 8, 80, 20, "Inside")
+  AddGadgetItem(#Panel_0, -1, "Tab 2")
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "StringGadget", 22, 44, "#Panel_0", 0)
+  );
+
+  assert.match(patchedText, /StringGadget\(#String_0, 22, 44, 100, 25, ""\)[\s\S]*AddGadgetItem\(#Panel_0, -1, "Tab 2"\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#String_0");
+  assert.ok(gadget, "Expected inserted panel child gadget.");
+  assert.equal(gadget?.parentId, "#Panel_0");
+  assert.equal(gadget?.parentItem, 0);
+  assert.equal(gadget?.x, 22);
+  assert.equal(gadget?.y, 44);
 });
 
 test("roundtrips normal gadget rect changes", () => {
