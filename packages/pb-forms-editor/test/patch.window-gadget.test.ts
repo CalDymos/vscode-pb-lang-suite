@@ -462,11 +462,55 @@ test("deletes a splitter gadget and keeps its referenced gadgets", () => {
   assert.equal(parsed.gadgets.find((g) => g.id === "#SplitMain"), undefined);
 });
 
-test("refuses to delete a gadget that is still referenced by another splitter", () => {
+test("keeps a splitter child gadget when the original delete logic would no-op", () => {
   const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
   const document = new FakeTextDocument(text);
   const edit = applyGadgetDelete(document.asTextDocument(), "#TxtLeft");
   assert.equal(edit, undefined);
+});
+
+test("deletes descendants of a splitter child container but keeps the container itself", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #LeftPane
+  #InnerText
+  #RightPane
+  #SplitMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#LeftPane, 10, 40, 120, 100)
+  TextGadget(#InnerText, 8, 8, 80, 20, "Inside")
+  CloseGadgetList()
+  ContainerGadget(#RightPane, 150, 40, 120, 100)
+  CloseGadgetList()
+  SplitterGadget(#SplitMain, 10, 40, 260, 100, #LeftPane, #RightPane)
+  SetGadgetState(#SplitMain, 120)
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#LeftPane")
+  );
+
+  assert.match(patchedText, /ContainerGadget\(#LeftPane, 10, 40, 120, 100\)/);
+  assert.doesNotMatch(patchedText, /#InnerText/);
+  assert.match(patchedText, /SplitterGadget\(#SplitMain, 10, 40, 260, 100, #LeftPane, #RightPane\)/);
+
+  const leftPane = parsed.gadgets.find((g) => g.id === "#LeftPane");
+  const innerText = parsed.gadgets.find((g) => g.id === "#InnerText");
+  const splitter = parsed.gadgets.find((g) => g.id === "#SplitMain");
+
+  assert.ok(leftPane);
+  assert.equal(leftPane?.splitterId, "#SplitMain");
+  assert.equal(innerText, undefined);
+  assert.ok(splitter);
+  assert.equal(splitter?.gadget1Id, "#LeftPane");
 });
 
 test("roundtrips normal gadget rect changes", () => {

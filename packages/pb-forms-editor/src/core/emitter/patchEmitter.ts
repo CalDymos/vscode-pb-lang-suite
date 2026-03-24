@@ -3,6 +3,7 @@ import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
 import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
+import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
 import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
@@ -1661,7 +1662,7 @@ export function applyGadgetInsert(
       const deletedLines = new Set<number>();
 
       for (const rootId of [splitterSourceGadget1.id, splitterSourceGadget2.id]) {
-        const movedIds = collectDeletedGadgetIds(parsed.gadgets, rootId);
+        const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, rootId);
         const lineNumbers = collectMovedGadgetConstructorLineNumbers(calls, movedIds, gadgetListParentIds);
         if (!lineNumbers.size) return undefined;
         movedBlocks.push(buildLineBlock(document, lineNumbers));
@@ -1685,24 +1686,6 @@ export function applyGadgetInsert(
 
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
   return edit;
-}
-
-function collectDeletedGadgetIds(gadgets: readonly Gadget[], rootId: string): Set<string> {
-  const deleted = new Set<string>();
-
-  const visit = (gadgetId: string) => {
-    if (deleted.has(gadgetId)) return;
-    deleted.add(gadgetId);
-
-    for (const gadget of gadgets) {
-      if (gadget.parentId === gadgetId) {
-        visit(gadget.id);
-      }
-    }
-  };
-
-  visit(rootId);
-  return deleted;
 }
 
 function collectDeletedContainerCloseLines(
@@ -1852,14 +1835,6 @@ function buildLineBlock(document: vscode.TextDocument, lineNumbers: ReadonlySet<
     .join("");
 }
 
-function hasExternalSplitterReference(gadgets: readonly Gadget[], deletedIds: ReadonlySet<string>): boolean {
-  return gadgets.some(gadget => {
-    if (deletedIds.has(gadget.id) || gadget.kind !== "SplitterGadget") return false;
-    return (gadget.gadget1Id && deletedIds.has(gadget.gadget1Id))
-      || (gadget.gadget2Id && deletedIds.has(gadget.gadget2Id));
-  });
-}
-
 export function applyGadgetDelete(
   document: vscode.TextDocument,
   gadgetKey: string,
@@ -1869,14 +1844,13 @@ export function applyGadgetDelete(
   const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
   if (!target?.source) return undefined;
 
-  const deletedIds = collectDeletedGadgetIds(parsed.gadgets, gadgetKey);
-  const deletedGadgets = parsed.gadgets.filter(gadget => deletedIds.has(gadget.id));
-
-  if (hasExternalSplitterReference(parsed.gadgets, deletedIds)) return undefined;
+  const deletePlan = buildOriginalGadgetDeletePlan(parsed.gadgets, gadgetKey);
+  const deletedGadgets = parsed.gadgets.filter(gadget => deletePlan.deletedIds.has(gadget.id));
+  if (!deletedGadgets.length) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
   const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
-  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletedIds, gadgetListParentIds);
+  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletePlan.deletedIds, gadgetListParentIds);
   for (const line of collectDeletedCustomGadgetLineNumbers(document, deletedGadgets)) {
     lineNumbers.add(line);
   }
@@ -1892,7 +1866,7 @@ export function applyGadgetDelete(
     appendWorkspaceEdit(edit, applyGadgetEventProcUpdate(document, gadget.id, undefined, scanRange));
   }
 
-  const remainingGadgets = parsed.gadgets.filter(gadget => !deletedIds.has(gadget.id));
+  const remainingGadgets = parsed.gadgets.filter(gadget => !deletePlan.deletedIds.has(gadget.id));
   applyGadgetHeadPatchForGadgets(edit, document, remainingGadgets);
   return edit;
 }

@@ -113,6 +113,7 @@ import {
   isInsertableGadgetKind,
   shouldInsertGadgetAsPbAny
 } from "../core/gadgetInsertUtils";
+import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
 import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
@@ -1289,21 +1290,9 @@ function getPredictedInsertedGadgetId(kind: string): string | undefined {
   return buildInsertedGadgetIdentity(kind, model.gadgets, pbAny).id;
 }
 
-function collectGadgetDeleteIds(rootId: string): Set<string> {
-  const deleted = new Set<string>();
-
-  const visit = (gadgetId: string) => {
-    if (deleted.has(gadgetId)) return;
-    deleted.add(gadgetId);
-    for (const gadget of model.gadgets) {
-      if (gadget.parentId === gadgetId) {
-        visit(gadget.id);
-      }
-    }
-  };
-
-  visit(rootId);
-  return deleted;
+function getGadgetDeletePlan(gadget: Gadget | undefined) {
+  if (!gadget) return undefined;
+  return buildOriginalGadgetDeletePlan(model.gadgets, gadget.id);
 }
 
 function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | undefined {
@@ -1312,15 +1301,10 @@ function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | unde
     return "Only parsed gadgets with a source line can be deleted.";
   }
 
-  const deletedIds = collectGadgetDeleteIds(gadget.id);
-
-  const externalSplitter = model.gadgets.find(entry => {
-    if (deletedIds.has(entry.id) || entry.kind !== "SplitterGadget") return false;
-    return (entry.gadget1Id && deletedIds.has(entry.gadget1Id)) || (entry.gadget2Id && deletedIds.has(entry.gadget2Id));
-  });
-
-  if (externalSplitter) {
-    return "Gadgets referenced by another SplitterGadget are not covered by the current delete path yet.";
+  const deletePlan = getGadgetDeletePlan(gadget);
+  if (!deletePlan) return "The selected gadget could not be resolved.";
+  if (!deletePlan.deletedIds.size) {
+    return "This gadget remains attached to a surviving SplitterGadget in the original delete logic. Delete the splitter instead.";
   }
 
   return undefined;
@@ -1330,17 +1314,32 @@ function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructive
   const blockedReason = getGadgetDeleteBlockedReason(gadget);
   if (!gadget || blockedReason) return undefined;
 
-  const deletedIds = collectGadgetDeleteIds(gadget.id);
-  const childCount = Math.max(0, deletedIds.size - 1);
-  const message = childCount > 0
-    ? `Delete gadget '${gadget.id}' and its ${childCount} child gadget${childCount === 1 ? "" : "s"}?`
-    : `Delete gadget '${gadget.id}'?`;
+  const deletePlan = getGadgetDeletePlan(gadget);
+  if (!deletePlan || !deletePlan.deletedIds.size) return undefined;
+
+  const rootDeleted = deletePlan.deletedIds.has(gadget.id);
+  const deletedChildCount = rootDeleted
+    ? Math.max(0, deletePlan.deletedIds.size - 1)
+    : deletePlan.deletedIds.size;
+
+  let message: string;
+  if (!rootDeleted) {
+    message = deletedChildCount === 1
+      ? `Delete 1 child gadget under '${gadget.id}'? The selected gadget itself remains attached to its SplitterGadget.`
+      : `Delete ${deletedChildCount} child gadgets under '${gadget.id}'? The selected gadget itself remains attached to its SplitterGadget.`;
+  }
+  else if (deletedChildCount > 0) {
+    message = `Delete gadget '${gadget.id}' and its ${deletedChildCount} child gadget${deletedChildCount === 1 ? "" : "s"}?`;
+  }
+  else {
+    message = `Delete gadget '${gadget.id}'?`;
+  }
 
   return {
     kind: "deleteGadget",
     gadgetId: gadget.id,
     message,
-    confirmLabel: "Delete Gadget"
+    confirmLabel: rootDeleted ? "Delete Gadget" : "Delete Child Gadgets"
   };
 }
 
