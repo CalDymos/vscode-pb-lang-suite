@@ -589,8 +589,6 @@ type PendingGadgetSelection = {
 type PendingSplitterInsertConfig = {
   gadget1Id: string;
   gadget2Id: string;
-  parentId?: string;
-  parentItem?: number;
 };
 
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
@@ -1470,8 +1468,6 @@ function openSplitterInsertDialog(): void {
     pendingSplitterInsertConfig = {
       gadget1Id: gadget1.id,
       gadget2Id: gadget2.id,
-      parentId: gadget1.parentId,
-      parentItem: gadget1.parentItem,
     };
     closeSplitterInsertDialog();
     setPendingInsertGadgetKind("SplitterGadget");
@@ -2705,7 +2701,7 @@ canvas.addEventListener("mousedown", (e) => {
       postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
       setPendingInsertGadgetKind(null);
     } else if (pendingInsertGadgetKind === "SplitterGadget") {
-      errEl.textContent = "Place the splitter inside the same parent or panel tab as both selected gadgets.";
+      errEl.textContent = "Choose a valid placement position for the splitter inside the window or a container parent.";
       renderInfoPanel();
     }
     return;
@@ -3501,27 +3497,15 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
       y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
     }
 
-    const placement = {
+    return {
       x,
       y,
       parentId: gadget.id,
       parentItem: gadget.kind === "PanelGadget" ? getPanelActiveItem(gadget) : undefined,
     };
-    if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
-      if (placement.parentId !== pendingSplitterInsertConfig.parentId || placement.parentItem !== pendingSplitterInsertConfig.parentItem) {
-        return null;
-      }
-    }
-    return placement;
   }
 
-  const placement = { x: snappedLocalX, y: snappedLocalY };
-  if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
-    if ((pendingSplitterInsertConfig.parentId ?? undefined) !== undefined || (pendingSplitterInsertConfig.parentItem ?? undefined) !== undefined) {
-      return null;
-    }
-  }
-  return placement;
+  return { x: snappedLocalX, y: snappedLocalY };
 }
 
 function drawContainerChrome(

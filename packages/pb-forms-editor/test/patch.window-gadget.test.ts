@@ -214,7 +214,7 @@ EndProcedure
   assert.equal(gadget?.stateRaw, "12");
 });
 
-test("rejects splitter insertion when the selected gadgets do not share the target parent", () => {
+test("rejects splitter insertion when the selected gadgets do not share the same source parent", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow
   #FrmMain
@@ -243,6 +243,49 @@ EndProcedure
   });
 
   assert.equal(edit, undefined);
+});
+
+test("reparents selected gadgets when inserting a splitter into a different target parent", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #TxtLeft
+  #TxtRight
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 10, 200, 120)
+  CloseGadgetList()
+  StringGadget(#TxtLeft, 10, 150, 80, 20, "Left")
+  StringGadget(#TxtRight, 100, 150, 80, 20, "Right")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "SplitterGadget", 12, 18, "#Container_0", undefined, undefined, {
+      gadget1Id: "#TxtLeft",
+      gadget2Id: "#TxtRight",
+    })
+  );
+
+  assert.match(patchedText, /ContainerGadget\(#Container_0, 10, 10, 200, 120\)[\s\S]*StringGadget\(#TxtLeft, 10, 150, 80, 20, "Left"\)[\s\S]*StringGadget\(#TxtRight, 100, 150, 80, 20, "Right"\)[\s\S]*SplitterGadget\(#Splitter_0, 12, 18, 100, 25, #TxtLeft, #TxtRight\)[\s\S]*SetGadgetState\(#Splitter_0, 12\)[\s\S]*CloseGadgetList\(\)/);
+
+  const left = parsed.gadgets.find((g) => g.id === "#TxtLeft");
+  const right = parsed.gadgets.find((g) => g.id === "#TxtRight");
+  const splitter = parsed.gadgets.find((g) => g.id === "#Splitter_0");
+
+  assert.equal(left?.parentId, "#Container_0");
+  assert.equal(right?.parentId, "#Container_0");
+  assert.equal(splitter?.parentId, "#Container_0");
+  assert.equal(splitter?.gadget1Id, "#TxtLeft");
+  assert.equal(splitter?.gadget2Id, "#TxtRight");
+  assert.equal(left?.splitterId, "#Splitter_0");
+  assert.equal(right?.splitterId, "#Splitter_0");
 });
 
 test("deletes a top-level gadget together with its managed lines and event binding", () => {

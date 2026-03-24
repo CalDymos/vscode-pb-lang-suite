@@ -1614,6 +1614,11 @@ export function applyGadgetInsert(
   const proc = findProcedureBlock(document, openCall.range.line);
   if (!proc) return undefined;
 
+  let splitterSourceGadget1: Gadget | undefined;
+  let splitterSourceGadget2: Gadget | undefined;
+  let splitterSourceParentId: string | undefined;
+  let splitterSourceParentItem: number | undefined;
+
   if (kind === "SplitterGadget") {
     const gadget1 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget1Id);
     const gadget2 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget2Id);
@@ -1622,8 +1627,10 @@ export function applyGadgetInsert(
     const sourceParentId = gadget1.parentId;
     const sourceParentItem = gadget1.parentItem;
     if (sourceParentId !== gadget2.parentId || sourceParentItem !== gadget2.parentItem) return undefined;
-    if ((parentId ?? undefined) !== (sourceParentId ?? undefined)) return undefined;
-    if ((parentItem ?? undefined) !== (sourceParentItem ?? undefined)) return undefined;
+    splitterSourceGadget1 = gadget1;
+    splitterSourceGadget2 = gadget2;
+    splitterSourceParentId = sourceParentId;
+    splitterSourceParentItem = sourceParentItem;
   }
 
   const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets);
@@ -1641,7 +1648,41 @@ export function applyGadgetInsert(
   const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent, extraArgs);
   if (!block) return undefined;
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0), block);
+  const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
+
+  if (kind === "SplitterGadget" && splitterSourceGadget1 && splitterSourceGadget2) {
+    const targetParentId = parentId ?? undefined;
+    const targetParentItem = parentItem ?? undefined;
+    const needsReparentMove = targetParentId !== splitterSourceParentId || targetParentItem !== splitterSourceParentItem;
+
+    if (needsReparentMove) {
+      const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+      const movedBlocks: string[] = [];
+      const deletedLines = new Set<number>();
+
+      for (const rootId of [splitterSourceGadget1.id, splitterSourceGadget2.id]) {
+        const movedIds = collectDeletedGadgetIds(parsed.gadgets, rootId);
+        const lineNumbers = collectMovedGadgetConstructorLineNumbers(calls, movedIds, gadgetListParentIds);
+        if (!lineNumbers.size) return undefined;
+        movedBlocks.push(buildLineBlock(document, lineNumbers));
+        for (const line of lineNumbers) {
+          deletedLines.add(line);
+        }
+      }
+
+      edit.insert(document.uri, anchorPos, `${movedBlocks.join("")}${block}`);
+      for (const line of [...deletedLines].sort((a, b) => b - a)) {
+        edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+      }
+    }
+    else {
+      edit.insert(document.uri, anchorPos, block);
+    }
+  }
+  else {
+    edit.insert(document.uri, anchorPos, block);
+  }
+
   applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
   return edit;
 }
@@ -1732,6 +1773,53 @@ function collectDeletedGadgetLineNumbers(
   }
 
   return lines;
+}
+
+function collectMovedGadgetConstructorLineNumbers(
+  calls: PbCall[],
+  movedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
+  const lines = new Set<number>();
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    let targetId: string | undefined;
+
+    if (/gadget$/i.test(call.name)) {
+      targetId = stableKey(call.assignedVar, splitParams(call.args));
+    }
+    else if (
+      nameLower === "addgadgetitem"
+      || nameLower === "addgadgetcolumn"
+      || nameLower === "opengadgetlist"
+    ) {
+      targetId = firstParamOfCall(call.args);
+    }
+
+    if (targetId && movedIds.has(targetId)) {
+      lines.add(call.range.line);
+    }
+  }
+
+  for (const line of collectDeletedContainerCloseLines(calls, movedIds, gadgetListParentIds)) {
+    lines.add(line);
+  }
+
+  return lines;
+}
+
+function buildLineBlock(document: vscode.TextDocument, lineNumbers: ReadonlySet<number>): string {
+  const text = document.getText();
+  return [...lineNumbers]
+    .sort((a, b) => a - b)
+    .map(line => {
+      const lineInfo = document.lineAt(line);
+      const start = document.offsetAt(lineInfo.range.start);
+      const end = document.offsetAt(lineInfo.rangeIncludingLineBreak.end);
+      return text.slice(start, end);
+    })
+    .join("");
 }
 
 function hasExternalSplitterReference(gadgets: readonly Gadget[], deletedIds: ReadonlySet<string>): boolean {
