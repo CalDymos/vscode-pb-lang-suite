@@ -85,6 +85,11 @@ export type GadgetResizeRawUpdate = {
   hRaw?: string;
 };
 
+export type GadgetInspectorDetailsLike = {
+  parentId?: string;
+  parentItem?: number;
+};
+
 const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "ButtonGadget",
   "ButtonImageGadget",
@@ -194,6 +199,14 @@ export function canInspectGadgetItems(kind: string | undefined): boolean {
 
 export function canInspectGadgetColumns(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind);
+}
+
+export function shouldShowGadgetParentDetail(gadget: GadgetInspectorDetailsLike): boolean {
+  return typeof gadget.parentId === "string" && gadget.parentId.trim().length > 0;
+}
+
+export function shouldShowGadgetTabDetail(gadget: GadgetInspectorDetailsLike): boolean {
+  return typeof gadget.parentItem === "number" && Number.isFinite(gadget.parentItem);
 }
 
 export function buildGadgetCheckedStateRaw(kind: string | undefined, checked: boolean): string | undefined {

@@ -100,7 +100,9 @@ import {
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
-  getGadgetTooltipInspectorValue
+  getGadgetTooltipInspectorValue,
+  shouldShowGadgetParentDetail,
+  shouldShowGadgetTabDetail
 } from "../core/gadgetInspectorUtils";
 
 import {
@@ -7518,8 +7520,12 @@ function renderProps() {
   propsEl.appendChild(section("Details"));
   propsEl.appendChild(row("Id", readonlyInput(g.id)));
   propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
-  propsEl.appendChild(row("Parent", readonlyInput((g.parentId ?? "").toString())));
-  propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
+  if (shouldShowGadgetParentDetail(g)) {
+    propsEl.appendChild(row("Parent", readonlyInput(g.parentId!.toString())));
+  }
+  if (shouldShowGadgetTabDetail(g)) {
+    propsEl.appendChild(row("Tab", readonlyInput(String(g.parentItem))));
+  }
   const showsItemsInspector = canInspectGadgetItems(g.kind) || Boolean(g.items?.length);
   const showsColumnsInspector = canInspectGadgetColumns(g.kind) || Boolean(g.columns?.length);
   if (showsItemsInspector) {

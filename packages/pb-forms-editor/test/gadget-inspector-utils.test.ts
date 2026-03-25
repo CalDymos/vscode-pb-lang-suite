@@ -21,7 +21,9 @@ import {
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
-  getGadgetTooltipInspectorValue
+  getGadgetTooltipInspectorValue,
+  shouldShowGadgetParentDetail,
+  shouldShowGadgetTabDetail
 } from "../src/core/gadgetInspectorUtils";
 
 test("marks original text-capable gadget constructors as caption-editable", () => {
@@ -481,3 +483,14 @@ test("keeps blocking top-level stretch-height synthesis when the host skin is un
 
   assert.equal(update, undefined);
 });
+
+test("shows non-original gadget parent and tab detail rows only when they actually carry metadata", () => {
+  assert.equal(shouldShowGadgetParentDetail({ parentId: "Container_0" }), true);
+  assert.equal(shouldShowGadgetParentDetail({ parentId: "   " }), false);
+  assert.equal(shouldShowGadgetParentDetail({}), false);
+
+  assert.equal(shouldShowGadgetTabDetail({ parentItem: 0 }), true);
+  assert.equal(shouldShowGadgetTabDetail({ parentItem: 3 }), true);
+  assert.equal(shouldShowGadgetTabDetail({}), false);
+});
+
