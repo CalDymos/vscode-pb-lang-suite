@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowPositionInspectorValue, getWindowVariableInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowVariableInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -101,18 +101,45 @@ test('window hidden/disabled inspector state prefers parsed booleans and treats 
 });
 
 
-test('window parent inspector input keeps the original text unchanged instead of trimming it', () => {
-  assert.deepEqual(parseWindowParentInspectorInput('WindowID(#FrmParent)'), {
+test('window parent inspector displays wrapped and raw parent expressions without the internal marker syntax', () => {
+  assert.equal(getWindowParentInspectorValue('WindowID(#FrmParent)', '#FrmParent'), '#FrmParent');
+  assert.equal(getWindowParentInspectorValue('ParentWindow', '=ParentWindow'), 'ParentWindow');
+  assert.equal(getWindowParentInspectorValue(undefined, '=ParentWindow'), 'ParentWindow');
+  assert.equal(getWindowParentInspectorValue(undefined, '#FrmParent'), '#FrmParent');
+  assert.equal(getWindowParentInspectorValue(undefined, undefined), '');
+});
+
+test('window parent inspector derives the raw-expression toggle from the parsed parent form', () => {
+  assert.equal(getWindowParentAsRawExpression('WindowID(#FrmParent)', '#FrmParent'), false);
+  assert.equal(getWindowParentAsRawExpression('ParentWindow', '=ParentWindow'), true);
+  assert.equal(getWindowParentAsRawExpression(undefined, '=ParentWindow'), true);
+  assert.equal(getWindowParentAsRawExpression(undefined, '#FrmParent'), false);
+});
+
+test('window parent inspector override keeps the checkbox state even before a parent expression exists', () => {
+  assert.equal(getWindowParentAsRawExpressionWithOverride(undefined, undefined, true), true);
+  assert.equal(getWindowParentAsRawExpressionWithOverride(undefined, undefined, false), false);
+  assert.equal(getWindowParentAsRawExpressionWithOverride('WindowID(#FrmParent)', '#FrmParent', undefined), false);
+  assert.equal(getWindowParentAsRawExpressionWithOverride('ParentWindow', '=ParentWindow', undefined), true);
+});
+
+test('window parent inspector input preserves the user expression and only toggles WindowID(...) wrapping', () => {
+  assert.deepEqual(parseWindowParentInspectorInput('#FrmParent', false), {
     raw: 'WindowID(#FrmParent)',
-    storedValue: 'WindowID(#FrmParent)'
+    storedValue: '#FrmParent'
   });
 
-  assert.deepEqual(parseWindowParentInspectorInput('  WindowID(#FrmParent)  '), {
-    raw: '  WindowID(#FrmParent)  ',
-    storedValue: '  WindowID(#FrmParent)  '
+  assert.deepEqual(parseWindowParentInspectorInput('  #FrmParent  ', false), {
+    raw: 'WindowID(  #FrmParent  )',
+    storedValue: '  #FrmParent  '
   });
 
-  assert.deepEqual(parseWindowParentInspectorInput(''), {
+  assert.deepEqual(parseWindowParentInspectorInput('ParentWindow', true), {
+    raw: 'ParentWindow',
+    storedValue: 'ParentWindow'
+  });
+
+  assert.deepEqual(parseWindowParentInspectorInput('', true), {
     raw: '',
     storedValue: undefined
   });

@@ -74,15 +74,63 @@ export type ParsedWindowParentInput = {
   storedValue: string | undefined;
 };
 
+function unwrapWindowIdParent(raw: string): string | undefined {
+  const match = /^WindowID\((.*)\)$/i.exec(raw);
+  return match ? match[1] : undefined;
+}
+
+export function getWindowParentInspectorValue(parentRaw: string | undefined, normalizedParent: string | undefined): string {
+  if (typeof parentRaw === 'string') {
+    const unwrapped = unwrapWindowIdParent(parentRaw);
+    if (unwrapped !== undefined) {
+      return unwrapped;
+    }
+    return parentRaw;
+  }
+
+  if (!normalizedParent) {
+    return '';
+  }
+
+  return normalizedParent.startsWith('=') ? normalizedParent.slice(1) : normalizedParent;
+}
+
+export function getWindowParentAsRawExpression(parentRaw: string | undefined, normalizedParent: string | undefined): boolean {
+  if (typeof parentRaw === 'string') {
+    return unwrapWindowIdParent(parentRaw) === undefined && parentRaw.length > 0;
+  }
+
+  return Boolean(normalizedParent?.startsWith('='));
+}
+
+export function getWindowParentAsRawExpressionWithOverride(
+  parentRaw: string | undefined,
+  normalizedParent: string | undefined,
+  override: boolean | undefined
+): boolean {
+  if (typeof override === 'boolean') {
+    return override;
+  }
+
+  return getWindowParentAsRawExpression(parentRaw, normalizedParent);
+}
+
 export type ParsedWindowEventProcInput = {
   raw: string;
   storedValue: string | undefined;
 };
 
-export function parseWindowParentInspectorInput(raw: string): ParsedWindowParentInput {
+export function parseWindowParentInspectorInput(raw: string, parentAsRawExpression: boolean): ParsedWindowParentInput {
+  if (!raw.length) {
+    return {
+      raw: '',
+      storedValue: undefined,
+    };
+  }
+
   return {
-    raw,
-    storedValue: raw.length ? raw : undefined,
+    raw: parentAsRawExpression ? raw : `WindowID(${raw})`,
+    storedValue: raw,
   };
 }
 

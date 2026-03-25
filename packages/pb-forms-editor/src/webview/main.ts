@@ -129,6 +129,8 @@ import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
 import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
+  getWindowParentAsRawExpressionWithOverride,
+  getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
   getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
@@ -571,6 +573,7 @@ type DesignerSelection =
   | { kind: "image"; id: string }
   | null;
 let selection: DesignerSelection = null;
+let windowParentAsRawExpressionOverrides = new Map<string, boolean>();
 
 type PendingMenuEntrySelection = {
   menuId: string;
@@ -2133,6 +2136,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "init") {
     errEl.textContent = "";
     model = msg.model;
+    windowParentAsRawExpressionOverrides.clear();
     const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
     retainedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
@@ -5775,12 +5779,37 @@ function renderProps() {
       postWindowProperties(win, { disabledRaw: checked ? "1" : "" });
       renderProps();
     })));
-    propsEl.appendChild(row("Parent", textInput(win.parentRaw ?? win.parent ?? "", v => {
+    const parentAsRawExpression = getWindowParentAsRawExpressionWithOverride(
+      win.parentRaw,
+      win.parent,
+      windowParentAsRawExpressionOverrides.get(win.id)
+    );
+    const parentInput = textInput(getWindowParentInspectorValue(win.parentRaw, win.parent), v => {
       if (!model.window) return;
-      const parsed = parseWindowParentInspectorInput(v);
-      win.parentRaw = parsed.storedValue;
+      const parsed = parseWindowParentInspectorInput(v, parentAsRawExpressionCheckbox.checked);
+      win.parentRaw = parsed.raw || undefined;
+      win.parent = parsed.storedValue
+        ? (parentAsRawExpressionCheckbox.checked ? `=${parsed.storedValue}` : parsed.storedValue)
+        : undefined;
       postWindowOpenArgs(win, { parentRaw: parsed.raw });
-    })));
+    });
+    parentInput.title = "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.";
+    const parentAsRawExpressionCheckbox = checkboxInput(parentAsRawExpression, checked => {
+      if (!model.window) return;
+      windowParentAsRawExpressionOverrides.set(win.id, checked);
+      const parsed = parseWindowParentInspectorInput(parentInput.value, checked);
+      win.parentRaw = parsed.raw || undefined;
+      win.parent = parsed.storedValue
+        ? (checked ? `=${parsed.storedValue}` : parsed.storedValue)
+        : undefined;
+      if (parsed.raw.length > 0) {
+        postWindowOpenArgs(win, { parentRaw: parsed.raw });
+      }
+      renderProps();
+    });
+    parentAsRawExpressionCheckbox.title = "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.";
+    propsEl.appendChild(row("Parent", parentInput));
+    propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
     const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
     windowColorInput.title = "Use the color picker to choose a window color, or Remove to clear it.";
     const windowColorPicker = document.createElement("input");

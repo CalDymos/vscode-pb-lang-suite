@@ -864,6 +864,25 @@ EndProcedure
 });
 
 
+test("roundtrips window OpenWindow arg updates for raw parent expressions without WindowID wrapping", () => {
+  const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowOpenArgsUpdate(document, "#FrmMain", {
+      parentRaw: "ParentWindowHandle()",
+    })
+  );
+
+  assert.match(
+    patchedText,
+    /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic", #PB_Window_SystemMenu, ParentWindowHandle\(\)\)/
+  );
+  assert.doesNotMatch(patchedText, /WindowID\(ParentWindowHandle\(\)\)/);
+  assert.equal(parsed.window?.parentRaw, "ParentWindowHandle()");
+  assert.equal(parsed.window?.parent, "=ParentWindowHandle()");
+});
+
+
 test("roundtrips gadget constructor arg updates for text and flags", () => {
   const text = loadFixture("fixtures/smoke/03-gadgets-basic.pbf");
 
