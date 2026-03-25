@@ -138,6 +138,7 @@ import {
   getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
+  getWindowPreviewTitleButtons,
   getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
   parseWindowEventProcInspectorInput,
@@ -5003,6 +5004,18 @@ function render() {
 
   // Optional title bar
   if (tbH > 0) {
+    const titleButtons = getWindowPreviewTitleButtons(model.window?.flagsExpr);
+    const buttonKinds = [
+      titleButtons.showMinimize ? "minimize" : null,
+      titleButtons.showMaximize ? "maximize" : null,
+      titleButtons.showClose ? "close" : null,
+    ].filter((kind): kind is "minimize" | "maximize" | "close" => kind !== null);
+    const buttonSize = Math.max(12, Math.min(18, tbH - 8));
+    const buttonGap = 4;
+    const buttonAreaW = buttonKinds.length > 0
+      ? buttonKinds.length * buttonSize + Math.max(0, buttonKinds.length - 1) * buttonGap + 8
+      : 0;
+
     ctx.save();
     ctx.globalAlpha = 0.10;
     ctx.fillStyle = focus;
@@ -5017,6 +5030,42 @@ function render() {
 
     ctx.fillStyle = fg;
     ctx.fillText(winTitle, winX + 8, winY + Math.min(tbH - 8, 18));
+
+    if (buttonKinds.length > 0) {
+      let buttonX = winX + winW - 8 - buttonAreaW + 4;
+      const buttonY = winY + Math.max(4, Math.trunc((tbH - buttonSize) / 2));
+      for (const kind of buttonKinds) {
+        ctx.save();
+        ctx.globalAlpha = kind === "close" ? 0.28 : 0.18;
+        ctx.fillStyle = focus;
+        ctx.fillRect(buttonX, buttonY, buttonSize, buttonSize);
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = fg;
+        ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonSize - 1, buttonSize - 1);
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = fg;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        if (kind === "close") {
+          ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
+          ctx.lineTo(buttonX + buttonSize - 4.5, buttonY + buttonSize - 4.5);
+          ctx.moveTo(buttonX + buttonSize - 4.5, buttonY + 4.5);
+          ctx.lineTo(buttonX + 4.5, buttonY + buttonSize - 4.5);
+        } else if (kind === "maximize") {
+          ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonSize - 9), Math.max(4, buttonSize - 9));
+        } else {
+          const lineY = buttonY + buttonSize - 4.5;
+          ctx.moveTo(buttonX + 4.5, lineY);
+          ctx.lineTo(buttonX + buttonSize - 4.5, lineY);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        buttonX += buttonSize + buttonGap;
+      }
+    }
   }
 
   if (menuBarRect) {

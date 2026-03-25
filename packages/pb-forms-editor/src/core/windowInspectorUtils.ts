@@ -23,6 +23,15 @@ const WINDOW_TITLEBAR_PREVIEW_FLAGS = new Set<string>([
   "#PB_Window_TitleBar",
 ]);
 
+const WINDOW_TITLEBAR_MINIMIZE_PREVIEW_FLAG = "#PB_Window_MinimizeGadget";
+const WINDOW_TITLEBAR_MAXIMIZE_PREVIEW_FLAG = "#PB_Window_MaximizeGadget";
+
+export type WindowPreviewTitleButtons = {
+  showClose: boolean;
+  showMinimize: boolean;
+  showMaximize: boolean;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -175,6 +184,23 @@ export function getWindowPreviewTitleBarHeight(flagsExpr: string | undefined, co
   }
 
   return Math.max(0, Math.trunc(configuredHeight));
+}
+
+export function getWindowPreviewTitleButtons(flagsExpr: string | undefined): WindowPreviewTitleButtons {
+  if (!hasWindowPreviewTitleBar(flagsExpr)) {
+    return {
+      showClose: false,
+      showMinimize: false,
+      showMaximize: false,
+    };
+  }
+
+  const flags = new Set(splitFlags(flagsExpr));
+  return {
+    showClose: true,
+    showMinimize: flags.has(WINDOW_TITLEBAR_MINIMIZE_PREVIEW_FLAG),
+    showMaximize: flags.has(WINDOW_TITLEBAR_MAXIMIZE_PREVIEW_FLAG),
+  };
 }
 
 export function getWindowBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {

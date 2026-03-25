@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewTitleBarHeight, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -174,4 +174,31 @@ test('window preview title bar height collapses to zero without SystemMenu or Ti
   assert.equal(getWindowPreviewTitleBarHeight('#PB_Window_TitleBar', 26), 26);
   assert.equal(getWindowPreviewTitleBarHeight('#PB_Window_SizeGadget', 26), 0);
   assert.equal(getWindowPreviewTitleBarHeight(undefined, 26), 0);
+});
+
+
+test('window preview title buttons follow the original close/minimize/maximize flag visibility', () => {
+  assert.deepEqual(getWindowPreviewTitleButtons('#PB_Window_SystemMenu'), {
+    showClose: true,
+    showMinimize: false,
+    showMaximize: false,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtons('#PB_Window_TitleBar | #PB_Window_MinimizeGadget'), {
+    showClose: true,
+    showMinimize: true,
+    showMaximize: false,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtons('#PB_Window_SystemMenu | #PB_Window_MinimizeGadget | #PB_Window_MaximizeGadget'), {
+    showClose: true,
+    showMinimize: true,
+    showMaximize: true,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtons('#PB_Window_SizeGadget'), {
+    showClose: false,
+    showMinimize: false,
+    showMaximize: false,
+  });
 });
