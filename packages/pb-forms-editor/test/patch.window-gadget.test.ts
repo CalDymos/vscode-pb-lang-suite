@@ -875,7 +875,7 @@ test("roundtrips window OpenWindow arg updates for raw parent expressions withou
 
   assert.match(
     patchedText,
-    /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic", #PB_Window_SystemMenu, ParentWindowHandle\(\)\)/
+    /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic", 0, ParentWindowHandle\(\)\)/
   );
   assert.doesNotMatch(patchedText, /WindowID\(ParentWindowHandle\(\)\)/);
   assert.equal(parsed.window?.parentRaw, "ParentWindowHandle()");

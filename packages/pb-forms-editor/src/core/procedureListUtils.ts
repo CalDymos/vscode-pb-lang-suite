@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const PROCEDURE_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([".pb", ".pbi"]);
 const PROCEDURE_SOURCE_IGNORED_DIRS: ReadonlySet<string> = new Set([
@@ -90,7 +90,7 @@ export function discoverProcedureSourcePaths(documentPath: string, workspaceRoot
   if (!trimmedWorkspaceRoot.length) return Array.from(resolved).sort();
 
   const visitDir = (dirPath: string) => {
-    let entries: fs.Dirent[];
+    let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
     try {
       entries = fs.readdirSync(dirPath, { withFileTypes: true });
     } catch {

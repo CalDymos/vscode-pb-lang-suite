@@ -118,6 +118,7 @@ import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
 } from "../core/gadgetReparentUtils";
+import { getPanelInspectorItemLabel } from "../core/gadgetItemLabelUtils";
 import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
@@ -8017,7 +8018,9 @@ function renderProps() {
 
   const itemsBox = miniList();
   (g.items ?? []).forEach((it, idx) => {
-    const label = `${idx}  ${it.text ?? it.textRaw ?? ""}`;
+    const label = g.kind === "PanelGadget"
+      ? getPanelInspectorItemLabel(it, idx)
+      : `${idx}  ${it.text ?? it.textRaw ?? ""}`;
     const canPatch = typeof it.source?.line === "number";
 
     const itemImage = findImageEntryById(it.imageId);

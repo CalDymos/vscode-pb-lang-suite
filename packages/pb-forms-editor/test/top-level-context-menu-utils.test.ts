@@ -8,10 +8,10 @@ test("menu entry context action uses Delete MenuItem label and existing delete p
     menus: [{ id: "#Menu_0", entries: [{ kind: "MenuItem", source: { line: 42 } }] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected menu entry actions");
   assert.equal(actions.length, 1);
   const action = actions[0]!;
-  assert.equal(action.kind, "deleteMenuEntry");
+  if (action.kind !== "deleteMenuEntry") throw new Error(`Unexpected action kind: ${action.kind}`);
   assert.equal(action.label, "Delete MenuItem…");
   assert.equal(action.enabled, true);
   assert.equal(action.sourceLine, 42);
@@ -25,10 +25,10 @@ test("toolbar entry context action uses Delete ToolbarItem label and disables un
     toolbars: [{ id: "#ToolBar_0", entries: [{ kind: "ToolBarImageButton" }] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected toolbar entry actions");
   assert.equal(actions.length, 1);
   const action = actions[0]!;
-  assert.equal(action.kind, "deleteToolBarEntry");
+  if (action.kind !== "deleteToolBarEntry") throw new Error(`Unexpected action kind: ${action.kind}`);
   assert.equal(action.label, "Delete ToolbarItem…");
   assert.equal(action.enabled, false);
   assert.match(action.title, /source line/i);
@@ -40,10 +40,10 @@ test("statusbar field context action uses Delete StatusBarField label and field 
     statusbars: [{ id: "#StatusBar_0", fields: [{}, {}, { source: { line: 77 } }] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected statusbar field actions");
   assert.equal(actions.length, 1);
   const action = actions[0]!;
-  assert.equal(action.kind, "deleteStatusBarField");
+  if (action.kind !== "deleteStatusBarField") throw new Error(`Unexpected action kind: ${action.kind}`);
   assert.equal(action.label, "Delete StatusBarField…");
   assert.equal(action.enabled, true);
   assert.equal(action.sourceLine, 77);
@@ -57,10 +57,10 @@ test("toolbar root context action uses Delete Toolbar label", () => {
     toolbars: [{ id: "#ToolBar_0", entries: [] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected toolbar root actions");
   assert.equal(actions.length, 1);
   const action = actions[0]!;
-  assert.equal(action.kind, "deleteToolBar");
+  if (action.kind !== "deleteToolBar") throw new Error(`Unexpected action kind: ${action.kind}`);
   assert.equal(action.label, "Delete Toolbar…");
   assert.equal(action.enabled, true);
 });
@@ -71,7 +71,7 @@ test("toolbar add button popup exposes Add Button, Add Toggle and Add Separator"
     toolbars: [{ id: "#ToolBar_0", entries: [] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected toolbar add actions");
   assert.deepEqual(actions.map(action => action.label), ["Add Button", "Add Toggle", "Add Separator"]);
 });
 
@@ -81,6 +81,6 @@ test("statusbar add button popup exposes Add Image, Add Label and Add ProgressBa
     statusbars: [{ id: "#StatusBar_0", fields: [] }]
   });
 
-  assert.ok(actions);
+  if (!actions) throw new Error("Expected statusbar add actions");
   assert.deepEqual(actions.map(action => action.label), ["Add Image", "Add Label", "Add ProgressBar"]);
 });

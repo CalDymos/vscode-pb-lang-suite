@@ -120,6 +120,10 @@ function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.Worksp
     return;
   }
 
+  if (typeof target.set !== "function" || typeof target.get !== "function") {
+    return;
+  }
+
   for (const [uri, textEdits] of sourceWithOps.entries()) {
     target.set(uri, [...target.get(uri), ...textEdits]);
   }
