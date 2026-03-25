@@ -2242,11 +2242,12 @@ export function applyWindowPbAnyToggle(
     // 1) Remove Enumeration FormWindow block.
     const enumBlock = findNamedEnumerationBlock(document, "FormWindow");
     if (enumBlock) {
+      const expandedBlock = expandBlockWithTrailingBlank(document, enumBlock);
       edit.delete(
         document.uri,
         new vscode.Range(
-          new vscode.Position(enumBlock.startLine, 0),
-          document.lineAt(enumBlock.endLine).rangeIncludingLineBreak.end
+          new vscode.Position(expandedBlock.startLine, 0),
+          document.lineAt(expandedBlock.endLine).rangeIncludingLineBreak.end
         )
       );
     }
@@ -2402,10 +2403,6 @@ export function applyWindowVariableNamePatch(
       return undefined;
     }
 
-    // Procedure rename: Open<oldVar> -> Open<newVar>
-    const oldProcName = toOpenProcName(oldVar);
-    const newProcName = toOpenProcName(newVar);
-
     // 1) Rename Global line
     if (oldVar !== newVar) {
       removeGlobalLine(edit, document, oldVar);
@@ -2444,12 +2441,6 @@ export function applyWindowVariableNamePatch(
           updatedLine
         );
       }
-    }
-
-    // 4) Patch "Procedure OpenX(...)" (and calls) if possible
-    if (oldProcName && newProcName) {
-      patchProcedureNameInBlock(edit, document, proc, oldProcName, newProcName);
-      patchProcedureCallsBestEffort(edit, document, calls, oldProcName, newProcName, scanRange);
     }
 
     // --- rename derived procedure names + call-sites globally ---
