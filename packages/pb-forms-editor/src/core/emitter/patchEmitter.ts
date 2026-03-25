@@ -1663,7 +1663,7 @@ export function applyGadgetInsert(
 
       for (const rootId of [splitterSourceGadget1.id, splitterSourceGadget2.id]) {
         const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, rootId);
-        const lineNumbers = collectMovedGadgetConstructorLineNumbers(calls, movedIds, gadgetListParentIds);
+        const lineNumbers = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
         if (!lineNumbers.size) return undefined;
         movedBlocks.push(buildLineBlock(document, lineNumbers));
         for (const line of lineNumbers) {
@@ -1788,7 +1788,7 @@ function collectDeletedCustomGadgetLineNumbers(
   return lines;
 }
 
-function collectMovedGadgetConstructorLineNumbers(
+function collectMovedGadgetLineNumbers(
   calls: PbCall[],
   movedIds: ReadonlySet<string>,
   gadgetListParentIds: ReadonlySet<string>
@@ -1806,6 +1806,8 @@ function collectMovedGadgetConstructorLineNumbers(
       nameLower === "addgadgetitem"
       || nameLower === "addgadgetcolumn"
       || nameLower === "opengadgetlist"
+      || nameLower === "resizegadget"
+      || GADGET_PROPERTY_NAMES.has(nameLower)
     ) {
       targetId = firstParamOfCall(call.args);
     }
@@ -1951,7 +1953,7 @@ export function applyGadgetReparent(
   if (target.kind === "SplitterGadget") {
     for (const gadget of [splitterGadget1!, splitterGadget2!]) {
       const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadget.id);
-      const movedLines = collectMovedGadgetConstructorLineNumbers(calls, movedIds, gadgetListParentIds);
+      const movedLines = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
       if (!movedLines.size) return undefined;
       movedBlocks.push(buildLineBlock(document, movedLines));
       for (const line of movedLines) {
@@ -1960,7 +1962,7 @@ export function applyGadgetReparent(
     }
   }
 
-  const movedLines = collectMovedGadgetConstructorLineNumbers(calls, requestedIds, gadgetListParentIds);
+  const movedLines = collectMovedGadgetLineNumbers(calls, requestedIds, gadgetListParentIds);
   if (!movedLines.size) return undefined;
   movedBlocks.push(buildLineBlockWithReplacements(
     document,
