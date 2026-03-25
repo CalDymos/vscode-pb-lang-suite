@@ -18,6 +18,10 @@ export const WINDOW_KNOWN_FLAGS = [
 export const WINDOW_POSITION_IGNORE_LITERAL = "#PB_Ignore";
 
 const WINDOW_KNOWN_FLAG_SET = new Set<string>(WINDOW_KNOWN_FLAGS);
+const WINDOW_TITLEBAR_PREVIEW_FLAGS = new Set<string>([
+  "#PB_Window_SystemMenu",
+  "#PB_Window_TitleBar",
+]);
 
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -153,6 +157,24 @@ export function parseWindowVariableNameInspectorInput(raw: string, currentValue:
     ok: true,
     value: raw,
   };
+}
+
+export function hasWindowPreviewTitleBar(flagsExpr: string | undefined): boolean {
+  for (const flag of splitFlags(flagsExpr)) {
+    if (WINDOW_TITLEBAR_PREVIEW_FLAGS.has(flag)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function getWindowPreviewTitleBarHeight(flagsExpr: string | undefined, configuredHeight: number): number {
+  if (!hasWindowPreviewTitleBar(flagsExpr)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(configuredHeight));
 }
 
 export function getWindowBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {

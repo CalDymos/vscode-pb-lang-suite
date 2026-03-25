@@ -137,6 +137,7 @@ import {
   getWindowParentAsRawExpressionWithOverride,
   getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
+  getWindowPreviewTitleBarHeight,
   getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
   parseWindowEventProcInspectorInput,
@@ -2335,7 +2336,7 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
     h,
     title: model.window.title ?? "",
     id: model.window.id,
-    tbH: Math.max(0, asInt(settings.titleBarHeight))
+    tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
   };
 }
 
@@ -2380,7 +2381,7 @@ function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect
 function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout {
   return getWindowChromeLayout(
     getWindowLocalRect(),
-    Math.max(0, asInt(settings.titleBarHeight)),
+    getWindowPreviewTitleBarHeight(model.window?.flagsExpr, asInt(settings.titleBarHeight)),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),

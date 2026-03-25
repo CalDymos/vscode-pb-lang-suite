@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowVariableInspectorValue, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewTitleBarHeight, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -159,4 +159,19 @@ test('parseWindowEventProcInspectorInput preserves surrounding whitespace', () =
     raw: '',
     storedValue: undefined
   });
+});
+
+
+test('window preview title bar follows the original SystemMenu/TitleBar flag gate', () => {
+  assert.equal(hasWindowPreviewTitleBar('#PB_Window_SystemMenu | #PB_Window_SizeGadget'), true);
+  assert.equal(hasWindowPreviewTitleBar('#PB_Window_TitleBar'), true);
+  assert.equal(hasWindowPreviewTitleBar('#PB_Window_SizeGadget | #PB_Window_BorderLess'), false);
+  assert.equal(hasWindowPreviewTitleBar(undefined), false);
+});
+
+test('window preview title bar height collapses to zero without SystemMenu or TitleBar', () => {
+  assert.equal(getWindowPreviewTitleBarHeight('#PB_Window_SystemMenu', 26), 26);
+  assert.equal(getWindowPreviewTitleBarHeight('#PB_Window_TitleBar', 26), 26);
+  assert.equal(getWindowPreviewTitleBarHeight('#PB_Window_SizeGadget', 26), 0);
+  assert.equal(getWindowPreviewTitleBarHeight(undefined, 26), 0);
 });
