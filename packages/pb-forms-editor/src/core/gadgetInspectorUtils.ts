@@ -142,6 +142,19 @@ const GADGET_COLOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   "TreeGadget"
 ]);
 
+const GADGET_ITEM_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  "ComboBoxGadget",
+  "EditorGadget",
+  "ListIconGadget",
+  "ListViewGadget",
+  "PanelGadget",
+  "TreeGadget"
+]);
+
+const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
+  "ListIconGadget"
+]);
+
 function quotePbStringLiteral(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -173,6 +186,14 @@ export function canEditGadgetColors(kind: string | undefined): boolean {
 
 export function canEditGadgetCheckedState(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_CHECKED_STATE_CAPABLE_KINDS.has(kind);
+}
+
+export function canInspectGadgetItems(kind: string | undefined): boolean {
+  return typeof kind === "string" && GADGET_ITEM_EDITOR_CAPABLE_KINDS.has(kind);
+}
+
+export function canInspectGadgetColumns(kind: string | undefined): boolean {
+  return typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind);
 }
 
 export function buildGadgetCheckedStateRaw(kind: string | undefined, checked: boolean): string | undefined {

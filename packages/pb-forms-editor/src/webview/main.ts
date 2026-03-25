@@ -90,6 +90,8 @@ import {
   canEditGadgetCheckedState,
   canEditGadgetColors,
   canEditGadgetHorizontalLocks,
+  canInspectGadgetColumns,
+  canInspectGadgetItems,
   getCustomGadgetHelpDisplay,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
@@ -7518,8 +7520,14 @@ function renderProps() {
   propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
   propsEl.appendChild(row("Parent", readonlyInput((g.parentId ?? "").toString())));
   propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
-  propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
-  propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  const showsItemsInspector = canInspectGadgetItems(g.kind) || Boolean(g.items?.length);
+  const showsColumnsInspector = canInspectGadgetColumns(g.kind) || Boolean(g.columns?.length);
+  if (showsItemsInspector) {
+    propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
+  }
+  if (showsColumnsInspector) {
+    propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  }
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
   if (isImageCapableGadget) {
@@ -7971,9 +7979,10 @@ function renderProps() {
   }
 
   // Items editor (minimal UI)
-  propsEl.appendChild(section("Items"));
-  const itemDraft = getGadgetItemDraft(g);
-  const itemEditorOpen = isGadgetItemEditorOpen(g);
+  if (showsItemsInspector) {
+    propsEl.appendChild(section("Items"));
+    const itemDraft = getGadgetItemDraft(g);
+    const itemEditorOpen = isGadgetItemEditorOpen(g);
   if (itemDraft && itemEditorOpen) {
     propsEl.appendChild(row(
       "Item Text",
@@ -8069,15 +8078,17 @@ function renderProps() {
 
   propsEl.appendChild(itemsBox);
   propsEl.appendChild(itemActions);
-  if (pendingDestructiveAction?.kind === "deleteGadgetItem" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
+    if (pendingDestructiveAction?.kind === "deleteGadgetItem" && pendingDestructiveAction.gadgetId === g.id) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
   }
 
   // Columns editor (minimal UI)
-  propsEl.appendChild(section("Columns"));
-  const columnDraft = getGadgetColumnDraft(g);
-  const columnEditorOpen = isGadgetColumnEditorOpen(g);
+  if (showsColumnsInspector) {
+    propsEl.appendChild(section("Columns"));
+    const columnDraft = getGadgetColumnDraft(g);
+    const columnEditorOpen = isGadgetColumnEditorOpen(g);
   if (columnDraft && columnEditorOpen) {
     propsEl.appendChild(row(
       "Column Title",
@@ -8156,9 +8167,10 @@ function renderProps() {
 
   propsEl.appendChild(colsBox);
   propsEl.appendChild(colActions);
-  if (pendingDestructiveAction?.kind === "deleteGadgetColumn" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
+    if (pendingDestructiveAction?.kind === "deleteGadgetColumn" && pendingDestructiveAction.gadgetId === g.id) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
   }
 }
 

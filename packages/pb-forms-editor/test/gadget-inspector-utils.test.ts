@@ -11,6 +11,8 @@ import {
   canEditGadgetColors,
   canEditGadgetHorizontalLocks,
   canEditGadgetText,
+  canInspectGadgetColumns,
+  canInspectGadgetItems,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
   getGadgetCaptionFieldConfig,
@@ -39,6 +41,20 @@ test("marks original color-capable gadget kinds for front/back color editing", (
   assert.equal(canEditGadgetColors("ImageGadget"), false);
 });
 
+
+test("marks only original item-editor gadget kinds for inspector item sections", () => {
+  assert.equal(canInspectGadgetItems("PanelGadget"), true);
+  assert.equal(canInspectGadgetItems("ListIconGadget"), true);
+  assert.equal(canInspectGadgetItems("ComboBoxGadget"), true);
+  assert.equal(canInspectGadgetItems("ButtonGadget"), false);
+  assert.equal(canInspectGadgetItems("ProgressBarGadget"), false);
+});
+
+test("marks only original listicon gadgets for inspector column sections", () => {
+  assert.equal(canInspectGadgetColumns("ListIconGadget"), true);
+  assert.equal(canInspectGadgetColumns("PanelGadget"), false);
+  assert.equal(canInspectGadgetColumns("TreeGadget"), false);
+});
 
 test("marks original checkbox/option gadget kinds as checked-state editable", () => {
   assert.equal(canEditGadgetCheckedState("CheckBoxGadget"), true);
