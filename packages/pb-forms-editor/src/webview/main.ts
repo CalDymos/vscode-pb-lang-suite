@@ -138,6 +138,7 @@ import {
   getWindowParentInspectorValue,
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
+  getWindowPreviewChromeTopPadding,
   getWindowPreviewTitleButtons,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -2381,9 +2382,10 @@ function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect
 }
 
 function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout {
+  const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     getWindowLocalRect(),
-    getWindowPreviewTitleBarHeight(model.window?.flagsExpr, asInt(settings.titleBarHeight)),
+    getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight)),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -2394,9 +2396,10 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
 function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout | null {
   const wr = getWinRect();
   if (!wr) return null;
+  const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
-    wr.tbH,
+    getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight)),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
@@ -5003,9 +5006,28 @@ function render() {
     );
   }
 
+  const platformSkin = resolvePbFormSkinPlatform();
+  const chromeTopPadding = getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight));
+
+  if (tbH === 0 && platformSkin === "windows" && chromeTopPadding > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = focus;
+    ctx.fillRect(winX, winY, winW, chromeTopPadding);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = focus;
+    ctx.beginPath();
+    ctx.moveTo(winX + 0.5, winY + chromeTopPadding + 0.5);
+    ctx.lineTo(winX + winW - 0.5, winY + chromeTopPadding + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Optional title bar
   if (tbH > 0) {
-    const platformSkin = resolvePbFormSkinPlatform();
     const titleButtons = getWindowPreviewTitleButtons(model.window?.flagsExpr);
     const buttonKinds = [
       titleButtons.showMinimize ? "minimize" : null,

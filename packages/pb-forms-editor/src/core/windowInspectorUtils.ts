@@ -34,6 +34,8 @@ export type WindowPreviewTitleButtons = {
 
 export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
 
+const WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING = 8;
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -186,6 +188,23 @@ export function getWindowPreviewTitleBarHeight(flagsExpr: string | undefined, co
   }
 
   return Math.max(0, Math.trunc(configuredHeight));
+}
+
+export function getWindowPreviewChromeTopPadding(
+  platformSkin: WindowPreviewPlatformSkin | undefined,
+  flagsExpr: string | undefined,
+  configuredTitleBarHeight: number
+): number {
+  const titleBarHeight = getWindowPreviewTitleBarHeight(flagsExpr, configuredTitleBarHeight);
+  if (titleBarHeight > 0) {
+    return titleBarHeight;
+  }
+
+  if (platformSkin === "windows") {
+    return WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING;
+  }
+
+  return 0;
 }
 
 export function getWindowPreviewTitleButtons(flagsExpr: string | undefined): WindowPreviewTitleButtons {
