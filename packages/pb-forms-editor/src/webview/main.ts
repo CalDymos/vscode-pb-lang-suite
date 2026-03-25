@@ -95,6 +95,7 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
+  getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue
@@ -7481,6 +7482,7 @@ function renderProps() {
     return;
   }
 
+  propsEl.appendChild(section("Details"));
   propsEl.appendChild(row("Id", readonlyInput(g.id)));
   propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
   propsEl.appendChild(row("Parent", readonlyInput((g.parentId ?? "").toString())));
@@ -7515,6 +7517,30 @@ function renderProps() {
     const pendingEl = createPendingImageAssignmentDraftEl();
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
+
+  propsEl.appendChild(section("Properties"));
+  propsEl.appendChild(
+    row(
+      "#PB_Any",
+      checkboxInput(Boolean(g.pbAny), () => {}, {
+        disabled: true,
+        title: "Display-only for the current gadget patch path. PB_Any toggling is not wired here yet."
+      })
+    )
+  );
+  propsEl.appendChild(
+    row(
+      "Variable",
+      textInput(
+        getGadgetVariableInspectorValue(g),
+        () => {},
+        {
+          disabled: true,
+          title: "Shows the current assigned gadget variable or enum symbol tail. Renaming is not wired here yet."
+        }
+      )
+    )
+  );
 
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);

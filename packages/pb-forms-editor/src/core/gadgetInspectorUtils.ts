@@ -207,6 +207,13 @@ export function getGadgetCurrentImageDisplay(gadget: GadgetCurrentImageLike, ima
   return gadget.imageRaw?.trim() ?? "";
 }
 
+export function getGadgetVariableInspectorValue(gadget: { variable?: string; firstParam: string }): string {
+  if (typeof gadget.variable === "string" && gadget.variable.trim().length) {
+    return gadget.variable;
+  }
+  return gadget.firstParam.replace(/^#/, "");
+}
+
 export function getGadgetCaptionFieldConfig(kind: string | undefined): GadgetCaptionFieldConfig | undefined {
   if (kind === "CanvasGadget") {
     return { label: "Caption", textEditable: false, variableToggleEditable: true };

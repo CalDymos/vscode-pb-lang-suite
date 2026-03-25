@@ -16,6 +16,7 @@ import {
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeInspectorValue,
+  getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue
@@ -152,6 +153,11 @@ test("prefers the parsed form image path for gadget CurrentImage display", () =>
   assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgOpen)" }, { image: "images/open.png" }), "images/open.png");
   assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgInline)" }, { imageRaw: "?toolbar_open" }), "?toolbar_open");
   assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "0" }), "0");
+});
+
+test("uses the assigned gadget variable or enum symbol tail for the inspector Variable field", () => {
+  assert.equal(getGadgetVariableInspectorValue({ variable: "Button_0", firstParam: "#PB_Any" }), "Button_0");
+  assert.equal(getGadgetVariableInspectorValue({ firstParam: "#Button_1" }), "Button_1");
 });
 test("resolves inspector display values from raw gadget caption and tooltip expressions", () => {
   assert.equal(getGadgetTextInspectorValue({ textRaw: '"Caption"', text: "Caption" }), "Caption");
