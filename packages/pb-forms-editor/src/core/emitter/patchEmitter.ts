@@ -853,16 +853,20 @@ function patchProcedureCallsBestEffort(
   if (oldProcName === newProcName) return;
 
   // Prefer callScanner data when available; fallback would be raw regex, but we avoid that here.
+  const procedureHeaderRe = new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+${escapeRegExp(oldProcName)}\\s*\\(`, "i");
   const procCalls = calls.filter(c => c.name === oldProcName);
   for (const c of procCalls) {
-    // Replace only the name token, keep args/assignment/indent
+    if (procedureHeaderRe.test(document.lineAt(c.range.line).text)) continue;
+
+    // Replace only the name token (or the full assignment line), keep any leading control-flow code intact.
     const indent = c.indent ?? getLineIndent(document, c.range.line);
     const rebuiltCall = `${newProcName}(${c.args})`;
-    const updatedLine = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuiltCall}` : `${indent}${rebuiltCall}`;
+    const updatedLine = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuiltCall}` : rebuiltCall;
+    const replaceStart = c.assignedVar ? c.range.lineStart : c.range.start;
 
     edit.replace(
       document.uri,
-      new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+      new vscode.Range(document.positionAt(replaceStart), document.positionAt(c.range.end)),
       updatedLine
     );
   }
@@ -934,8 +938,11 @@ function renameCallsGlobalByScanner(
 ) {
   if (oldName === newName) return;
 
+  const procedureHeaderRe = new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+${escapeRegExp(oldName)}\\s*\\(`, "i");
+
   for (const c of calls) {
     if (c.name !== oldName) continue;
+    if (procedureHeaderRe.test(document.lineAt(c.range.line).text)) continue;
 
     const rebuilt = `${newName}(${c.args})`;
     const indent = c.indent ?? getLineIndent(document, c.range.line);
@@ -2364,6 +2371,7 @@ export function applyWindowEnumValuePatch(
 export function applyWindowVariableNamePatch(
   document: vscode.TextDocument,
   variableName: string,
+  windowKey?: string,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const newVar = variableName;
@@ -2371,7 +2379,10 @@ export function applyWindowVariableNamePatch(
 
   const calls = scanDocumentCalls(document, scanRange);
 
-  const openWin = calls.find(c => c.name === "OpenWindow");
+  const openWindowCalls = calls.filter(c => c.name.toLowerCase() === "openwindow");
+  const openWin = windowKey
+    ? openWindowCalls.find(c => stableKey(c.assignedVar, splitParams(c.args)) === windowKey)
+    : openWindowCalls[0];
   if (!openWin) return undefined;
 
   const params = splitParams(openWin.args);

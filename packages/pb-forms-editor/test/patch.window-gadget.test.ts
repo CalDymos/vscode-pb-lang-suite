@@ -1623,6 +1623,40 @@ EndProcedure
   assert.match(patchedText, /OpenWindow\(#  winMain  , x, y, width, height, "Window Basic"\)/);
 });
 
+test("patches the selected pbAny window variable name by window key", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Global HelperWin
+Global Window_0
+
+Procedure OpenHelper()
+  HelperWin = OpenWindow(#PB_Any, 0, 0, 40, 40, "Helper")
+EndProcedure
+
+Procedure OpenWindow_0(x = 0, y = 0, width = 220, height = 140)
+  Window_0 = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+
+Procedure Window_0_Events(event)
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowVariableNamePatch(document, "Window_1", "Window_0")
+  );
+
+  assert.match(patchedText, /^Global HelperWin$/m);
+  assert.match(patchedText, /^Global Window_1$/m);
+  assert.doesNotMatch(patchedText, /^Global Window_0$/m);
+  assert.match(patchedText, /HelperWin = OpenWindow\(#PB_Any, 0, 0, 40, 40, "Helper"\)/);
+  assert.match(patchedText, /Window_1 = OpenWindow\(#PB_Any, x, y, width, height, "Window Basic"\)/);
+  assert.match(patchedText, /Procedure OpenWindow_1\(/);
+  assert.match(patchedText, /Procedure Window_1_Events\(/);
+  assert.equal(parsed.window?.id, "Window_1");
+  assert.equal(parsed.window?.variable, "Window_1");
+});
+
+
 test("removes the trailing blank line of the last window Global when toggling back to enum mode", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
