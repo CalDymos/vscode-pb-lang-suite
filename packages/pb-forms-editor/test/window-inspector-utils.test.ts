@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -201,4 +201,14 @@ test('window preview title buttons follow the original close/minimize/maximize f
     showMinimize: false,
     showMaximize: false,
   });
+});
+
+
+test('window preview title icon follows the original Windows title-bar path only', () => {
+  assert.equal(hasWindowPreviewTitleIcon('windows', '#PB_Window_SystemMenu'), true);
+  assert.equal(hasWindowPreviewTitleIcon('windows', '#PB_Window_TitleBar'), true);
+  assert.equal(hasWindowPreviewTitleIcon('linux', '#PB_Window_SystemMenu'), false);
+  assert.equal(hasWindowPreviewTitleIcon('macos', '#PB_Window_SystemMenu'), false);
+  assert.equal(hasWindowPreviewTitleIcon('windows', '#PB_Window_SizeGadget'), false);
+  assert.equal(hasWindowPreviewTitleIcon(undefined, '#PB_Window_SystemMenu'), false);
 });

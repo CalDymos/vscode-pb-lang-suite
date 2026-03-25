@@ -139,6 +139,7 @@ import {
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
   getWindowPreviewTitleButtons,
+  hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
   parseWindowEventProcInspectorInput,
@@ -5004,6 +5005,7 @@ function render() {
 
   // Optional title bar
   if (tbH > 0) {
+    const platformSkin = resolvePbFormSkinPlatform();
     const titleButtons = getWindowPreviewTitleButtons(model.window?.flagsExpr);
     const buttonKinds = [
       titleButtons.showMinimize ? "minimize" : null,
@@ -5015,6 +5017,13 @@ function render() {
     const buttonAreaW = buttonKinds.length > 0
       ? buttonKinds.length * buttonSize + Math.max(0, buttonKinds.length - 1) * buttonGap + 8
       : 0;
+    const showWindowsIcon = hasWindowPreviewTitleIcon(platformSkin, model.window?.flagsExpr);
+    const iconSize = showWindowsIcon ? Math.max(12, Math.min(16, tbH - 10)) : 0;
+    const iconX = winX + 8;
+    const iconY = winY + Math.max(4, Math.trunc((tbH - iconSize) / 2));
+    const titleLeft = showWindowsIcon ? iconX + iconSize + 5 : winX + 8;
+    const titleRight = winX + winW - Math.max(8, buttonAreaW + 8);
+    const titleBaseline = winY + Math.min(tbH - 8, 18);
 
     ctx.save();
     ctx.globalAlpha = 0.10;
@@ -5028,8 +5037,32 @@ function render() {
     ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
     ctx.restore();
 
-    ctx.fillStyle = fg;
-    ctx.fillText(winTitle, winX + 8, winY + Math.min(tbH - 8, 18));
+    if (showWindowsIcon) {
+      ctx.save();
+      ctx.globalAlpha = 0.20;
+      ctx.fillStyle = focus;
+      ctx.fillRect(iconX, iconY, iconSize, iconSize);
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = fg;
+      ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize - 1), Math.max(0, iconSize - 1));
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = fg;
+      ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize - 6), Math.max(4, iconSize - 6));
+      ctx.restore();
+    }
+
+    if (titleRight > titleLeft) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
+      ctx.clip();
+      ctx.fillStyle = fg;
+      ctx.fillText(winTitle, titleLeft, titleBaseline);
+      ctx.restore();
+    }
 
     if (buttonKinds.length > 0) {
       let buttonX = winX + winW - 8 - buttonAreaW + 4;

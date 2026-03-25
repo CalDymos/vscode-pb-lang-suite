@@ -32,6 +32,8 @@ export type WindowPreviewTitleButtons = {
   showMaximize: boolean;
 };
 
+export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -201,6 +203,13 @@ export function getWindowPreviewTitleButtons(flagsExpr: string | undefined): Win
     showMinimize: flags.has(WINDOW_TITLEBAR_MINIMIZE_PREVIEW_FLAG),
     showMaximize: flags.has(WINDOW_TITLEBAR_MAXIMIZE_PREVIEW_FLAG),
   };
+}
+
+export function hasWindowPreviewTitleIcon(
+  platformSkin: WindowPreviewPlatformSkin | undefined,
+  flagsExpr: string | undefined
+): boolean {
+  return platformSkin === "windows" && hasWindowPreviewTitleBar(flagsExpr);
 }
 
 export function getWindowBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {
