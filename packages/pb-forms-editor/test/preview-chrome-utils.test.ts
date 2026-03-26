@@ -19,6 +19,7 @@ import {
   getScrollAreaViewportRect,
   getStatusBarRect,
   getStatusBarAlignedX,
+  getWindowClientSurfaceRects,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -143,6 +144,16 @@ test("computes combined window chrome layout with a Windows client-side inset", 
     toolBarRect: { x: 48, y: 98, w: 304, h: 24 },
     statusBarRect: { x: 48, y: 247, w: 304, h: 23 },
     contentRect: { x: 48, y: 122, w: 304, h: 125 }
+  });
+});
+
+test("computes the Windows client surface fill and border rects from chrome padding", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+  const rects = getWindowClientSurfaceRects(windowRect, 26, 4);
+
+  assert.deepEqual(rects, {
+    fillRect: { x: 44, y: 76, w: 312, h: 194 },
+    borderRect: { x: 43, y: 75, w: 314, h: 196 }
   });
 });
 

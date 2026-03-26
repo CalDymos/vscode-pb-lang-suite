@@ -23,6 +23,7 @@ import {
   getGadgetContentRect,
   getStatusBarAlignedX,
   getWindowChromeLayout,
+  getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   getRectHandlePoints,
   hitHandlePoints,
@@ -4988,8 +4989,12 @@ function render() {
   }
 
   const chromeMetrics = previewChromeMetrics;
+  const platformSkin = resolvePbFormSkinPlatform();
+  const chromeTopPadding = getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight));
+  const windowClientSidePadding = getWindowPreviewClientSidePadding(platformSkin);
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
   const globalChromeLayout = getWindowGlobalChromeLayout(chromeMetrics);
+  const windowClientSurface = getWindowClientSurfaceRects({ x: winX, y: winY, w: winW, h: winH }, chromeTopPadding, windowClientSidePadding);
   const windowContentRect = localChromeLayout.contentRect;
   const menuBarRect = globalChromeLayout?.menuBarRect ?? null;
   const toolBarRect = globalChromeLayout?.toolBarRect ?? null;
@@ -5010,8 +5015,38 @@ function render() {
     );
   }
 
-  const platformSkin = resolvePbFormSkinPlatform();
-  const chromeTopPadding = getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight));
+  if (platformSkin === "windows" && windowClientSidePadding > 0 && windowClientSurface.fillRect.w > 0 && windowClientSurface.fillRect.h > 0) {
+    const leftFrameW = Math.max(0, windowClientSurface.fillRect.x - winX);
+    const rightFrameX = windowClientSurface.fillRect.x + windowClientSurface.fillRect.w;
+    const rightFrameW = Math.max(0, winX + winW - rightFrameX);
+
+    if (leftFrameW > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = focus;
+      ctx.fillRect(winX, windowClientSurface.fillRect.y, leftFrameW, windowClientSurface.fillRect.h);
+      ctx.restore();
+    }
+
+    if (rightFrameW > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = focus;
+      ctx.fillRect(rightFrameX, windowClientSurface.fillRect.y, rightFrameW, windowClientSurface.fillRect.h);
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = focus;
+    ctx.strokeRect(
+      windowClientSurface.borderRect.x + 0.5,
+      windowClientSurface.borderRect.y + 0.5,
+      Math.max(0, windowClientSurface.borderRect.w - 1),
+      Math.max(0, windowClientSurface.borderRect.h - 1)
+    );
+    ctx.restore();
+  }
 
   if (tbH === 0 && platformSkin === "windows" && chromeTopPadding > 0) {
     ctx.save();

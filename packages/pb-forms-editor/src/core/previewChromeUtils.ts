@@ -17,6 +17,11 @@ export type WindowChromeLayout = {
   statusBarRect: PreviewRect | null;
 };
 
+export type WindowClientSurfaceRects = {
+  fillRect: PreviewRect;
+  borderRect: PreviewRect;
+};
+
 export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
@@ -423,6 +428,31 @@ export function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChrome
   };
 }
 
+
+export function getWindowClientSurfaceRects(
+  windowRect: PreviewRect,
+  chromeTopPadding: number,
+  clientSidePadding = 0
+): WindowClientSurfaceRects {
+  const insetX = Math.max(0, Math.trunc(clientSidePadding));
+  const insetY = Math.max(0, Math.trunc(chromeTopPadding));
+  const fillRect: PreviewRect = {
+    x: windowRect.x + insetX,
+    y: windowRect.y + insetY,
+    w: Math.max(0, windowRect.w - insetX * 2),
+    h: Math.max(0, windowRect.h - insetY),
+  };
+
+  return {
+    fillRect,
+    borderRect: {
+      x: fillRect.x - 1,
+      y: fillRect.y - 1,
+      w: fillRect.w + 2,
+      h: fillRect.h + 2,
+    },
+  };
+}
 
 export function getStatusBarAlignedX(
   fieldX: number,
