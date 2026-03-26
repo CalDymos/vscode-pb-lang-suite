@@ -135,25 +135,25 @@ test("computes combined window chrome layout from title and top-level bands", ()
   });
 });
 
-test("computes combined window chrome layout with a Windows client-side inset", () => {
+test("computes combined window chrome layout with Windows client-side and bottom insets", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
-  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8);
+  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8, 8);
 
   assert.deepEqual(layout, {
     menuBarRect: { x: 48, y: 76, w: 304, h: 22 },
     toolBarRect: { x: 48, y: 98, w: 304, h: 24 },
-    statusBarRect: { x: 48, y: 247, w: 304, h: 23 },
-    contentRect: { x: 48, y: 122, w: 304, h: 125 }
+    statusBarRect: { x: 48, y: 239, w: 304, h: 23 },
+    contentRect: { x: 48, y: 122, w: 304, h: 117 }
   });
 });
 
-test("computes the Windows client surface fill and border rects from chrome padding", () => {
+test("computes the Windows client surface fill and border rects from chrome and bottom padding", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
-  const rects = getWindowClientSurfaceRects(windowRect, 26, 4);
+  const rects = getWindowClientSurfaceRects(windowRect, 26, 8, 8);
 
   assert.deepEqual(rects, {
-    fillRect: { x: 44, y: 76, w: 312, h: 194 },
-    borderRect: { x: 43, y: 75, w: 314, h: 196 }
+    fillRect: { x: 48, y: 76, w: 304, h: 186 },
+    borderRect: { x: 47, y: 75, w: 306, h: 188 }
   });
 });
 

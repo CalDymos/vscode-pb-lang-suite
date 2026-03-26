@@ -140,6 +140,7 @@ import {
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
   getWindowPreviewChromeTopPadding,
+  getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewTitleButtons,
   hasWindowPreviewResizeGrip,
@@ -2393,7 +2394,8 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
     metrics,
-    getWindowPreviewClientSidePadding(platformSkin)
+    getWindowPreviewClientSidePadding(platformSkin),
+    getWindowPreviewClientBottomPadding(platformSkin)
   );
 }
 
@@ -2408,7 +2410,8 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
     metrics,
-    getWindowPreviewClientSidePadding(platformSkin)
+    getWindowPreviewClientSidePadding(platformSkin),
+    getWindowPreviewClientBottomPadding(platformSkin)
   );
 }
 
@@ -4992,9 +4995,10 @@ function render() {
   const platformSkin = resolvePbFormSkinPlatform();
   const chromeTopPadding = getWindowPreviewChromeTopPadding(platformSkin, model.window?.flagsExpr, asInt(settings.titleBarHeight));
   const windowClientSidePadding = getWindowPreviewClientSidePadding(platformSkin);
+  const windowClientBottomPadding = getWindowPreviewClientBottomPadding(platformSkin);
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
   const globalChromeLayout = getWindowGlobalChromeLayout(chromeMetrics);
-  const windowClientSurface = getWindowClientSurfaceRects({ x: winX, y: winY, w: winW, h: winH }, chromeTopPadding, windowClientSidePadding);
+  const windowClientSurface = getWindowClientSurfaceRects({ x: winX, y: winY, w: winW, h: winH }, chromeTopPadding, windowClientSidePadding, windowClientBottomPadding);
   const windowContentRect = localChromeLayout.contentRect;
   const menuBarRect = globalChromeLayout?.menuBarRect ?? null;
   const toolBarRect = globalChromeLayout?.toolBarRect ?? null;
@@ -5033,6 +5037,16 @@ function render() {
       ctx.globalAlpha = 0.14;
       ctx.fillStyle = focus;
       ctx.fillRect(rightFrameX, windowClientSurface.fillRect.y, rightFrameW, windowClientSurface.fillRect.h);
+      ctx.restore();
+    }
+
+    const bottomFrameY = windowClientSurface.fillRect.y + windowClientSurface.fillRect.h;
+    const bottomFrameH = Math.max(0, winY + winH - bottomFrameY);
+    if (bottomFrameH > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = focus;
+      ctx.fillRect(winX, bottomFrameY, winW, bottomFrameH);
       ctx.restore();
     }
 
