@@ -5121,6 +5121,8 @@ function render() {
     const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
     const titleButtonSlots = titleButtonLayout.slots;
     const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
+    const titleFg = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
+    const buttonStrokeColor = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
     const buttonSize = Math.max(12, Math.min(18, tbH - 8));
     const buttonGap = 4;
     const buttonAreaW = titleButtonSlots.length > 0
@@ -5146,6 +5148,12 @@ function render() {
       ctx.globalAlpha = 0.10;
       ctx.fillStyle = focus;
       ctx.fillRect(winX, winY, winW, tbH);
+      ctx.restore();
+    } else if (titleBarDecoration.backgroundStyle === "linux-dark") {
+      ctx.save();
+      traceRoundedTopRect(ctx, winX - 1, winY - 1, winW + 2, tbH + 1, 6);
+      ctx.fillStyle = "rgb(70, 70, 70)";
+      ctx.fill();
       ctx.restore();
     } else {
       const gradient = ctx.createLinearGradient(winX, winY, winX, winY + tbH);
@@ -5223,7 +5231,7 @@ function render() {
         ctx.fillStyle = "rgb(54, 54, 54)";
         ctx.fillText(winTitle, titleX, titleBaseline);
       } else {
-        ctx.fillStyle = fg;
+        ctx.fillStyle = titleFg;
         ctx.fillText(winTitle, titleX, titleBaseline);
       }
       ctx.restore();
@@ -5234,7 +5242,8 @@ function render() {
         ? winX + 8
         : winX + winW - 8 - buttonAreaW;
       const buttonY = winY + Math.max(4, Math.trunc((tbH - buttonSize) / 2));
-      const isMacPreview = settings.osSkin === "macos";
+      const isMacPreview = titleBarDecoration.buttonStyle === "macos-circles";
+      const isLinuxPreview = titleBarDecoration.buttonStyle === "linux-glyphs";
       for (const slot of titleButtonSlots) {
         const kind = slot.kind;
         const isEnabled = slot.enabled;
@@ -5249,12 +5258,12 @@ function render() {
           ctx.arc(cx, cy, radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = isEnabled ? 0.35 : 0.18;
-          ctx.strokeStyle = fg;
+          ctx.strokeStyle = buttonStrokeColor;
           ctx.beginPath();
           ctx.arc(cx, cy, Math.max(0, radius - 0.5), 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
-        } else {
+        } else if (!isLinuxPreview) {
           ctx.save();
           ctx.globalAlpha = isEnabled
             ? (kind === "close" ? 0.28 : 0.18)
@@ -5262,15 +5271,15 @@ function render() {
           ctx.fillStyle = focus;
           ctx.fillRect(buttonX, buttonY, buttonSize, buttonSize);
           ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
-          ctx.strokeStyle = fg;
+          ctx.strokeStyle = buttonStrokeColor;
           ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonSize - 1, buttonSize - 1);
           ctx.restore();
         }
 
         if (isEnabled || !isMacPreview) {
           ctx.save();
-          ctx.strokeStyle = fg;
-          ctx.globalAlpha = isEnabled ? 0.85 : 0.22;
+          ctx.strokeStyle = buttonStrokeColor;
+          ctx.globalAlpha = isLinuxPreview ? 1 : (isEnabled ? 0.85 : 0.22);
           ctx.beginPath();
           if (kind === "close") {
             ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
@@ -5572,6 +5581,18 @@ function drawHandles(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   }
 
   ctx.restore();
+}
+
+function traceRoundedTopRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
+  const clampedRadius = Math.max(0, Math.min(Math.trunc(radius), Math.trunc(w / 2), Math.trunc(h)));
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + clampedRadius);
+  ctx.quadraticCurveTo(x, y, x + clampedRadius, y);
+  ctx.lineTo(x + w - clampedRadius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + clampedRadius);
+  ctx.lineTo(x + w, y + h);
+  ctx.closePath();
 }
 
 function renderList() {

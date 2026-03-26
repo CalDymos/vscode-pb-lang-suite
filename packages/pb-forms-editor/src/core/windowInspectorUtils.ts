@@ -46,11 +46,13 @@ export type WindowPreviewTitleButtonLayout = {
 };
 
 export type WindowPreviewTitleBarDecoration = {
-  backgroundStyle: "default" | "macos-compact" | "macos-toolbar";
+  backgroundStyle: "default" | "macos-compact" | "macos-toolbar" | "linux-dark";
+  buttonStyle: "default" | "macos-circles" | "linux-glyphs";
   showFrameBorder: boolean;
   showBottomSeparator: boolean;
   showExtraBottomSeparator: boolean;
   drawShadowedTitle: boolean;
+  useLightForeground: boolean;
 };
 
 function splitFlags(raw: string | undefined): string[] {
@@ -356,19 +358,35 @@ export function getWindowPreviewTitleBarDecoration(
   if (osSkin === "macos") {
     return {
       backgroundStyle: hasToolBar ? "macos-toolbar" : "macos-compact",
+      buttonStyle: "macos-circles",
       showFrameBorder: false,
       showBottomSeparator: true,
       showExtraBottomSeparator: !hasToolBar,
       drawShadowedTitle: true,
+      useLightForeground: false,
+    };
+  }
+
+  if (osSkin === "linux") {
+    return {
+      backgroundStyle: "linux-dark",
+      buttonStyle: "linux-glyphs",
+      showFrameBorder: false,
+      showBottomSeparator: false,
+      showExtraBottomSeparator: false,
+      drawShadowedTitle: false,
+      useLightForeground: true,
     };
   }
 
   return {
     backgroundStyle: "default",
+    buttonStyle: "default",
     showFrameBorder: true,
     showBottomSeparator: false,
     showExtraBottomSeparator: false,
     drawShadowedTitle: false,
+    useLightForeground: false,
   };
 }
 

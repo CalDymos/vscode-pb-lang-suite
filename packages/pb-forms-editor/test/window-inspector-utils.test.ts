@@ -274,26 +274,42 @@ test('window preview title button layout follows the original per-skin alignment
 test('window preview title bar decoration follows the original macOS toolbar split', () => {
   assert.deepEqual(getWindowPreviewTitleBarDecoration('macos', false), {
     backgroundStyle: 'macos-compact',
+    buttonStyle: 'macos-circles',
     showFrameBorder: false,
     showBottomSeparator: true,
     showExtraBottomSeparator: true,
     drawShadowedTitle: true,
+    useLightForeground: false,
   });
 
   assert.deepEqual(getWindowPreviewTitleBarDecoration('macos', true), {
     backgroundStyle: 'macos-toolbar',
+    buttonStyle: 'macos-circles',
     showFrameBorder: false,
     showBottomSeparator: true,
     showExtraBottomSeparator: false,
     drawShadowedTitle: true,
+    useLightForeground: false,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleBarDecoration('linux', false), {
+    backgroundStyle: 'linux-dark',
+    buttonStyle: 'linux-glyphs',
+    showFrameBorder: false,
+    showBottomSeparator: false,
+    showExtraBottomSeparator: false,
+    drawShadowedTitle: false,
+    useLightForeground: true,
   });
 
   assert.deepEqual(getWindowPreviewTitleBarDecoration('windows8', true), {
     backgroundStyle: 'default',
+    buttonStyle: 'default',
     showFrameBorder: true,
     showBottomSeparator: false,
     showExtraBottomSeparator: false,
     drawShadowedTitle: false,
+    useLightForeground: false,
   });
 });
 
