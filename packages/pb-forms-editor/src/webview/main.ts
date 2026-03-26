@@ -119,6 +119,7 @@ import {
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
 } from "../core/gadgetInsertUtils";
+import { resolvePreviewPlatformFromOsSkin } from "../core/formSettingsRuntimeUtils";
 import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
@@ -1358,7 +1359,7 @@ function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: s
 
 function getPredictedInsertedGadgetId(kind: string): string | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
-  const pbAny = shouldInsertGadgetAsPbAny(model.gadgets);
+  const pbAny = shouldInsertGadgetAsPbAny(model.gadgets, settings.newGadgetsUsePbAnyByDefault);
   return buildInsertedGadgetIdentity(kind, model.gadgets, pbAny).id;
 }
 
@@ -2624,13 +2625,8 @@ function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boo
   renderProps();
 }
 
-function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" | undefined {
-  const nav = globalThis.navigator;
-  const ua = `${nav?.userAgent ?? ""} ${nav?.platform ?? ""}`.toLowerCase();
-  if (ua.includes("win")) return "windows";
-  if (ua.includes("mac")) return "macos";
-  if (ua.includes("linux")) return "linux";
-  return undefined;
+function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" {
+  return resolvePreviewPlatformFromOsSkin(settings.osSkin);
 }
 
 function getWindowResizeLockContext() {

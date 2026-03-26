@@ -184,7 +184,11 @@ function getNextNameForPrefix(prefix: string, existingNames: Set<string>): strin
   return `${prefix}${nextIndex}`;
 }
 
-export function shouldInsertGadgetAsPbAny(gadgets: readonly GadgetIdentityLike[]): boolean {
+export function shouldInsertGadgetAsPbAny(gadgets: readonly GadgetIdentityLike[], preferPbAnyByDefault?: boolean): boolean {
+  if (typeof preferPbAnyByDefault === "boolean") {
+    return preferPbAnyByDefault;
+  }
+
   const hasPbAny = gadgets.some(gadget => gadget.pbAny);
   const hasEnum = gadgets.some(gadget => !gadget.pbAny);
   return hasPbAny && !hasEnum;

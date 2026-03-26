@@ -51,6 +51,7 @@ import {
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
 import { isInsertableGadgetKind } from "./core/gadgetInsertUtils";
+import { applyConfiguredFormVersionWarnings } from "./core/formSettingsRuntimeUtils";
 import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
@@ -423,6 +424,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         model.procedureNames = collectProcedureNames(document.uri.fsPath, text, model, workspaceRoot);
 
         const settings = readDesignerSettings();
+        model.meta.issues = applyConfiguredFormVersionWarnings(model.meta.issues, model.meta.header, settings);
         post({ type: "init", model, settings });
       } catch (e: any) {
         // Keep the webview alive with a minimal model and a structured error.
@@ -856,7 +858,18 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             postError(`Unsupported gadget kind '${msg.kind}'${rangeInfo}.`);
             return;
           }
-          const edit = applyGadgetInsert(document, msg.kind, msg.x, msg.y, msg.parentId, msg.parentItem, sr, { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id });
+          const designerSettings = readDesignerSettings();
+          const edit = applyGadgetInsert(
+            document,
+            msg.kind,
+            msg.x,
+            msg.y,
+            msg.parentId,
+            msg.parentItem,
+            sr,
+            { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id },
+            { pbAny: designerSettings.newGadgetsUsePbAnyByDefault }
+          );
           await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`);
           return;
         }

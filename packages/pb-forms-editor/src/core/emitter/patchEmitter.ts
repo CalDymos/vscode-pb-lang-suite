@@ -1323,6 +1323,10 @@ type GadgetInsertExtraArgs = {
   gadget2Id?: string;
 };
 
+type GadgetInsertDefaults = {
+  pbAny?: boolean;
+};
+
 type GadgetInsertArgs = {
   kind: InsertableGadgetKind;
   x: number;
@@ -1611,7 +1615,8 @@ export function applyGadgetInsert(
   parentId?: string,
   parentItem?: number,
   scanRange?: ScanRange,
-  extraArgs?: GadgetInsertExtraArgs
+  extraArgs?: GadgetInsertExtraArgs,
+  insertDefaults?: GadgetInsertDefaults
 ): vscode.WorkspaceEdit | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
 
@@ -1645,7 +1650,7 @@ export function applyGadgetInsert(
     splitterSourceParentItem = sourceParentItem;
   }
 
-  const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets);
+  const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets, insertDefaults?.pbAny);
   const identity = buildInsertedGadgetIdentity(kind, parsed.gadgets, pbAny);
   const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
   const anchor = parentId
