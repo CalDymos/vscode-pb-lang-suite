@@ -378,6 +378,9 @@ type Model = {
 
 type GridMode = "dots" | "lines";
 type SnapMode = "live" | "drop";
+type DesignerOsSkin = "windows7" | "windows8" | "linux" | "macos";
+type WarningPresenceMode = "never" | "always";
+type WarningVersionUpgradeMode = "never" | "ifBackwardCompatibilityIsAffected" | "always";
 
 type DesignerSettings = {
   showGrid: boolean;
@@ -394,6 +397,14 @@ type DesignerSettings = {
 
   canvasBackground: string;
   canvasReadonlyBackground: string;
+
+  newGadgetsUsePbAnyByDefault: boolean;
+  newGadgetsUseVariableAsCaption: boolean;
+  generateEventProcedure: boolean;
+  osSkin: DesignerOsSkin;
+  warningUnrecognizedFile: WarningPresenceMode;
+  warningVersionUpgrade: WarningVersionUpgradeMode;
+  warningVersionDowngrade: WarningPresenceMode;
 };
 
 const EXT_TO_WEBVIEW_MSG_TYPE = {
@@ -776,7 +787,15 @@ let settings: DesignerSettings = {
   titleBarHeight: 26,
 
   canvasBackground: "",
-  canvasReadonlyBackground: ""
+  canvasReadonlyBackground: "",
+
+  newGadgetsUsePbAnyByDefault: true,
+  newGadgetsUseVariableAsCaption: false,
+  generateEventProcedure: true,
+  osSkin: "windows7",
+  warningUnrecognizedFile: "always",
+  warningVersionUpgrade: "ifBackwardCompatibilityIsAffected",
+  warningVersionDowngrade: "always"
 };
 
 const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");

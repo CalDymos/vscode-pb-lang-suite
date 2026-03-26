@@ -129,7 +129,7 @@
         },
         "purebasicFormsDesigner.gridSize": {
           "type": "number",
-          "default": 10,
+          "default": 5,
           "minimum": 2,
           "maximum": 100,
           "description": "%purebasicFormsDesigner.gridSize.description%"
@@ -190,6 +190,79 @@
           "type": "string",
           "default": "",
           "description": "%purebasicFormsDesigner.expectedPbVersion.description%"
+        },
+        "purebasicFormsDesigner.newGadgetsUsePbAnyByDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "%purebasicFormsDesigner.newGadgetsUsePbAnyByDefault.description%"
+        },
+        "purebasicFormsDesigner.newGadgetsUseVariableAsCaption": {
+          "type": "boolean",
+          "default": false,
+          "description": "%purebasicFormsDesigner.newGadgetsUseVariableAsCaption.description%"
+        },
+        "purebasicFormsDesigner.generateEventProcedure": {
+          "type": "boolean",
+          "default": true,
+          "description": "%purebasicFormsDesigner.generateEventProcedure.description%"
+        },
+        "purebasicFormsDesigner.osSkin": {
+          "type": "string",
+          "enum": [
+            "windows7",
+            "windows8",
+            "linux",
+            "macos"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.osSkin.windows7%",
+            "%purebasicFormsDesigner.osSkin.windows8%",
+            "%purebasicFormsDesigner.osSkin.linux%",
+            "%purebasicFormsDesigner.osSkin.macos%"
+          ],
+          "default": "windows7",
+          "description": "%purebasicFormsDesigner.osSkin.description%"
+        },
+        "purebasicFormsDesigner.warningUnrecognizedFile": {
+          "type": "string",
+          "enum": [
+            "never",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "always",
+          "description": "%purebasicFormsDesigner.warningUnrecognizedFile.description%"
+        },
+        "purebasicFormsDesigner.warningVersionUpgrade": {
+          "type": "string",
+          "enum": [
+            "never",
+            "ifBackwardCompatibilityIsAffected",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.ifBackwardCompatibilityIsAffected%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "ifBackwardCompatibilityIsAffected",
+          "description": "%purebasicFormsDesigner.warningVersionUpgrade.description%"
+        },
+        "purebasicFormsDesigner.warningVersionDowngrade": {
+          "type": "string",
+          "enum": [
+            "never",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "always",
+          "description": "%purebasicFormsDesigner.warningVersionDowngrade.description%"
         }
       }
     }
