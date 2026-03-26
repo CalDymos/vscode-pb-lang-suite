@@ -149,6 +149,7 @@ import {
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewMenuBarDecoration,
   getWindowPreviewMenuFlyoutDecoration,
+  getWindowPreviewFrameDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -5517,11 +5518,8 @@ function render() {
   }
 
   // Window border
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = focus;
-  ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
-  ctx.restore();
+  const frameDecoration = getWindowPreviewFrameDecoration(settings.osSkin);
+  drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus);
 
   // Window resize grip
   if (hasWindowPreviewResizeGrip(platformSkin)) {
@@ -5551,7 +5549,12 @@ function render() {
     ctx.save();
     ctx.strokeStyle = focus;
     ctx.lineWidth = 2;
-    ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
+    if (frameDecoration.borderStyle === "macos-rounded") {
+      traceRoundedRect(ctx, winX + 0.5, winY + 0.5, winW - 1, winH - 1, frameDecoration.borderRadius);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
+    }
     ctx.restore();
 
     drawHandles(ctx, winX, winY, winW, winH, focus);
@@ -5719,6 +5722,41 @@ function traceRoundedTopRect(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.quadraticCurveTo(x + w, y, x + w, y + clampedRadius);
   ctx.lineTo(x + w, y + h);
   ctx.closePath();
+}
+
+function traceRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
+  const clampedRadius = Math.max(0, Math.min(Math.trunc(radius), Math.trunc(w / 2), Math.trunc(h / 2)));
+  ctx.beginPath();
+  ctx.moveTo(x + clampedRadius, y);
+  ctx.lineTo(x + w - clampedRadius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + clampedRadius);
+  ctx.lineTo(x + w, y + h - clampedRadius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - clampedRadius, y + h);
+  ctx.lineTo(x + clampedRadius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - clampedRadius);
+  ctx.lineTo(x, y + clampedRadius);
+  ctx.quadraticCurveTo(x, y, x + clampedRadius, y);
+  ctx.closePath();
+}
+
+function drawWindowPreviewFrame(
+  ctx: CanvasRenderingContext2D,
+  rect: PreviewRect,
+  decoration: ReturnType<typeof getWindowPreviewFrameDecoration>,
+  focus: string
+) {
+  ctx.save();
+  ctx.globalAlpha = decoration.strokeAlpha;
+  ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark" ? "rgb(118, 118, 118)" : focus;
+
+  if (decoration.borderStyle === "macos-rounded") {
+    traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  }
+
+  ctx.restore();
 }
 
 function renderList() {

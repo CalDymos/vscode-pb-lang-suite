@@ -94,6 +94,13 @@ export type WindowPreviewMenuFlyoutDecoration = {
   showEntryHoverFill: boolean;
 };
 
+export type WindowPreviewFrameDecoration = {
+  borderStyle: "default" | "macos-rounded";
+  borderRadius: number;
+  strokeColorStyle: "focus" | "macos-dark";
+  strokeAlpha: number;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -564,6 +571,26 @@ export function getWindowPreviewMenuFlyoutDecoration(): WindowPreviewMenuFlyoutD
     separatorStyle: "light",
     useSelectedOutline: true,
     showEntryHoverFill: false,
+  };
+}
+
+export function getWindowPreviewFrameDecoration(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewFrameDecoration {
+  if (osSkin === "macos") {
+    return {
+      borderStyle: "macos-rounded",
+      borderRadius: 4,
+      strokeColorStyle: "macos-dark",
+      strokeAlpha: 1,
+    };
+  }
+
+  return {
+    borderStyle: "default",
+    borderRadius: 0,
+    strokeColorStyle: "focus",
+    strokeAlpha: 0.35,
   };
 }
 
