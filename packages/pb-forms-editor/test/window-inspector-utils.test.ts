@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewStatusBarDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -339,6 +339,41 @@ test('window preview toolbar decoration follows the original per-skin toolbar bl
     useDarkBottomSeparator: false,
     itemInsetX: 13,
     itemInsetY: 3,
+  });
+});
+
+test('window preview status bar decoration follows the original per-skin status bar block', () => {
+  assert.deepEqual(getWindowPreviewStatusBarDecoration('macos'), {
+    backgroundStyle: 'macos-gradient',
+    showRoundedBackground: true,
+    showTopSeparator: true,
+    topSeparatorStyle: 'macos-dark',
+    showFieldSeparators: false,
+    fieldInsetX: 7,
+    fieldInsetY: 4,
+    widthAdjustment: 14,
+  });
+
+  assert.deepEqual(getWindowPreviewStatusBarDecoration('windows8'), {
+    backgroundStyle: 'transparent',
+    showRoundedBackground: false,
+    showTopSeparator: true,
+    topSeparatorStyle: 'light',
+    showFieldSeparators: true,
+    fieldInsetX: 7,
+    fieldInsetY: 4,
+    widthAdjustment: 14,
+  });
+
+  assert.deepEqual(getWindowPreviewStatusBarDecoration('linux'), {
+    backgroundStyle: 'transparent',
+    showRoundedBackground: false,
+    showTopSeparator: true,
+    topSeparatorStyle: 'light',
+    showFieldSeparators: true,
+    fieldInsetX: 15,
+    fieldInsetY: 4,
+    widthAdjustment: 14,
   });
 });
 

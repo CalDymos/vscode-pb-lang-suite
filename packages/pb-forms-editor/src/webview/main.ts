@@ -146,6 +146,7 @@ import {
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewToolBarDecoration,
+  getWindowPreviewStatusBarDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -4888,41 +4889,59 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 }
 
 
-function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const statusbar = getPrimaryStatusbar();
   statusBarFieldPreviewRects = [];
   statusBarAddPreviewRect = null;
   if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-statusBar-background") || getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
   const accent = getCssVar("--vscode-progressBar-background") || fg;
+  const statusBarDecoration = getWindowPreviewStatusBarDecoration(osSkin);
 
-  ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.92;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
-  ctx.restore();
+  if (statusBarDecoration.backgroundStyle === "macos-gradient") {
+    ctx.save();
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + 23);
+    gradient.addColorStop(0, "rgb(211, 211, 211)");
+    gradient.addColorStop(1, "rgb(171, 171, 171)");
+    ctx.fillStyle = gradient;
+    if (statusBarDecoration.showRoundedBackground && typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 3);
+      ctx.fill();
+    } else {
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.restore();
+  }
 
-  const fieldWidths = getStatusBarFieldWidths(statusbar, rect.w);
+  if (statusBarDecoration.showTopSeparator) {
+    ctx.save();
+    ctx.strokeStyle = statusBarDecoration.topSeparatorStyle === "macos-dark"
+      ? "rgb(118, 118, 118)"
+      : "rgb(145, 145, 145)";
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  let x = rect.x;
-  const imageY = rect.y + 4;
+  const fieldWidths = getStatusBarFieldWidths(statusbar, Math.max(0, rect.w - statusBarDecoration.widthAdjustment));
+
+  let x = rect.x + statusBarDecoration.fieldInsetX;
+  const imageY = rect.y + statusBarDecoration.fieldInsetY;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
     statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
 
-    if (i > 0) {
+    if (statusBarDecoration.showFieldSeparators && i > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = border;
+      ctx.strokeStyle = "rgb(215, 215, 215)";
       ctx.beginPath();
       ctx.moveTo(x + 0.5, rect.y + 1);
-      ctx.lineTo(x + 0.5, rect.y + rect.h - 2);
+      ctx.lineTo(x + 0.5, rect.y + rect.h - 1);
       ctx.stroke();
       ctx.restore();
     }
@@ -4932,11 +4951,11 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ctx.fillStyle = fg;
       const textWidth = Math.ceil(ctx.measureText(textLabel).width);
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      ctx.fillText(textLabel, textX, rect.y + Math.min(rect.h - 6, 15));
+      ctx.fillText(textLabel, textX, rect.y + 15);
     } else if (field.progressBar) {
       const progressMetrics = getStatusBarProgressPreviewMetrics(fieldW, rect.h, field.progressRaw ?? "0");
       const trackX = x + 2;
-      const trackY = rect.y + Math.max(3, Math.trunc((rect.h - progressMetrics.trackHeight) / 2));
+      const trackY = rect.y + Math.max(5, Math.trunc((rect.h - progressMetrics.trackHeight) / 2));
       ctx.save();
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.14;
@@ -4973,7 +4992,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const addRect: PreviewStatusBarAddRect = {
     statusBarId: statusbar.id,
     x,
-    y: rect.y + Math.max(0, Math.trunc((rect.h - 16) / 2)),
+    y: rect.y + Math.max(4, Math.trunc((rect.h - 16) / 2)),
     w: 16,
     h: 16
   };
@@ -5393,7 +5412,7 @@ function render() {
   }
 
   if (statusBarRect) {
-    drawStatusBarPreview(ctx, statusBarRect, fg);
+    drawStatusBarPreview(ctx, statusBarRect, fg, settings.osSkin);
     if (selection?.kind === "statusbar" && selection.id === getPrimaryStatusbar()?.id) {
       ctx.save();
       ctx.strokeStyle = focus;

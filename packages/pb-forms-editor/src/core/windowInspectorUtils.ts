@@ -64,6 +64,17 @@ export type WindowPreviewToolBarDecoration = {
   itemInsetY: number;
 };
 
+export type WindowPreviewStatusBarDecoration = {
+  backgroundStyle: "macos-gradient" | "transparent";
+  showRoundedBackground: boolean;
+  showTopSeparator: boolean;
+  topSeparatorStyle: "macos-dark" | "light";
+  showFieldSeparators: boolean;
+  fieldInsetX: number;
+  fieldInsetY: number;
+  widthAdjustment: number;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -430,6 +441,47 @@ export function getWindowPreviewToolBarDecoration(
         useDarkBottomSeparator: false,
         itemInsetX: 5,
         itemInsetY: 3,
+      };
+  }
+}
+
+export function getWindowPreviewStatusBarDecoration(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewStatusBarDecoration {
+  switch (osSkin) {
+    case "macos":
+      return {
+        backgroundStyle: "macos-gradient",
+        showRoundedBackground: true,
+        showTopSeparator: true,
+        topSeparatorStyle: "macos-dark",
+        showFieldSeparators: false,
+        fieldInsetX: 7,
+        fieldInsetY: 4,
+        widthAdjustment: 14,
+      };
+    case "linux":
+      return {
+        backgroundStyle: "transparent",
+        showRoundedBackground: false,
+        showTopSeparator: true,
+        topSeparatorStyle: "light",
+        showFieldSeparators: true,
+        fieldInsetX: 15,
+        fieldInsetY: 4,
+        widthAdjustment: 14,
+      };
+    case "windows7":
+    case "windows8":
+      return {
+        backgroundStyle: "transparent",
+        showRoundedBackground: false,
+        showTopSeparator: true,
+        topSeparatorStyle: "light",
+        showFieldSeparators: true,
+        fieldInsetX: 7,
+        fieldInsetY: 4,
+        widthAdjustment: 14,
       };
   }
 }
