@@ -85,3 +85,45 @@ export function parseDesignerVersion(version: string | undefined): number | unde
 export function hasBackwardCompatibilityBreak(fileVersion: number): boolean {
   return PB_FORM_DESIGNER_BREAKING_UPGRADE_VERSIONS.some((breakVersion) => fileVersion < breakVersion);
 }
+
+export type GadgetCaptionVariableRuntimeLike = {
+  id: string;
+  textRaw?: string;
+  textVariable?: boolean;
+};
+
+export function isAmbiguousEmptyTextLiteral(raw: string | undefined): boolean {
+  return (raw?.trim() ?? "") === '""';
+}
+
+export function applyGadgetCaptionVariableSessionOverrides<T extends GadgetCaptionVariableRuntimeLike>(
+  gadgets: readonly T[],
+  overrides: ReadonlyMap<string, boolean>
+): string[] {
+  const activeIds = new Set<string>();
+  const seenIds = new Set<string>();
+
+  for (const gadget of gadgets) {
+    seenIds.add(gadget.id);
+    const override = overrides.get(gadget.id);
+    if (typeof override !== "boolean") {
+      continue;
+    }
+
+    if (!isAmbiguousEmptyTextLiteral(gadget.textRaw)) {
+      continue;
+    }
+
+    gadget.textVariable = override;
+    activeIds.add(gadget.id);
+  }
+
+  const staleIds: string[] = [];
+  for (const id of overrides.keys()) {
+    if (!activeIds.has(id)) {
+      staleIds.push(id);
+    }
+  }
+
+  return staleIds;
+}

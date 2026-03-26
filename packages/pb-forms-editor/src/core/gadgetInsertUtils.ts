@@ -184,6 +184,21 @@ function getNextNameForPrefix(prefix: string, existingNames: Set<string>): strin
   return `${prefix}${nextIndex}`;
 }
 
+const INSERTED_GADGET_AMBIGUOUS_EMPTY_TEXT_KINDS: ReadonlySet<InsertableGadgetKind> = new Set([
+  "ButtonGadget",
+  "CheckBoxGadget",
+  "DateGadget",
+  "ExplorerComboGadget",
+  "ExplorerListGadget",
+  "ExplorerTreeGadget",
+  "FrameGadget",
+  "HyperLinkGadget",
+  "OptionGadget",
+  "StringGadget",
+  "TextGadget",
+  "WebGadget"
+]);
+
 export function shouldInsertGadgetAsPbAny(gadgets: readonly GadgetIdentityLike[], preferPbAnyByDefault?: boolean): boolean {
   if (typeof preferPbAnyByDefault === "boolean") {
     return preferPbAnyByDefault;
@@ -192,6 +207,10 @@ export function shouldInsertGadgetAsPbAny(gadgets: readonly GadgetIdentityLike[]
   const hasPbAny = gadgets.some(gadget => gadget.pbAny);
   const hasEnum = gadgets.some(gadget => !gadget.pbAny);
   return hasPbAny && !hasEnum;
+}
+
+export function insertedGadgetHasAmbiguousEmptyTextDefault(kind: string | undefined): kind is InsertableGadgetKind {
+  return typeof kind === "string" && INSERTED_GADGET_AMBIGUOUS_EMPTY_TEXT_KINDS.has(kind as InsertableGadgetKind);
 }
 
 export function buildInsertedGadgetIdentity(

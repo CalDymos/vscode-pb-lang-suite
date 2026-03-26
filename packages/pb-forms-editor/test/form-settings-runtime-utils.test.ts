@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {
   applyConfiguredFormVersionWarnings,
   MISSING_FORM_DESIGNER_HEADER_ISSUE,
+  applyGadgetCaptionVariableSessionOverrides,
+  isAmbiguousEmptyTextLiteral,
   resolvePreviewPlatformFromOsSkin
 } from '../src/core/formSettingsRuntimeUtils';
 
@@ -73,4 +75,31 @@ test('configured upgrade warnings respect the original breaking-only mode', () =
   });
   assert.equal(alwaysWarn.length, 1);
   assert.match(alwaysWarn[0]?.message ?? '', /upgrade/i);
+});
+
+
+test('isAmbiguousEmptyTextLiteral only treats the empty string literal as a session-overlay candidate', () => {
+  assert.equal(isAmbiguousEmptyTextLiteral('""'), true);
+  assert.equal(isAmbiguousEmptyTextLiteral('  ""  '), true);
+  assert.equal(isAmbiguousEmptyTextLiteral('Button_0'), false);
+  assert.equal(isAmbiguousEmptyTextLiteral(undefined), false);
+});
+
+test('applyGadgetCaptionVariableSessionOverrides keeps configured caption-variable defaults only for ambiguous empty constructor text', () => {
+  const gadgets = [
+    { id: '#Button_0', textRaw: '""', textVariable: false },
+    { id: '#Text_0', textRaw: '"Caption"', textVariable: false },
+    { id: '#Gone', textRaw: undefined, textVariable: false }
+  ];
+  const overrides = new Map<string, boolean>([
+    ['#Button_0', true],
+    ['#Text_0', true],
+    ['#Missing', true]
+  ]);
+
+  const staleIds = applyGadgetCaptionVariableSessionOverrides(gadgets, overrides);
+
+  assert.equal(gadgets[0]?.textVariable, true);
+  assert.equal(gadgets[1]?.textVariable, false);
+  assert.deepEqual(staleIds.sort(), ['#Missing', '#Text_0']);
 });

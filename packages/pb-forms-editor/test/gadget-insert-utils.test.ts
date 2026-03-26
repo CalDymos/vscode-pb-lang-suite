@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shouldInsertGadgetAsPbAny } from '../src/core/gadgetInsertUtils';
+import { insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadgetInsertUtils';
 
 test('shouldInsertGadgetAsPbAny honours the configured default when provided', () => {
   const mixedIds = [
@@ -28,4 +28,14 @@ test('shouldInsertGadgetAsPbAny keeps the legacy heuristic without an explicit s
     ]),
     false
   );
+});
+
+
+test('insertedGadgetHasAmbiguousEmptyTextDefault matches the constructor kinds that start with an empty caption literal', () => {
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('ButtonGadget'), true);
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('DateGadget'), true);
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('WebGadget'), true);
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('ListViewGadget'), false);
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault('PanelGadget'), false);
+  assert.equal(insertedGadgetHasAmbiguousEmptyTextDefault(undefined), false);
 });

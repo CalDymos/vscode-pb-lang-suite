@@ -50,8 +50,8 @@ import {
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
-import { isInsertableGadgetKind } from "./core/gadgetInsertUtils";
-import { applyConfiguredFormVersionWarnings } from "./core/formSettingsRuntimeUtils";
+import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadgetInsertUtils";
+import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/formSettingsRuntimeUtils";
 import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
 import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
@@ -278,7 +278,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
@@ -361,6 +361,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     let lastModel: FormDocument | undefined;
     let initTimer: ReturnType<typeof setTimeout> | undefined;
+    const gadgetTextVariableSessionOverrides = new Map<string, boolean>();
 
     function createErrorModel(textLen: number, message: string): FormDocument {
       return {
@@ -425,6 +426,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
         const settings = readDesignerSettings();
         model.meta.issues = applyConfiguredFormVersionWarnings(model.meta.issues, model.meta.header, settings);
+        const staleGadgetTextVariableIds = applyGadgetCaptionVariableSessionOverrides(model.gadgets, gadgetTextVariableSessionOverrides);
+        for (const id of staleGadgetTextVariableIds) {
+          gadgetTextVariableSessionOverrides.delete(id);
+        }
         post({ type: "init", model, settings });
       } catch (e: any) {
         // Keep the webview alive with a minimal model and a structured error.
@@ -713,7 +718,18 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             minRaw: msg.minRaw,
             maxRaw: msg.maxRaw
           }, sr);
-          await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`);
+          if (!await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`)) {
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(msg, "textVariable")) {
+            if (isAmbiguousEmptyTextLiteral(msg.textRaw)) {
+              gadgetTextVariableSessionOverrides.set(msg.id, Boolean(msg.textVariable));
+            } else {
+              gadgetTextVariableSessionOverrides.delete(msg.id);
+            }
+          } else if (!isAmbiguousEmptyTextLiteral(msg.textRaw)) {
+            gadgetTextVariableSessionOverrides.delete(msg.id);
+          }
           return;
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode: {
@@ -859,6 +875,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
           const designerSettings = readDesignerSettings();
+          const parsed = lastModel ?? parseFormDocument(document.getText());
+          const insertAsPbAny = shouldInsertGadgetAsPbAny(parsed.gadgets, designerSettings.newGadgetsUsePbAnyByDefault);
+          const insertedIdentity = buildInsertedGadgetIdentity(msg.kind, parsed.gadgets, insertAsPbAny);
           const edit = applyGadgetInsert(
             document,
             msg.kind,
@@ -870,7 +889,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id },
             { pbAny: designerSettings.newGadgetsUsePbAnyByDefault }
           );
-          await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`);
+          if (!await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`)) {
+            return;
+          }
+          if (designerSettings.newGadgetsUseVariableAsCaption && insertedGadgetHasAmbiguousEmptyTextDefault(msg.kind)) {
+            gadgetTextVariableSessionOverrides.set(insertedIdentity.id, true);
+          }
           return;
         }
 
