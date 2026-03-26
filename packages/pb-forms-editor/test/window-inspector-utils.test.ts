@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -200,6 +200,73 @@ test('window preview title buttons follow the original close/minimize/maximize f
     showClose: false,
     showMinimize: false,
     showMaximize: false,
+  });
+});
+
+
+test('window preview title button slots follow the original per-skin placeholder behavior', () => {
+  assert.deepEqual(getWindowPreviewTitleButtonSlots('macos', '#PB_Window_SystemMenu'), [
+    { kind: 'close', enabled: true },
+    { kind: 'minimize', enabled: false },
+    { kind: 'maximize', enabled: false },
+  ]);
+
+  assert.deepEqual(getWindowPreviewTitleButtonSlots('windows7', '#PB_Window_SystemMenu | #PB_Window_MinimizeGadget'), [
+    { kind: 'minimize', enabled: true },
+    { kind: 'maximize', enabled: false },
+    { kind: 'close', enabled: true },
+  ]);
+
+  assert.deepEqual(getWindowPreviewTitleButtonSlots('windows8', '#PB_Window_SystemMenu | #PB_Window_MaximizeGadget'), [
+    { kind: 'maximize', enabled: true },
+    { kind: 'close', enabled: true },
+  ]);
+
+  assert.deepEqual(getWindowPreviewTitleButtonSlots('linux', '#PB_Window_SystemMenu | #PB_Window_MinimizeGadget | #PB_Window_MaximizeGadget'), [
+    { kind: 'minimize', enabled: true },
+    { kind: 'maximize', enabled: true },
+    { kind: 'close', enabled: true },
+  ]);
+});
+
+
+test('window preview title button layout follows the original per-skin alignment', () => {
+  assert.deepEqual(getWindowPreviewTitleButtonLayout('macos', '#PB_Window_SystemMenu'), {
+    buttonSide: 'left',
+    titleAlignment: 'center',
+    slots: [
+      { kind: 'close', enabled: true },
+      { kind: 'minimize', enabled: false },
+      { kind: 'maximize', enabled: false },
+    ],
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonLayout('windows7', '#PB_Window_SystemMenu | #PB_Window_MinimizeGadget'), {
+    buttonSide: 'right',
+    titleAlignment: 'left',
+    slots: [
+      { kind: 'minimize', enabled: true },
+      { kind: 'maximize', enabled: false },
+      { kind: 'close', enabled: true },
+    ],
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonLayout('windows8', '#PB_Window_SystemMenu | #PB_Window_MinimizeGadget'), {
+    buttonSide: 'right',
+    titleAlignment: 'center',
+    slots: [
+      { kind: 'minimize', enabled: true },
+      { kind: 'close', enabled: true },
+    ],
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonLayout('linux', '#PB_Window_SystemMenu | #PB_Window_MaximizeGadget'), {
+    buttonSide: 'left',
+    titleAlignment: 'left',
+    slots: [
+      { kind: 'maximize', enabled: true },
+      { kind: 'close', enabled: true },
+    ],
   });
 });
 

@@ -33,6 +33,17 @@ export type WindowPreviewTitleButtons = {
 };
 
 export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
+export type WindowPreviewOsSkin = "windows7" | "windows8" | "linux" | "macos";
+export type WindowPreviewTitleButtonKind = "minimize" | "maximize" | "close";
+export type WindowPreviewTitleButtonSlot = {
+  kind: WindowPreviewTitleButtonKind;
+  enabled: boolean;
+};
+export type WindowPreviewTitleButtonLayout = {
+  buttonSide: "left" | "right";
+  titleAlignment: "left" | "center";
+  slots: WindowPreviewTitleButtonSlot[];
+};
 
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -239,6 +250,95 @@ export function getWindowPreviewTitleButtons(flagsExpr: string | undefined): Win
     showMinimize: flags.has(WINDOW_TITLEBAR_MINIMIZE_PREVIEW_FLAG),
     showMaximize: flags.has(WINDOW_TITLEBAR_MAXIMIZE_PREVIEW_FLAG),
   };
+}
+
+export function getWindowPreviewTitleButtonSlots(
+  osSkin: WindowPreviewOsSkin,
+  flagsExpr: string | undefined
+): WindowPreviewTitleButtonSlot[] {
+  const buttons = getWindowPreviewTitleButtons(flagsExpr);
+  if (!buttons.showClose) {
+    return [];
+  }
+
+  switch (osSkin) {
+    case "macos":
+      return [
+        { kind: "close", enabled: true },
+        { kind: "minimize", enabled: buttons.showMinimize },
+        { kind: "maximize", enabled: buttons.showMaximize },
+      ];
+    case "windows7":
+      if (buttons.showMinimize && buttons.showMaximize) {
+        return [
+          { kind: "minimize", enabled: true },
+          { kind: "maximize", enabled: true },
+          { kind: "close", enabled: true },
+        ];
+      }
+
+      if (buttons.showMinimize) {
+        return [
+          { kind: "minimize", enabled: true },
+          { kind: "maximize", enabled: false },
+          { kind: "close", enabled: true },
+        ];
+      }
+
+      if (buttons.showMaximize) {
+        return [
+          { kind: "minimize", enabled: false },
+          { kind: "maximize", enabled: true },
+          { kind: "close", enabled: true },
+        ];
+      }
+
+      return [{ kind: "close", enabled: true }];
+    case "windows8":
+    case "linux": {
+      const slots: WindowPreviewTitleButtonSlot[] = [];
+      if (buttons.showMinimize) {
+        slots.push({ kind: "minimize", enabled: true });
+      }
+      if (buttons.showMaximize) {
+        slots.push({ kind: "maximize", enabled: true });
+      }
+      slots.push({ kind: "close", enabled: true });
+      return slots;
+    }
+  }
+}
+
+export function getWindowPreviewTitleButtonLayout(
+  osSkin: WindowPreviewOsSkin,
+  flagsExpr: string | undefined
+): WindowPreviewTitleButtonLayout {
+  switch (osSkin) {
+    case "macos":
+      return {
+        buttonSide: "left",
+        titleAlignment: "center",
+        slots: getWindowPreviewTitleButtonSlots(osSkin, flagsExpr),
+      };
+    case "windows7":
+      return {
+        buttonSide: "right",
+        titleAlignment: "left",
+        slots: getWindowPreviewTitleButtonSlots(osSkin, flagsExpr),
+      };
+    case "windows8":
+      return {
+        buttonSide: "right",
+        titleAlignment: "center",
+        slots: getWindowPreviewTitleButtonSlots(osSkin, flagsExpr),
+      };
+    case "linux":
+      return {
+        buttonSide: "left",
+        titleAlignment: "left",
+        slots: getWindowPreviewTitleButtonSlots(osSkin, flagsExpr),
+      };
+  }
 }
 
 export function hasWindowPreviewTitleIcon(

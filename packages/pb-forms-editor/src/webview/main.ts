@@ -143,7 +143,7 @@ import {
   getWindowPreviewChromeTopPadding,
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
-  getWindowPreviewTitleButtons,
+  getWindowPreviewTitleButtonLayout,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -5117,23 +5117,26 @@ function render() {
 
   // Optional title bar
   if (tbH > 0) {
-    const titleButtons = getWindowPreviewTitleButtons(model.window?.flagsExpr);
-    const buttonKinds = [
-      titleButtons.showMinimize ? "minimize" : null,
-      titleButtons.showMaximize ? "maximize" : null,
-      titleButtons.showClose ? "close" : null,
-    ].filter((kind): kind is "minimize" | "maximize" | "close" => kind !== null);
+    const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
+    const titleButtonSlots = titleButtonLayout.slots;
     const buttonSize = Math.max(12, Math.min(18, tbH - 8));
     const buttonGap = 4;
-    const buttonAreaW = buttonKinds.length > 0
-      ? buttonKinds.length * buttonSize + Math.max(0, buttonKinds.length - 1) * buttonGap + 8
+    const buttonAreaW = titleButtonSlots.length > 0
+      ? titleButtonSlots.length * buttonSize + Math.max(0, titleButtonSlots.length - 1) * buttonGap
       : 0;
+    const buttonBandPadding = titleButtonSlots.length > 0 ? 8 : 0;
     const showWindowsIcon = hasWindowPreviewTitleIcon(platformSkin, model.window?.flagsExpr);
     const iconSize = showWindowsIcon ? Math.max(12, Math.min(16, tbH - 10)) : 0;
     const iconX = winX + 8;
     const iconY = winY + Math.max(4, Math.trunc((tbH - iconSize) / 2));
-    const titleLeft = showWindowsIcon ? iconX + iconSize + 5 : winX + 8;
-    const titleRight = winX + winW - Math.max(8, buttonAreaW + 8);
+    const leftButtonBandEnd = titleButtonLayout.buttonSide === "left"
+      ? winX + 8 + buttonAreaW + buttonBandPadding
+      : winX + 8;
+    const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
+      ? winX + winW - 8 - buttonAreaW - buttonBandPadding
+      : winX + winW - 8;
+    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize + 5 : winX + 8, leftButtonBandEnd);
+    const titleRight = Math.min(winX + winW - 8, rightButtonBandStart);
     const titleBaseline = winY + Math.min(tbH - 8, 18);
 
     ctx.save();
@@ -5166,46 +5169,77 @@ function render() {
     }
 
     if (titleRight > titleLeft) {
+      const titleWidth = ctx.measureText(winTitle).width;
+      const titleX = titleButtonLayout.titleAlignment === "center"
+        ? titleLeft + Math.max(0, (titleRight - titleLeft - titleWidth) / 2)
+        : titleLeft;
       ctx.save();
       ctx.beginPath();
       ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
       ctx.clip();
       ctx.fillStyle = fg;
-      ctx.fillText(winTitle, titleLeft, titleBaseline);
+      ctx.fillText(winTitle, titleX, titleBaseline);
       ctx.restore();
     }
 
-    if (buttonKinds.length > 0) {
-      let buttonX = winX + winW - 8 - buttonAreaW + 4;
+    if (titleButtonSlots.length > 0) {
+      let buttonX = titleButtonLayout.buttonSide === "left"
+        ? winX + 8
+        : winX + winW - 8 - buttonAreaW;
       const buttonY = winY + Math.max(4, Math.trunc((tbH - buttonSize) / 2));
-      for (const kind of buttonKinds) {
-        ctx.save();
-        ctx.globalAlpha = kind === "close" ? 0.28 : 0.18;
-        ctx.fillStyle = focus;
-        ctx.fillRect(buttonX, buttonY, buttonSize, buttonSize);
-        ctx.globalAlpha = 0.45;
-        ctx.strokeStyle = fg;
-        ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonSize - 1, buttonSize - 1);
-        ctx.restore();
-
-        ctx.save();
-        ctx.strokeStyle = fg;
-        ctx.globalAlpha = 0.85;
-        ctx.beginPath();
-        if (kind === "close") {
-          ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
-          ctx.lineTo(buttonX + buttonSize - 4.5, buttonY + buttonSize - 4.5);
-          ctx.moveTo(buttonX + buttonSize - 4.5, buttonY + 4.5);
-          ctx.lineTo(buttonX + 4.5, buttonY + buttonSize - 4.5);
-        } else if (kind === "maximize") {
-          ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonSize - 9), Math.max(4, buttonSize - 9));
+      const isMacPreview = settings.osSkin === "macos";
+      for (const slot of titleButtonSlots) {
+        const kind = slot.kind;
+        const isEnabled = slot.enabled;
+        if (isMacPreview) {
+          const radius = Math.max(4, Math.trunc(buttonSize / 2));
+          const cx = buttonX + radius;
+          const cy = buttonY + radius;
+          ctx.save();
+          ctx.globalAlpha = isEnabled ? 0.24 : 0.12;
+          ctx.fillStyle = focus;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = isEnabled ? 0.35 : 0.18;
+          ctx.strokeStyle = fg;
+          ctx.beginPath();
+          ctx.arc(cx, cy, Math.max(0, radius - 0.5), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
         } else {
-          const lineY = buttonY + buttonSize - 4.5;
-          ctx.moveTo(buttonX + 4.5, lineY);
-          ctx.lineTo(buttonX + buttonSize - 4.5, lineY);
+          ctx.save();
+          ctx.globalAlpha = isEnabled
+            ? (kind === "close" ? 0.28 : 0.18)
+            : 0.08;
+          ctx.fillStyle = focus;
+          ctx.fillRect(buttonX, buttonY, buttonSize, buttonSize);
+          ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
+          ctx.strokeStyle = fg;
+          ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonSize - 1, buttonSize - 1);
+          ctx.restore();
         }
-        ctx.stroke();
-        ctx.restore();
+
+        if (isEnabled || !isMacPreview) {
+          ctx.save();
+          ctx.strokeStyle = fg;
+          ctx.globalAlpha = isEnabled ? 0.85 : 0.22;
+          ctx.beginPath();
+          if (kind === "close") {
+            ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
+            ctx.lineTo(buttonX + buttonSize - 4.5, buttonY + buttonSize - 4.5);
+            ctx.moveTo(buttonX + buttonSize - 4.5, buttonY + 4.5);
+            ctx.lineTo(buttonX + 4.5, buttonY + buttonSize - 4.5);
+          } else if (kind === "maximize") {
+            ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonSize - 9), Math.max(4, buttonSize - 9));
+          } else {
+            const lineY = buttonY + buttonSize - 4.5;
+            ctx.moveTo(buttonX + 4.5, lineY);
+            ctx.lineTo(buttonX + buttonSize - 4.5, lineY);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
 
         buttonX += buttonSize + buttonGap;
       }
