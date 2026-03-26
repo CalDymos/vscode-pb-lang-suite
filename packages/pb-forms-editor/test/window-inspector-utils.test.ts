@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewStatusBarDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewMenuBarDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -421,4 +421,51 @@ test('window preview client bottom padding follows the original Windows bottom f
   assert.equal(getWindowPreviewClientBottomPadding('linux', 8), 0);
   assert.equal(getWindowPreviewClientBottomPadding('macos', 8), 0);
   assert.equal(getWindowPreviewClientBottomPadding(undefined, 8), 0);
+});
+
+
+test('window preview menu bar decoration follows the original per-skin menu block', () => {
+  assert.deepEqual(getWindowPreviewMenuBarDecoration('macos'), {
+    backgroundStyle: 'macos-gradient',
+    showTopSeparator: true,
+    topSeparatorStyle: 'macos-dark',
+    bottomSeparatorStyle: 'macos-dark',
+    itemInsetX: 20,
+    itemInsetY: 4,
+    itemSpacing: 20,
+    useSelectedOutline: true,
+  });
+
+  assert.deepEqual(getWindowPreviewMenuBarDecoration('windows7'), {
+    backgroundStyle: 'windows7-layered',
+    showTopSeparator: false,
+    topSeparatorStyle: 'none',
+    bottomSeparatorStyle: 'windows7-triple',
+    itemInsetX: 15,
+    itemInsetY: 2,
+    itemSpacing: 7,
+    useSelectedOutline: true,
+  });
+
+  assert.deepEqual(getWindowPreviewMenuBarDecoration('windows8'), {
+    backgroundStyle: 'windows8-light',
+    showTopSeparator: false,
+    topSeparatorStyle: 'none',
+    bottomSeparatorStyle: 'windows8-light',
+    itemInsetX: 15,
+    itemInsetY: 2,
+    itemSpacing: 7,
+    useSelectedOutline: true,
+  });
+
+  assert.deepEqual(getWindowPreviewMenuBarDecoration('linux'), {
+    backgroundStyle: 'linux-light',
+    showTopSeparator: false,
+    topSeparatorStyle: 'none',
+    bottomSeparatorStyle: 'linux-light',
+    itemInsetX: 15,
+    itemInsetY: 2,
+    itemSpacing: 7,
+    useSelectedOutline: true,
+  });
 });

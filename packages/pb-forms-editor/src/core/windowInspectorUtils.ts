@@ -75,6 +75,17 @@ export type WindowPreviewStatusBarDecoration = {
   widthAdjustment: number;
 };
 
+export type WindowPreviewMenuBarDecoration = {
+  backgroundStyle: "macos-gradient" | "windows7-layered" | "windows8-light" | "linux-light";
+  showTopSeparator: boolean;
+  topSeparatorStyle: "macos-dark" | "none";
+  bottomSeparatorStyle: "macos-dark" | "windows7-triple" | "windows8-light" | "linux-light";
+  itemInsetX: number;
+  itemInsetY: number;
+  itemSpacing: number;
+  useSelectedOutline: boolean;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -482,6 +493,58 @@ export function getWindowPreviewStatusBarDecoration(
         fieldInsetX: 7,
         fieldInsetY: 4,
         widthAdjustment: 14,
+      };
+  }
+}
+
+
+export function getWindowPreviewMenuBarDecoration(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewMenuBarDecoration {
+  switch (osSkin) {
+    case "macos":
+      return {
+        backgroundStyle: "macos-gradient",
+        showTopSeparator: true,
+        topSeparatorStyle: "macos-dark",
+        bottomSeparatorStyle: "macos-dark",
+        itemInsetX: 20,
+        itemInsetY: 4,
+        itemSpacing: 20,
+        useSelectedOutline: true,
+      };
+    case "windows7":
+      return {
+        backgroundStyle: "windows7-layered",
+        showTopSeparator: false,
+        topSeparatorStyle: "none",
+        bottomSeparatorStyle: "windows7-triple",
+        itemInsetX: 15,
+        itemInsetY: 2,
+        itemSpacing: 7,
+        useSelectedOutline: true,
+      };
+    case "windows8":
+      return {
+        backgroundStyle: "windows8-light",
+        showTopSeparator: false,
+        topSeparatorStyle: "none",
+        bottomSeparatorStyle: "windows8-light",
+        itemInsetX: 15,
+        itemInsetY: 2,
+        itemSpacing: 7,
+        useSelectedOutline: true,
+      };
+    case "linux":
+      return {
+        backgroundStyle: "linux-light",
+        showTopSeparator: false,
+        topSeparatorStyle: "none",
+        bottomSeparatorStyle: "linux-light",
+        itemInsetX: 15,
+        itemInsetY: 2,
+        itemSpacing: 7,
+        useSelectedOutline: true,
       };
   }
 }

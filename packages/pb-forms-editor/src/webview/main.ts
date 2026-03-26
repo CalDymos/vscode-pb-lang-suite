@@ -147,6 +147,7 @@ import {
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
+  getWindowPreviewMenuBarDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -4669,28 +4670,99 @@ function drawMenuFlyoutPanelPreview(
   ctx.restore();
 }
 
-function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const menu = getPrimaryMenu();
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
   if (!menu || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
-  const itemHover = getCssVar("--vscode-toolbar-hoverBackground") || getCssVar("--vscode-list-hoverBackground") || "rgba(127,127,127,0.15)";
+  const menuBarDecoration = getWindowPreviewMenuBarDecoration(osSkin);
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.9;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  switch (menuBarDecoration.backgroundStyle) {
+    case "macos-gradient": {
+      const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + Math.max(rect.h, 22));
+      gradient.addColorStop(0, "rgb(251, 251, 251)");
+      gradient.addColorStop(1, "rgb(218, 218, 218)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(rect.x, rect.y + 1, rect.w, Math.max(0, rect.h - 1));
+      break;
+    }
+    case "windows7-layered":
+      ctx.fillStyle = "rgb(245, 245, 245)";
+      ctx.fillRect(rect.x, rect.y, rect.w, Math.min(rect.h, 7));
+      if (rect.h > 7) {
+        ctx.fillStyle = "rgb(218, 224, 241)";
+        ctx.fillRect(rect.x, rect.y + 7, rect.w, Math.max(0, rect.h - 7));
+      }
+      break;
+    case "windows8-light":
+      ctx.fillStyle = "rgb(245, 246, 247)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      break;
+    case "linux-light":
+      ctx.fillStyle = "rgb(245, 246, 247)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      break;
+  }
   ctx.restore();
 
-  let x = rect.x + 7;
-  const baseline = rect.y + Math.min(rect.h - 6, 15);
+  if (menuBarDecoration.showTopSeparator) {
+    ctx.save();
+    ctx.strokeStyle = menuBarDecoration.topSeparatorStyle === "macos-dark" ? "rgb(85, 85, 85)" : border;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  switch (menuBarDecoration.bottomSeparatorStyle) {
+    case "macos-dark":
+      ctx.strokeStyle = "rgb(118, 118, 118)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+    case "windows7-triple":
+      ctx.strokeStyle = "rgb(182, 188, 204)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(240, 240, 240)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 1.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 1.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(160, 160, 160)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+    case "windows8-light":
+    case "linux-light":
+      ctx.strokeStyle = "rgb(232, 233, 234)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+  }
+  ctx.restore();
+
+  const selectedRootEntryIndex = selection && selection.kind === "menuEntry" && selection.menuId === menu.id
+    ? getMenuAncestorChain(menu, selection.entryIndex)[0] ?? null
+    : null;
+
+  let x = rect.x + menuBarDecoration.itemInsetX;
+  const textY = rect.y + menuBarDecoration.itemInsetY;
+  const baseline = textY + Math.min(Math.max(12, rect.h - 8), 13);
   for (const [entryIndex, entry] of menu.entries.entries()) {
     if (getMenuEntryLevel(entry) !== 0) continue;
     if (entry.kind === "MenuBar") {
@@ -4708,18 +4780,21 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const label = getMenuPreviewLabel(entry);
     if (!label.length) continue;
-    const itemW = Math.max(24, Math.ceil(ctx.measureText(label).width) + 14);
-    menuEntryPreviewRects.push({ ownerId: menu.id, index: entryIndex, x, y: rect.y + 2, w: itemW, h: Math.max(0, rect.h - 4) });
-
-    ctx.save();
-    ctx.fillStyle = itemHover;
-    ctx.globalAlpha = 0.22;
-    ctx.fillRect(x, rect.y + 2, itemW, Math.max(0, rect.h - 4));
-    ctx.restore();
+    const textWidth = Math.ceil(ctx.measureText(label).width);
+    const itemW = Math.max(24, textWidth + 6);
+    menuEntryPreviewRects.push({ ownerId: menu.id, index: entryIndex, x, y: rect.y + 2, w: itemW + menuBarDecoration.itemSpacing, h: Math.max(0, rect.h - 4) });
 
     ctx.fillStyle = fg;
-    ctx.fillText(label, x + 7, baseline);
-    x += itemW + 3;
+    ctx.fillText(label, x, baseline);
+
+    if (menuBarDecoration.useSelectedOutline && selectedRootEntryIndex === entryIndex) {
+      ctx.save();
+      ctx.strokeStyle = fg;
+      ctx.strokeRect(x - 1.5, textY - 1.5, itemW + 1, Math.max(0, rect.h - 6));
+      ctx.restore();
+    }
+
+    x += itemW + menuBarDecoration.itemSpacing;
     if (x >= rect.x + rect.w - 20) break;
   }
 
@@ -4768,7 +4843,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;
-    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, itemHover);
+    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, getCssVar("--vscode-toolbar-hoverBackground") || getCssVar("--vscode-list-hoverBackground") || "rgba(127,127,127,0.15)");
     previousPanelRect = panelRect;
   }
 }
@@ -5346,7 +5421,7 @@ function render() {
   }
 
   if (menuBarRect) {
-    drawMenuBarPreview(ctx, menuBarRect, fg);
+    drawMenuBarPreview(ctx, menuBarRect, fg, settings.osSkin);
     if (selection?.kind === "menu" && selection.id === getPrimaryMenu()?.id) {
       ctx.save();
       ctx.strokeStyle = focus;
