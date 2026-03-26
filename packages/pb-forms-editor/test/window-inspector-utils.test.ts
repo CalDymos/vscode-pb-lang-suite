@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -310,6 +310,35 @@ test('window preview title bar decoration follows the original macOS toolbar spl
     showExtraBottomSeparator: false,
     drawShadowedTitle: false,
     useLightForeground: false,
+  });
+});
+
+test('window preview toolbar decoration follows the original per-skin toolbar block', () => {
+  assert.deepEqual(getWindowPreviewToolBarDecoration('macos'), {
+    backgroundStyle: 'macos-gradient',
+    showFrameBorder: false,
+    showBottomSeparator: true,
+    useDarkBottomSeparator: true,
+    itemInsetX: 7,
+    itemInsetY: 3,
+  });
+
+  assert.deepEqual(getWindowPreviewToolBarDecoration('windows8'), {
+    backgroundStyle: 'windows-light',
+    showFrameBorder: false,
+    showBottomSeparator: false,
+    useDarkBottomSeparator: false,
+    itemInsetX: 5,
+    itemInsetY: 3,
+  });
+
+  assert.deepEqual(getWindowPreviewToolBarDecoration('linux'), {
+    backgroundStyle: 'linux-light',
+    showFrameBorder: false,
+    showBottomSeparator: false,
+    useDarkBottomSeparator: false,
+    itemInsetX: 13,
+    itemInsetY: 3,
   });
 });
 

@@ -145,6 +145,7 @@ import {
   getWindowPreviewClientSidePadding,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
+  getWindowPreviewToolBarDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -4771,27 +4772,50 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   }
 }
 
-function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const toolbar = getPrimaryToolbar();
   toolBarEntryPreviewRects = [];
   toolBarAddPreviewRect = null;
   if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
   const buttonBg = getCssVar("--vscode-button-secondaryBackground") || getCssVar("--vscode-toolbar-hoverBackground") || "rgba(127,127,127,0.15)";
+  const toolBarDecoration = getWindowPreviewToolBarDecoration(osSkin);
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.92;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  if (toolBarDecoration.backgroundStyle === "macos-gradient") {
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + Math.max(rect.h, 90));
+    gradient.addColorStop(0, "rgb(228, 228, 228)");
+    gradient.addColorStop(1, "rgb(175, 175, 175)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  } else {
+    ctx.fillStyle = toolBarDecoration.backgroundStyle === "linux-light"
+      ? "rgb(242, 241, 240)"
+      : "rgb(240, 240, 240)";
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+
+  if (toolBarDecoration.showFrameBorder) {
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = border;
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  }
   ctx.restore();
 
-  let x = rect.x + 6;
-  const y = rect.y + Math.max(3, Math.trunc((rect.h - 16) / 2));
+  if (toolBarDecoration.showBottomSeparator) {
+    ctx.save();
+    ctx.strokeStyle = toolBarDecoration.useDarkBottomSeparator ? "rgb(105, 105, 105)" : border;
+    ctx.globalAlpha = toolBarDecoration.useDarkBottomSeparator ? 1 : 0.28;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  let x = rect.x + toolBarDecoration.itemInsetX;
+  const y = rect.y + toolBarDecoration.itemInsetY;
   for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
@@ -5347,7 +5371,7 @@ function render() {
   }
 
   if (toolBarRect) {
-    drawToolBarPreview(ctx, toolBarRect, fg);
+    drawToolBarPreview(ctx, toolBarRect, fg, settings.osSkin);
     if (selection?.kind === "toolbar" && selection.id === getPrimaryToolbar()?.id) {
       ctx.save();
       ctx.strokeStyle = focus;

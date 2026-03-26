@@ -55,6 +55,15 @@ export type WindowPreviewTitleBarDecoration = {
   useLightForeground: boolean;
 };
 
+export type WindowPreviewToolBarDecoration = {
+  backgroundStyle: "windows-light" | "macos-gradient" | "linux-light";
+  showFrameBorder: boolean;
+  showBottomSeparator: boolean;
+  useDarkBottomSeparator: boolean;
+  itemInsetX: number;
+  itemInsetY: number;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -388,6 +397,41 @@ export function getWindowPreviewTitleBarDecoration(
     drawShadowedTitle: false,
     useLightForeground: false,
   };
+}
+
+export function getWindowPreviewToolBarDecoration(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewToolBarDecoration {
+  switch (osSkin) {
+    case "macos":
+      return {
+        backgroundStyle: "macos-gradient",
+        showFrameBorder: false,
+        showBottomSeparator: true,
+        useDarkBottomSeparator: true,
+        itemInsetX: 7,
+        itemInsetY: 3,
+      };
+    case "linux":
+      return {
+        backgroundStyle: "linux-light",
+        showFrameBorder: false,
+        showBottomSeparator: false,
+        useDarkBottomSeparator: false,
+        itemInsetX: 13,
+        itemInsetY: 3,
+      };
+    case "windows7":
+    case "windows8":
+      return {
+        backgroundStyle: "windows-light",
+        showFrameBorder: false,
+        showBottomSeparator: false,
+        useDarkBottomSeparator: false,
+        itemInsetX: 5,
+        itemInsetY: 3,
+      };
+  }
 }
 
 export function hasWindowPreviewTitleIcon(
