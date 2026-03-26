@@ -147,6 +147,7 @@ import {
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
+  getWindowPreviewStatusBarProgressDecoration,
   getWindowPreviewMenuBarDecoration,
   getWindowPreviewMenuFlyoutDecoration,
   getWindowPreviewFrameDecoration,
@@ -5037,26 +5038,40 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillText(textLabel, textX, rect.y + 15);
     } else if (field.progressBar) {
+      const progressDecoration = getWindowPreviewStatusBarProgressDecoration(osSkin);
       const progressMetrics = getStatusBarProgressPreviewMetrics(fieldW, rect.h, field.progressRaw ?? "0");
-      const trackX = x + 2;
-      const trackY = rect.y + Math.max(5, Math.trunc((rect.h - progressMetrics.trackHeight) / 2));
+      const trackX = x + progressDecoration.trackInsetX;
+      const trackY = rect.y + progressDecoration.trackInsetY;
+      const trackColor = progressDecoration.trackColorStyle === "windows8"
+        ? "rgb(230, 230, 230)"
+        : "rgb(220, 220, 220)";
+      const fillColor = progressDecoration.fillColorStyle === "windows8"
+        ? "rgb(6, 176, 37)"
+        : "rgb(134, 206, 244)";
+      const borderColor = progressDecoration.borderColorStyle === "windows8"
+        ? "rgb(188, 188, 188)"
+        : "rgb(152, 152, 152)";
+
       ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.14;
-      ctx.fillRect(trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight);
-      ctx.strokeStyle = fg;
-      ctx.globalAlpha = 0.4;
-      ctx.strokeRect(trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1);
-      ctx.strokeStyle = border;
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.moveTo(trackX + 1, trackY + progressMetrics.trackHeight - 0.5);
-      ctx.lineTo(trackX + progressMetrics.trackWidth - 1, trackY + progressMetrics.trackHeight - 0.5);
-      ctx.stroke();
+      ctx.fillStyle = trackColor;
+      if (progressDecoration.trackShape === "rounded") {
+        traceRoundedRect(ctx, trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight, progressDecoration.trackRadius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight);
+      }
+
       if (progressMetrics.fillWidth > 0) {
-        ctx.fillStyle = accent;
-        ctx.globalAlpha = 0.78;
+        ctx.fillStyle = fillColor;
         ctx.fillRect(trackX + 1, trackY + 1, progressMetrics.fillWidth, Math.max(2, progressMetrics.trackHeight - 2));
+      }
+
+      ctx.strokeStyle = borderColor;
+      if (progressDecoration.trackShape === "rounded") {
+        traceRoundedRect(ctx, trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1, progressDecoration.trackRadius);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1);
       }
       ctx.restore();
     } else {

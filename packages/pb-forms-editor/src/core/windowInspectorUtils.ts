@@ -75,6 +75,16 @@ export type WindowPreviewStatusBarDecoration = {
   widthAdjustment: number;
 };
 
+export type WindowPreviewStatusBarProgressDecoration = {
+  trackShape: "rect" | "rounded";
+  trackRadius: number;
+  trackInsetX: number;
+  trackInsetY: number;
+  trackColorStyle: "default" | "windows8";
+  fillColorStyle: "default" | "windows8";
+  borderColorStyle: "default" | "windows8";
+};
+
 export type WindowPreviewMenuBarDecoration = {
   backgroundStyle: "macos-gradient" | "windows7-layered" | "windows8-light" | "linux-light";
   showTopSeparator: boolean;
@@ -512,6 +522,32 @@ export function getWindowPreviewStatusBarDecoration(
   }
 }
 
+
+export function getWindowPreviewStatusBarProgressDecoration(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewStatusBarProgressDecoration {
+  if (osSkin === "windows8") {
+    return {
+      trackShape: "rect",
+      trackRadius: 0,
+      trackInsetX: 0,
+      trackInsetY: 5,
+      trackColorStyle: "windows8",
+      fillColorStyle: "windows8",
+      borderColorStyle: "windows8",
+    };
+  }
+
+  return {
+    trackShape: "rounded",
+    trackRadius: 3,
+    trackInsetX: 0,
+    trackInsetY: 5,
+    trackColorStyle: "default",
+    fillColorStyle: "default",
+    borderColorStyle: "default",
+  };
+}
 
 export function getWindowPreviewMenuBarDecoration(
   osSkin: WindowPreviewOsSkin
