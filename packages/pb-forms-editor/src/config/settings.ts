@@ -46,6 +46,9 @@ export interface DesignerSettings {
   windowFillOpacity: number;
   outsideDimOpacity: number;
   titleBarHeight: number;
+  windowPreviewWindowsCaptionlessTopPadding: number;
+  windowPreviewWindowsClientSidePadding: number;
+  windowPreviewWindowsClientBottomPadding: number;
 
   canvasBackground: string;
   canvasReadonlyBackground: string;
@@ -73,6 +76,9 @@ const SETTING_KEYS = {
   windowFillOpacity: "windowFillOpacity",
   outsideDimOpacity: "outsideDimOpacity",
   titleBarHeight: "titleBarHeight",
+  windowPreviewWindowsCaptionlessTopPadding: "windowPreviewWindowsCaptionlessTopPadding",
+  windowPreviewWindowsClientSidePadding: "windowPreviewWindowsClientSidePadding",
+  windowPreviewWindowsClientBottomPadding: "windowPreviewWindowsClientBottomPadding",
 
   canvasBackground: "canvasBackground",
   canvasReadonlyBackground: "canvasReadonlyBackground",
@@ -101,6 +107,9 @@ export function readDesignerSettings(): DesignerSettings {
     windowFillOpacity: clamp(cfg.get<number>(SETTING_KEYS.windowFillOpacity, 0.05), 0, 0.25),
     outsideDimOpacity: clamp(cfg.get<number>(SETTING_KEYS.outsideDimOpacity, 0.12), 0, 0.35),
     titleBarHeight: clamp(cfg.get<number>(SETTING_KEYS.titleBarHeight, 26), 0, 60),
+    windowPreviewWindowsCaptionlessTopPadding: clamp(cfg.get<number>(SETTING_KEYS.windowPreviewWindowsCaptionlessTopPadding, 8), 0, 60),
+    windowPreviewWindowsClientSidePadding: clamp(cfg.get<number>(SETTING_KEYS.windowPreviewWindowsClientSidePadding, 8), 0, 60),
+    windowPreviewWindowsClientBottomPadding: clamp(cfg.get<number>(SETTING_KEYS.windowPreviewWindowsClientBottomPadding, 8), 0, 60),
 
     canvasBackground: cfg.get<string>(SETTING_KEYS.canvasBackground, ""),
     canvasReadonlyBackground: cfg.get<string>(SETTING_KEYS.canvasReadonlyBackground, ""),

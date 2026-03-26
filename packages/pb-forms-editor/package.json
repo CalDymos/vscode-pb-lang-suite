@@ -186,6 +186,27 @@
           "maximum": 60,
           "description": "%purebasicFormsDesigner.titleBarHeight.description%"
         },
+        "purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding.description%"
+        },
+        "purebasicFormsDesigner.windowPreviewWindowsClientSidePadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsClientSidePadding.description%"
+        },
+        "purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding.description%"
+        },
         "purebasicFormsDesigner.expectedPbVersion": {
           "type": "string",
           "default": "",

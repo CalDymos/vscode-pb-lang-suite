@@ -221,25 +221,31 @@ test('window preview resize grip follows the original always-drawn platform path
 });
 
 test('window preview client side padding follows the original Windows border width only', () => {
-  assert.equal(getWindowPreviewClientSidePadding('windows'), 8);
-  assert.equal(getWindowPreviewClientSidePadding('linux'), 0);
-  assert.equal(getWindowPreviewClientSidePadding('macos'), 0);
-  assert.equal(getWindowPreviewClientSidePadding(undefined), 0);
+  assert.equal(getWindowPreviewClientSidePadding('windows', 8), 8);
+  assert.equal(getWindowPreviewClientSidePadding('linux', 8), 0);
+  assert.equal(getWindowPreviewClientSidePadding('macos', 8), 0);
+  assert.equal(getWindowPreviewClientSidePadding(undefined, 8), 0);
 });
 
 
 test('window preview chrome top padding keeps the original 8px Windows inset when no title bar is present', () => {
-  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SystemMenu', 26), 26);
-  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SizeGadget', 26), 8);
-  assert.equal(getWindowPreviewChromeTopPadding('windows', undefined, 26), 8);
-  assert.equal(getWindowPreviewChromeTopPadding('linux', '#PB_Window_SizeGadget', 26), 0);
-  assert.equal(getWindowPreviewChromeTopPadding('macos', undefined, 26), 0);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SystemMenu', 26, 8), 26);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SizeGadget', 26, 8), 8);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', undefined, 26, 8), 8);
+  assert.equal(getWindowPreviewChromeTopPadding('linux', '#PB_Window_SizeGadget', 26, 8), 0);
+  assert.equal(getWindowPreviewChromeTopPadding('macos', undefined, 26, 8), 0);
 });
 
 
+test('window preview configurable paddings clamp negative values and keep caller-provided Windows metrics', () => {
+  assert.equal(getWindowPreviewClientSidePadding('windows', 12.9), 12);
+  assert.equal(getWindowPreviewClientBottomPadding('windows', 6.2), 6);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SizeGadget', 26, -4), 0);
+});
+
 test('window preview client bottom padding follows the original Windows bottom frame only', () => {
-  assert.equal(getWindowPreviewClientBottomPadding('windows'), 8);
-  assert.equal(getWindowPreviewClientBottomPadding('linux'), 0);
-  assert.equal(getWindowPreviewClientBottomPadding('macos'), 0);
-  assert.equal(getWindowPreviewClientBottomPadding(undefined), 0);
+  assert.equal(getWindowPreviewClientBottomPadding('windows', 8), 8);
+  assert.equal(getWindowPreviewClientBottomPadding('linux', 8), 0);
+  assert.equal(getWindowPreviewClientBottomPadding('macos', 8), 0);
+  assert.equal(getWindowPreviewClientBottomPadding(undefined, 8), 0);
 });

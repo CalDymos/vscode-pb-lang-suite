@@ -34,10 +34,6 @@ export type WindowPreviewTitleButtons = {
 
 export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
 
-const WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING = 8;
-const WINDOW_PREVIEW_WINDOWS_CLIENT_SIDE_PADDING = 8;
-const WINDOW_PREVIEW_WINDOWS_CLIENT_BOTTOM_PADDING = 8;
-
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -192,18 +188,29 @@ export function getWindowPreviewTitleBarHeight(flagsExpr: string | undefined, co
   return Math.max(0, Math.trunc(configuredHeight));
 }
 
-export function getWindowPreviewClientSidePadding(platformSkin: WindowPreviewPlatformSkin | undefined): number {
-  return platformSkin === "windows" ? WINDOW_PREVIEW_WINDOWS_CLIENT_SIDE_PADDING : 0;
+function normalizeWindowPreviewPadding(configuredPadding: number): number {
+  return Math.max(0, Math.trunc(configuredPadding));
 }
 
-export function getWindowPreviewClientBottomPadding(platformSkin: WindowPreviewPlatformSkin | undefined): number {
-  return platformSkin === "windows" ? WINDOW_PREVIEW_WINDOWS_CLIENT_BOTTOM_PADDING : 0;
+export function getWindowPreviewClientSidePadding(
+  platformSkin: WindowPreviewPlatformSkin | undefined,
+  configuredPadding: number
+): number {
+  return platformSkin === "windows" ? normalizeWindowPreviewPadding(configuredPadding) : 0;
+}
+
+export function getWindowPreviewClientBottomPadding(
+  platformSkin: WindowPreviewPlatformSkin | undefined,
+  configuredPadding: number
+): number {
+  return platformSkin === "windows" ? normalizeWindowPreviewPadding(configuredPadding) : 0;
 }
 
 export function getWindowPreviewChromeTopPadding(
   platformSkin: WindowPreviewPlatformSkin | undefined,
   flagsExpr: string | undefined,
-  configuredTitleBarHeight: number
+  configuredTitleBarHeight: number,
+  configuredCaptionlessTopPadding: number
 ): number {
   const titleBarHeight = getWindowPreviewTitleBarHeight(flagsExpr, configuredTitleBarHeight);
   if (titleBarHeight > 0) {
@@ -211,7 +218,7 @@ export function getWindowPreviewChromeTopPadding(
   }
 
   if (platformSkin === "windows") {
-    return WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING;
+    return normalizeWindowPreviewPadding(configuredCaptionlessTopPadding);
   }
 
   return 0;
