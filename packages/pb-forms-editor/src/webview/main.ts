@@ -144,6 +144,7 @@ import {
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewTitleButtonLayout,
+  getWindowPreviewTitleBarDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -5119,6 +5120,7 @@ function render() {
   if (tbH > 0) {
     const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
     const titleButtonSlots = titleButtonLayout.slots;
+    const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
     const buttonSize = Math.max(12, Math.min(18, tbH - 8));
     const buttonGap = 4;
     const buttonAreaW = titleButtonSlots.length > 0
@@ -5139,17 +5141,55 @@ function render() {
     const titleRight = Math.min(winX + winW - 8, rightButtonBandStart);
     const titleBaseline = winY + Math.min(tbH - 8, 18);
 
-    ctx.save();
-    ctx.globalAlpha = 0.10;
-    ctx.fillStyle = focus;
-    ctx.fillRect(winX, winY, winW, tbH);
-    ctx.restore();
+    if (titleBarDecoration.backgroundStyle === "default") {
+      ctx.save();
+      ctx.globalAlpha = 0.10;
+      ctx.fillStyle = focus;
+      ctx.fillRect(winX, winY, winW, tbH);
+      ctx.restore();
+    } else {
+      const gradient = ctx.createLinearGradient(winX, winY, winX, winY + tbH);
+      if (titleBarDecoration.backgroundStyle === "macos-toolbar") {
+        gradient.addColorStop(0, "rgba(228, 228, 228, 0.96)");
+        gradient.addColorStop(1, "rgba(175, 175, 175, 0.96)");
+      } else {
+        gradient.addColorStop(0, "rgba(228, 228, 228, 0.96)");
+        gradient.addColorStop(1, "rgba(183, 183, 183, 0.96)");
+      }
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.fillRect(winX, winY, winW, tbH);
+      ctx.restore();
+    }
 
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = focus;
-    ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
-    ctx.restore();
+    if (titleBarDecoration.showFrameBorder) {
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = focus;
+      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
+      ctx.restore();
+    }
+
+    if (titleBarDecoration.showBottomSeparator) {
+      ctx.save();
+      ctx.strokeStyle = titleBarDecoration.backgroundStyle === "default" ? focus : "rgb(184, 184, 184)";
+      ctx.globalAlpha = titleBarDecoration.backgroundStyle === "default" ? 0.2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(winX + 0.5, winY + tbH - 0.5);
+      ctx.lineTo(winX + winW - 0.5, winY + tbH - 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (titleBarDecoration.showExtraBottomSeparator) {
+      ctx.save();
+      ctx.strokeStyle = "rgb(105, 105, 105)";
+      ctx.beginPath();
+      ctx.moveTo(winX + 0.5, winY + tbH - 0.5);
+      ctx.lineTo(winX + winW - 0.5, winY + tbH - 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     if (showWindowsIcon) {
       ctx.save();
@@ -5177,8 +5217,15 @@ function render() {
       ctx.beginPath();
       ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
       ctx.clip();
-      ctx.fillStyle = fg;
-      ctx.fillText(winTitle, titleX, titleBaseline);
+      if (titleBarDecoration.drawShadowedTitle) {
+        ctx.fillStyle = "rgb(255, 255, 255)";
+        ctx.fillText(winTitle, titleX, titleBaseline + 1);
+        ctx.fillStyle = "rgb(54, 54, 54)";
+        ctx.fillText(winTitle, titleX, titleBaseline);
+      } else {
+        ctx.fillStyle = fg;
+        ctx.fillText(winTitle, titleX, titleBaseline);
+      }
       ctx.restore();
     }
 

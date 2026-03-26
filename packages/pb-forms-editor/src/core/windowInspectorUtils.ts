@@ -45,6 +45,14 @@ export type WindowPreviewTitleButtonLayout = {
   slots: WindowPreviewTitleButtonSlot[];
 };
 
+export type WindowPreviewTitleBarDecoration = {
+  backgroundStyle: "default" | "macos-compact" | "macos-toolbar";
+  showFrameBorder: boolean;
+  showBottomSeparator: boolean;
+  showExtraBottomSeparator: boolean;
+  drawShadowedTitle: boolean;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -339,6 +347,29 @@ export function getWindowPreviewTitleButtonLayout(
         slots: getWindowPreviewTitleButtonSlots(osSkin, flagsExpr),
       };
   }
+}
+
+export function getWindowPreviewTitleBarDecoration(
+  osSkin: WindowPreviewOsSkin,
+  hasToolBar: boolean
+): WindowPreviewTitleBarDecoration {
+  if (osSkin === "macos") {
+    return {
+      backgroundStyle: hasToolBar ? "macos-toolbar" : "macos-compact",
+      showFrameBorder: false,
+      showBottomSeparator: true,
+      showExtraBottomSeparator: !hasToolBar,
+      drawShadowedTitle: true,
+    };
+  }
+
+  return {
+    backgroundStyle: "default",
+    showFrameBorder: true,
+    showBottomSeparator: false,
+    showExtraBottomSeparator: false,
+    drawShadowedTitle: false,
+  };
 }
 
 export function hasWindowPreviewTitleIcon(

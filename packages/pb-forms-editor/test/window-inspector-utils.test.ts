@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -270,6 +270,32 @@ test('window preview title button layout follows the original per-skin alignment
   });
 });
 
+
+test('window preview title bar decoration follows the original macOS toolbar split', () => {
+  assert.deepEqual(getWindowPreviewTitleBarDecoration('macos', false), {
+    backgroundStyle: 'macos-compact',
+    showFrameBorder: false,
+    showBottomSeparator: true,
+    showExtraBottomSeparator: true,
+    drawShadowedTitle: true,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleBarDecoration('macos', true), {
+    backgroundStyle: 'macos-toolbar',
+    showFrameBorder: false,
+    showBottomSeparator: true,
+    showExtraBottomSeparator: false,
+    drawShadowedTitle: true,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleBarDecoration('windows8', true), {
+    backgroundStyle: 'default',
+    showFrameBorder: true,
+    showBottomSeparator: false,
+    showExtraBottomSeparator: false,
+    drawShadowedTitle: false,
+  });
+});
 
 test('window preview title icon follows the original Windows title-bar path only', () => {
   assert.equal(hasWindowPreviewTitleIcon('windows', '#PB_Window_SystemMenu'), true);
