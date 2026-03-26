@@ -148,6 +148,7 @@ import {
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewMenuBarDecoration,
+  getWindowPreviewMenuFlyoutDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -4576,24 +4577,20 @@ function drawMenuFlyoutPanelPreview(
   menu: MenuModel,
   parentIndex: number,
   panelRect: PreviewRect,
-  fg: string,
-  border: string,
-  itemHover: string
+  fg: string
 ): void {
   const childIndices = getDirectMenuChildIndices(menu, parentIndex);
   if (panelRect.w <= 0 || panelRect.h <= 0) return;
 
-  const bg = getCssVar("--vscode-menu-background")
-    || getCssVar("--vscode-sideBar-background")
-    || getCssVar("--vscode-editor-background")
-    || "rgba(255,255,255,0.96)";
+  const flyoutDecoration = getWindowPreviewMenuFlyoutDecoration();
+  const panelBg = flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)";
+  const panelBorder = flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg;
+  const separatorColor = flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder;
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.96;
+  ctx.fillStyle = panelBg;
   ctx.fillRect(panelRect.x, panelRect.y, panelRect.w, panelRect.h);
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = border;
+  ctx.strokeStyle = panelBorder;
   ctx.strokeRect(panelRect.x + 0.5, panelRect.y + 0.5, panelRect.w - 1, panelRect.h - 1);
   ctx.restore();
 
@@ -4603,8 +4600,7 @@ function drawMenuFlyoutPanelPreview(
     if (entry.kind === "MenuBar") {
       menuEntryPreviewRects.push({ ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 12 });
       ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = border;
+      ctx.strokeStyle = separatorColor;
       ctx.beginPath();
       ctx.moveTo(panelRect.x + 0.5, posY + 6.5);
       ctx.lineTo(panelRect.x + panelRect.w - 0.5, posY + 6.5);
@@ -4617,11 +4613,17 @@ function drawMenuFlyoutPanelPreview(
     const entryRect: PreviewEntryRect = { ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
     menuEntryPreviewRects.push(entryRect);
 
-    ctx.save();
-    ctx.fillStyle = itemHover;
-    ctx.globalAlpha = 0.08;
-    ctx.fillRect(entryRect.x + 1, entryRect.y + 1, Math.max(0, entryRect.w - 2), Math.max(0, entryRect.h - 2));
-    ctx.restore();
+    const isSelectedEntry = selection?.kind === "menuEntry"
+      && selection.menuId === menu.id
+      && selection.entryIndex === childIndex;
+
+    if (flyoutDecoration.showEntryHoverFill) {
+      ctx.save();
+      ctx.fillStyle = fg;
+      ctx.globalAlpha = 0.08;
+      ctx.fillRect(entryRect.x + 1, entryRect.y + 1, Math.max(0, entryRect.w - 2), Math.max(0, entryRect.h - 2));
+      ctx.restore();
+    }
 
     if (entry.iconId || entry.iconRaw) {
       ctx.save();
@@ -4646,7 +4648,6 @@ function drawMenuFlyoutPanelPreview(
 
     if (getDirectMenuChildIndices(menu, childIndex).length) {
       ctx.save();
-      ctx.globalAlpha = 0.8;
       ctx.fillStyle = fg;
       ctx.beginPath();
       ctx.moveTo(entryRect.x + entryRect.w - 16, entryRect.y + 6);
@@ -4654,6 +4655,13 @@ function drawMenuFlyoutPanelPreview(
       ctx.lineTo(entryRect.x + entryRect.w - 16, entryRect.y + 14);
       ctx.closePath();
       ctx.fill();
+      ctx.restore();
+    }
+
+    if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
+      ctx.save();
+      ctx.strokeStyle = fg;
+      ctx.strokeRect(entryRect.x, entryRect.y, Math.max(0, entryRect.w), Math.max(0, entryRect.h));
       ctx.restore();
     }
 
@@ -4843,7 +4851,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;
-    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, getCssVar("--vscode-toolbar-hoverBackground") || getCssVar("--vscode-list-hoverBackground") || "rgba(127,127,127,0.15)");
+    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg);
     previousPanelRect = panelRect;
   }
 }

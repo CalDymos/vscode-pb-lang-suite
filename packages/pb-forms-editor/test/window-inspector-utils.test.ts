@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewMenuBarDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -227,6 +227,17 @@ test('window preview title button slots follow the original per-skin placeholder
     { kind: 'maximize', enabled: true },
     { kind: 'close', enabled: true },
   ]);
+});
+
+
+test('window preview menu flyout decoration follows the original fixed white panel style', () => {
+  assert.deepEqual(getWindowPreviewMenuFlyoutDecoration(), {
+    backgroundStyle: 'white',
+    borderStyle: 'light',
+    separatorStyle: 'light',
+    useSelectedOutline: true,
+    showEntryHoverFill: false,
+  });
 });
 
 

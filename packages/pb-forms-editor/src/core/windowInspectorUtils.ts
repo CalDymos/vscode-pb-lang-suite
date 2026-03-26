@@ -86,6 +86,14 @@ export type WindowPreviewMenuBarDecoration = {
   useSelectedOutline: boolean;
 };
 
+export type WindowPreviewMenuFlyoutDecoration = {
+  backgroundStyle: "white";
+  borderStyle: "light";
+  separatorStyle: "light";
+  useSelectedOutline: boolean;
+  showEntryHoverFill: boolean;
+};
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -547,6 +555,16 @@ export function getWindowPreviewMenuBarDecoration(
         useSelectedOutline: true,
       };
   }
+}
+
+export function getWindowPreviewMenuFlyoutDecoration(): WindowPreviewMenuFlyoutDecoration {
+  return {
+    backgroundStyle: "white",
+    borderStyle: "light",
+    separatorStyle: "light",
+    useSelectedOutline: true,
+    showEntryHoverFill: false,
+  };
 }
 
 export function hasWindowPreviewTitleIcon(
