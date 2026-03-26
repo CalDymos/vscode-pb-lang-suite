@@ -34,7 +34,8 @@ export type WindowPreviewTitleButtons = {
 
 export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
 
-const WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING = 8;
+const WINDOW_PREVIEW_WINDOWS_CAPTIONLESS_TOP_PADDING = 4; // TODO: Convert to settings (package.json -> ./config/settings.ts)
+const WINDOW_PREVIEW_WINDOWS_CLIENT_SIDE_PADDING = 4; // TODO: Convert to settings (package.json -> ./config/settings.ts)
 
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -188,6 +189,10 @@ export function getWindowPreviewTitleBarHeight(flagsExpr: string | undefined, co
   }
 
   return Math.max(0, Math.trunc(configuredHeight));
+}
+
+export function getWindowPreviewClientSidePadding(platformSkin: WindowPreviewPlatformSkin | undefined): number {
+  return platformSkin === "windows" ? WINDOW_PREVIEW_WINDOWS_CLIENT_SIDE_PADDING : 0;
 }
 
 export function getWindowPreviewChromeTopPadding(

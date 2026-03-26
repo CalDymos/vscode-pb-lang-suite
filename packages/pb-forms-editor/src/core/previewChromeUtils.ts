@@ -388,12 +388,13 @@ export function getSplitterBarRect(
 export function getMenuBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
-  metrics: PreviewChromeMetrics
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
 ): PreviewRect {
   return {
-    x: windowRect.x,
+    x: windowRect.x + clientSidePadding,
     y: windowRect.y + Math.max(0, titleBarHeight),
-    w: windowRect.w,
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: metrics.menuHeight
   };
 }
@@ -402,21 +403,22 @@ export function getToolBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
   hasMenu: boolean,
-  metrics: PreviewChromeMetrics
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
 ): PreviewRect {
   return {
-    x: windowRect.x,
+    x: windowRect.x + clientSidePadding,
     y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
-    w: windowRect.w,
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: metrics.toolBarHeight
   };
 }
 
-export function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+export function getStatusBarRect(windowRect: PreviewRect, metrics: PreviewChromeMetrics, clientSidePadding = 0): PreviewRect {
   return {
-    x: windowRect.x,
+    x: windowRect.x + clientSidePadding,
     y: windowRect.y + Math.max(0, windowRect.h - metrics.statusBarHeight),
-    w: windowRect.w,
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: Math.min(metrics.statusBarHeight, Math.max(0, windowRect.h))
   };
 }
@@ -493,16 +495,17 @@ export function getWindowContentRect(
   hasMenu: boolean,
   hasToolbar: boolean,
   hasStatusbar: boolean,
-  metrics: PreviewChromeMetrics
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
 ): PreviewRect {
   const top = Math.max(0, titleBarHeight)
     + (hasMenu ? metrics.menuHeight : 0)
     + (hasToolbar ? metrics.toolBarHeight : 0);
   const bottom = hasStatusbar ? metrics.statusBarHeight : 0;
   return {
-    x: windowRect.x,
+    x: windowRect.x + clientSidePadding,
     y: windowRect.y + top,
-    w: windowRect.w,
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: Math.max(0, windowRect.h - top - bottom)
   };
 }
@@ -513,12 +516,13 @@ export function getWindowChromeLayout(
   hasMenu: boolean,
   hasToolbar: boolean,
   hasStatusbar: boolean,
-  metrics: PreviewChromeMetrics
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
 ): WindowChromeLayout {
   return {
-    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics),
-    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics) : null,
-    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics) : null,
-    statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics) : null
+    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics, clientSidePadding),
+    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding) : null,
+    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding) : null,
+    statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics, clientSidePadding) : null
   };
 }

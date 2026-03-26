@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientSidePadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -220,11 +220,18 @@ test('window preview resize grip follows the original always-drawn platform path
   assert.equal(hasWindowPreviewResizeGrip(undefined), false);
 });
 
+test('window preview client side padding follows the original Windows border width only', () => {
+  assert.equal(getWindowPreviewClientSidePadding('windows'), 4);
+  assert.equal(getWindowPreviewClientSidePadding('linux'), 0);
+  assert.equal(getWindowPreviewClientSidePadding('macos'), 0);
+  assert.equal(getWindowPreviewClientSidePadding(undefined), 0);
+});
 
-test('window preview chrome top padding keeps the original 8px Windows inset when no title bar is present', () => {
+
+test('window preview chrome top padding keeps the original 4px Windows inset when no title bar is present', () => {
   assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SystemMenu', 26), 26);
-  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SizeGadget', 26), 8);
-  assert.equal(getWindowPreviewChromeTopPadding('windows', undefined, 26), 8);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', '#PB_Window_SizeGadget', 26), 4);
+  assert.equal(getWindowPreviewChromeTopPadding('windows', undefined, 26), 4);
   assert.equal(getWindowPreviewChromeTopPadding('linux', '#PB_Window_SizeGadget', 26), 0);
   assert.equal(getWindowPreviewChromeTopPadding('macos', undefined, 26), 0);
 });

@@ -134,6 +134,18 @@ test("computes combined window chrome layout from title and top-level bands", ()
   });
 });
 
+test("computes combined window chrome layout with a Windows client-side inset", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8);
+
+  assert.deepEqual(layout, {
+    menuBarRect: { x: 48, y: 76, w: 304, h: 22 },
+    toolBarRect: { x: 48, y: 98, w: 304, h: 24 },
+    statusBarRect: { x: 48, y: 247, w: 304, h: 23 },
+    contentRect: { x: 48, y: 122, w: 304, h: 125 }
+  });
+});
+
 
 test("computes splitter pane rects for both child slots", () => {
   assert.deepEqual(getSplitterPaneRect(RECT, true, METRICS.splitterWidth, 30, "first"), { x: 10, y: 20, w: 30, h: 80 });

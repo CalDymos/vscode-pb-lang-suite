@@ -139,6 +139,7 @@ import {
   getWindowPositionInspectorValue,
   getWindowPreviewTitleBarHeight,
   getWindowPreviewChromeTopPadding,
+  getWindowPreviewClientSidePadding,
   getWindowPreviewTitleButtons,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
@@ -2390,7 +2391,8 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
-    metrics
+    metrics,
+    getWindowPreviewClientSidePadding(platformSkin)
   );
 }
 
@@ -2404,7 +2406,8 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
-    metrics
+    metrics,
+    getWindowPreviewClientSidePadding(platformSkin)
   );
 }
 
