@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtons, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -211,6 +211,13 @@ test('window preview title icon follows the original Windows title-bar path only
   assert.equal(hasWindowPreviewTitleIcon('macos', '#PB_Window_SystemMenu'), false);
   assert.equal(hasWindowPreviewTitleIcon('windows', '#PB_Window_SizeGadget'), false);
   assert.equal(hasWindowPreviewTitleIcon(undefined, '#PB_Window_SystemMenu'), false);
+});
+
+test('window preview resize grip follows the original always-drawn platform path', () => {
+  assert.equal(hasWindowPreviewResizeGrip('windows'), true);
+  assert.equal(hasWindowPreviewResizeGrip('linux'), true);
+  assert.equal(hasWindowPreviewResizeGrip('macos'), true);
+  assert.equal(hasWindowPreviewResizeGrip(undefined), false);
 });
 
 

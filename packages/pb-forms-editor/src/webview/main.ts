@@ -140,6 +140,7 @@ import {
   getWindowPreviewTitleBarHeight,
   getWindowPreviewChromeTopPadding,
   getWindowPreviewTitleButtons,
+  hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
   parseWindowCustomFlagsInput,
@@ -5217,6 +5218,29 @@ function render() {
   ctx.strokeStyle = focus;
   ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
   ctx.restore();
+
+  // Window resize grip
+  if (hasWindowPreviewResizeGrip(platformSkin)) {
+    const gripInset = 4;
+    const gripSize = Math.max(8, Math.min(12, Math.trunc(Math.min(winW, winH) / 8)));
+    const gripRight = winX + winW - gripInset;
+    const gripBottom = winY + winH - gripInset;
+
+    ctx.save();
+    ctx.strokeStyle = fg;
+    ctx.globalAlpha = 0.45;
+    for (let offset = 0; offset < 3; offset++) {
+      const startX = gripRight - gripSize + offset * 4;
+      const startY = gripBottom;
+      const endX = gripRight;
+      const endY = gripBottom - gripSize + offset * 4;
+      ctx.beginPath();
+      ctx.moveTo(startX + 0.5, startY + 0.5);
+      ctx.lineTo(endX + 0.5, endY + 0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Window selection overlay
   if (selection?.kind === "window") {

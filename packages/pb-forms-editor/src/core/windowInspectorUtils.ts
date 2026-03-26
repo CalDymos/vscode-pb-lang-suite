@@ -231,6 +231,10 @@ export function hasWindowPreviewTitleIcon(
   return platformSkin === "windows" && hasWindowPreviewTitleBar(flagsExpr);
 }
 
+export function hasWindowPreviewResizeGrip(platformSkin: WindowPreviewPlatformSkin | undefined): boolean {
+  return platformSkin === "windows" || platformSkin === "linux" || platformSkin === "macos";
+}
+
 export function getWindowBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {
   if (typeof value === 'boolean') {
     return value;
