@@ -5172,6 +5172,17 @@ function render() {
       ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(237, 237, 237)";
       traceRoundedRect(ctx, winX - 1, winY - 1, winW + 2, winH + 2, bodyDecoration.roundedTopRadius);
       ctx.fill();
+    } else if (bodyDecoration.backgroundStyle === "windows7-frame") {
+      const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
+      gradient.addColorStop(0, "rgb(210, 232, 232)");
+      gradient.addColorStop(0.5, "rgb(184, 220, 250)");
+      gradient.addColorStop(1, "rgb(210, 232, 232)");
+      ctx.fillStyle = gradient;
+      traceRoundedRect(ctx, winX, winY - 1, winW, winH + 1, bodyDecoration.roundedTopRadius);
+      ctx.fill();
+    } else if (bodyDecoration.backgroundStyle === "windows8-frame") {
+      ctx.fillStyle = "rgb(107, 173, 246)";
+      ctx.fillRect(winX, winY - 1, winW, winH + 1);
     } else {
       ctx.fillStyle = fg;
       ctx.fillRect(winX, winY, winW, winH);
@@ -5181,6 +5192,8 @@ function render() {
     // Ensure window area is not dimmed by outside fill
     if (bodyDecoration.backgroundStyle === "linux-light" || bodyDecoration.backgroundStyle === "macos-light") {
       ctx.clearRect(winX - 1, winY - 1, winW + 2, winH + 2);
+    } else if (bodyDecoration.backgroundStyle === "windows7-frame" || bodyDecoration.backgroundStyle === "windows8-frame") {
+      ctx.clearRect(winX, winY - 1, winW, winH + 1);
     } else {
       ctx.clearRect(winX, winY, winW, winH);
     }
@@ -5239,46 +5252,72 @@ function render() {
   }
 
   if (platformSkin === "windows" && windowClientSidePadding > 0 && windowClientSurface.fillRect.w > 0 && windowClientSurface.fillRect.h > 0) {
-    const leftFrameW = Math.max(0, windowClientSurface.fillRect.x - winX);
-    const rightFrameX = windowClientSurface.fillRect.x + windowClientSurface.fillRect.w;
-    const rightFrameW = Math.max(0, winX + winW - rightFrameX);
+    const hasOriginalWindowsBody = bodyDecoration.clientBorderStyle === "windows7-inner" || bodyDecoration.clientBorderStyle === "windows8-inner";
 
-    if (leftFrameW > 0) {
+    if (hasOriginalWindowsBody) {
       ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.fillStyle = focus;
-      ctx.fillRect(winX, windowClientSurface.fillRect.y, leftFrameW, windowClientSurface.fillRect.h);
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(240, 240, 240)";
+      ctx.fillRect(
+        windowClientSurface.fillRect.x,
+        windowClientSurface.fillRect.y,
+        windowClientSurface.fillRect.w,
+        windowClientSurface.fillRect.h
+      );
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = bodyDecoration.clientBorderStyle === "windows7-inner"
+        ? "rgb(93, 108, 122)"
+        : "rgb(91, 147, 209)";
+      ctx.strokeRect(
+        windowClientSurface.borderRect.x + 0.5,
+        windowClientSurface.borderRect.y + 0.5,
+        Math.max(0, windowClientSurface.borderRect.w - 1),
+        Math.max(0, windowClientSurface.borderRect.h - 1)
+      );
+      ctx.restore();
+    } else {
+      const leftFrameW = Math.max(0, windowClientSurface.fillRect.x - winX);
+      const rightFrameX = windowClientSurface.fillRect.x + windowClientSurface.fillRect.w;
+      const rightFrameW = Math.max(0, winX + winW - rightFrameX);
+
+      if (leftFrameW > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(winX, windowClientSurface.fillRect.y, leftFrameW, windowClientSurface.fillRect.h);
+        ctx.restore();
+      }
+
+      if (rightFrameW > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(rightFrameX, windowClientSurface.fillRect.y, rightFrameW, windowClientSurface.fillRect.h);
+        ctx.restore();
+      }
+
+      const bottomFrameY = windowClientSurface.fillRect.y + windowClientSurface.fillRect.h;
+      const bottomFrameH = Math.max(0, winY + winH - bottomFrameY);
+      if (bottomFrameH > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(winX, bottomFrameY, winW, bottomFrameH);
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = focus;
+      ctx.strokeRect(
+        windowClientSurface.borderRect.x + 0.5,
+        windowClientSurface.borderRect.y + 0.5,
+        Math.max(0, windowClientSurface.borderRect.w - 1),
+        Math.max(0, windowClientSurface.borderRect.h - 1)
+      );
       ctx.restore();
     }
-
-    if (rightFrameW > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.fillStyle = focus;
-      ctx.fillRect(rightFrameX, windowClientSurface.fillRect.y, rightFrameW, windowClientSurface.fillRect.h);
-      ctx.restore();
-    }
-
-    const bottomFrameY = windowClientSurface.fillRect.y + windowClientSurface.fillRect.h;
-    const bottomFrameH = Math.max(0, winY + winH - bottomFrameY);
-    if (bottomFrameH > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.fillStyle = focus;
-      ctx.fillRect(winX, bottomFrameY, winW, bottomFrameH);
-      ctx.restore();
-    }
-
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = focus;
-    ctx.strokeRect(
-      windowClientSurface.borderRect.x + 0.5,
-      windowClientSurface.borderRect.y + 0.5,
-      Math.max(0, windowClientSurface.borderRect.w - 1),
-      Math.max(0, windowClientSurface.borderRect.h - 1)
-    );
-    ctx.restore();
   }
 
   if (tbH === 0 && platformSkin === "windows" && chromeTopPadding > 0) {
@@ -5604,7 +5643,7 @@ function render() {
     ctx.save();
     ctx.strokeStyle = focus;
     ctx.lineWidth = 2;
-    if (frameDecoration.borderStyle === "macos-rounded") {
+    if (frameDecoration.borderStyle === "macos-rounded" || frameDecoration.borderStyle === "windows7-rounded") {
       traceRoundedRect(ctx, winX + 0.5, winY + 0.5, winW - 1, winH - 1, frameDecoration.borderRadius);
       ctx.stroke();
     } else {
@@ -5802,14 +5841,20 @@ function drawWindowPreviewFrame(
 ) {
   ctx.save();
   ctx.globalAlpha = decoration.strokeAlpha;
-  ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark" ? "rgb(118, 118, 118)" : focus;
+  ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark"
+    ? "rgb(118, 118, 118)"
+    : decoration.strokeColorStyle === "windows7-dark"
+      ? "rgb(37, 37, 37)"
+      : decoration.strokeColorStyle === "windows8-blue"
+        ? "rgb(82, 132, 188)"
+        : focus;
 
   if (decoration.borderStyle === "none") {
     ctx.restore();
     return;
   }
 
-  if (decoration.borderStyle === "macos-rounded") {
+  if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
     traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);
     ctx.stroke();
   } else {

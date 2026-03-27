@@ -105,19 +105,19 @@ export type WindowPreviewMenuFlyoutDecoration = {
 };
 
 export type WindowPreviewBodyDecoration = {
-  backgroundStyle: "default" | "linux-light" | "macos-light";
+  backgroundStyle: "default" | "linux-light" | "macos-light" | "windows7-frame" | "windows8-frame";
   useRoundedTopFill: boolean;
   roundedTopRadius: number;
   showClientBorder: boolean;
-  clientBorderStyle: "none" | "linux-dark";
+  clientBorderStyle: "none" | "linux-dark" | "windows7-inner" | "windows8-inner";
   showBodyOutline: boolean;
   bodyOutlineStyle: "none" | "macos-light";
 };
 
 export type WindowPreviewFrameDecoration = {
-  borderStyle: "default" | "macos-rounded" | "none";
+  borderStyle: "default" | "macos-rounded" | "windows7-rounded" | "none";
   borderRadius: number;
-  strokeColorStyle: "focus" | "macos-dark";
+  strokeColorStyle: "focus" | "macos-dark" | "windows7-dark" | "windows8-blue";
   strokeAlpha: number;
 };
 
@@ -648,6 +648,30 @@ export function getWindowPreviewBodyDecoration(
     };
   }
 
+  if (osSkin === "windows7") {
+    return {
+      backgroundStyle: "windows7-frame",
+      useRoundedTopFill: false,
+      roundedTopRadius: 4,
+      showClientBorder: true,
+      clientBorderStyle: "windows7-inner",
+      showBodyOutline: false,
+      bodyOutlineStyle: "none",
+    };
+  }
+
+  if (osSkin === "windows8") {
+    return {
+      backgroundStyle: "windows8-frame",
+      useRoundedTopFill: false,
+      roundedTopRadius: 0,
+      showClientBorder: true,
+      clientBorderStyle: "windows8-inner",
+      showBodyOutline: false,
+      bodyOutlineStyle: "none",
+    };
+  }
+
   return {
     backgroundStyle: "default",
     useRoundedTopFill: false,
@@ -677,6 +701,24 @@ export function getWindowPreviewFrameDecoration(
       borderRadius: 0,
       strokeColorStyle: "focus",
       strokeAlpha: 0,
+    };
+  }
+
+  if (osSkin === "windows7") {
+    return {
+      borderStyle: "windows7-rounded",
+      borderRadius: 4,
+      strokeColorStyle: "windows7-dark",
+      strokeAlpha: 1,
+    };
+  }
+
+  if (osSkin === "windows8") {
+    return {
+      borderStyle: "default",
+      borderRadius: 0,
+      strokeColorStyle: "windows8-blue",
+      strokeAlpha: 1,
     };
   }
 

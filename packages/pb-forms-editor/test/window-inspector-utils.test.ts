@@ -240,7 +240,7 @@ test('window preview menu flyout decoration follows the original fixed white pan
   });
 });
 
-test('window preview body decoration follows the original mac and linux draw-window paths', () => {
+test('window preview body decoration follows the original per-skin draw-window paths', () => {
   assert.deepEqual(getWindowPreviewBodyDecoration('macos', true), {
     backgroundStyle: 'macos-light',
     useRoundedTopFill: false,
@@ -271,18 +271,28 @@ test('window preview body decoration follows the original mac and linux draw-win
     bodyOutlineStyle: 'none',
   });
 
+  assert.deepEqual(getWindowPreviewBodyDecoration('windows7', true), {
+    backgroundStyle: 'windows7-frame',
+    useRoundedTopFill: false,
+    roundedTopRadius: 4,
+    showClientBorder: true,
+    clientBorderStyle: 'windows7-inner',
+    showBodyOutline: false,
+    bodyOutlineStyle: 'none',
+  });
+
   assert.deepEqual(getWindowPreviewBodyDecoration('windows8', true), {
-    backgroundStyle: 'default',
+    backgroundStyle: 'windows8-frame',
     useRoundedTopFill: false,
     roundedTopRadius: 0,
-    showClientBorder: false,
-    clientBorderStyle: 'none',
+    showClientBorder: true,
+    clientBorderStyle: 'windows8-inner',
     showBodyOutline: false,
     bodyOutlineStyle: 'none',
   });
 });
 
-test('window preview frame decoration follows the original final mac border path', () => {
+test('window preview frame decoration follows the original per-skin outer border path', () => {
   assert.deepEqual(getWindowPreviewFrameDecoration('macos'), {
     borderStyle: 'macos-rounded',
     borderRadius: 4,
@@ -297,11 +307,18 @@ test('window preview frame decoration follows the original final mac border path
     strokeAlpha: 0,
   });
 
+  assert.deepEqual(getWindowPreviewFrameDecoration('windows7'), {
+    borderStyle: 'windows7-rounded',
+    borderRadius: 4,
+    strokeColorStyle: 'windows7-dark',
+    strokeAlpha: 1,
+  });
+
   assert.deepEqual(getWindowPreviewFrameDecoration('windows8'), {
     borderStyle: 'default',
     borderRadius: 0,
-    strokeColorStyle: 'focus',
-    strokeAlpha: 0.35,
+    strokeColorStyle: 'windows8-blue',
+    strokeAlpha: 1,
   });
 });
 
