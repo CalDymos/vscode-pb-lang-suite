@@ -143,6 +143,7 @@ import {
   getWindowPreviewChromeTopPadding,
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
+  getWindowPreviewCanvasOrigin,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewTitleBarMetrics,
@@ -2368,14 +2369,15 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const rect = canvas.getBoundingClientRect();
   if (!model.window) return null;
 
-  const x = asInt(model.window.x ?? 0);
-  const y = asInt(model.window.y ?? 0);
+  const storedX = asInt(model.window.x ?? 0);
+  const storedY = asInt(model.window.y ?? 0);
+  const origin = getWindowPreviewCanvasOrigin(storedX, storedY);
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
 
   return {
-    x,
-    y,
+    x: origin.x,
+    y: origin.y,
     w,
     h,
     title: model.window.title ?? "",
@@ -3256,8 +3258,8 @@ canvas.addEventListener("mousedown", (e) => {
         handle: wh,
         startMx: mx,
         startMy: my,
-        startX: wr.x,
-        startY: wr.y,
+        startX: asInt(model.window?.x ?? 0),
+        startY: asInt(model.window?.y ?? 0),
         startW: wr.w,
         startH: wr.h
       };
@@ -3268,8 +3270,8 @@ canvas.addEventListener("mousedown", (e) => {
         mode: "move",
         startMx: mx,
         startMy: my,
-        startX: wr.x,
-        startY: wr.y,
+        startX: asInt(model.window?.x ?? 0),
+        startY: asInt(model.window?.y ?? 0),
         startW: wr.w,
         startH: wr.h
       };

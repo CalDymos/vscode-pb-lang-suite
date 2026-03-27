@@ -140,6 +140,20 @@ export type WindowPreviewFrameDecoration = {
   strokeAlpha: number;
 };
 
+export const WINDOW_PREVIEW_PAGE_PADDING = 10;
+
+export type WindowPreviewCanvasOrigin = {
+  x: number;
+  y: number;
+};
+
+export function getWindowPreviewCanvasOrigin(windowX: number, windowY: number): WindowPreviewCanvasOrigin {
+  return {
+    x: WINDOW_PREVIEW_PAGE_PADDING + Math.trunc(windowX),
+    y: WINDOW_PREVIEW_PAGE_PADDING + Math.trunc(windowY),
+  };
+}
+
 function splitFlags(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
