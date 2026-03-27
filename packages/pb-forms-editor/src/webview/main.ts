@@ -74,6 +74,7 @@ import {
   buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
+  hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolveTopLevelChromeHit,
@@ -897,6 +898,33 @@ function drawPreviewSubmenuIndicatorIcon(ctx: CanvasRenderingContext2D, x: numbe
   ctx.lineTo(x + 1, y + metrics.height - 1);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
+}
+
+function drawPreviewFallbackImageIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const iconSize = Math.max(8, Math.trunc(size));
+  const iconX = Math.trunc(x);
+  const iconY = Math.trunc(y);
+
+  ctx.save();
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.fillRect(iconX + 1, iconY + 1, iconSize - 2, iconSize - 2);
+
+  ctx.strokeStyle = "rgb(128,128,128)";
+  ctx.strokeRect(iconX + 0.5, iconY + 0.5, iconSize - 1, iconSize - 1);
+
+  ctx.fillStyle = "rgb(128,180,255)";
+  ctx.fillRect(iconX + 2, iconY + 2, Math.max(2, iconSize - 4), Math.max(2, Math.trunc(iconSize / 3)));
+
+  ctx.fillStyle = "rgb(255,212,80)";
+  ctx.fillRect(iconX + iconSize - 5, iconY + 3, 2, 2);
+
+  ctx.strokeStyle = "rgb(90,140,90)";
+  ctx.beginPath();
+  ctx.moveTo(iconX + 2.5, iconY + iconSize - 3.5);
+  ctx.lineTo(iconX + Math.trunc(iconSize / 2) - 0.5, iconY + Math.trunc(iconSize / 2) + 0.5);
+  ctx.lineTo(iconX + iconSize - 2.5, iconY + iconSize - 4.5);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -5076,7 +5104,9 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.globalAlpha = 0.55;
       ctx.fillRect(x + 4, y + 4, 8, 8);
       ctx.restore();
-    } else if (entry.kind !== "ToolBarImageButton") {
+    } else if (entry.kind === "ToolBarImageButton") {
+      drawPreviewFallbackImageIcon(ctx, x, y, 16);
+    } else {
       const label = ((entry.text ?? entry.idRaw ?? entry.kind).replace(/^#/, "").trim().slice(0, 1) || "•").toUpperCase();
       ctx.fillStyle = fg;
       ctx.fillText(label, x + 4, y + 12);
@@ -5217,13 +5247,17 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       }
       ctx.restore();
     } else {
-      ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
       const size = Math.max(10, Math.min(16, rect.h - 8));
       const imageX = getStatusBarAlignedX(x, fieldW, size, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      ctx.fillRect(imageX, imageY, size, size);
-      ctx.restore();
+      if (hasStatusBarPreviewAssignedImage(field)) {
+        ctx.save();
+        ctx.fillStyle = fg;
+        ctx.globalAlpha = 0.55;
+        ctx.fillRect(imageX, imageY, size, size);
+        ctx.restore();
+      } else {
+        drawPreviewFallbackImageIcon(ctx, imageX, imageY, size);
+      }
     }
 
     if (isSelectedField) {

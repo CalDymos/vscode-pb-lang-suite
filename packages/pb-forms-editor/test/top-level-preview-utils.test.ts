@@ -32,6 +32,7 @@ import {
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
+  hasStatusBarPreviewAssignedImage,
   hasToolBarPreviewAssignedImage,
   isBoundToolBarTooltipEntry,
   shouldShowToolBarPreviewUnselectedFrame,
@@ -485,4 +486,11 @@ test("shows the generic unselected toolbar frame only for empty command buttons"
   assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "ImageID(#Img_Open)" }, false), false);
   assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "0" }, true), false);
   assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarSeparator" }, false), false);
+});
+
+
+test("treats statusbar imageRaw 0 as the empty fallback-image case", () => {
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageRaw: "0" }), false);
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageRaw: " #Img_Open " }), true);
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageId: "#Img_Open", imageRaw: "0" }), true);
 });

@@ -320,6 +320,15 @@ export function shouldShowToolBarPreviewUnselectedFrame(entry: ToolBarEntryLike,
   return !hasToolBarPreviewAssignedImage(entry);
 }
 
+export function hasStatusBarPreviewAssignedImage(field: StatusBarFieldLike): boolean {
+  if ((field.imageId ?? "").trim().length > 0) {
+    return true;
+  }
+
+  const imageRaw = (field.imageRaw ?? "").trim();
+  return imageRaw.length > 0 && imageRaw !== "0";
+}
+
 
 export interface SelectedToolBarInspectorFieldConfig {
   captionLabel: string;
