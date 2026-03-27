@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewBodyDecoration, getWindowPreviewFrameDecoration, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewBodyDecoration, getWindowPreviewFrameDecoration, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -442,6 +442,31 @@ test('window preview title bar metrics follow the original per-skin image offset
     titleOffsetY: 8,
     iconInsetX: 8,
     iconOffsetY: 8,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonSize('windows7', 'close', { width: 18, height: 18 }), {
+    width: 47,
+    height: 20,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonSize('windows7', 'minimize', { width: 18, height: 18 }), {
+    width: 29,
+    height: 20,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonSize('windows8', 'maximize', { width: 18, height: 18 }), {
+    width: 27,
+    height: 20,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleButtonSize('windows8', 'close', { width: 18, height: 18 }), {
+    width: 45,
+    height: 20,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleIconSize('windows8', { width: 16, height: 16 }), {
+    width: 16,
+    height: 14,
   });
 });
 

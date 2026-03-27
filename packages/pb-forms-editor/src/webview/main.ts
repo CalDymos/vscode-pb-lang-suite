@@ -147,6 +147,7 @@ import {
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewTitleBarMetrics,
   getWindowPreviewTitleButtonSize,
+  getWindowPreviewTitleIconSize,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewStatusBarProgressDecoration,
@@ -5355,7 +5356,9 @@ function render() {
       ? titleButtonSizes.reduce((sum, size) => sum + size.width, 0) + Math.max(0, titleButtonSizes.length - 1) * buttonGap
       : 0;
     const showWindowsIcon = hasWindowPreviewTitleIcon(platformSkin, model.window?.flagsExpr);
-    const iconSize = showWindowsIcon ? 16 : 0;
+    const iconSize = showWindowsIcon
+      ? getWindowPreviewTitleIconSize(settings.osSkin, { width: 16, height: 16 })
+      : { width: 0, height: 0 };
     const iconX = winX + titleBarMetrics.iconInsetX;
     const iconY = winY + titleBarMetrics.iconOffsetY;
     const leftButtonBandEnd = titleButtonLayout.buttonSide === "left"
@@ -5364,7 +5367,7 @@ function render() {
     const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
       ? winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW
       : winX + winW - titleBarMetrics.buttonInsetX;
-    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize + 5 : winX + titleBarMetrics.buttonInsetX, leftButtonBandEnd);
+    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize.width + 5 : winX + titleBarMetrics.buttonInsetX, leftButtonBandEnd);
     const titleRight = Math.min(winX + winW - titleBarMetrics.buttonInsetX, rightButtonBandStart);
     const titleTop = winY + titleBarMetrics.titleOffsetY;
 
@@ -5428,16 +5431,16 @@ function render() {
       ctx.save();
       ctx.globalAlpha = 0.20;
       ctx.fillStyle = focus;
-      ctx.fillRect(iconX, iconY, iconSize, iconSize);
+      ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
       ctx.globalAlpha = 0.5;
       ctx.strokeStyle = fg;
-      ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize - 1), Math.max(0, iconSize - 1));
+      ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize.width - 1), Math.max(0, iconSize.height - 1));
       ctx.restore();
 
       ctx.save();
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = fg;
-      ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize - 6), Math.max(4, iconSize - 6));
+      ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize.width - 6), Math.max(4, iconSize.height - 6));
       ctx.restore();
     }
 
@@ -5510,18 +5513,24 @@ function render() {
           ctx.save();
           ctx.strokeStyle = buttonStrokeColor;
           ctx.globalAlpha = isLinuxPreview ? 1 : (isEnabled ? 0.85 : 0.22);
+          const glyphBoxWidth = isLinuxPreview ? Math.max(8, buttonW - 9) : Math.min(10, Math.max(6, buttonW - 8));
+          const glyphBoxHeight = isLinuxPreview ? Math.max(8, buttonH - 9) : Math.min(8, Math.max(6, buttonH - 8));
+          const glyphLeft = buttonX + Math.max(4, Math.trunc((buttonW - glyphBoxWidth) / 2));
+          const glyphTop = buttonY + Math.max(4, Math.trunc((buttonH - glyphBoxHeight) / 2));
+          const glyphRight = glyphLeft + glyphBoxWidth;
+          const glyphBottom = glyphTop + glyphBoxHeight;
           ctx.beginPath();
           if (kind === "close") {
-            ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
-            ctx.lineTo(buttonX + Math.max(4.5, buttonW - 4.5), buttonY + Math.max(4.5, buttonH - 4.5));
-            ctx.moveTo(buttonX + Math.max(4.5, buttonW - 4.5), buttonY + 4.5);
-            ctx.lineTo(buttonX + 4.5, buttonY + Math.max(4.5, buttonH - 4.5));
+            ctx.moveTo(glyphLeft + 0.5, glyphTop + 0.5);
+            ctx.lineTo(glyphRight - 0.5, glyphBottom - 0.5);
+            ctx.moveTo(glyphRight - 0.5, glyphTop + 0.5);
+            ctx.lineTo(glyphLeft + 0.5, glyphBottom - 0.5);
           } else if (kind === "maximize") {
-            ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonW - 9), Math.max(4, buttonH - 9));
+            ctx.strokeRect(glyphLeft + 0.5, glyphTop + 0.5, Math.max(4, glyphBoxWidth - 1), Math.max(4, glyphBoxHeight - 1));
           } else {
-            const lineY = buttonY + buttonH - 4.5;
-            ctx.moveTo(buttonX + 4.5, lineY);
-            ctx.lineTo(buttonX + Math.max(4.5, buttonW - 4.5), lineY);
+            const lineY = glyphBottom - 0.5;
+            ctx.moveTo(glyphLeft + 0.5, lineY);
+            ctx.lineTo(glyphRight - 0.5, lineY);
           }
           ctx.stroke();
           ctx.restore();

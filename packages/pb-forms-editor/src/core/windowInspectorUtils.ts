@@ -69,6 +69,11 @@ export type WindowPreviewTitleButtonSize = {
   height: number;
 };
 
+export type WindowPreviewTitleIconSize = {
+  width: number;
+  height: number;
+};
+
 export type WindowPreviewToolBarDecoration = {
   backgroundStyle: "windows-light" | "macos-gradient" | "linux-light";
   showFrameBorder: boolean;
@@ -529,6 +534,34 @@ export function getWindowPreviewTitleButtonSize(
     return {
       width: kind === "maximize" ? 17 : 18,
       height: 19,
+    };
+  }
+
+  if (osSkin === "windows7") {
+    return {
+      width: kind === "close" ? 47 : (kind === "maximize" ? 26 : 29),
+      height: 20,
+    };
+  }
+
+  if (osSkin === "windows8") {
+    return {
+      width: kind === "close" ? 45 : (kind === "maximize" ? 27 : 17),
+      height: 20,
+    };
+  }
+
+  return fallbackSize;
+}
+
+export function getWindowPreviewTitleIconSize(
+  osSkin: WindowPreviewOsSkin,
+  fallbackSize: WindowPreviewTitleIconSize
+): WindowPreviewTitleIconSize {
+  if (osSkin === "windows7" || osSkin === "windows8") {
+    return {
+      width: 16,
+      height: 14,
     };
   }
 
