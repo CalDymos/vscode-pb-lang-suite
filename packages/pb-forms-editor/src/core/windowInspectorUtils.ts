@@ -135,6 +135,13 @@ export type WindowPreviewMenuSubmenuIconMetrics = {
   offsetY: number;
 };
 
+export type WindowPreviewMenuRootEntryRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type WindowPreviewBodyDecoration = {
   backgroundStyle: "default" | "linux-light" | "macos-light" | "windows7-frame" | "windows8-frame";
   useRoundedTopFill: boolean;
@@ -771,6 +778,20 @@ export function getWindowPreviewMenuSubmenuIconMetrics(): WindowPreviewMenuSubme
     height: 10,
     offsetRight: 20,
     offsetY: 4,
+  };
+}
+
+export function getWindowPreviewMenuRootEntryRect(
+  x: number,
+  y: number,
+  textWidth: number,
+  menuBarHeight: number,      
+): WindowPreviewMenuRootEntryRect {
+  return {
+    x: Math.trunc(x) - 1,
+    y: Math.trunc(y) - 1,
+    w: Math.max(24, Math.ceil(textWidth) + 6) + 1,
+    h: Math.max(0, menuBarHeight - 4),          
   };
 }
 

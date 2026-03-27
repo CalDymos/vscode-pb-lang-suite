@@ -156,6 +156,7 @@ import {
   getWindowPreviewMenuFlyoutDecoration,
   getWindowPreviewAddIconMetrics,
   getWindowPreviewMenuSubmenuIconMetrics,
+  getWindowPreviewMenuRootEntryRect,
   getWindowPreviewBodyDecoration,
   getWindowPreviewFrameDecoration,
   hasWindowPreviewResizeGrip,
@@ -4885,9 +4886,17 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const label = getMenuPreviewLabel(entry);
     if (!label.length) continue;
-    const textWidth = Math.ceil(ctx.measureText(label).width);
+    const metrics = ctx.measureText(label);
+    const textWidth = Math.ceil(metrics.width);
     const itemW = Math.max(24, textWidth + 6);
-    menuEntryPreviewRects.push({ ownerId: menu.id, index: entryIndex, x, y: rect.y + 2, w: itemW + menuBarDecoration.itemSpacing, h: Math.max(0, rect.h - 4) });
+    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h);
+
+    menuEntryPreviewRects.push({
+      ownerId: menu.id, index: entryIndex,
+      x: entryRect.x, y: entryRect.y,
+      w: entryRect.w,  
+      h: entryRect.h
+    });
 
     ctx.fillStyle = fg;
     ctx.fillText(label, x, baseline);
@@ -4895,7 +4904,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (menuBarDecoration.useSelectedOutline && selectedRootEntryIndex === entryIndex) {
       ctx.save();
       ctx.strokeStyle = fg;
-      ctx.strokeRect(x - 1.5, textY - 1.5, itemW + 1, Math.max(0, rect.h - 6));
+      ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, Math.max(0, entryRect.w - 1), Math.max(0, entryRect.h - 1));
       ctx.restore();
     }
 
