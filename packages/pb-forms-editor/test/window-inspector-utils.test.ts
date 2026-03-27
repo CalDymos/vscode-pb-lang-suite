@@ -244,6 +244,8 @@ test('window preview menu flyout decoration follows the original fixed white pan
     separatorStyle: 'light',
     useSelectedOutline: true,
     showEntryHoverFill: false,
+    textColorStyle: 'black',
+    outlineColorStyle: 'black',
   });
 });
 
@@ -630,6 +632,8 @@ test('window preview menu bar decoration follows the original per-skin menu bloc
     itemInsetY: 4,
     itemSpacing: 20,
     useSelectedOutline: true,
+    textColorStyle: 'black',
+    outlineColorStyle: 'black',
   });
 
   assert.deepEqual(getWindowPreviewMenuBarDecoration('windows7'), {
@@ -641,6 +645,8 @@ test('window preview menu bar decoration follows the original per-skin menu bloc
     itemInsetY: 2,
     itemSpacing: 7,
     useSelectedOutline: true,
+    textColorStyle: 'black',
+    outlineColorStyle: 'black',
   });
 
   assert.deepEqual(getWindowPreviewMenuBarDecoration('windows8'), {
@@ -652,6 +658,8 @@ test('window preview menu bar decoration follows the original per-skin menu bloc
     itemInsetY: 2,
     itemSpacing: 7,
     useSelectedOutline: true,
+    textColorStyle: 'black',
+    outlineColorStyle: 'black',
   });
 
   assert.deepEqual(getWindowPreviewMenuBarDecoration('linux'), {
@@ -663,6 +671,8 @@ test('window preview menu bar decoration follows the original per-skin menu bloc
     itemInsetY: 2,
     itemSpacing: 7,
     useSelectedOutline: true,
+    textColorStyle: 'black',
+    outlineColorStyle: 'black',
   });
 });
 

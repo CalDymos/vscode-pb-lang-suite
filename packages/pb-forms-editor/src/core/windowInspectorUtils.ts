@@ -113,6 +113,8 @@ export type WindowPreviewMenuBarDecoration = {
   itemInsetY: number;
   itemSpacing: number;
   useSelectedOutline: boolean;
+  textColorStyle: "black";
+  outlineColorStyle: "black";
 };
 
 export type WindowPreviewMenuFlyoutDecoration = {
@@ -121,6 +123,8 @@ export type WindowPreviewMenuFlyoutDecoration = {
   separatorStyle: "light";
   useSelectedOutline: boolean;
   showEntryHoverFill: boolean;
+  textColorStyle: "black";
+  outlineColorStyle: "black";
 };
 
 export type WindowPreviewAddIconMetrics = {
@@ -718,6 +722,8 @@ export function getWindowPreviewMenuBarDecoration(
         itemInsetY: 4,
         itemSpacing: 20,
         useSelectedOutline: true,
+        textColorStyle: "black",
+        outlineColorStyle: "black",
       };
     case "windows7":
       return {
@@ -729,6 +735,8 @@ export function getWindowPreviewMenuBarDecoration(
         itemInsetY: 2,
         itemSpacing: 7,
         useSelectedOutline: true,
+        textColorStyle: "black",
+        outlineColorStyle: "black",
       };
     case "windows8":
       return {
@@ -740,6 +748,8 @@ export function getWindowPreviewMenuBarDecoration(
         itemInsetY: 2,
         itemSpacing: 7,
         useSelectedOutline: true,
+        textColorStyle: "black",
+        outlineColorStyle: "black",
       };
     case "linux":
       return {
@@ -751,6 +761,8 @@ export function getWindowPreviewMenuBarDecoration(
         itemInsetY: 2,
         itemSpacing: 7,
         useSelectedOutline: true,
+        textColorStyle: "black",
+        outlineColorStyle: "black",
       };
   }
 }
@@ -762,6 +774,8 @@ export function getWindowPreviewMenuFlyoutDecoration(): WindowPreviewMenuFlyoutD
     separatorStyle: "light",
     useSelectedOutline: true,
     showEntryHoverFill: false,
+    textColorStyle: "black",
+    outlineColorStyle: "black",
   };
 }
 

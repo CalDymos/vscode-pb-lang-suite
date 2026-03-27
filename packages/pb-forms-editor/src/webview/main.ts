@@ -4687,6 +4687,8 @@ function drawMenuFlyoutPanelPreview(
   const panelBg = flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)";
   const panelBorder = flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg;
   const separatorColor = flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder;
+  const menuTextColor = flyoutDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg;
+  const selectedOutlineColor = flyoutDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg;
 
   ctx.save();
   ctx.fillStyle = panelBg;
@@ -4735,14 +4737,14 @@ function drawMenuFlyoutPanelPreview(
     }
 
     const label = getMenuPreviewLabel(entry);
-    ctx.fillStyle = fg;
+    ctx.fillStyle = menuTextColor;
     ctx.fillText(label, entryRect.x + 24, entryRect.y + 14);
 
     if (entry.shortcut) {
       const shortcutWidth = Math.ceil(ctx.measureText(entry.shortcut).width);
       ctx.save();
       ctx.globalAlpha = 0.72;
-      ctx.fillStyle = fg;
+      ctx.fillStyle = menuTextColor;
       ctx.fillText(entry.shortcut, entryRect.x + entryRect.w - 10 - shortcutWidth, entryRect.y + 14);
       ctx.restore();
     }
@@ -4758,7 +4760,7 @@ function drawMenuFlyoutPanelPreview(
 
     if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
       ctx.save();
-      ctx.strokeStyle = fg;
+      ctx.strokeStyle = selectedOutlineColor;
       ctx.strokeRect(entryRect.x, entryRect.y, Math.max(0, entryRect.w), Math.max(0, entryRect.h));
       ctx.restore();
     }
@@ -4771,7 +4773,7 @@ function drawMenuFlyoutPanelPreview(
 
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = fg;
+  ctx.fillStyle = menuTextColor;
   ctx.fillText("Add Item...", footerRect.x + 5, footerRect.y + 14);
   ctx.restore();
 }
@@ -4785,6 +4787,8 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   const border = getCssVar("--vscode-panel-border") || fg;
   const menuBarDecoration = getWindowPreviewMenuBarDecoration(osSkin);
+  const menuTextColor = menuBarDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg;
+  const selectedOutlineColor = menuBarDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg;
 
   ctx.save();
   switch (menuBarDecoration.backgroundStyle) {
@@ -4898,12 +4902,12 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       h: entryRect.h
     });
 
-    ctx.fillStyle = fg;
+    ctx.fillStyle = menuTextColor;
     ctx.fillText(label, x, baseline);
 
     if (menuBarDecoration.useSelectedOutline && selectedRootEntryIndex === entryIndex) {
       ctx.save();
-      ctx.strokeStyle = fg;
+      ctx.strokeStyle = selectedOutlineColor;
       ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, Math.max(0, entryRect.w - 1), Math.max(0, entryRect.h - 1));
       ctx.restore();
     }
