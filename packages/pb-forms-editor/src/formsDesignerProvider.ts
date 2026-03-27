@@ -1,3 +1,4 @@
+import * as cp from "child_process";
 import * as fs from "fs";
 import * as vscode from "vscode";
 import { parseFormDocument } from "./core/parser/formParser";
@@ -200,7 +201,8 @@ function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.
 const EXT_TO_WEBVIEW_MSG_TYPE = {
   init: "init",
   settings: "settings",
-  error: "error"
+  error: "error",
+  windowsSystemColors: "windowsSystemColors"
 } as const;
 
 const WEBVIEW_TO_EXT_MSG_TYPE = {
@@ -336,10 +338,87 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };
 
+/** Colors read from HKCU\Control Panel\Colors that have no CSS system-color equivalent. */
+type WindowsRegistryColors = {
+  menu:                 string; // Menu background
+  menuBar:              string; // Menu bar background
+  menuText:             string; // Menu text
+  menuHilight:          string; // Selected menu item background
+  activeTitle:          string; // Active title bar (solid)
+  gradientActiveTitle:  string; // Active title bar gradient end
+  inactiveTitle:        string; // Inactive title bar
+  titleText:            string; // Title bar text
+  hotTrackingColor:     string; // Hover / hot-track color
+  scrollbar:            string; // Scrollbar track background
+};
+
+
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors };
+
+/**
+ * Reads Windows UI colors from HKCU\Control Panel\Colors via `reg query`.
+ * Values are stored as "R G B" strings (e.g. "240 240 240").
+ * Returns null on non-Windows or when the key cannot be read.
+ */
+function readWindowsRegistryColors(): WindowsRegistryColors | null {
+  if (process.platform !== "win32") return null;
+
+  const REG_KEY = "HKCU\\Control Panel\\Colors";
+  const FIELDS: (keyof WindowsRegistryColors)[] = [
+    "menu", "menuBar", "menuText", "menuHilight",
+    "activeTitle", "gradientActiveTitle", "inactiveTitle", "titleText",
+    "hotTrackingColor", "scrollbar"
+  ];
+  // Registry names differ from our camelCase keys in a few cases
+  const REGISTRY_NAME: Record<keyof WindowsRegistryColors, string> = {
+    menu:                "Menu",
+    menuBar:             "MenuBar",
+    menuText:            "MenuText",
+    menuHilight:         "MenuHilight",
+    activeTitle:         "ActiveTitle",
+    gradientActiveTitle: "GradientActiveTitle",
+    inactiveTitle:       "InactiveTitle",
+    titleText:           "TitleText",
+    hotTrackingColor:    "HotTrackingColor",
+    scrollbar:           "Scrollbar"
+  };
+
+  try {
+    const stdout = cp.execSync(`reg query "${REG_KEY}"`, {
+      encoding: "utf8",
+      timeout: 2000,
+      windowsHide: true
+    });
+
+    // Each line looks like:
+    //   "    ButtonFace    REG_SZ    240 240 240"
+    const lineRe = /^\s+(\S+)\s+REG_SZ\s+(.+)$/;
+    const valueMap = new Map<string, string>();
+    for (const line of stdout.split(/\r?\n/)) {
+      const m = lineRe.exec(line);
+      if (m) valueMap.set(m[1].trim(), m[2].trim());
+    }
+
+    const toRgb = (rgbStr: string | undefined): string => {
+      if (!rgbStr) return "rgb(0, 0, 0)";
+      const parts = rgbStr.split(/\s+/).map(Number);
+      if (parts.length < 3) return "rgb(0, 0, 0)";
+      return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+    };
+
+    const result = {} as WindowsRegistryColors;
+    for (const key of FIELDS) {
+      result[key] = toRgb(valueMap.get(REGISTRY_NAME[key]));
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
 
 export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = "purebasic.formDesigner";
@@ -440,6 +519,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     };
 
     sendInit();
+
+    // Send Windows registry colors once on startup (non-blocking, win32 only).
+    const winColors = readWindowsRegistryColors();
+    if (winColors) {
+      post({ type: EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors, colors: winColors });
+    }
 
     const cfgSub = vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
       if (e.affectsConfiguration(SETTINGS_SECTION)) {

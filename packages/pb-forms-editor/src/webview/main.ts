@@ -429,7 +429,8 @@ type DesignerSettings = {
 const EXT_TO_WEBVIEW_MSG_TYPE = {
   init: "init",
   settings: "settings",
-  error: "error"
+  error: "error",
+  windowsSystemColors: "windowsSystemColors"
 } as const;
 
 const WEBVIEW_TO_EXT_MSG_TYPE = {
@@ -504,11 +505,26 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
 } as const;
 
 // Backwards compatible:
+/** Colors read from HKCU\Control Panel\Colors — sent by the extension on win32. */
+type WindowsRegistryColors = {
+  menu:                 string;
+  menuBar:              string;
+  menuText:             string;
+  menuHilight:          string;
+  activeTitle:          string;
+  gradientActiveTitle:  string;
+  inactiveTitle:        string;
+  titleText:            string;
+  hotTrackingColor:     string;
+  scrollbar:            string;
+};
+
 // - init may come without settings
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: Model; settings?: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors };
 
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
@@ -911,6 +927,15 @@ let settings: DesignerSettings = {
 };
 
 const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
+
+// Cache for resolved CSS system color keywords (e.g. "ButtonFace").
+// Invalidated whenever osSkin changes via applySettings().
+const systemColorCache = new Map<string, string>();
+
+// Windows registry colors received from the extension (win32 only).
+// null = not yet received or non-Windows host.
+let windowsRegistryColors: WindowsRegistryColors | null = null;
+
 
 type PbfdSymbols = {
   menuEntryKinds: readonly string[];
@@ -2216,6 +2241,9 @@ type DragState =
 let drag: DragState | null = null;
 
 function applySettings(s: DesignerSettings) {
+  if (s.osSkin !== settings.osSkin) {
+    clearSystemColorCache();
+  }
   settings = s;
 
   const bg = (settings.canvasBackground ?? "").trim();
@@ -2308,6 +2336,11 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "error") {
     errEl.textContent = msg.message;
     renderInfoPanel();
+  }
+
+  if (msg.type === "windowsSystemColors") {
+    windowsRegistryColors = msg.colors;
+    render();
   }
 });
 
@@ -9142,6 +9175,108 @@ function numberInput(value: number, onChange: (v: number) => void) {
 
 function getCssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Resolves a CSS system color keyword (e.g. "ButtonFace", "Window") to an
+ * "rgb(r, g, b)" string using the browser's own color resolution.
+ * Results are cached in `systemColorCache`; call `clearSystemColorCache()`
+ * when the skin changes so the next draw picks up fresh values.
+ */
+function getSystemColor(keyword: string): string {
+  const cached = systemColorCache.get(keyword);
+  if (cached !== undefined) return cached;
+
+  const el = document.createElement("span");
+  el.style.cssText = `color:${keyword};display:none`;
+  document.body.appendChild(el);
+  const resolved = getComputedStyle(el).color; // always "rgb(r, g, b)"
+  document.body.removeChild(el);
+
+  const value = resolved || keyword;
+  systemColorCache.set(keyword, value);
+  return value;
+}
+
+function clearSystemColorCache(): void {
+  systemColorCache.clear();
+}
+
+type WindowsSkinSystemColors = {
+  /** Control / button background (≈ rgb(240,240,240) on default Windows) */
+  buttonFace: string;
+  /** Text on controls */
+  buttonText: string;
+  /** Window client-area background (≈ white) */
+  window: string;
+  /** Text in window client area */
+  windowText: string;
+  /** Selection / accent background */
+  highlight: string;
+  /** Text on selected items */
+  highlightText: string;
+  /** Disabled control text */
+  grayText: string;
+  /** Border / 3-D shadow edge */
+  threeDShadow: string;
+  // --- Registry colors (HKCU\Control Panel\Colors) ---
+  /** Menu popup background */
+  menu: string;
+  /** Menu bar background */
+  menuBar: string;
+  /** Menu text */
+  menuText: string;
+  /** Selected menu item background */
+  menuHilight: string;
+  /** Active title bar (solid) */
+  activeTitle: string;
+  /** Active title bar gradient end */
+  gradientActiveTitle: string;
+  /** Inactive title bar */
+  inactiveTitle: string;
+  /** Title bar text */
+  titleText: string;
+  /** Hover / hot-track color */
+  hotTrackingColor: string;
+  /** Scrollbar track background */
+  scrollbar: string;
+};
+
+/**
+ * Returns the real Windows system colors for the canvas preview.
+ * Combines CSS system colors (via getSystemColor) with registry colors
+ * received from the extension (windowsRegistryColors).
+ * Only meaningful when `osSkin` is "windows7" or "windows8".
+ * Returns `null` for non-Windows skins so callers can fall back gracefully.
+ */
+function resolveWindowsSkinColors(): WindowsSkinSystemColors | null {
+  const skin = settings.osSkin;
+  if (skin !== "windows7" && skin !== "windows8") return null;
+
+  const reg = windowsRegistryColors;
+
+  return {
+    // CSS system colors — always available on Windows Chromium
+    buttonFace:    getSystemColor("ButtonFace"),
+    buttonText:    getSystemColor("ButtonText"),
+    window:        getSystemColor("Window"),
+    windowText:    getSystemColor("WindowText"),
+    highlight:     getSystemColor("Highlight"),
+    highlightText: getSystemColor("HighlightText"),
+    grayText:      getSystemColor("GrayText"),
+    threeDShadow:  getSystemColor("ThreeDShadow"),
+    // Registry colors — only available after the extension sent them
+    menu:                reg?.menu                 ?? "rgb(240, 240, 240)",
+    menuBar:             reg?.menuBar              ?? "rgb(240, 240, 240)",
+    menuText:            reg?.menuText             ?? "rgb(0, 0, 0)",
+    menuHilight:         reg?.menuHilight          ?? "rgb(0, 120, 215)",
+    activeTitle:         reg?.activeTitle          ?? "rgb(0, 120, 215)",
+    gradientActiveTitle: reg?.gradientActiveTitle  ?? "rgb(16, 135, 228)",
+    inactiveTitle:       reg?.inactiveTitle        ?? "rgb(191, 205, 219)",
+    titleText:           reg?.titleText            ?? "rgb(255, 255, 255)",
+    hotTrackingColor:    reg?.hotTrackingColor     ?? "rgb(0, 102, 204)",
+    scrollbar:           reg?.scrollbar            ?? "rgb(200, 200, 200)",
+  };
 }
 
 function clampPos(v: number): number {
