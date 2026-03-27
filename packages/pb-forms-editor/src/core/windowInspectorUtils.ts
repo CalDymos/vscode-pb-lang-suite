@@ -55,6 +55,20 @@ export type WindowPreviewTitleBarDecoration = {
   useLightForeground: boolean;
 };
 
+export type WindowPreviewTitleBarMetrics = {
+  buttonInsetX: number;
+  buttonOffsetY: number;
+  buttonGap: number;
+  titleOffsetY: number;
+  iconInsetX: number;
+  iconOffsetY: number;
+};
+
+export type WindowPreviewTitleButtonSize = {
+  width: number;
+  height: number;
+};
+
 export type WindowPreviewToolBarDecoration = {
   backgroundStyle: "windows-light" | "macos-gradient" | "linux-light";
   showFrameBorder: boolean;
@@ -454,6 +468,71 @@ export function getWindowPreviewTitleBarDecoration(
     drawShadowedTitle: false,
     useLightForeground: false,
   };
+}
+
+export function getWindowPreviewTitleBarMetrics(
+  osSkin: WindowPreviewOsSkin
+): WindowPreviewTitleBarMetrics {
+  switch (osSkin) {
+    case "macos":
+      return {
+        buttonInsetX: 9,
+        buttonOffsetY: 5,
+        buttonGap: 9,
+        titleOffsetY: 4,
+        iconInsetX: 8,
+        iconOffsetY: 8,
+      };
+    case "linux":
+      return {
+        buttonInsetX: 11,
+        buttonOffsetY: 4,
+        buttonGap: 0,
+        titleOffsetY: 6,
+        iconInsetX: 8,
+        iconOffsetY: 8,
+      };
+    case "windows7":
+      return {
+        buttonInsetX: 8,
+        buttonOffsetY: -1,
+        buttonGap: 0,
+        titleOffsetY: 8,
+        iconInsetX: 8,
+        iconOffsetY: 8,
+      };
+    case "windows8":
+      return {
+        buttonInsetX: 8,
+        buttonOffsetY: 0,
+        buttonGap: 0,
+        titleOffsetY: 8,
+        iconInsetX: 8,
+        iconOffsetY: 8,
+      };
+  }
+}
+
+export function getWindowPreviewTitleButtonSize(
+  osSkin: WindowPreviewOsSkin,
+  kind: WindowPreviewTitleButtonKind,
+  fallbackSize: WindowPreviewTitleButtonSize
+): WindowPreviewTitleButtonSize {
+  if (osSkin === "macos") {
+    return {
+      width: 12,
+      height: 14,
+    };
+  }
+
+  if (osSkin === "linux") {
+    return {
+      width: kind === "maximize" ? 17 : 18,
+      height: 19,
+    };
+  }
+
+  return fallbackSize;
 }
 
 export function getWindowPreviewToolBarDecoration(

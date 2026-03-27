@@ -145,6 +145,8 @@ import {
   getWindowPreviewClientSidePadding,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
+  getWindowPreviewTitleBarMetrics,
+  getWindowPreviewTitleButtonSize,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
   getWindowPreviewStatusBarProgressDecoration,
@@ -5342,27 +5344,29 @@ function render() {
     const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
     const titleButtonSlots = titleButtonLayout.slots;
     const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
+    const titleBarMetrics = getWindowPreviewTitleBarMetrics(settings.osSkin);
     const titleFg = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
     const buttonStrokeColor = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
-    const buttonSize = Math.max(12, Math.min(18, tbH - 8));
-    const buttonGap = 4;
-    const buttonAreaW = titleButtonSlots.length > 0
-      ? titleButtonSlots.length * buttonSize + Math.max(0, titleButtonSlots.length - 1) * buttonGap
+    const fallbackButtonSize = Math.max(12, Math.min(18, tbH - 8));
+    const fallbackButtonDims = { width: fallbackButtonSize, height: fallbackButtonSize };
+    const titleButtonSizes = titleButtonSlots.map(slot => getWindowPreviewTitleButtonSize(settings.osSkin, slot.kind, fallbackButtonDims));
+    const buttonGap = titleBarMetrics.buttonGap;
+    const buttonAreaW = titleButtonSizes.length > 0
+      ? titleButtonSizes.reduce((sum, size) => sum + size.width, 0) + Math.max(0, titleButtonSizes.length - 1) * buttonGap
       : 0;
-    const buttonBandPadding = titleButtonSlots.length > 0 ? 8 : 0;
     const showWindowsIcon = hasWindowPreviewTitleIcon(platformSkin, model.window?.flagsExpr);
-    const iconSize = showWindowsIcon ? Math.max(12, Math.min(16, tbH - 10)) : 0;
-    const iconX = winX + 8;
-    const iconY = winY + Math.max(4, Math.trunc((tbH - iconSize) / 2));
+    const iconSize = showWindowsIcon ? 16 : 0;
+    const iconX = winX + titleBarMetrics.iconInsetX;
+    const iconY = winY + titleBarMetrics.iconOffsetY;
     const leftButtonBandEnd = titleButtonLayout.buttonSide === "left"
-      ? winX + 8 + buttonAreaW + buttonBandPadding
-      : winX + 8;
+      ? winX + titleBarMetrics.buttonInsetX + buttonAreaW
+      : winX + titleBarMetrics.buttonInsetX;
     const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
-      ? winX + winW - 8 - buttonAreaW - buttonBandPadding
-      : winX + winW - 8;
-    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize + 5 : winX + 8, leftButtonBandEnd);
-    const titleRight = Math.min(winX + winW - 8, rightButtonBandStart);
-    const titleBaseline = winY + Math.min(tbH - 8, 18);
+      ? winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW
+      : winX + winW - titleBarMetrics.buttonInsetX;
+    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize + 5 : winX + titleBarMetrics.buttonInsetX, leftButtonBandEnd);
+    const titleRight = Math.min(winX + winW - titleBarMetrics.buttonInsetX, rightButtonBandStart);
+    const titleTop = winY + titleBarMetrics.titleOffsetY;
 
     if (titleBarDecoration.backgroundStyle === "default") {
       ctx.save();
@@ -5446,32 +5450,37 @@ function render() {
       ctx.beginPath();
       ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
       ctx.clip();
+      ctx.textBaseline = "top";
       if (titleBarDecoration.drawShadowedTitle) {
         ctx.fillStyle = "rgb(255, 255, 255)";
-        ctx.fillText(winTitle, titleX, titleBaseline + 1);
+        ctx.fillText(winTitle, titleX, titleTop + 1);
         ctx.fillStyle = "rgb(54, 54, 54)";
-        ctx.fillText(winTitle, titleX, titleBaseline);
+        ctx.fillText(winTitle, titleX, titleTop);
       } else {
         ctx.fillStyle = titleFg;
-        ctx.fillText(winTitle, titleX, titleBaseline);
+        ctx.fillText(winTitle, titleX, titleTop);
       }
       ctx.restore();
     }
 
     if (titleButtonSlots.length > 0) {
       let buttonX = titleButtonLayout.buttonSide === "left"
-        ? winX + 8
-        : winX + winW - 8 - buttonAreaW;
-      const buttonY = winY + Math.max(4, Math.trunc((tbH - buttonSize) / 2));
+        ? winX + titleBarMetrics.buttonInsetX
+        : winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW;
       const isMacPreview = titleBarDecoration.buttonStyle === "macos-circles";
       const isLinuxPreview = titleBarDecoration.buttonStyle === "linux-glyphs";
-      for (const slot of titleButtonSlots) {
+      for (let index = 0; index < titleButtonSlots.length; index += 1) {
+        const slot = titleButtonSlots[index];
+        const size = titleButtonSizes[index] ?? fallbackButtonDims;
+        const buttonY = winY + titleBarMetrics.buttonOffsetY;
+        const buttonW = size.width;
+        const buttonH = size.height;
         const kind = slot.kind;
         const isEnabled = slot.enabled;
         if (isMacPreview) {
-          const radius = Math.max(4, Math.trunc(buttonSize / 2));
-          const cx = buttonX + radius;
-          const cy = buttonY + radius;
+          const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
+          const cx = buttonX + Math.trunc(buttonW / 2);
+          const cy = buttonY + Math.trunc(buttonH / 2);
           ctx.save();
           ctx.globalAlpha = isEnabled ? 0.24 : 0.12;
           ctx.fillStyle = focus;
@@ -5490,10 +5499,10 @@ function render() {
             ? (kind === "close" ? 0.28 : 0.18)
             : 0.08;
           ctx.fillStyle = focus;
-          ctx.fillRect(buttonX, buttonY, buttonSize, buttonSize);
+          ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
           ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
           ctx.strokeStyle = buttonStrokeColor;
-          ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, buttonSize - 1, buttonSize - 1);
+          ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, Math.max(0, buttonW - 1), Math.max(0, buttonH - 1));
           ctx.restore();
         }
 
@@ -5504,21 +5513,21 @@ function render() {
           ctx.beginPath();
           if (kind === "close") {
             ctx.moveTo(buttonX + 4.5, buttonY + 4.5);
-            ctx.lineTo(buttonX + buttonSize - 4.5, buttonY + buttonSize - 4.5);
-            ctx.moveTo(buttonX + buttonSize - 4.5, buttonY + 4.5);
-            ctx.lineTo(buttonX + 4.5, buttonY + buttonSize - 4.5);
+            ctx.lineTo(buttonX + Math.max(4.5, buttonW - 4.5), buttonY + Math.max(4.5, buttonH - 4.5));
+            ctx.moveTo(buttonX + Math.max(4.5, buttonW - 4.5), buttonY + 4.5);
+            ctx.lineTo(buttonX + 4.5, buttonY + Math.max(4.5, buttonH - 4.5));
           } else if (kind === "maximize") {
-            ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonSize - 9), Math.max(4, buttonSize - 9));
+            ctx.strokeRect(buttonX + 4.5, buttonY + 4.5, Math.max(4, buttonW - 9), Math.max(4, buttonH - 9));
           } else {
-            const lineY = buttonY + buttonSize - 4.5;
+            const lineY = buttonY + buttonH - 4.5;
             ctx.moveTo(buttonX + 4.5, lineY);
-            ctx.lineTo(buttonX + buttonSize - 4.5, lineY);
+            ctx.lineTo(buttonX + Math.max(4.5, buttonW - 4.5), lineY);
           }
           ctx.stroke();
           ctx.restore();
         }
 
-        buttonX += buttonSize + buttonGap;
+        buttonX += buttonW + buttonGap;
       }
     }
   }
