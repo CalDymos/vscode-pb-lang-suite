@@ -240,13 +240,25 @@ test('window preview menu flyout decoration follows the original fixed white pan
   });
 });
 
-test('window preview body decoration follows the original linux draw-window path', () => {
+test('window preview body decoration follows the original mac and linux draw-window paths', () => {
+  assert.deepEqual(getWindowPreviewBodyDecoration('macos', true), {
+    backgroundStyle: 'macos-light',
+    useRoundedTopFill: false,
+    roundedTopRadius: 4,
+    showClientBorder: false,
+    clientBorderStyle: 'none',
+    showBodyOutline: true,
+    bodyOutlineStyle: 'macos-light',
+  });
+
   assert.deepEqual(getWindowPreviewBodyDecoration('linux', true), {
     backgroundStyle: 'linux-light',
     useRoundedTopFill: true,
     roundedTopRadius: 6,
     showClientBorder: true,
     clientBorderStyle: 'linux-dark',
+    showBodyOutline: false,
+    bodyOutlineStyle: 'none',
   });
 
   assert.deepEqual(getWindowPreviewBodyDecoration('linux', false), {
@@ -255,6 +267,8 @@ test('window preview body decoration follows the original linux draw-window path
     roundedTopRadius: 6,
     showClientBorder: true,
     clientBorderStyle: 'linux-dark',
+    showBodyOutline: false,
+    bodyOutlineStyle: 'none',
   });
 
   assert.deepEqual(getWindowPreviewBodyDecoration('windows8', true), {
@@ -263,6 +277,8 @@ test('window preview body decoration follows the original linux draw-window path
     roundedTopRadius: 0,
     showClientBorder: false,
     clientBorderStyle: 'none',
+    showBodyOutline: false,
+    bodyOutlineStyle: 'none',
   });
 });
 

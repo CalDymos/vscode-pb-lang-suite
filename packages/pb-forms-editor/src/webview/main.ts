@@ -5168,6 +5168,10 @@ function render() {
       } else {
         ctx.fillRect(winX - 1, winY - 1, winW + 2, winH + 1);
       }
+    } else if (bodyDecoration.backgroundStyle === "macos-light") {
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(237, 237, 237)";
+      traceRoundedRect(ctx, winX - 1, winY - 1, winW + 2, winH + 2, bodyDecoration.roundedTopRadius);
+      ctx.fill();
     } else {
       ctx.fillStyle = fg;
       ctx.fillRect(winX, winY, winW, winH);
@@ -5175,11 +5179,19 @@ function render() {
     ctx.restore();
   } else {
     // Ensure window area is not dimmed by outside fill
-    if (bodyDecoration.backgroundStyle === "linux-light") {
+    if (bodyDecoration.backgroundStyle === "linux-light" || bodyDecoration.backgroundStyle === "macos-light") {
       ctx.clearRect(winX - 1, winY - 1, winW + 2, winH + 2);
     } else {
       ctx.clearRect(winX, winY, winW, winH);
     }
+  }
+
+  if (bodyDecoration.showBodyOutline) {
+    ctx.save();
+    ctx.strokeStyle = bodyDecoration.bodyOutlineStyle === "macos-light" ? "rgb(184, 184, 184)" : focus;
+    traceRoundedRect(ctx, winX - 1.5, winY - 1.5, winW + 3, winH + 3, bodyDecoration.roundedTopRadius);
+    ctx.stroke();
+    ctx.restore();
   }
 
   const chromeMetrics = previewChromeMetrics;

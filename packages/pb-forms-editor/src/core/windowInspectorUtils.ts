@@ -105,11 +105,13 @@ export type WindowPreviewMenuFlyoutDecoration = {
 };
 
 export type WindowPreviewBodyDecoration = {
-  backgroundStyle: "default" | "linux-light";
+  backgroundStyle: "default" | "linux-light" | "macos-light";
   useRoundedTopFill: boolean;
   roundedTopRadius: number;
   showClientBorder: boolean;
   clientBorderStyle: "none" | "linux-dark";
+  showBodyOutline: boolean;
+  bodyOutlineStyle: "none" | "macos-light";
 };
 
 export type WindowPreviewFrameDecoration = {
@@ -622,6 +624,18 @@ export function getWindowPreviewBodyDecoration(
   osSkin: WindowPreviewOsSkin,
   hasTitleBar: boolean
 ): WindowPreviewBodyDecoration {
+  if (osSkin === "macos") {
+    return {
+      backgroundStyle: "macos-light",
+      useRoundedTopFill: false,
+      roundedTopRadius: 4,
+      showClientBorder: false,
+      clientBorderStyle: "none",
+      showBodyOutline: true,
+      bodyOutlineStyle: "macos-light",
+    };
+  }
+
   if (osSkin === "linux") {
     return {
       backgroundStyle: "linux-light",
@@ -629,6 +643,8 @@ export function getWindowPreviewBodyDecoration(
       roundedTopRadius: 6,
       showClientBorder: true,
       clientBorderStyle: "linux-dark",
+      showBodyOutline: false,
+      bodyOutlineStyle: "none",
     };
   }
 
@@ -638,6 +654,8 @@ export function getWindowPreviewBodyDecoration(
     roundedTopRadius: 0,
     showClientBorder: false,
     clientBorderStyle: "none",
+    showBodyOutline: false,
+    bodyOutlineStyle: "none",
   };
 }
 
