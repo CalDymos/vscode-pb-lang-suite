@@ -123,6 +123,18 @@ export type WindowPreviewMenuFlyoutDecoration = {
   showEntryHoverFill: boolean;
 };
 
+export type WindowPreviewAddIconMetrics = {
+  width: number;
+  height: number;
+};
+
+export type WindowPreviewMenuSubmenuIconMetrics = {
+  width: number;
+  height: number;
+  offsetRight: number;
+  offsetY: number;
+};
+
 export type WindowPreviewBodyDecoration = {
   backgroundStyle: "default" | "linux-light" | "macos-light" | "windows7-frame" | "windows8-frame";
   useRoundedTopFill: boolean;
@@ -743,6 +755,22 @@ export function getWindowPreviewMenuFlyoutDecoration(): WindowPreviewMenuFlyoutD
     separatorStyle: "light",
     useSelectedOutline: true,
     showEntryHoverFill: false,
+  };
+}
+
+export function getWindowPreviewAddIconMetrics(): WindowPreviewAddIconMetrics {
+  return {
+    width: 16,
+    height: 16,
+  };
+}
+
+export function getWindowPreviewMenuSubmenuIconMetrics(): WindowPreviewMenuSubmenuIconMetrics {
+  return {
+    width: 9,
+    height: 10,
+    offsetRight: 20,
+    offsetY: 4,
   };
 }
 

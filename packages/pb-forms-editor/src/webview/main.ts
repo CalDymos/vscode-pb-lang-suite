@@ -154,6 +154,8 @@ import {
   getWindowPreviewStatusBarProgressDecoration,
   getWindowPreviewMenuBarDecoration,
   getWindowPreviewMenuFlyoutDecoration,
+  getWindowPreviewAddIconMetrics,
+  getWindowPreviewMenuSubmenuIconMetrics,
   getWindowPreviewBodyDecoration,
   getWindowPreviewFrameDecoration,
   hasWindowPreviewResizeGrip,
@@ -788,6 +790,96 @@ let toolBarAddPreviewRect: PreviewToolBarAddRect | null = null;
 let statusBarAddPreviewRect: PreviewStatusBarAddRect | null = null;
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
+
+const PREVIEW_PLUS_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABuwAAAbsBOuzj4gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAHVSURBVDiNhZK/axNhGMc/75sD2wZBCkpRinOyGSfrVgc3d6d2yX/QDiIUS6gFhw5FQRwqDtLVLEr31CINtgqNm0rQyw8HJSR3Sd7c+zjcXbwcrX3g4X25u+/n+dx7p4BLQJ7zapV7uZu5pcK1wuxR46hV69Uey7I8d4B8u93etyJordFao5Sa6Jdfd9j9s8vilUU285s8rD2Yz/7KPlM7SjSAlf8P3/6yTcNvcPCtDMD3Rhk7amosqw5AJqMBUEqNDXTCoPm7iXffGwNf36mFzz9VVx0ArTWIoKJX0EqF+wgwd30O55XiBnC4JBTLio8CXMbV8eRxOOpMYr+SW0EuatxMaPAZ+GSxzPDkn0G0xgbJwyzOF0HD1s8tsm+yeA4/mKIkd+WFAhY6nc7+BCDq2C65AjiOc1tE3gM4ACptEE0/C5CsEBCfQ6QeV3ztXACpcPpHArDWYq2l1/MEMJMGqUA6XK/XcV2Xqelp3r7b+wAcJy0WPM+Tfr8vw+FQjDEyGo0kCAKx1ooxRiqVigRBII82Nk6AGREh7hDg+2cCut2uVKtVWSuVToDZZDgG3PJ83w4GAzHGTABERFqttl1bXz9IT45bAReAQvQxTisDHIuIOe3mX6/JBlGoABR2AAAAAElFTkSuQmCC";
+const PREVIEW_SUBMENU_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAKCAYAAABmBXS+AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iaWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpGN0RBRDc4M0YxNjkxMUUxODg1NDg1ODU1QThCQTAyQSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpGN0RBRDc4NEYxNjkxMUUxODg1NDg1ODU1QThCQTAyQSI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkY3REFENzgxRjE2OTExRTE4ODU0ODU4NTVBOEJBMDJBIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkY3REFENzgyRjE2OTExRTE4ODU0ODU4NTVBOEJBMDJBIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+qIRuegAAAKNJREFUeNp0jsEJhDAQRX9EsAQPgXRhjnbhzUuuHiRgByE92IM92IJYQUgD3oOX2ayQZdlNHgwzzDxmplrXlc7zpAhKUTnnoLWGtZau6yJkqFKx7zvGccS2bVSU3oQQEM9DKUXHcVBWSnjvsSwLjDFUlBL3fT+5zg0555jnGVJK9ic1TfM8H4N99z9S3/eYpglt27LfzbUQAsMwoOs6VvrtJcAAFhhIFeyORTUAAAAASUVORK5CYII=";
+
+let previewPlusIconImage: HTMLImageElement | null = null;
+let previewSubmenuIconImage: HTMLImageElement | null = null;
+
+function createPreviewRasterIcon(dataUri: string): HTMLImageElement | null {
+  if (typeof Image === "undefined") {
+    return null;
+  }
+
+  const image = new Image();
+  image.decoding = "sync";
+  image.addEventListener("load", () => render(), { once: true });
+  image.src = dataUri;
+  return image;
+}
+
+function getPreviewPlusIconImage(): HTMLImageElement | null {
+  if (!previewPlusIconImage) {
+    previewPlusIconImage = createPreviewRasterIcon(PREVIEW_PLUS_ICON_DATA_URI);
+  }
+
+  return previewPlusIconImage;
+}
+
+function getPreviewSubmenuIconImage(): HTMLImageElement | null {
+  if (!previewSubmenuIconImage) {
+    previewSubmenuIconImage = createPreviewRasterIcon(PREVIEW_SUBMENU_ICON_DATA_URI);
+  }
+
+  return previewSubmenuIconImage;
+}
+
+function drawPreviewRasterIcon(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): boolean {
+  if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+    return false;
+  }
+
+  ctx.drawImage(image, x, y, width, height);
+  return true;
+}
+
+function drawPreviewPlusIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const metrics = getWindowPreviewAddIconMetrics();
+  ctx.save();
+  if (drawPreviewRasterIcon(ctx, getPreviewPlusIconImage(), x, y, metrics.width, metrics.height)) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.fillRect(x + 3, y + 3, 9, 9);
+  ctx.strokeStyle = "rgb(176,176,176)";
+  ctx.strokeRect(x + 3.5, y + 3.5, 8, 8);
+  ctx.strokeStyle = "rgb(48,179,48)";
+  ctx.beginPath();
+  ctx.moveTo(x + 5.5, y + 7.5);
+  ctx.lineTo(x + 9.5, y + 7.5);
+  ctx.moveTo(x + 7.5, y + 5.5);
+  ctx.lineTo(x + 7.5, y + 9.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPreviewSubmenuIndicatorIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const metrics = getWindowPreviewMenuSubmenuIconMetrics();
+  ctx.save();
+  if (drawPreviewRasterIcon(ctx, getPreviewSubmenuIconImage(), x, y, metrics.width, metrics.height)) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = "rgb(96,96,96)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 1);
+  ctx.lineTo(x + metrics.width - 1, y + Math.trunc(metrics.height / 2));
+  ctx.lineTo(x + 1, y + metrics.height - 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
 
 let settings: DesignerSettings = {
   showGrid: true,
@@ -4655,15 +4747,12 @@ function drawMenuFlyoutPanelPreview(
     }
 
     if (getDirectMenuChildIndices(menu, childIndex).length) {
-      ctx.save();
-      ctx.fillStyle = fg;
-      ctx.beginPath();
-      ctx.moveTo(entryRect.x + entryRect.w - 16, entryRect.y + 6);
-      ctx.lineTo(entryRect.x + entryRect.w - 10, entryRect.y + 10);
-      ctx.lineTo(entryRect.x + entryRect.w - 16, entryRect.y + 14);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+      const submenuIconMetrics = getWindowPreviewMenuSubmenuIconMetrics();
+      drawPreviewSubmenuIndicatorIcon(
+        ctx,
+        entryRect.x + entryRect.w - submenuIconMetrics.offsetRight,
+        entryRect.y + submenuIconMetrics.offsetY,
+      );
     }
 
     if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
@@ -4814,32 +4903,17 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (x >= rect.x + rect.w - 20) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
   const addRect: PreviewMenuAddRect = {
     menuId: menu.id,
     x: addRectX,
-    y: rect.y + Math.max(2, Math.trunc((rect.h - 16) / 2)),
-    w: 16,
-    h: 16
+    y: rect.y + menuBarDecoration.itemInsetY,
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   menuAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 
   if (!selection || selection.kind !== "menuEntry" || selection.menuId !== menu.id) {
     return;
@@ -4951,32 +5025,17 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (x >= rect.x + rect.w - 18) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
   const addRect: PreviewToolBarAddRect = {
     toolBarId: toolbar.id,
     x: addRectX,
     y,
-    w: 16,
-    h: 16
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   toolBarAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 }
 
 
@@ -5094,31 +5153,16 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     if (x >= rect.x + rect.w) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRect: PreviewStatusBarAddRect = {
     statusBarId: statusbar.id,
     x,
-    y: rect.y + Math.max(4, Math.trunc((rect.h - 16) / 2)),
-    w: 16,
-    h: 16
+    y: rect.y + 4,
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   statusBarAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 }
 
 function render() {
