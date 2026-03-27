@@ -558,11 +558,11 @@ test('window preview status bar decoration follows the original per-skin status 
   });
 });
 
-test('window preview status bar progress decoration follows the original per-skin progress block', () => {
+test('window preview status bar progress decoration keeps the local 2px side padding per skin', () => {
   assert.deepEqual(getWindowPreviewStatusBarProgressDecoration('windows8'), {
     trackShape: 'rect',
     trackRadius: 0,
-    trackInsetX: 0,
+    trackInsetX: 2,
     trackInsetY: 5,
     trackColorStyle: 'windows8',
     fillColorStyle: 'windows8',
@@ -572,7 +572,7 @@ test('window preview status bar progress decoration follows the original per-ski
   assert.deepEqual(getWindowPreviewStatusBarProgressDecoration('windows7'), {
     trackShape: 'rounded',
     trackRadius: 3,
-    trackInsetX: 0,
+    trackInsetX: 2,
     trackInsetY: 5,
     trackColorStyle: 'default',
     fillColorStyle: 'default',
@@ -582,7 +582,7 @@ test('window preview status bar progress decoration follows the original per-ski
   assert.deepEqual(getWindowPreviewStatusBarProgressDecoration('macos'), {
     trackShape: 'rounded',
     trackRadius: 3,
-    trackInsetX: 0,
+    trackInsetX: 2,
     trackInsetY: 5,
     trackColorStyle: 'default',
     fillColorStyle: 'default',

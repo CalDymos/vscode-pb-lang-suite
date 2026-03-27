@@ -25,6 +25,8 @@ export type StatusBarProgressPreviewMetrics = {
   fillWidth: number;
 };
 
+export const STATUSBAR_PROGRESS_FIELD_SIDE_PADDING = 2;
+
 export function parseStatusBarWidth(widthRaw: string | undefined): number | null {
   const trimmed = (widthRaw ?? "").trim();
   if (!trimmed.length || trimmed === "#PB_Ignore") return null;
@@ -86,10 +88,10 @@ function parseStatusBarProgress(progressRaw: string | undefined): number {
 }
 
 export function getStatusBarProgressPreviewMetrics(fieldWidth: number, fieldHeight: number, progressRaw: string | undefined): StatusBarProgressPreviewMetrics {
-  const trackWidth = Math.max(8, Math.trunc(fieldWidth));
+  const paddedFieldWidth = Math.max(0, Math.trunc(fieldWidth) - STATUSBAR_PROGRESS_FIELD_SIDE_PADDING * 2);
+  const trackWidth = paddedFieldWidth;
   const trackHeight = Math.max(6, Math.trunc(fieldHeight) - 10);
-  const innerWidth = Math.max(0, trackWidth - 2);
   const progress = parseStatusBarProgress(progressRaw);
-  const fillWidth = Math.max(0, Math.round((innerWidth * progress) / 100));
+  const fillWidth = Math.max(0, Math.trunc(trackWidth / 2) - 2);
   return { progress, trackWidth, trackHeight, fillWidth };
 }

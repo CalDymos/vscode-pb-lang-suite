@@ -46,24 +46,24 @@ test("builds display summaries for label, image, progress and empty fields", () 
 });
 
 
-test("computes progress preview metrics with a visible empty track", () => {
-  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 20, "0"), {
+test("uses the fixed half-fill preview for statusbar progress bars with 2px side padding", () => {
+  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 23, "0"), {
     progress: 0,
-    trackWidth: 90,
-    trackHeight: 10,
-    fillWidth: 0
+    trackWidth: 86,
+    trackHeight: 13,
+    fillWidth: 41
   });
 
-  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 20, "50"), {
+  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 23, "50"), {
     progress: 50,
-    trackWidth: 90,
-    trackHeight: 10,
-    fillWidth: 44
+    trackWidth: 86,
+    trackHeight: 13,
+    fillWidth: 41
   });
 
   assert.deepEqual(getStatusBarProgressPreviewMetrics(6, 8, "abc"), {
     progress: 0,
-    trackWidth: 8,
+    trackWidth: 2,
     trackHeight: 6,
     fillWidth: 0
   });

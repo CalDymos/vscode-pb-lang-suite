@@ -709,7 +709,7 @@ export function getWindowPreviewStatusBarProgressDecoration(
     return {
       trackShape: "rect",
       trackRadius: 0,
-      trackInsetX: 0,
+      trackInsetX: 2,
       trackInsetY: 5,
       trackColorStyle: "windows8",
       fillColorStyle: "windows8",
@@ -720,7 +720,7 @@ export function getWindowPreviewStatusBarProgressDecoration(
   return {
     trackShape: "rounded",
     trackRadius: 3,
-    trackInsetX: 0,
+    trackInsetX: 2,
     trackInsetY: 5,
     trackColorStyle: "default",
     fillColorStyle: "default",
