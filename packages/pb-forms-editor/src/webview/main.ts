@@ -79,7 +79,9 @@ import {
   resolveTopLevelChromeHit,
   unquotePbString,
   getVisibleToolBarEntryCount,
-  shouldShowToolBarStructureEntry
+  shouldShowToolBarPreviewUnselectedFrame,
+  shouldShowToolBarStructureEntry,
+  hasToolBarPreviewAssignedImage
 } from "../core/topLevelPreviewUtils";
 
 import {
@@ -4991,8 +4993,13 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
 
   const border = getCssVar("--vscode-panel-border") || fg;
-  const buttonBg = getCssVar("--vscode-button-secondaryBackground") || getCssVar("--vscode-toolbar-hoverBackground") || "rgba(127,127,127,0.15)";
   const toolBarDecoration = getWindowPreviewToolBarDecoration(osSkin);
+  const toolbarSeparatorColor = toolBarDecoration.separatorColorStyle === "toolbar-dark"
+    ? "rgb(132,132,132)"
+    : border;
+  const toolbarSelectedOutlineColor = toolBarDecoration.selectedOutlineColorStyle === "black"
+    ? "rgb(0,0,0)"
+    : fg;
 
   ctx.save();
   if (toolBarDecoration.backgroundStyle === "macos-gradient") {
@@ -5032,39 +5039,54 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
       toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 6, h: 16 });
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.strokeStyle = border;
-      ctx.beginPath();
-      ctx.moveTo(x + 2.5, y);
-      ctx.lineTo(x + 2.5, y + 16);
-      ctx.stroke();
-      ctx.restore();
+      if (toolBarDecoration.separatorColorStyle !== "none") {
+        ctx.save();
+        ctx.strokeStyle = toolbarSeparatorColor;
+        ctx.beginPath();
+        ctx.moveTo(x + 2.5, y + 1);
+        ctx.lineTo(x + 2.5, y + 15);
+        ctx.stroke();
+        ctx.restore();
+      }
       x += 10;
       continue;
     }
 
-    toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 });
+    const entryRect = { ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 };
+    toolBarEntryPreviewRects.push(entryRect);
+    const isSelectedEntry = selection?.kind === "toolBarEntry"
+      && selection.toolBarId === toolbar.id
+      && selection.entryIndex === entryIndex;
 
-    ctx.save();
-    ctx.fillStyle = buttonBg;
-    ctx.globalAlpha = 0.28;
-    ctx.fillRect(x, y, 16, 16);
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = border;
-    ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
-    ctx.restore();
+    const hasAssignedImage = hasToolBarPreviewAssignedImage(entry);
+    const showUnselectedEntryFrame = toolBarDecoration.showUnselectedEntryFrame
+      || shouldShowToolBarPreviewUnselectedFrame(entry, isSelectedEntry);
 
-    if (entry.iconId || entry.iconRaw) {
+    if (showUnselectedEntryFrame) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = border;
+      ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
+      ctx.restore();
+    }
+
+    if (hasAssignedImage) {
       ctx.save();
       ctx.fillStyle = fg;
       ctx.globalAlpha = 0.55;
       ctx.fillRect(x + 4, y + 4, 8, 8);
       ctx.restore();
-    } else {
+    } else if (entry.kind !== "ToolBarImageButton") {
       const label = ((entry.text ?? entry.idRaw ?? entry.kind).replace(/^#/, "").trim().slice(0, 1) || "•").toUpperCase();
       ctx.fillStyle = fg;
       ctx.fillText(label, x + 4, y + 12);
+    }
+
+    if (isSelectedEntry) {
+      ctx.save();
+      ctx.strokeStyle = toolbarSelectedOutlineColor;
+      ctx.strokeRect(entryRect.x - 0.5, entryRect.y - 0.5, 18, 18);
+      ctx.restore();
     }
 
     x += 22;
@@ -5092,8 +5114,13 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
 
   const border = getCssVar("--vscode-panel-border") || fg;
-  const accent = getCssVar("--vscode-progressBar-background") || fg;
   const statusBarDecoration = getWindowPreviewStatusBarDecoration(osSkin);
+  const statusBarTextColor = statusBarDecoration.textColorStyle === "black"
+    ? "rgb(0,0,0)"
+    : fg;
+  const statusBarSelectedOutlineColor = statusBarDecoration.selectedOutlineColorStyle === "black"
+    ? "rgb(0,0,0)"
+    : fg;
 
   if (statusBarDecoration.backgroundStyle === "macos-gradient") {
     ctx.save();
@@ -5130,7 +5157,11 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
-    statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
+    const fieldRect = { ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) };
+    statusBarFieldPreviewRects.push(fieldRect);
+    const isSelectedField = selection?.kind === "statusBarField"
+      && selection.statusBarId === statusbar.id
+      && selection.fieldIndex === i;
 
     if (statusBarDecoration.showFieldSeparators && i > 0) {
       ctx.save();
@@ -5144,7 +5175,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 
     const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
     if (textLabel.length) {
-      ctx.fillStyle = fg;
+      ctx.fillStyle = statusBarTextColor;
       const textWidth = Math.ceil(ctx.measureText(textLabel).width);
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillText(textLabel, textX, rect.y + 15);
@@ -5192,6 +5223,13 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       const size = Math.max(10, Math.min(16, rect.h - 8));
       const imageX = getStatusBarAlignedX(x, fieldW, size, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
       ctx.fillRect(imageX, imageY, size, size);
+      ctx.restore();
+    }
+
+    if (isSelectedField) {
+      ctx.save();
+      ctx.strokeStyle = statusBarSelectedOutlineColor;
+      ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, Math.max(0, fieldRect.w - 1), Math.max(0, fieldRect.h - 1));
       ctx.restore();
     }
 

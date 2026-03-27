@@ -23,6 +23,8 @@ export type MenuModelLike = {
 export type ToolBarEntryLike = {
   kind: string;
   idRaw?: string;
+  iconRaw?: string;
+  iconId?: string;
 };
 
 export type ToolBarModelLike = {
@@ -297,6 +299,27 @@ export function canEditToolBarTooltip(entry: ToolBarEntryLike): boolean {
     && typeof entry.idRaw === "string"
     && entry.idRaw.trim().length > 0;
 }
+export function hasToolBarPreviewAssignedImage(entry: ToolBarEntryLike): boolean {
+  if ((entry.iconId ?? "").trim().length > 0) {
+    return true;
+  }
+
+  const iconRaw = (entry.iconRaw ?? "").trim();
+  return iconRaw.length > 0 && iconRaw !== "0";
+}
+
+export function shouldShowToolBarPreviewUnselectedFrame(entry: ToolBarEntryLike, isSelected: boolean): boolean {
+  if (isSelected) {
+    return false;
+  }
+
+  if (entry.kind === "ToolBarSeparator" || entry.kind === "ToolBarToolTip") {
+    return false;
+  }
+
+  return !hasToolBarPreviewAssignedImage(entry);
+}
+
 
 export interface SelectedToolBarInspectorFieldConfig {
   captionLabel: string;

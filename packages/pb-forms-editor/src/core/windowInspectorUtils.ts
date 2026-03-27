@@ -79,6 +79,9 @@ export type WindowPreviewToolBarDecoration = {
   showFrameBorder: boolean;
   showBottomSeparator: boolean;
   useDarkBottomSeparator: boolean;
+  separatorColorStyle: "toolbar-dark" | "none";
+  showUnselectedEntryFrame: boolean;
+  selectedOutlineColorStyle: "black";
   itemInsetX: number;
   itemInsetY: number;
 };
@@ -89,6 +92,8 @@ export type WindowPreviewStatusBarDecoration = {
   showTopSeparator: boolean;
   topSeparatorStyle: "macos-dark" | "light";
   showFieldSeparators: boolean;
+  textColorStyle: "black";
+  selectedOutlineColorStyle: "black";
   fieldInsetX: number;
   fieldInsetY: number;
   widthAdjustment: number;
@@ -615,6 +620,9 @@ export function getWindowPreviewToolBarDecoration(
         showFrameBorder: false,
         showBottomSeparator: true,
         useDarkBottomSeparator: true,
+        separatorColorStyle: "none",
+        showUnselectedEntryFrame: false,
+        selectedOutlineColorStyle: "black",
         itemInsetX: 7,
         itemInsetY: 3,
       };
@@ -624,6 +632,9 @@ export function getWindowPreviewToolBarDecoration(
         showFrameBorder: false,
         showBottomSeparator: false,
         useDarkBottomSeparator: false,
+        separatorColorStyle: "toolbar-dark",
+        showUnselectedEntryFrame: false,
+        selectedOutlineColorStyle: "black",
         itemInsetX: 13,
         itemInsetY: 3,
       };
@@ -634,6 +645,9 @@ export function getWindowPreviewToolBarDecoration(
         showFrameBorder: false,
         showBottomSeparator: false,
         useDarkBottomSeparator: false,
+        separatorColorStyle: "toolbar-dark",
+        showUnselectedEntryFrame: false,
+        selectedOutlineColorStyle: "black",
         itemInsetX: 5,
         itemInsetY: 3,
       };
@@ -651,6 +665,8 @@ export function getWindowPreviewStatusBarDecoration(
         showTopSeparator: true,
         topSeparatorStyle: "macos-dark",
         showFieldSeparators: false,
+        textColorStyle: "black",
+        selectedOutlineColorStyle: "black",
         fieldInsetX: 7,
         fieldInsetY: 4,
         widthAdjustment: 14,
@@ -662,6 +678,8 @@ export function getWindowPreviewStatusBarDecoration(
         showTopSeparator: true,
         topSeparatorStyle: "light",
         showFieldSeparators: true,
+        textColorStyle: "black",
+        selectedOutlineColorStyle: "black",
         fieldInsetX: 15,
         fieldInsetY: 4,
         widthAdjustment: 14,
@@ -674,6 +692,8 @@ export function getWindowPreviewStatusBarDecoration(
         showTopSeparator: true,
         topSeparatorStyle: "light",
         showFieldSeparators: true,
+        textColorStyle: "black",
+        selectedOutlineColorStyle: "black",
         fieldInsetX: 7,
         fieldInsetY: 4,
         widthAdjustment: 14,

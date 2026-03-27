@@ -32,7 +32,9 @@ import {
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
+  hasToolBarPreviewAssignedImage,
   isBoundToolBarTooltipEntry,
+  shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry
 } from "../src/core/topLevelPreviewUtils";
 
@@ -469,4 +471,18 @@ test("resolves menu move targets from visible flyout entries", () => {
       indicatorOrientation: "horizontal"
     }
   );
+});
+
+
+test("treats toolbar image buttons with iconRaw 0 as empty preview buttons", () => {
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: "0" }), false);
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: " ImageID(#Img_Open) " }), true);
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconId: "#Img_Open", iconRaw: "0" }), true);
+});
+
+test("shows the generic unselected toolbar frame only for empty command buttons", () => {
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "0" }, false), true);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "ImageID(#Img_Open)" }, false), false);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "0" }, true), false);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarSeparator" }, false), false);
 });
