@@ -150,6 +150,7 @@ import {
   getWindowPreviewStatusBarProgressDecoration,
   getWindowPreviewMenuBarDecoration,
   getWindowPreviewMenuFlyoutDecoration,
+  getWindowPreviewBodyDecoration,
   getWindowPreviewFrameDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
@@ -5153,16 +5154,32 @@ function render() {
     ctx.restore();
   }
 
+  const bodyDecoration = getWindowPreviewBodyDecoration(settings.osSkin, tbH > 0);
+
   // Window fill (so the window area is visually separated)
   if (settings.windowFillOpacity > 0) {
     ctx.save();
     ctx.globalAlpha = clamp(settings.windowFillOpacity, 0, 1);
-    ctx.fillStyle = fg;
-    ctx.fillRect(winX, winY, winW, winH);
+    if (bodyDecoration.backgroundStyle === "linux-light") {
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(242, 241, 240)";
+      if (bodyDecoration.useRoundedTopFill) {
+        traceRoundedTopRect(ctx, winX - 1, winY - 1, winW + 2, winH + 1, bodyDecoration.roundedTopRadius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(winX - 1, winY - 1, winW + 2, winH + 1);
+      }
+    } else {
+      ctx.fillStyle = fg;
+      ctx.fillRect(winX, winY, winW, winH);
+    }
     ctx.restore();
   } else {
     // Ensure window area is not dimmed by outside fill
-    ctx.clearRect(winX, winY, winW, winH);
+    if (bodyDecoration.backgroundStyle === "linux-light") {
+      ctx.clearRect(winX - 1, winY - 1, winW + 2, winH + 2);
+    } else {
+      ctx.clearRect(winX, winY, winW, winH);
+    }
   }
 
   const chromeMetrics = previewChromeMetrics;
@@ -5196,6 +5213,17 @@ function render() {
       settings.gridMode,
       fg
     );
+  }
+
+  if (bodyDecoration.showClientBorder) {
+    const clientBorderY = winY + chromeTopPadding;
+    const clientBorderH = Math.max(0, winH - chromeTopPadding);
+    if (clientBorderH > 0) {
+      ctx.save();
+      ctx.strokeStyle = bodyDecoration.clientBorderStyle === "linux-dark" ? "rgb(70, 70, 70)" : focus;
+      ctx.strokeRect(winX + 0.5, clientBorderY + 0.5, Math.max(0, winW - 1), Math.max(0, clientBorderH - 1));
+      ctx.restore();
+    }
   }
 
   if (platformSkin === "windows" && windowClientSidePadding > 0 && windowClientSurface.fillRect.w > 0 && windowClientSurface.fillRect.h > 0) {
@@ -5763,6 +5791,11 @@ function drawWindowPreviewFrame(
   ctx.save();
   ctx.globalAlpha = decoration.strokeAlpha;
   ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark" ? "rgb(118, 118, 118)" : focus;
+
+  if (decoration.borderStyle === "none") {
+    ctx.restore();
+    return;
+  }
 
   if (decoration.borderStyle === "macos-rounded") {
     traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);

@@ -49,16 +49,16 @@ test("builds display summaries for label, image, progress and empty fields", () 
 test("computes progress preview metrics with a visible empty track", () => {
   assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 20, "0"), {
     progress: 0,
-    trackWidth: 86,
+    trackWidth: 90,
     trackHeight: 10,
     fillWidth: 0
   });
 
   assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 20, "50"), {
     progress: 50,
-    trackWidth: 86,
+    trackWidth: 90,
     trackHeight: 10,
-    fillWidth: 42
+    fillWidth: 44
   });
 
   assert.deepEqual(getStatusBarProgressPreviewMetrics(6, 8, "abc"), {

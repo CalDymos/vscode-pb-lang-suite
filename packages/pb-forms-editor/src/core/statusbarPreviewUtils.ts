@@ -86,7 +86,7 @@ function parseStatusBarProgress(progressRaw: string | undefined): number {
 }
 
 export function getStatusBarProgressPreviewMetrics(fieldWidth: number, fieldHeight: number, progressRaw: string | undefined): StatusBarProgressPreviewMetrics {
-  const trackWidth = Math.max(8, Math.trunc(fieldWidth) - 4);
+  const trackWidth = Math.max(8, Math.trunc(fieldWidth));
   const trackHeight = Math.max(6, Math.trunc(fieldHeight) - 10);
   const innerWidth = Math.max(0, trackWidth - 2);
   const progress = parseStatusBarProgress(progressRaw);

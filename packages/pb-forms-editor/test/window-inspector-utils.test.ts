@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
+import { buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewBodyDecoration, getWindowPreviewFrameDecoration, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput, WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL } from '../src/core/windowInspectorUtils';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -240,12 +240,45 @@ test('window preview menu flyout decoration follows the original fixed white pan
   });
 });
 
+test('window preview body decoration follows the original linux draw-window path', () => {
+  assert.deepEqual(getWindowPreviewBodyDecoration('linux', true), {
+    backgroundStyle: 'linux-light',
+    useRoundedTopFill: true,
+    roundedTopRadius: 6,
+    showClientBorder: true,
+    clientBorderStyle: 'linux-dark',
+  });
+
+  assert.deepEqual(getWindowPreviewBodyDecoration('linux', false), {
+    backgroundStyle: 'linux-light',
+    useRoundedTopFill: false,
+    roundedTopRadius: 6,
+    showClientBorder: true,
+    clientBorderStyle: 'linux-dark',
+  });
+
+  assert.deepEqual(getWindowPreviewBodyDecoration('windows8', true), {
+    backgroundStyle: 'default',
+    useRoundedTopFill: false,
+    roundedTopRadius: 0,
+    showClientBorder: false,
+    clientBorderStyle: 'none',
+  });
+});
+
 test('window preview frame decoration follows the original final mac border path', () => {
   assert.deepEqual(getWindowPreviewFrameDecoration('macos'), {
     borderStyle: 'macos-rounded',
     borderRadius: 4,
     strokeColorStyle: 'macos-dark',
     strokeAlpha: 1,
+  });
+
+  assert.deepEqual(getWindowPreviewFrameDecoration('linux'), {
+    borderStyle: 'none',
+    borderRadius: 0,
+    strokeColorStyle: 'focus',
+    strokeAlpha: 0,
   });
 
   assert.deepEqual(getWindowPreviewFrameDecoration('windows8'), {
