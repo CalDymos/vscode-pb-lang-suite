@@ -4449,9 +4449,10 @@ function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
 }
 
 function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
-  // For new statusbar field images in create mode, respect the pbAny setting.
+  // For new statusbar field / toolbar entry images in create mode,
+  // respect the pbAny setting.
   const usePbAny = mode === "create"
-    && target.kind === "statusBarField"
+    && (target.kind === "statusBarField" || target.kind === "toolBarEntry")
     && settings.newGadgetsUsePbAnyByDefault;
 
   let idRaw = "#ImgNew";
@@ -7328,6 +7329,26 @@ function renderProps() {
         ? (selectedImageEditState.reason ?? "")
         : "Enter an existing parsed image path to rebind this toolbar entry, or a quoted/path-like file string to auto-create a new LoadImage entry.";
       propsEl.appendChild(row("CurrentImage", currentImageControl));
+      if (selectedImage && typeof selectedImage.source?.line === "number") {
+        const canToggle = canEditSelectedImage && canToggleImagePbAny(selectedImage);
+        propsEl.appendChild(row("#PB_Any", checkboxInput(
+          Boolean(selectedImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedImage!.source!.line,
+              toPbAny: !selectedImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: selectedImage.pbAny
+              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
+              : "Switch this image entry to #PB_Any variable mode and update all references."
+          }
+        )));
+      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
