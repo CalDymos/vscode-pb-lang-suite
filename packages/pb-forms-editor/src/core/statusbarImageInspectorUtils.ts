@@ -55,7 +55,7 @@ function sanitizeImageWindowBase(windowVariable: string | undefined, windowId: s
   return /^\d/.test(safeBase) ? `FormWindow_${safeBase}` : safeBase;
 }
 
-function buildNextGeneratedImageIdRaw(
+export function buildNextGeneratedImageIdRaw(
   images: StatusBarCurrentImageRebindCandidate[],
   windowVariable: string | undefined,
   windowId: string | undefined

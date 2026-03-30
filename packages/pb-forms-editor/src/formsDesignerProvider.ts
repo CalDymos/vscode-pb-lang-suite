@@ -322,7 +322,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string; pbAny?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
@@ -1203,7 +1203,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.updateImage: {
-          const edit = applyImageUpdate(document, msg.sourceLine, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar }, sr);
+          const edit = applyImageUpdate(document, msg.sourceLine, { inline: msg.inline, idRaw: msg.idRaw, imageRaw: msg.imageRaw, assignedVar: msg.assignedVar, pbAny: msg.pbAny }, sr);
           await applyEditOrError(edit, `Could not update image entry. No matching LoadImage/CatchImage call found${rangeInfo}.`);
           return;
         }
@@ -1284,6 +1284,37 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
+          const applyOrAbort = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
+            if (!edit) {
+              postError(errorMessage);
+              return false;
+            }
+            const ok = await vscode.workspace.applyEdit(edit);
+            if (!ok) {
+              postError(errorMessage);
+              return false;
+            }
+            return true;
+          };
+
+          if (msg.toPbAny) {
+            // Convert enum → #PB_Any: move entry to list end, re-index all IDs,
+            // and patch every ImageID(...) reference via applyImageIdRenames.
+            // applyImageUpdate(pbAny:true) handles all of this atomically —
+            // no separate usage-patching loops needed.
+            const declarationEdit = applyImageUpdate(document, msg.sourceLine, {
+              inline: image.inline,
+              idRaw: toggledIdRaw,
+              imageRaw: image.imageRaw,
+              assignedVar: toggledAssignedVar,
+              pbAny: true,
+            }, sr);
+            await applyEditOrError(declarationEdit, `Could not toggle image entry '${image.id}'${rangeInfo}.`);
+            return;
+          }
+
+          // toPbAny=false: simple variable → enum toggle, no re-index.
+          // Patch all usages first, then rewrite the declaration.
           const gadgetUsages = (model?.gadgets ?? []).filter((entry) => entry.imageId === oldImageId);
           const menuUsages = (model?.menus ?? []).flatMap((menu) =>
             menu.entries
@@ -1300,19 +1331,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
               .filter((field) => field.imageId === oldImageId)
               .map((field) => ({ statusBarId: statusBar.id, field }))
           );
-
-          const applyOrAbort = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
-            if (!edit) {
-              postError(errorMessage);
-              return false;
-            }
-            const ok = await vscode.workspace.applyEdit(edit);
-            if (!ok) {
-              postError(errorMessage);
-              return false;
-            }
-            return true;
-          };
 
           for (const gadget of gadgetUsages) {
             const edit = applyGadgetOpenArgsUpdate(document, gadget.id, { imageRaw: nextImageRef }, sr);

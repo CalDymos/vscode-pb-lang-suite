@@ -183,6 +183,7 @@ import {
   isValidPbVariableReference
 } from "../core/propertyValidationUtils";
 import {
+  buildNextGeneratedImageIdRaw,
   getStatusBarCurrentImageEditState,
   resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
@@ -575,7 +576,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string; pbAny?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
@@ -4448,13 +4449,30 @@ function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
 }
 
 function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
+  // For new statusbar field images in create mode, respect the pbAny setting.
+  const usePbAny = mode === "create"
+    && target.kind === "statusBarField"
+    && settings.newGadgetsUsePbAnyByDefault;
+
+  let idRaw = "#ImgNew";
+  let assignedVar = "imgNew";
+  if (usePbAny) {
+    const nextIdRaw = buildNextGeneratedImageIdRaw(
+      model.images ?? [],
+      model.window?.variable,
+      model.window?.id
+    );
+    idRaw = "#PB_Any";
+    assignedVar = nextIdRaw.replace(/^#/, "");
+  }
+
   return {
     target,
     mode,
     inline: false,
-    idRaw: "#ImgNew",
+    idRaw,
     imageRaw: '"image.png"',
-    assignedVar: "imgNew",
+    assignedVar,
     resizeToImage: false,
   };
 }
@@ -7742,7 +7760,9 @@ function renderProps() {
               inline: false,
               idRaw: selectedUi.statusImage.firstParam,
               imageRaw: toPbString(value),
-              assignedVar: selectedUi.statusImage.pbAny ? selectedUi.statusImage.variable : undefined
+              assignedVar: selectedUi.statusImage.pbAny
+                ? selectedUi.statusImage.variable
+                : undefined,
             });
             return;
           }
@@ -7816,6 +7836,26 @@ function renderProps() {
       propsEl.appendChild(row("CurrentImage", currentImageControl));
       if (!selectedImageEditState.canDirectEdit) {
         propsEl.appendChild(mutedNote("For shared or CatchImage references, you can rebind to an existing image here. For file paths, a new LoadImage entry can be created automatically. Use Create New for inline labels or custom image ids."));
+      }
+      if (selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
+        const canToggle = selectedUi.canPatch && canToggleImagePbAny(selectedUi.statusImage);
+        propsEl.appendChild(row("#PB_Any", checkboxInput(
+          Boolean(selectedUi.statusImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedUi.statusImage!.source!.line,
+              toPbAny: !selectedUi.statusImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: selectedUi.statusImage.pbAny
+              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
+              : "Switch this image entry to #PB_Any variable mode and update all references."
+          }
+        )));
       }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";

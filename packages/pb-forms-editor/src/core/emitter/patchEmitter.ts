@@ -291,6 +291,9 @@ export interface ImageArgs {
   idRaw: string;
   imageRaw: string;
   assignedVar?: string;
+  /** When true: convert enum image (firstParam=#Img_...) to #PB_Any variable
+   *  mode, move entry to end of list, and re-index all image IDs. */
+  pbAny?: boolean;
 }
 
 export interface GadgetPropertyArgs {
@@ -4232,10 +4235,84 @@ function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): nu
   return findImageBlockInsertLine(document, calls) - 1;
 }
 
+// ---------------------------------------------------------------------------
+// Image re-indexing helpers (mirrors codeviewer.pb FD_SelectCode logic)
+// ---------------------------------------------------------------------------
+
+interface ImageRename {
+  /** The old image id as it appears in ImageID(...) references. */
+  oldId: string;
+  /** The new image id that replaces it. */
+  newId: string;
+}
+
+/**
+ * Re-numbers every image in `images` by its position in the array —
+ * exactly as FD_SelectCode does via ListIndex(FormWindows()\FormImg()).
+ *
+ * Enum images  (pbAny=false): id/firstParam → "#Img_<windowVar>_<i>"
+ * Global images (pbAny=true):  id/variable  → "Img_<windowVar>_<i>",
+ *                               firstParam  → "#PB_Any"
+ *
+ * Returns the list of old→new renames for ImageID(...) body patching.
+ * Mutates `images` in place.
+ */
+function reindexImages(images: FormImage[], windowVar: string): ImageRename[] {
+  const renames: ImageRename[] = [];
+  images.forEach((image, idx) => {
+    const oldId = image.id;
+    if (image.pbAny) {
+      const newId = `Img_${windowVar}_${idx}`;
+      if (oldId !== newId) {
+        renames.push({ oldId, newId });
+      }
+      image.id = newId;
+      image.variable = newId;
+      image.firstParam = "#PB_Any";
+    } else {
+      const newId = `#Img_${windowVar}_${idx}`;
+      if (oldId !== newId) {
+        renames.push({ oldId, newId });
+      }
+      image.id = newId;
+      image.firstParam = newId;
+      image.variable = `Img_${windowVar}_${idx}`;
+    }
+  });
+  return renames;
+}
+
+/**
+ * Applies ImageID(oldId) → ImageID(newId) substitutions across the
+ * whole document.  Only lines containing the `ImageID(` pattern are
+ * touched, so the substitution never overlaps with the image-block
+ * replacement (which uses LoadImage/CatchImage, not ImageID).
+ */
+function applyImageIdRenames(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  renames: ImageRename[]
+): void {
+  if (!renames.length) return;
+  const renameMap = new Map(renames.map(r => [r.oldId, r.newId]));
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (!/ImageID\s*\(/i.test(line)) continue;
+    const updated = line.replace(/\bImageID\s*\(([^)]+)\)/gi, (match, inner) => {
+      const newId = renameMap.get(inner.trim());
+      return newId !== undefined ? `ImageID(${newId})` : match;
+    });
+    if (updated !== line) {
+      edit.replace(document.uri, document.lineAt(i).range, updated);
+    }
+  }
+}
+
 function applyImageMutation(
   document: vscode.TextDocument,
   mutate: (images: FormImage[]) => boolean,
-  scanRange?: ScanRange
+  scanRange?: ScanRange,
+  afterBuild?: (edit: vscode.WorkspaceEdit) => void
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const nextImages = parsed.images.map(cloneFormImage);
@@ -4302,6 +4379,7 @@ function applyImageMutation(
       new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
       rebuilt
     );
+    afterBuild?.(edit);
     return edit;
   }
 
@@ -4309,10 +4387,12 @@ function applyImageMutation(
 
   if (combineFreshEnumAndImageInsert) {
     edit.insert(document.uri, new vscode.Position(imageEnumInsertLine, 0), `${rebuiltEnumBlock}${rebuilt}`);
+    afterBuild?.(edit);
     return edit;
   }
 
   edit.insert(document.uri, new vscode.Position(imageBlockInsertLine, 0), rebuilt);
+  afterBuild?.(edit);
   return edit;
 }
 
@@ -5263,19 +5343,45 @@ export function applyImageUpdate(
   args: ImageArgs,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
+  // Capture renames produced by reindexImages so afterBuild can apply them.
+  let pendingRenames: ImageRename[] = [];
+
   return applyImageMutation(
     document,
     images => {
       const index = images.findIndex(image => image.source?.line === sourceLine);
       if (index < 0) return false;
-      images[index] = {
-        ...images[index],
-        ...mapImageArgsToImage(args),
-        source: images[index].source,
-      };
+
+      if (args.pbAny === true && !images[index].pbAny) {
+        // Convert enum image → #PB_Any variable, move to list end, re-index.
+        // Mirrors FD_ProcessEventGridStatusbar case 2 → AddImage("") +
+        // CleanImageList() + FD_SelectCode re-numbering in codeviewer.pb.
+        const parsed2 = parseFormDocument(document.getText());
+        const windowVar =
+          parsed2.window?.variable ??
+          parsed2.window?.id?.replace(/^#/, "") ??
+          "FormWindow";
+
+        const [entry] = images.splice(index, 1);
+        const trimmedImageRaw = args.imageRaw.trim();
+        entry.pbAny = true;
+        entry.firstParam = "#PB_Any";
+        entry.imageRaw = trimmedImageRaw;
+        entry.image = trimmedImageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (trimmedImageRaw || undefined);
+        images.push(entry);
+
+        pendingRenames = reindexImages(images, windowVar);
+      } else {
+        images[index] = {
+          ...images[index],
+          ...mapImageArgsToImage(args),
+          source: images[index].source,
+        };
+      }
       return true;
     },
-    scanRange
+    scanRange,
+    (edit) => applyImageIdRenames(edit, document, pendingRenames)
   );
 }
 
