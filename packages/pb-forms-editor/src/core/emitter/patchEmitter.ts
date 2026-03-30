@@ -80,6 +80,19 @@ function getLineIndent(document: vscode.TextDocument, line: number): string {
   return m?.[0] ?? "";
 }
 
+function isBlankLine(document: vscode.TextDocument, line: number): boolean {
+  if (line < 0 || line >= document.lineCount) return false;
+  return document.lineAt(line).text.trim() === "";
+}
+
+function skipBlankLines(document: vscode.TextDocument, line: number): number {
+  let nextLine = line;
+  while (nextLine < document.lineCount && isBlankLine(document, nextLine)) {
+    nextLine += 1;
+  }
+  return nextLine;
+}
+
 function scanDocumentCalls(document: vscode.TextDocument, scanRange?: ScanRange): PbCall[] {
   return scanCalls(document.getText(), scanRange);
 }
@@ -487,11 +500,7 @@ function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]):
   }
 
   if (lastBlock) {
-    let insertLine = lastBlock.endLine + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
-      insertLine += 1;
-    }
-    return insertLine;
+    return skipBlankLines(document, lastBlock.endLine + 1);
   }
 
   for (let i = 0; i < document.lineCount; i++) {
@@ -3815,9 +3824,7 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
       imageCalls.length ? imageCalls[imageCalls.length - 1].range.line : -1,
       decoderLines.length ? decoderLines[decoderLines.length - 1] : -1
     );
-    let insertLine = lastLine + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") insertLine += 1;
-    return insertLine;
+    return skipBlankLines(document, lastLine + 1);
   }
 
   const preferredEnums = ["FormWindow", "FormGadget", "FormMenu", "FormImage"];
@@ -3828,8 +3835,7 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
   }
 
   if (lastBlock) {
-    let insertLine = lastBlock.endLine + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") insertLine += 1;
+    const insertLine = skipBlankLines(document, lastBlock.endLine + 1);
     const customInitBoundary = findCustomGadgetInitBoundaryLine(document, insertLine);
     if (customInitBoundary !== undefined) return customInitBoundary;
     return insertLine;
@@ -4058,11 +4064,7 @@ function findGadgetGlobalInsertLine(document: vscode.TextDocument): number {
 function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
   const windowEnumBlock = findNamedEnumerationBlock(document, "FormWindow");
   if (windowEnumBlock) {
-    let insertLine = windowEnumBlock.endLine + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
-      insertLine += 1;
-    }
-    return insertLine;
+    return skipBlankLines(document, windowEnumBlock.endLine + 1);
   }
 
   for (let i = 0; i < document.lineCount; i++) {
@@ -4125,11 +4127,7 @@ function findImageGlobalInsertLine(document: vscode.TextDocument): number {
   }
 
   if (lastGlobal >= 0) {
-    let insertLine = lastGlobal + 1;
-    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
-      insertLine += 1;
-    }
-    return insertLine;
+    return skipBlankLines(document, lastGlobal + 1);
   }
 
   return firstAnchor;
