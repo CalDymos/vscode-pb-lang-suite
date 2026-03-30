@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
-import { asNumber, splitParams, unquoteString } from "../parser/tokenizer";
+import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
 import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
@@ -26,13 +26,6 @@ function stableKey(assignedVar: string | undefined, params: string[]): string | 
   return first;
 }
 
-function normalizeProcParamName(raw: string): string {
-  let name = raw.trim();
-  name = name.replace(/^\*+/, "");
-  const dot = name.indexOf(".");
-  if (dot >= 0) name = name.slice(0, dot);
-  return name.toLowerCase();
-}
 
 function tryPatchProcedureDefaults(
   document: vscode.TextDocument,

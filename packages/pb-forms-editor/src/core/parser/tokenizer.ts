@@ -60,3 +60,12 @@ export function asNumber(s: string): number | undefined {
   const n = Number(t);
   return Number.isFinite(n) ? n : undefined;
 }
+
+export function normalizeProcParamName(raw: string): string {
+  let name = raw.trim();
+  name = name.replace(/^\*+/, "");
+  const dot = name.indexOf(".");
+  if (dot >= 0) name = name.slice(0, dot);
+  return name.toLowerCase();
+}
+

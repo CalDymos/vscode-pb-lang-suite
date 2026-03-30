@@ -27,7 +27,7 @@ import {
 } from "../model";
 
 import { canHostInsertedGadgets } from "../gadgetInsertUtils";
-import { splitParams, unquoteString, asNumber } from "./tokenizer";
+import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./callScanner";
 
 const KNOWN_WINDOW_FLAGS = new Set<string>(PBFD_WINDOW_KNOWN_FLAGS);
@@ -863,17 +863,6 @@ function parseProcDefaultsFromHeader(line: string): Record<string, string> | und
   const parts = splitParams(raw);
   const out: Record<string, string> = {};
 
-  const normalizeParamName = (nameRaw: string) => {
-    let name = nameRaw.trim();
-
-    // Strip pointer marker and optional type suffix: x.i, *ptr, etc.
-    name = name.replace(/^\*+/, "");
-    const dot = name.indexOf(".");
-    if (dot >= 0) name = name.slice(0, dot);
-
-    return name.toLowerCase();
-  };
-
   for (const part of parts) {
     const eq = part.indexOf("=");
     if (eq < 0) continue;
@@ -882,7 +871,7 @@ function parseProcDefaultsFromHeader(line: string): Record<string, string> | und
     const def = part.slice(eq + 1).trim();
     if (!name.length || !def.length) continue;
 
-    out[normalizeParamName(name)] = def;
+    out[normalizeProcParamName(name)] = def;
   }
 
   return Object.keys(out).length ? out : undefined;
