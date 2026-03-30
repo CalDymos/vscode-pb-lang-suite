@@ -5535,15 +5535,18 @@ function render() {
   }
 
   if (tbH === 0 && platformSkin === "windows" && chromeTopPadding > 0) {
+    const captionlessTopFill = windowsChromeColors?.activeTitle ?? focus;
+    const captionlessTopStroke = windowsChromeColors?.threeDShadow ?? focus;
+
     ctx.save();
     ctx.globalAlpha = 0.08;
-    ctx.fillStyle = focus;
+    ctx.fillStyle = captionlessTopFill;
     ctx.fillRect(winX, winY, winW, chromeTopPadding);
     ctx.restore();
 
     ctx.save();
     ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = focus;
+    ctx.strokeStyle = captionlessTopStroke;
     ctx.beginPath();
     ctx.moveTo(winX + 0.5, winY + chromeTopPadding + 0.5);
     ctx.lineTo(winX + winW - 0.5, winY + chromeTopPadding + 0.5);
@@ -5873,7 +5876,7 @@ function render() {
 
   // Window border
   const frameDecoration = getWindowPreviewFrameDecoration(settings.osSkin);
-  drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus);
+  drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus, windowsChromeColors);
 
   // Window resize grip
   if (hasWindowPreviewResizeGrip(platformSkin)) {
@@ -6097,16 +6100,17 @@ function drawWindowPreviewFrame(
   ctx: CanvasRenderingContext2D,
   rect: PreviewRect,
   decoration: ReturnType<typeof getWindowPreviewFrameDecoration>,
-  focus: string
+  focus: string,
+  windowsChromeColors?: ReturnType<typeof resolveWindowsSkinColors>
 ) {
   ctx.save();
   ctx.globalAlpha = decoration.strokeAlpha;
   ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark"
     ? "rgb(118, 118, 118)"
     : decoration.strokeColorStyle === "windows7-dark"
-      ? "rgb(37, 37, 37)"
+      ? (windowsChromeColors?.threeDShadow ?? "rgb(37, 37, 37)")
       : decoration.strokeColorStyle === "windows8-blue"
-        ? "rgb(82, 132, 188)"
+        ? (windowsChromeColors?.hotTrackingColor ?? windowsChromeColors?.activeTitle ?? "rgb(82, 132, 188)")
         : focus;
 
   if (decoration.borderStyle === "none") {
