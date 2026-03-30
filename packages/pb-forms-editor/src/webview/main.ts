@@ -4870,8 +4870,13 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   const border = getCssVar("--vscode-panel-border") || fg;
   const menuBarDecoration = getWindowPreviewMenuBarDecoration(osSkin);
-  const menuTextColor = menuBarDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg;
-  const selectedOutlineColor = menuBarDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg;
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const menuTextColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (menuBarDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
+  const selectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.hotTrackingColor
+    : (menuBarDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg);
 
   ctx.save();
   switch (menuBarDecoration.backgroundStyle) {
@@ -4883,16 +4888,19 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.fillRect(rect.x, rect.y + 1, rect.w, Math.max(0, rect.h - 1));
       break;
     }
-    case "windows7-layered":
-      ctx.fillStyle = "rgb(245, 245, 245)";
+    case "windows7-layered": {
+      const topFillColor = windowsSkinColors?.buttonFace ?? "rgb(245, 245, 245)";
+      const bottomFillColor = windowsSkinColors?.menuBar ?? "rgb(218, 224, 241)";
+      ctx.fillStyle = topFillColor;
       ctx.fillRect(rect.x, rect.y, rect.w, Math.min(rect.h, 7));
       if (rect.h > 7) {
-        ctx.fillStyle = "rgb(218, 224, 241)";
+        ctx.fillStyle = bottomFillColor;
         ctx.fillRect(rect.x, rect.y + 7, rect.w, Math.max(0, rect.h - 7));
       }
       break;
+    }
     case "windows8-light":
-      ctx.fillStyle = "rgb(245, 246, 247)";
+      ctx.fillStyle = windowsSkinColors?.menuBar ?? "rgb(245, 246, 247)";
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
       break;
     case "linux-light":
@@ -4922,17 +4930,17 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.stroke();
       break;
     case "windows7-triple":
-      ctx.strokeStyle = "rgb(182, 188, 204)";
+      ctx.strokeStyle = windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
       ctx.stroke();
-      ctx.strokeStyle = "rgb(240, 240, 240)";
+      ctx.strokeStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 1.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 1.5);
       ctx.stroke();
-      ctx.strokeStyle = "rgb(160, 160, 160)";
+      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(160, 160, 160)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
@@ -4940,7 +4948,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       break;
     case "windows8-light":
     case "linux-light":
-      ctx.strokeStyle = "rgb(232, 233, 234)";
+      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(232, 233, 234)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
@@ -5042,12 +5050,17 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   const border = getCssVar("--vscode-panel-border") || fg;
   const toolBarDecoration = getWindowPreviewToolBarDecoration(osSkin);
-  const toolbarSeparatorColor = toolBarDecoration.separatorColorStyle === "toolbar-dark"
-    ? "rgb(132,132,132)"
-    : border;
-  const toolbarSelectedOutlineColor = toolBarDecoration.selectedOutlineColorStyle === "black"
-    ? "rgb(0,0,0)"
-    : fg;
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const toolbarSeparatorColor = windowsSkinColors
+    ? windowsSkinColors.threeDShadow
+    : (toolBarDecoration.separatorColorStyle === "toolbar-dark"
+      ? "rgb(132,132,132)"
+      : border);
+  const toolbarSelectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.hotTrackingColor
+    : (toolBarDecoration.selectedOutlineColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
 
   ctx.save();
   if (toolBarDecoration.backgroundStyle === "macos-gradient") {
@@ -5057,9 +5070,11 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     ctx.fillStyle = gradient;
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   } else {
-    ctx.fillStyle = toolBarDecoration.backgroundStyle === "linux-light"
-      ? "rgb(242, 241, 240)"
-      : "rgb(240, 240, 240)";
+    ctx.fillStyle = windowsSkinColors
+      ? windowsSkinColors.buttonFace
+      : (toolBarDecoration.backgroundStyle === "linux-light"
+        ? "rgb(242, 241, 240)"
+        : "rgb(240, 240, 240)");
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   }
 
@@ -5165,12 +5180,17 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 
   const border = getCssVar("--vscode-panel-border") || fg;
   const statusBarDecoration = getWindowPreviewStatusBarDecoration(osSkin);
-  const statusBarTextColor = statusBarDecoration.textColorStyle === "black"
-    ? "rgb(0,0,0)"
-    : fg;
-  const statusBarSelectedOutlineColor = statusBarDecoration.selectedOutlineColorStyle === "black"
-    ? "rgb(0,0,0)"
-    : fg;
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const statusBarTextColor = windowsSkinColors
+    ? windowsSkinColors.windowText
+    : (statusBarDecoration.textColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
+  const statusBarSelectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.hotTrackingColor
+    : (statusBarDecoration.selectedOutlineColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
 
   if (statusBarDecoration.backgroundStyle === "macos-gradient") {
     ctx.save();
@@ -5192,7 +5212,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     ctx.save();
     ctx.strokeStyle = statusBarDecoration.topSeparatorStyle === "macos-dark"
       ? "rgb(118, 118, 118)"
-      : "rgb(145, 145, 145)";
+      : (windowsSkinColors?.threeDShadow ?? "rgb(145, 145, 145)");
     ctx.beginPath();
     ctx.moveTo(rect.x, rect.y + 0.5);
     ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
@@ -5215,7 +5235,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 
     if (statusBarDecoration.showFieldSeparators && i > 0) {
       ctx.save();
-      ctx.strokeStyle = "rgb(215, 215, 215)";
+      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(215, 215, 215)";
       ctx.beginPath();
       ctx.moveTo(x + 0.5, rect.y + 1);
       ctx.lineTo(x + 0.5, rect.y + rect.h - 1);
