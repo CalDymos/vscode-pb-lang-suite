@@ -4449,10 +4449,10 @@ function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
 }
 
 function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
-  // For new statusbar field / toolbar entry images in create mode,
+  // For new statusbar field / toolbar entry / menu entry images in create mode,
   // respect the pbAny setting.
   const usePbAny = mode === "create"
-    && (target.kind === "statusBarField" || target.kind === "toolBarEntry")
+    && (target.kind === "statusBarField" || target.kind === "toolBarEntry" || target.kind === "menuEntry")
     && settings.newGadgetsUsePbAnyByDefault;
 
   let idRaw = "#ImgNew";
@@ -6878,6 +6878,26 @@ function renderProps() {
       ));
       if (selectedImageInspectorConfig.currentImageHint) {
         propsEl.appendChild(mutedNote(selectedImageInspectorConfig.currentImageHint));
+      }
+      if (selectedImage && typeof selectedImage.source?.line === "number") {
+        const canToggle = selectedCanEditImage && canToggleImagePbAny(selectedImage);
+        propsEl.appendChild(row("#PB_Any", checkboxInput(
+          Boolean(selectedImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedImage!.source!.line,
+              toPbAny: !selectedImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: selectedImage.pbAny
+              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
+              : "Switch this image entry to #PB_Any variable mode and update all references."
+          }
+        )));
       }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! })) {
