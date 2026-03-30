@@ -4450,10 +4450,11 @@ function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
 
 function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
   // For new statusbar field / toolbar entry / menu entry images in create mode,
-  // respect the pbAny setting.
-  const usePbAny = mode === "create"
-    && (target.kind === "statusBarField" || target.kind === "toolBarEntry" || target.kind === "menuEntry")
-    && settings.newGadgetsUsePbAnyByDefault;
+  // and for gadget image assignment (chooseFile), respect the pbAny setting.
+  const usePbAny = (
+    (mode === "create" && (target.kind === "statusBarField" || target.kind === "toolBarEntry" || target.kind === "menuEntry"))
+    || (mode === "chooseFile" && target.kind === "gadget")
+  ) && settings.newGadgetsUsePbAnyByDefault;
 
   let idRaw = "#ImgNew";
   let assignedVar = "imgNew";
@@ -8394,6 +8395,29 @@ function renderProps() {
         readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
       )
     );
+    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
+      const canToggle = canToggleImagePbAny(gadgetImage);
+      propsEl.appendChild(row(
+        "Image #PB_Any",
+        checkboxInput(
+          Boolean(gadgetImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: gadgetImage!.source!.line,
+              toPbAny: !gadgetImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: gadgetImage.pbAny
+              ? "Switch the assigned image entry from #PB_Any to a regular enum id and update all references. (This is separate from the gadget's own #PB_Any toggle.)"
+              : "Switch the assigned image entry to #PB_Any variable mode and update all references. (This is separate from the gadget's own #PB_Any toggle.)"
+          }
+        )
+      ));
+    }
   }
   const gadgetImageActions = document.createElement("div");
   gadgetImageActions.className = "row-actions";
