@@ -23,7 +23,8 @@ import {
   GADGET_KIND_SET,
   GADGET_KIND,
   ENUM_NAMES,
-  PBFD_WINDOW_KNOWN_FLAGS
+  PBFD_WINDOW_KNOWN_FLAGS,
+  PB_ANY
 } from "../model";
 
 import { canHostInsertedGadgets } from "../gadgetInsertUtils";
@@ -680,7 +681,7 @@ export function parseFormDocument(text: string): FormDocument {
           if (win.pbAny && !c.assignedVar) {
             issues.push({
               severity: "error",
-              message: "Found OpenWindow(#PB_Any, ...) without a stable assignment (expected: Var = OpenWindow(#PB_Any, ...)). Patching may be ambiguous.",
+              message: `Found OpenWindow(${PB_ANY}, ...) without a stable assignment (expected: Var = OpenWindow(${PB_ANY}, ...)). Patching may be ambiguous.`,
               line: c.range.line
             });
           }
@@ -722,7 +723,7 @@ export function parseFormDocument(text: string): FormDocument {
       if (gadget.pbAny && !c.assignedVar) {
         issues.push({
           severity: "error",
-          message: "Found Gadget(#PB_Any, ...) without a stable assignment (expected: Var = Gadget(#PB_Any, ...)). Patching may be ambiguous.",
+          message: `Found Gadget(${PB_ANY}, ...) without a stable assignment (expected: Var = Gadget(${PB_ANY}, ...)). Patching may be ambiguous.`,
           line: c.range.line
         });
       }
@@ -1347,8 +1348,8 @@ function parseFormFont(assignedVar: string | undefined, args: string, source?: F
   if (p.length < 3) return undefined;
 
   const firstParam = (p[0] ?? "").trim();
-  const pbAny = firstParam === "#PB_Any";
-  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const pbAny = firstParam === PB_ANY;
+  const id = pbAny ? (assignedVar ?? PB_ANY) : firstParam;
   const nameRaw = (p[1] ?? "").trim();
   const sizeRaw = (p[2] ?? "").trim();
   if (!nameRaw.length || !sizeRaw.length) return undefined;
@@ -1375,8 +1376,8 @@ function parseFormImage(inline: boolean, assignedVar: string | undefined, args: 
   if (p.length < 2) return undefined;
 
   const firstParam = (p[0] ?? "").trim();
-  const pbAny = firstParam === "#PB_Any";
-  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const pbAny = firstParam === PB_ANY;
+  const id = pbAny ? (assignedVar ?? PB_ANY) : firstParam;
   const imageRaw = (p[1] ?? "").trim();
   if (!imageRaw.length) return undefined;
 
@@ -1523,7 +1524,7 @@ function parseCustomGadgetCreationCall(
   if (!idRaw?.length) return undefined;
 
   const pbAny = !idRaw.startsWith("#");
-  const firstParam = pbAny ? "#PB_Any" : idRaw;
+  const firstParam = pbAny ? PB_ANY : idRaw;
   const textRaw = resolved.get("txt")?.trim() || undefined;
   const literalText = unquoteString(textRaw ?? "");
   const initIndex = Number(markerMatch[1]);
@@ -1702,8 +1703,8 @@ function parseOpenWindow(assignedVar: string | undefined, args: string, procDefa
   if (p.length < 6) return undefined;
 
   const firstParam = (p[0] ?? "").trim();
-  const pbAny = firstParam === "#PB_Any";
-  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const pbAny = firstParam === PB_ANY;
+  const id = pbAny ? (assignedVar ?? PB_ANY) : firstParam;
 
   const xRaw = resolveProcDefault(p[1], "x", procDefaults) ?? "0";
   const yRaw = resolveProcDefault(p[2], "y", procDefaults) ?? "0";
@@ -1758,8 +1759,8 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   if (p.length < 5) return undefined;
 
   const firstParam = (p[0] ?? "").trim();
-  const pbAny = firstParam === "#PB_Any";
-  const id = pbAny ? (assignedVar ?? "#PB_Any") : firstParam;
+  const pbAny = firstParam === PB_ANY;
+  const id = pbAny ? (assignedVar ?? PB_ANY) : firstParam;
 
   const xRaw = (p[1] ?? "").trim();
   const yRaw = (p[2] ?? "").trim();

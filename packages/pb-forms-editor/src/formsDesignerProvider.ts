@@ -53,7 +53,7 @@ import {
   toEnumImageId
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
-import { FormDocument, PBFD_SYMBOLS } from "./core/model";
+import { FormDocument, PBFD_SYMBOLS, PB_ANY } from "./core/model";
 import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadgetInsertUtils";
 import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/formSettingsRuntimeUtils";
 import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
@@ -1249,7 +1249,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             ? toPbAnyAssignedVar(image.firstParam)
             : undefined;
           const toggledIdRaw = msg.toPbAny
-            ? "#PB_Any"
+            ? PB_ANY
             : toEnumImageId(image.variable ?? image.id ?? "");
 
           if (!toggledIdRaw || (msg.toPbAny && !toggledAssignedVar)) {
@@ -1372,7 +1372,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for gadget '${msg.id}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1395,7 +1395,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           const imageRef = buildImageReferenceFromEntry(existingImage)
             ?? buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for gadget '${msg.id}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1437,7 +1437,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1461,7 +1461,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1505,7 +1505,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1577,7 +1577,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for menu '${msg.menuId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1606,7 +1606,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for toolbar '${msg.toolBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 
@@ -1667,7 +1667,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
-            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
+            postError(`Could not create image entry for statusbar '${msg.statusBarId}'. ${PB_ANY} requires an assigned variable name${rangeInfo}.`);
             return;
           }
 

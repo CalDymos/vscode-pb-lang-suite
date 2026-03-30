@@ -309,6 +309,8 @@ export interface FormImage {
   source?: SourceRange;
 }
 
+export const PB_ANY = "#PB_Any" as const;
+
 export interface FormDocument {
   window?: FormWindow;
   fonts: FormFont[];
@@ -356,5 +358,6 @@ export const PBFD_SYMBOLS = {
   toolBarEntryKinds: PBFD_TOOLBAR_ENTRY_KINDS,
   containerGadgetKinds: PBFD_CONTAINER_GADGET_KINDS,
   windowKnownFlags: PBFD_WINDOW_KNOWN_FLAGS,
-  enumNames: PBFD_ENUM_NAMES
+  enumNames: PBFD_ENUM_NAMES,
+  pbAny: PB_ANY
 } as const;

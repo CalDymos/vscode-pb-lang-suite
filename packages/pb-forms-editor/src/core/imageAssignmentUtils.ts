@@ -1,3 +1,4 @@
+import { PB_ANY } from "./model";
 import { normalizePbPath, parsePbStringLiteral } from "./imagePathUtils";
 
 export interface ParsedImageEntryLike {
@@ -42,7 +43,7 @@ export function buildImageReferenceFromEntry(image: ParsedImageEntryLike | undef
   }
 
   const firstParam = image.firstParam?.trim();
-  if (firstParam?.length && firstParam !== "#PB_Any") {
+  if (firstParam?.length && firstParam !== PB_ANY) {
     return `ImageID(${firstParam})`;
   }
 

@@ -4,7 +4,7 @@ import { parseFormDocument } from "../parser/formParser";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
-import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, ToolBarEntryKind } from "../model";
+import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -19,8 +19,8 @@ function stableKey(assignedVar: string | undefined, params: string[]): string | 
   if (params.length < 1) return undefined;
 
   const first = params[0].trim();
-  if (first === "#PB_Any") {
-    return assignedVar ?? "#PB_Any";
+  if (first === PB_ANY) {
+    return assignedVar ?? PB_ANY;
   }
 
   return first;
@@ -2245,7 +2245,7 @@ export function applyWindowPbAnyToggle(
   const openParams = splitParams(openWin.args);
   if (openParams.length < 6) return undefined;
 
-  const isFirstParamPbAny = (openParams[0] ?? "").trim() === "#PB_Any";
+  const isFirstParamPbAny = (openParams[0] ?? "").trim() === PB_ANY;
 
   const edit = new vscode.WorkspaceEdit();
 
@@ -2270,7 +2270,7 @@ export function applyWindowPbAnyToggle(
     ensureWindowGlobalLine(edit, document, variableName);
 
     // 3) Rewrite OpenWindow line to "Var = OpenWindow(#PB_Any, ...)".
-    openParams[0] = "#PB_Any";
+    openParams[0] = PB_ANY;
     const rebuilt = `OpenWindow(${openParams.join(", ")})`;
     const indent = openWin.indent ?? getLineIndent(document, openWin.range.line);
     const updated = `${indent}${variableName} = ${rebuilt}`;
@@ -2411,7 +2411,7 @@ export function applyWindowVariableNamePatch(
   // ---------------------------------------------------------------------------
   // PB_Any mode:  <oldVar> = OpenWindow(#PB_Any, ...)
   // ---------------------------------------------------------------------------
-  if (first === "#PB_Any") {
+  if (first === PB_ANY) {
     const oldVar = (openWin.assignedVar ?? "").trim();
     if (!oldVar.length) {
       return undefined;
@@ -3578,10 +3578,10 @@ function buildImageLine(args: ImageArgs): string {
   const idRaw = args.idRaw.trim();
   const imageRaw = args.imageRaw.trim();
 
-  if (idRaw === "#PB_Any") {
+  if (idRaw === PB_ANY) {
     const assignedVar = args.assignedVar?.trim();
     if (assignedVar) {
-      return `${assignedVar} = ${procName}(#PB_Any, ${imageRaw})`;
+      return `${assignedVar} = ${procName}(${PB_ANY}, ${imageRaw})`;
     }
   }
 
@@ -3594,10 +3594,10 @@ function buildFontLine(args: FontArgs): string {
   const sizeRaw = args.sizeRaw.trim();
   const flagsRaw = normalizeOptionalRaw(args.flagsRaw);
 
-  if (idRaw === "#PB_Any") {
+  if (idRaw === PB_ANY) {
     const assignedVar = args.assignedVar?.trim();
     if (assignedVar) {
-      return `${assignedVar} = LoadFont(#PB_Any, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
+      return `${assignedVar} = LoadFont(${PB_ANY}, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
     }
   }
 
@@ -3621,7 +3621,7 @@ function cloneFormFont(font: FormFont): FormFont {
 
 function mapFontArgsToFont(args: FontArgs): FormFont {
   const firstParam = args.idRaw.trim();
-  const pbAny = firstParam === "#PB_Any";
+  const pbAny = firstParam === PB_ANY;
   const assignedVar = args.assignedVar?.trim();
   const nameRaw = args.nameRaw.trim();
   const sizeRaw = args.sizeRaw.trim();
@@ -3629,7 +3629,7 @@ function mapFontArgsToFont(args: FontArgs): FormFont {
   const size = asNumber(sizeRaw);
 
   return {
-    id: pbAny ? (assignedVar || "#PB_Any") : firstParam,
+    id: pbAny ? (assignedVar || PB_ANY) : firstParam,
     pbAny,
     variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
     firstParam,
@@ -3656,7 +3656,7 @@ function cloneFormImage(image: FormImage): FormImage {
 
 function mapImageArgsToImage(args: ImageArgs): FormImage {
   const firstParam = args.idRaw.trim();
-  const pbAny = firstParam === "#PB_Any";
+  const pbAny = firstParam === PB_ANY;
   const assignedVar = args.assignedVar?.trim();
   const imageRaw = args.imageRaw.trim();
   const normalized = args.inline
@@ -3664,7 +3664,7 @@ function mapImageArgsToImage(args: ImageArgs): FormImage {
     : (imageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (imageRaw || undefined));
 
   return {
-    id: pbAny ? (assignedVar || "#PB_Any") : firstParam,
+    id: pbAny ? (assignedVar || PB_ANY) : firstParam,
     pbAny,
     variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
     firstParam,
@@ -4259,7 +4259,7 @@ function reindexImages(images: FormImage[], windowVar: string): ImageRename[] {
       }
       image.id = newId;
       image.variable = newId;
-      image.firstParam = "#PB_Any";
+      image.firstParam = PB_ANY;
     } else {
       const newId = `#Img_${windowVar}_${idx}`;
       if (oldId !== newId) {
@@ -5356,7 +5356,7 @@ export function applyImageUpdate(
         const [entry] = images.splice(index, 1);
         const trimmedImageRaw = args.imageRaw.trim();
         entry.pbAny = true;
-        entry.firstParam = "#PB_Any";
+        entry.firstParam = PB_ANY;
         entry.imageRaw = trimmedImageRaw;
         entry.image = trimmedImageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (trimmedImageRaw || undefined);
         images.push(entry);

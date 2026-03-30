@@ -974,6 +974,7 @@ type PbfdSymbols = {
   containerGadgetKinds: readonly string[];
   windowKnownFlags?: readonly string[];
   enumNames?: { windows: string; gadgets: string };
+  pbAny?: string;
 };
 
 type PbfdWindow = Window & {
@@ -1005,6 +1006,7 @@ function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entry
 }
 
 const PBFD_SYMBOLS: PbfdSymbols = pbfdWindow.__PBFD_SYMBOLS__;
+const PB_ANY: string = PBFD_SYMBOLS.pbAny ?? "#PB_Any";
 const TOOLBOX_ICON_URIS: Record<string, string> = pbfdWindow.__PBFD_TOOLBOX_ICON_URIS__ ?? {};
 
 function menuEntryKindHint(): string {
@@ -4333,7 +4335,7 @@ function saveImageEditor(entry: ImageEntry) {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -4404,7 +4406,7 @@ function saveImageInsertDraft() {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = pendingImageInsertDraft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -4464,7 +4466,7 @@ function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mo
       model.window?.variable,
       model.window?.id
     );
-    idRaw = "#PB_Any";
+    idRaw = PB_ANY;
     assignedVar = nextIdRaw.replace(/^#/, "");
   }
 
@@ -4579,7 +4581,7 @@ function saveImageAssignmentDraft() {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -4590,7 +4592,7 @@ function saveImageAssignmentDraft() {
 
   const reference = buildCreatedImageReference(idRaw, assignedVar);
   if (!reference) {
-    alert("#PB_Any requires an assigned variable name.");
+    alert(`${PB_ANY} requires an assigned variable name.`);
     return;
   }
 
@@ -6500,7 +6502,7 @@ function renderProps() {
     const customFlagsValue = (win.customFlags ?? []).join(" | ");
 
     propsEl.appendChild(section("Properties"));
-    propsEl.appendChild(row("#PB_Any", checkboxInput(win.pbAny, v => {
+    propsEl.appendChild(row(PB_ANY, checkboxInput(win.pbAny, v => {
       vscode.postMessage({
         type: "toggleWindowPbAny",
         windowKey: win.id,
@@ -6902,7 +6904,7 @@ function renderProps() {
       }
       if (selectedImage && typeof selectedImage.source?.line === "number") {
         const canToggle = selectedCanEditImage && canToggleImagePbAny(selectedImage);
-        propsEl.appendChild(row("#PB_Any", checkboxInput(
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
           Boolean(selectedImage.pbAny),
           () => {
             if (!canToggle) return;
@@ -6915,8 +6917,8 @@ function renderProps() {
           {
             disabled: !canToggle,
             title: selectedImage.pbAny
-              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
-              : "Switch this image entry to #PB_Any variable mode and update all references."
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
           }
         )));
       }
@@ -7372,7 +7374,7 @@ function renderProps() {
       propsEl.appendChild(row("CurrentImage", currentImageControl));
       if (selectedImage && typeof selectedImage.source?.line === "number") {
         const canToggle = canEditSelectedImage && canToggleImagePbAny(selectedImage);
-        propsEl.appendChild(row("#PB_Any", checkboxInput(
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
           Boolean(selectedImage.pbAny),
           () => {
             if (!canToggle) return;
@@ -7385,8 +7387,8 @@ function renderProps() {
           {
             disabled: !canToggle,
             title: selectedImage.pbAny
-              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
-              : "Switch this image entry to #PB_Any variable mode and update all references."
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
           }
         )));
       }
@@ -7901,7 +7903,7 @@ function renderProps() {
       }
       if (selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
         const canToggle = selectedUi.canPatch && canToggleImagePbAny(selectedUi.statusImage);
-        propsEl.appendChild(row("#PB_Any", checkboxInput(
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
           Boolean(selectedUi.statusImage.pbAny),
           () => {
             if (!canToggle) return;
@@ -7914,8 +7916,8 @@ function renderProps() {
           {
             disabled: !canToggle,
             title: selectedUi.statusImage.pbAny
-              ? "Switch this image entry from #PB_Any to a regular enum id and update all references."
-              : "Switch this image entry to #PB_Any variable mode and update all references."
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
           }
         )));
       }
@@ -8088,7 +8090,7 @@ function renderProps() {
       "First Param",
       imageEditorOpen
         ? textInput(imageDraft.idRaw, v => updateImageEditorDraft({ idRaw: v }), {
-            title: "Edit the first image argument (#ImgName or #PB_Any)."
+            title: `Edit the first image argument (#ImgName or ${PB_ANY}).`
           })
         : readonlyInput(img.firstParam)
     ));
@@ -8096,7 +8098,7 @@ function renderProps() {
       propsEl.appendChild(row(
         "Assigned Var",
         textInput(imageDraft.assignedVar, v => updateImageEditorDraft({ assignedVar: v }), {
-          title: "Provide the assigned variable name for #PB_Any image entries."
+          title: `Provide the assigned variable name for ${PB_ANY} image entries.`
         })
       ));
     }
@@ -8191,8 +8193,8 @@ function renderProps() {
     togglePbAnyBtn.textContent = img.pbAny ? "Use Enum Id" : "Use PB_Any";
     togglePbAnyBtn.disabled = imageEditorOpen || !(canPatch && canToggleImagePbAny(img));
     togglePbAnyBtn.title = img.pbAny
-      ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
-      : "Switch this image entry to #PB_Any assignment and update parsed references.";
+      ? `Switch this image entry from ${PB_ANY} assignment to a regular image id and update parsed references.`
+      : `Switch this image entry to ${PB_ANY} assignment and update parsed references.`;
     togglePbAnyBtn.onclick = () => {
       if (!(canPatch && canToggleImagePbAny(img))) return;
       post({
@@ -8328,8 +8330,8 @@ function renderProps() {
               : undefined,
             disabled: !(canPatch && canToggleImagePbAny(img)),
             title: img.pbAny
-              ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
-              : "Switch this image entry to #PB_Any assignment and update parsed references."
+              ? `Switch this image entry from ${PB_ANY} assignment to a regular image id and update parsed references.`
+              : `Switch this image entry to ${PB_ANY} assignment and update parsed references.`
           },
           {
             label: "Relative",
@@ -8418,7 +8420,7 @@ function renderProps() {
     if (gadgetImage && typeof gadgetImage.source?.line === "number") {
       const canToggle = canToggleImagePbAny(gadgetImage);
       propsEl.appendChild(row(
-        "Image #PB_Any",
+        `Image ${PB_ANY}`,
         checkboxInput(
           Boolean(gadgetImage.pbAny),
           () => {
@@ -8432,8 +8434,8 @@ function renderProps() {
           {
             disabled: !canToggle,
             title: gadgetImage.pbAny
-              ? "Switch the assigned image entry from #PB_Any to a regular enum id and update all references. (This is separate from the gadget's own #PB_Any toggle.)"
-              : "Switch the assigned image entry to #PB_Any variable mode and update all references. (This is separate from the gadget's own #PB_Any toggle.)"
+              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
           }
         )
       ));
@@ -8461,7 +8463,7 @@ function renderProps() {
   propsEl.appendChild(section("Properties"));
   propsEl.appendChild(
     row(
-      "#PB_Any",
+      PB_ANY,
       checkboxInput(Boolean(g.pbAny), () => {}, {
         disabled: true,
         title: "Display-only for the current gadget patch path. PB_Any toggling is not wired here yet."
@@ -9137,14 +9139,14 @@ function createPendingImageAssignmentDraftEl() {
     wrap.appendChild(row(
       "First Param",
       textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
-        title: "Use either a fixed image id like #ImgOpen or #PB_Any."
+        title: `Use either a fixed image id like #ImgOpen or ${PB_ANY}.`
       })
     ));
     if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
       wrap.appendChild(row(
         "Assigned Var",
         textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
-          title: "Variable name receiving the #PB_Any image handle."
+          title: `Variable name receiving the ${PB_ANY} image handle.`
         })
       ));
     }
@@ -9199,14 +9201,14 @@ function createPendingImageInsertDraftEl() {
   wrap.appendChild(row(
     "First Param",
     textInput(pendingImageInsertDraft.idRaw, value => updateImageInsertDraft({ idRaw: value }), {
-      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
+      title: `Use either a fixed image id like #ImgOpen or ${PB_ANY}.`
     })
   ));
   if (pendingImageInsertDraft.idRaw.trim().toLowerCase() === "#pb_any") {
     wrap.appendChild(row(
       "Assigned Var",
       textInput(pendingImageInsertDraft.assignedVar, value => updateImageInsertDraft({ assignedVar: value }), {
-        title: "Variable name receiving the #PB_Any image handle."
+        title: `Variable name receiving the ${PB_ANY} image handle.`
       })
     ));
   }

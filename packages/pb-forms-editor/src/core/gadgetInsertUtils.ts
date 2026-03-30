@@ -1,5 +1,5 @@
 import { hasPbFlag } from "./topLevelPreviewUtils";
-import { GADGET_KIND, type Gadget, type GadgetKind } from "./model";
+import { GADGET_KIND, PB_ANY, type Gadget, type GadgetKind } from "./model";
 
 export const PBFD_INSERTABLE_GADGET_KINDS = [
   GADGET_KIND.ButtonGadget,
@@ -223,8 +223,8 @@ export function buildInsertedGadgetIdentity(
     return {
       name,
       id: name,
-      idRaw: "#PB_Any",
-      firstParam: "#PB_Any",
+      idRaw: PB_ANY,
+      firstParam: PB_ANY,
       variable: name,
       assignedVar: name,
       pbAny: true,
