@@ -5386,14 +5386,14 @@ function render() {
       ctx.fill();
     } else if (bodyDecoration.backgroundStyle === "windows7-frame") {
       const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
-      gradient.addColorStop(0, "rgb(210, 232, 232)");
-      gradient.addColorStop(0.5, "rgb(184, 220, 250)");
-      gradient.addColorStop(1, "rgb(210, 232, 232)");
+      gradient.addColorStop(0, windowsChromeColors?.activeTitle ?? "rgb(210, 232, 232)");
+      gradient.addColorStop(0.5, windowsChromeColors?.gradientActiveTitle ?? "rgb(184, 220, 250)");
+      gradient.addColorStop(1, windowsChromeColors?.activeTitle ?? "rgb(210, 232, 232)");
       ctx.fillStyle = gradient;
       traceRoundedRect(ctx, winX, winY - 1, winW, winH + 1, bodyDecoration.roundedTopRadius);
       ctx.fill();
     } else if (bodyDecoration.backgroundStyle === "windows8-frame") {
-      ctx.fillStyle = "rgb(107, 173, 246)";
+      ctx.fillStyle = windowsChromeColors?.activeTitle ?? "rgb(107, 173, 246)";
       ctx.fillRect(winX, winY - 1, winW, winH + 1);
     } else {
       ctx.fillStyle = fg;
