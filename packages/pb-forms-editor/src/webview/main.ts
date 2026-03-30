@@ -5365,6 +5365,8 @@ function render() {
   }
 
   const bodyDecoration = getWindowPreviewBodyDecoration(settings.osSkin, tbH > 0);
+  const platformSkin = resolvePbFormSkinPlatform();
+  const windowsChromeColors = platformSkin === "windows" ? resolveWindowsSkinColors() : null;
 
   // Window fill (so the window area is visually separated)
   if (settings.windowFillOpacity > 0) {
@@ -5418,7 +5420,6 @@ function render() {
   }
 
   const chromeMetrics = previewChromeMetrics;
-  const platformSkin = resolvePbFormSkinPlatform();
   const chromeTopPadding = getWindowPreviewChromeTopPadding(
     platformSkin,
     model.window?.flagsExpr,
@@ -5451,9 +5452,10 @@ function render() {
   }
 
   if (bodyDecoration.showClientBorder) {
+    const hasOriginalWindowsBody = bodyDecoration.clientBorderStyle === "windows7-inner" || bodyDecoration.clientBorderStyle === "windows8-inner";
     const clientBorderY = winY + chromeTopPadding;
     const clientBorderH = Math.max(0, winH - chromeTopPadding);
-    if (clientBorderH > 0) {
+    if (!hasOriginalWindowsBody && clientBorderH > 0) {
       ctx.save();
       ctx.strokeStyle = bodyDecoration.clientBorderStyle === "linux-dark" ? "rgb(70, 70, 70)" : focus;
       ctx.strokeRect(winX + 0.5, clientBorderY + 0.5, Math.max(0, winW - 1), Math.max(0, clientBorderH - 1));
@@ -5466,7 +5468,9 @@ function render() {
 
     if (hasOriginalWindowsBody) {
       ctx.save();
-      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(240, 240, 240)";
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color)
+        ?? windowsChromeColors?.buttonFace
+        ?? "rgb(240, 240, 240)";
       ctx.fillRect(
         windowClientSurface.fillRect.x,
         windowClientSurface.fillRect.y,
@@ -5553,10 +5557,9 @@ function render() {
     const titleButtonSlots = titleButtonLayout.slots;
     const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
     const titleBarMetrics = getWindowPreviewTitleBarMetrics(settings.osSkin);
-    const windowsSkinColors = resolveWindowsSkinColors();
-    const isWindowsTitleBar = titleBarDecoration.backgroundStyle === "default" && Boolean(windowsSkinColors);
+    const isWindowsTitleBar = titleBarDecoration.backgroundStyle === "default" && Boolean(windowsChromeColors);
     const titleFg = isWindowsTitleBar
-      ? windowsSkinColors!.titleText
+      ? windowsChromeColors!.titleText
       : (titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg);
     const buttonStrokeColor = titleFg;
     const fallbackButtonSize = Math.max(12, Math.min(18, tbH - 8));
@@ -5587,12 +5590,12 @@ function render() {
       if (isWindowsTitleBar) {
         if (settings.osSkin === "windows7") {
           const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
-          gradient.addColorStop(0, windowsSkinColors!.activeTitle);
-          gradient.addColorStop(0.5, windowsSkinColors!.gradientActiveTitle);
-          gradient.addColorStop(1, windowsSkinColors!.activeTitle);
+          gradient.addColorStop(0, windowsChromeColors!.activeTitle);
+          gradient.addColorStop(0.5, windowsChromeColors!.gradientActiveTitle);
+          gradient.addColorStop(1, windowsChromeColors!.activeTitle);
           ctx.fillStyle = gradient;
         } else {
-          ctx.fillStyle = windowsSkinColors!.activeTitle;
+          ctx.fillStyle = windowsChromeColors!.activeTitle;
         }
       } else {
         ctx.globalAlpha = 0.10;
@@ -5624,7 +5627,7 @@ function render() {
     if (titleBarDecoration.showFrameBorder) {
       ctx.save();
       if (isWindowsTitleBar) {
-        ctx.strokeStyle = windowsSkinColors!.threeDShadow;
+        ctx.strokeStyle = windowsChromeColors!.threeDShadow;
       } else {
         ctx.globalAlpha = 0.22;
         ctx.strokeStyle = focus;
@@ -5636,7 +5639,7 @@ function render() {
     if (titleBarDecoration.showBottomSeparator) {
       ctx.save();
       if (isWindowsTitleBar) {
-        ctx.strokeStyle = windowsSkinColors!.threeDShadow;
+        ctx.strokeStyle = windowsChromeColors!.threeDShadow;
       } else {
         ctx.strokeStyle = titleBarDecoration.backgroundStyle === "default" ? focus : "rgb(184, 184, 184)";
         ctx.globalAlpha = titleBarDecoration.backgroundStyle === "default" ? 0.2 : 1;
@@ -5661,7 +5664,7 @@ function render() {
     if (showWindowsIcon) {
       ctx.save();
       if (isWindowsTitleBar) {
-        ctx.fillStyle = windowsSkinColors!.inactiveTitle;
+        ctx.fillStyle = windowsChromeColors!.inactiveTitle;
         ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
         ctx.strokeStyle = titleFg;
       } else {
