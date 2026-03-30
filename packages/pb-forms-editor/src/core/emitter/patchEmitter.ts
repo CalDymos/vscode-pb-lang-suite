@@ -5401,3 +5401,45 @@ export function applyImageDelete(
     scanRange
   );
 }
+
+// ---------------------------------------------------------------------------
+// Image reference synthesis helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the PureBasic ImageID(...) expression used to reference an image
+ * from a gadget/menu/toolbar/statusbar argument.
+ * Returns undefined when the input is empty or when #PB_Any is used without
+ * an assigned variable name (because the reference cannot be resolved).
+ */
+export function buildImageIdReference(idRaw: string, assignedVar?: string): string | undefined {
+  const trimmedId = idRaw.trim();
+  if (!trimmedId.length) return undefined;
+
+  if (trimmedId.toLowerCase() === "#pb_any") {
+    const variableName = assignedVar?.trim();
+    return variableName ? `ImageID(${variableName})` : undefined;
+  }
+
+  return `ImageID(${trimmedId})`;
+}
+
+/**
+ * Derives the #PB_Any assigned variable name from a raw first parameter.
+ * "#IMG" → "IMG", "imgSave" → "imgSave", "" → undefined.
+ */
+export function toPbAnyAssignedVar(firstParam: string): string | undefined {
+  const trimmed = firstParam.trim();
+  if (!trimmed.length) return undefined;
+  return trimmed.startsWith("#") ? trimmed.slice(1).trim() || undefined : trimmed;
+}
+
+/**
+ * Normalises a variable name or enum symbol to a PureBasic enum image ID
+ * with a leading "#". Idempotent: "#IMG" → "#IMG", "IMG" → "#IMG".
+ */
+export function toEnumImageId(variableOrId: string): string | undefined {
+  const trimmed = variableOrId.trim();
+  if (!trimmed.length) return undefined;
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}

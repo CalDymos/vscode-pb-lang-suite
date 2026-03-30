@@ -47,7 +47,10 @@ import {
   applyWindowPropertyUpdate,
   applyWindowVariableNamePatch,
   applyWindowPbAnyToggle,
-  applyWindowRectPatch
+  applyWindowRectPatch,
+  buildImageIdReference,
+  toPbAnyAssignedVar,
+  toEnumImageId
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS } from "./core/model";
@@ -655,30 +658,6 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return picked?.imageRaw;
       };
 
-      const buildCreatedImageReference = (idRaw: string, assignedVar?: string): string | undefined => {
-        const trimmedId = idRaw.trim();
-        if (!trimmedId.length) return undefined;
-
-        if (trimmedId.toLowerCase() === "#pb_any") {
-          const variableName = assignedVar?.trim();
-          return variableName ? `ImageID(${variableName})` : undefined;
-        }
-
-        return `ImageID(${trimmedId})`;
-      };
-
-      const toPbAnyAssignedVar = (firstParam: string): string | undefined => {
-        const trimmed = firstParam.trim();
-        if (!trimmed.length) return undefined;
-        return trimmed.startsWith("#") ? trimmed.slice(1).trim() || undefined : trimmed;
-      };
-
-      const toEnumImageId = (variableOrId: string): string | undefined => {
-        const trimmed = variableOrId.trim();
-        if (!trimmed.length) return undefined;
-        return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
-      };
-
       const ensureMenuEntryKind = (kind: string): boolean => {
         if (ALLOWED_MENU_ENTRY_KINDS.has(kind)) return true;
         postError(`Unsupported menu entry kind '${kind}'.`);
@@ -1278,7 +1257,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const nextImageRef = buildCreatedImageReference(toggledIdRaw, toggledAssignedVar);
+          const nextImageRef = buildImageIdReference(toggledIdRaw, toggledAssignedVar);
           if (!nextImageRef) {
             postError(`Could not build the updated image reference for '${image.id}'${rangeInfo}.`);
             return;
@@ -1391,7 +1370,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage: {
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1414,7 +1393,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
           const existingImage = resolveExistingLoadImageByFilePath(lastModel?.images, picked.fsPath);
           const imageRef = buildImageReferenceFromEntry(existingImage)
-            ?? buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+            ?? buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for gadget '${msg.id}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1456,7 +1435,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage: {
           if (!ensureMenuEntryKind(msg.kind)) return;
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1480,7 +1459,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage: {
           if (!ensureToolBarEntryKind(msg.kind)) return;
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1524,7 +1503,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage: {
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1596,7 +1575,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for menu '${msg.menuId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1625,7 +1604,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for toolbar '${msg.toolBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
@@ -1686,7 +1665,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          const imageRef = buildCreatedImageReference(msg.newImageIdRaw, msg.newAssignedVar);
+          const imageRef = buildImageIdReference(msg.newImageIdRaw, msg.newAssignedVar);
           if (!imageRef) {
             postError(`Could not create image entry for statusbar '${msg.statusBarId}'. #PB_Any requires an assigned variable name${rangeInfo}.`);
             return;
