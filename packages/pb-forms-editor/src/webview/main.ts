@@ -5553,8 +5553,12 @@ function render() {
     const titleButtonSlots = titleButtonLayout.slots;
     const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
     const titleBarMetrics = getWindowPreviewTitleBarMetrics(settings.osSkin);
-    const titleFg = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
-    const buttonStrokeColor = titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg;
+    const windowsSkinColors = resolveWindowsSkinColors();
+    const isWindowsTitleBar = titleBarDecoration.backgroundStyle === "default" && Boolean(windowsSkinColors);
+    const titleFg = isWindowsTitleBar
+      ? windowsSkinColors!.titleText
+      : (titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg);
+    const buttonStrokeColor = titleFg;
     const fallbackButtonSize = Math.max(12, Math.min(18, tbH - 8));
     const fallbackButtonDims = { width: fallbackButtonSize, height: fallbackButtonSize };
     const titleButtonSizes = titleButtonSlots.map(slot => getWindowPreviewTitleButtonSize(settings.osSkin, slot.kind, fallbackButtonDims));
@@ -5580,8 +5584,20 @@ function render() {
 
     if (titleBarDecoration.backgroundStyle === "default") {
       ctx.save();
-      ctx.globalAlpha = 0.10;
-      ctx.fillStyle = focus;
+      if (isWindowsTitleBar) {
+        if (settings.osSkin === "windows7") {
+          const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
+          gradient.addColorStop(0, windowsSkinColors!.activeTitle);
+          gradient.addColorStop(0.5, windowsSkinColors!.gradientActiveTitle);
+          gradient.addColorStop(1, windowsSkinColors!.activeTitle);
+          ctx.fillStyle = gradient;
+        } else {
+          ctx.fillStyle = windowsSkinColors!.activeTitle;
+        }
+      } else {
+        ctx.globalAlpha = 0.10;
+        ctx.fillStyle = focus;
+      }
       ctx.fillRect(winX, winY, winW, tbH);
       ctx.restore();
     } else if (titleBarDecoration.backgroundStyle === "linux-dark") {
@@ -5607,16 +5623,24 @@ function render() {
 
     if (titleBarDecoration.showFrameBorder) {
       ctx.save();
-      ctx.globalAlpha = 0.22;
-      ctx.strokeStyle = focus;
+      if (isWindowsTitleBar) {
+        ctx.strokeStyle = windowsSkinColors!.threeDShadow;
+      } else {
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = focus;
+      }
       ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
       ctx.restore();
     }
 
     if (titleBarDecoration.showBottomSeparator) {
       ctx.save();
-      ctx.strokeStyle = titleBarDecoration.backgroundStyle === "default" ? focus : "rgb(184, 184, 184)";
-      ctx.globalAlpha = titleBarDecoration.backgroundStyle === "default" ? 0.2 : 1;
+      if (isWindowsTitleBar) {
+        ctx.strokeStyle = windowsSkinColors!.threeDShadow;
+      } else {
+        ctx.strokeStyle = titleBarDecoration.backgroundStyle === "default" ? focus : "rgb(184, 184, 184)";
+        ctx.globalAlpha = titleBarDecoration.backgroundStyle === "default" ? 0.2 : 1;
+      }
       ctx.beginPath();
       ctx.moveTo(winX + 0.5, winY + tbH - 0.5);
       ctx.lineTo(winX + winW - 0.5, winY + tbH - 0.5);
@@ -5636,17 +5660,25 @@ function render() {
 
     if (showWindowsIcon) {
       ctx.save();
-      ctx.globalAlpha = 0.20;
-      ctx.fillStyle = focus;
-      ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
-      ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = fg;
+      if (isWindowsTitleBar) {
+        ctx.fillStyle = windowsSkinColors!.inactiveTitle;
+        ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+        ctx.strokeStyle = titleFg;
+      } else {
+        ctx.globalAlpha = 0.20;
+        ctx.fillStyle = focus;
+        ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = fg;
+      }
       ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize.width - 1), Math.max(0, iconSize.height - 1));
       ctx.restore();
 
       ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = fg;
+      if (!isWindowsTitleBar) {
+        ctx.globalAlpha = 0.85;
+      }
+      ctx.fillStyle = titleFg;
       ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize.width - 6), Math.max(4, iconSize.height - 6));
       ctx.restore();
     }
