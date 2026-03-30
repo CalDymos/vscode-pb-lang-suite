@@ -22,29 +22,15 @@ import {
   MENU_ENTRY_KIND,
   GADGET_KIND_SET,
   GADGET_KIND,
-  ENUM_NAMES
+  ENUM_NAMES,
+  PBFD_WINDOW_KNOWN_FLAGS
 } from "../model";
 
 import { canHostInsertedGadgets } from "../gadgetInsertUtils";
 import { splitParams, unquoteString, asNumber } from "./tokenizer";
 import { PbCall, scanCalls } from "./callScanner";
 
-const KNOWN_WINDOW_FLAGS = new Set([
-  "#PB_Window_SystemMenu",
-  "#PB_Window_MinimizeGadget",
-  "#PB_Window_MaximizeGadget",
-  "#PB_Window_SizeGadget",
-  "#PB_Window_Invisible",
-  "#PB_Window_TitleBar",
-  "#PB_Window_Tool",
-  "#PB_Window_BorderLess",
-  "#PB_Window_ScreenCentered",
-  "#PB_Window_WindowCentered",
-  "#PB_Window_Maximize",
-  "#PB_Window_Minimize",
-  "#PB_Window_NoGadgets",
-  "#PB_Window_NoActivate",
-]);
+const KNOWN_WINDOW_FLAGS = new Set<string>(PBFD_WINDOW_KNOWN_FLAGS);
 
 function asGadgetKind(s: string): GadgetKind | undefined {
   return GADGET_KIND_SET.has(s as GadgetKind) ? (s as GadgetKind) : undefined;
