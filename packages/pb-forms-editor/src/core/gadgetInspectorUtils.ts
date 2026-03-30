@@ -1,3 +1,5 @@
+import { quotePbString } from "./parser/tokenizer";
+
 export type GadgetTextLike = {
   textRaw?: string;
   text?: string;
@@ -161,7 +163,7 @@ const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 function quotePbStringLiteral(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
+  return quotePbString(value);
 }
 
 function unquotePbStringLiteral(raw?: string): string | undefined {

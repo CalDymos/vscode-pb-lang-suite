@@ -1,3 +1,4 @@
+import { quotePbString } from "./parser/tokenizer";
 import { parseStatusBarWidth } from "./statusbarPreviewUtils";
 
 export type SourceLineLike = {
@@ -102,7 +103,7 @@ export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
 
 function toPbStringLiteral(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
+  return quotePbString(value);
 }
 
 export function buildOptionalInspectorLiteralRaw(value: string): string {

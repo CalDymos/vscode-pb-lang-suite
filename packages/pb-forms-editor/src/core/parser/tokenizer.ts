@@ -69,3 +69,7 @@ export function normalizeProcParamName(raw: string): string {
   return name.toLowerCase();
 }
 
+export function quotePbString(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+

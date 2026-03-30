@@ -136,6 +136,7 @@ import {
   type ToolboxPanelTabId
 } from "../core/toolboxPanelUtils";
 import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
+import { quotePbString } from "../core/parser/tokenizer";
 import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
@@ -1444,8 +1445,7 @@ function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imag
 }
 
 function toPbString(v: string): string {
-  const esc = (v ?? "").replace(/"/g, '""');
-  return `"${esc}"`;
+  return quotePbString(v ?? "");
 }
 
 function getMenuInsertLevel(menu: MenuModel, parentSourceLine?: number): number {
@@ -6421,11 +6421,6 @@ function renderProps() {
   if (!sel) {
     return;
   }
-
-  const toPbString = (v: string): string => {
-    const esc = (v ?? "").replace(/"/g, '""');
-    return `"${esc}"`;
-  };
 
   const miniList = () => {
     const d = document.createElement("div");

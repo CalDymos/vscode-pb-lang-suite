@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/callScanner";
 import { parseFormDocument } from "../parser/formParser";
-import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "../parser/tokenizer";
+import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
 import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind } from "../model";
@@ -360,10 +360,6 @@ function findNearestCreateAbove(
     else break;
   }
   return best;
-}
-
-function quotePbString(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function normalizeMenuTextForShortcut(textRaw: string): string {

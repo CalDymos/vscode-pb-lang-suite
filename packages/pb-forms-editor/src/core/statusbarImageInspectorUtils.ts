@@ -1,3 +1,5 @@
+import { quotePbString } from "./parser/tokenizer";
+
 export interface StatusBarCurrentImageEditCandidate {
   id?: string;
   imageRaw?: string;
@@ -180,7 +182,7 @@ export function resolveStatusBarCurrentImageCreate(
 
   return {
     imageIdRaw: buildNextGeneratedImageIdRaw(images, windowVariable, windowId),
-    imageRaw: `"${loadPath.replace(/"/g, '""')}"`,
+    imageRaw: quotePbString(loadPath),
   };
 }
 

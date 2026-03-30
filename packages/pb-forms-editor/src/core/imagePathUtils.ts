@@ -1,3 +1,5 @@
+import { quotePbString } from "./parser/tokenizer";
+
 // Matches plain "..." and PureBasic escaped ~"..." string literals.
 const PB_STRING_LITERAL_RE = /^~?"(?:[^"]|"")*"$/;
 
@@ -14,7 +16,7 @@ export function parsePbStringLiteral(raw?: string): string | undefined {
 }
 
 export function toPbStringLiteral(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
+  return quotePbString(value);
 }
 
 export function normalizePbPath(value: string): string {
