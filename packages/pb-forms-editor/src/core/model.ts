@@ -324,8 +324,11 @@ export interface FormDocument {
 }
 
 export const ENUM_NAMES = {
-  windows: "FormWindow", 
-  gadgets: "FormGadget"
+  windows: "FormWindow",
+  gadgets: "FormGadget",
+  menus: "FormMenu",
+  images: "FormImage",
+  fonts: "FormFont"
 } as const;
 
 // PBFD_* constants: shared symbol sets from the PureBasic Form Designer.

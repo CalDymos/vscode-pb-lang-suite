@@ -4,7 +4,7 @@ import { parseFormDocument } from "../parser/formParser";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
-import { FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind } from "../model";
+import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -481,7 +481,7 @@ function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = [])
 
 function buildMenuEnumBlock(symbols: string[]): string {
   if (!symbols.length) return "";
-  return `Enumeration FormMenu
+  return `Enumeration ${ENUM_NAMES.menus}
 ${symbols.map(symbol => `  ${symbol}`).join("\n")}
 EndEnumeration
 
@@ -489,7 +489,7 @@ EndEnumeration
 }
 
 function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
-  const preferredEnums = ["FormWindow", "FormGadget"];
+  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets];
   let lastBlock: LineBlock | undefined;
 
   for (const enumName of preferredEnums) {
@@ -506,8 +506,8 @@ function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]):
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text;
     const trimmed = text.trim();
-    if (/^Enumeration\s+FormImage\b/i.test(trimmed)
-      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
       || isCustomGadgetInitMarkerLine(text)
       || isImageDecoderLine(text)
       || /^LoadImage\s*\(/i.test(trimmed)
@@ -527,7 +527,7 @@ function applyMenuEnumPatch(
   calls: PbCall[],
   symbols: string[]
 ): void {
-  const menuEnumBlock = findNamedEnumerationBlock(document, "FormMenu");
+  const menuEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.menus);
   applyOptionalBlockPatch(
     edit,
     document,
@@ -686,10 +686,10 @@ function findWindowEnumInsertLine(document: vscode.TextDocument): number {
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text;
     const trimmed = text.trim();
-    if (/^Enumeration\s+FormGadget\b/i.test(trimmed)
-      || /^Enumeration\s+FormMenu\b/i.test(trimmed)
-      || /^Enumeration\s+FormImage\b/i.test(trimmed)
-      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.gadgets}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.menus}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
       || isCustomGadgetInitMarkerLine(text)
       || isImageDecoderLine(text)
       || /^LoadImage\s*\(/i.test(trimmed)
@@ -704,7 +704,7 @@ function findWindowEnumInsertLine(document: vscode.TextDocument): number {
 }
 
 function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, enumSymbol: string, enumValueRaw: string | undefined) {
-  const block = findNamedEnumerationBlock(document, "FormWindow");
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
   if (block) {
     // Ensure the entry exists; if it exists, optionally update.
     const current = applyWindowEnumValuePatch(document, enumSymbol, enumValueRaw);
@@ -1525,7 +1525,7 @@ function applyGadgetHeadPatchForGadgets(
     buildGadgetGlobalBlock(gadgets)
   );
 
-  const gadgetEnumBlock = findNamedEnumerationBlock(document, "FormGadget");
+  const gadgetEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
   applyOptionalBlockPatch(
     edit,
     document,
@@ -2254,7 +2254,7 @@ export function applyWindowPbAnyToggle(
 
   if (toPbAny) {
     // 1) Remove Enumeration FormWindow block.
-    const enumBlock = findNamedEnumerationBlock(document, "FormWindow");
+    const enumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
     if (enumBlock) {
       const expandedBlock = expandBlockWithTrailingBlank(document, enumBlock);
       edit.delete(
@@ -2350,7 +2350,7 @@ export function applyWindowEnumValuePatch(
   enumValueRaw: string | undefined,
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
-  const block = findNamedEnumerationBlock(document, "FormWindow");
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
   if (!block) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
@@ -2498,7 +2498,7 @@ export function applyWindowVariableNamePatch(
   const newProcName = toOpenProcName(newEnum);
 
   // 1) Patch Enumeration FormWindow entry name if present
-  const block = findNamedEnumerationBlock(document, "FormWindow");
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
   if (block) {
     for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
       const lineText = document.lineAt(i).text;
@@ -3692,7 +3692,7 @@ function isTopLevelImageOrFontBoundaryLine(text: string): boolean {
   return isImageDecoderLine(text)
     || /^LoadImage\s*\(/i.test(trimmed)
     || /^CatchImage\s*\(/i.test(trimmed)
-    || /^Enumeration\s+FormFont\b/i.test(trimmed)
+    || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
     || /^LoadFont\s*\(/i.test(trimmed)
     || isTopLevelHeadBoundaryLine(text);
 }
@@ -3775,7 +3775,7 @@ function buildFontGlobalBlock(fonts: FormFont[]): string {
 function buildFontEnumBlock(fonts: FormFont[]): string {
   const symbols = getFontEnumSymbols(fonts);
   if (!symbols.length) return "";
-  return `Enumeration FormFont
+  return `Enumeration ${ENUM_NAMES.fonts}
 ${symbols.map(symbol => `  ${symbol}`).join("\n")}
 EndEnumeration
 
@@ -3827,7 +3827,7 @@ function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[])
     return skipBlankLines(document, lastLine + 1);
   }
 
-  const preferredEnums = ["FormWindow", "FormGadget", "FormMenu", "FormImage"];
+  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets, ENUM_NAMES.menus, ENUM_NAMES.images];
   let lastBlock: LineBlock | undefined;
   for (const enumName of preferredEnums) {
     const block = findNamedEnumerationBlock(document, enumName);
@@ -3883,7 +3883,7 @@ function applyFontMutation(
   const fontGlobalBlock = findFontGlobalBlock(document, parsed.fonts);
   applyOptionalBlockPatch(edit, document, fontGlobalBlock, findFontGlobalInsertLine(document), "");
 
-  const fontEnumBlock = findNamedEnumerationBlock(document, "FormFont");
+  const fontEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.fonts);
   const fontEnumInsertLine = findFontBlockInsertLine(document, calls);
   const combineFreshEnumAndLoadInsert = !fontLoadCalls.length && !fontEnumBlock && !!buildFontEnumBlock(nextFonts);
 
@@ -3950,7 +3950,7 @@ function isImageDecoderLine(text: string): boolean {
 function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text.trim();
-    if (/^Enumeration\s+FormFont\b/i.test(text)) return i;
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(text)) return i;
     if (/^LoadFont\s*\(/i.test(text)) return i;
     if (isTopLevelHeadBoundaryLine(document.lineAt(i).text)) return i;
   }
@@ -3983,7 +3983,7 @@ function buildImageGlobalBlock(images: FormImage[]): string {
 function buildImageEnumBlock(images: FormImage[]): string {
   const symbols = getImageEnumSymbols(images);
   if (!symbols.length) return "";
-  return `Enumeration FormImage
+  return `Enumeration ${ENUM_NAMES.images}
 ${symbols.map(symbol => `  ${symbol}`).join("\n")}
 EndEnumeration
 
@@ -4062,7 +4062,7 @@ function findGadgetGlobalInsertLine(document: vscode.TextDocument): number {
 }
 
 function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
-  const windowEnumBlock = findNamedEnumerationBlock(document, "FormWindow");
+  const windowEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
   if (windowEnumBlock) {
     return skipBlankLines(document, windowEnumBlock.endLine + 1);
   }
@@ -4070,9 +4070,9 @@ function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text;
     const trimmed = text.trim();
-    if (/^Enumeration\s+FormMenu\b/i.test(trimmed)
-      || /^Enumeration\s+FormImage\b/i.test(trimmed)
-      || /^Enumeration\s+FormFont\b/i.test(trimmed)
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.menus}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
       || isCustomGadgetInitMarkerLine(text)
       || isImageDecoderLine(text)
       || /^LoadImage\s*\(/i.test(trimmed)
@@ -4134,7 +4134,7 @@ function findImageGlobalInsertLine(document: vscode.TextDocument): number {
 }
 
 function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
-  const preferredEnums = ["FormWindow", "FormGadget", "FormMenu"];
+  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets, ENUM_NAMES.menus];
   let lastBlock: LineBlock | undefined;
 
   for (const enumName of preferredEnums) {
@@ -4336,7 +4336,7 @@ function applyImageMutation(
     rebuiltGlobalBlock
   );
 
-  const imageEnumBlock = findNamedEnumerationBlock(document, "FormImage");
+  const imageEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.images);
   const rebuiltEnumBlock = buildImageEnumBlock(nextImages);
   const imageBlockInsertLine = findImageBlockInsertLine(document, calls);
   const imageEnumInsertLine = findImageEnumInsertLine(document, calls);
@@ -5351,7 +5351,7 @@ export function applyImageUpdate(
         const windowVar =
           parsed2.window?.variable ??
           parsed2.window?.id?.replace(/^#/, "") ??
-          "FormWindow";
+          ENUM_NAMES.windows;
 
         const [entry] = images.splice(index, 1);
         const trimmedImageRaw = args.imageRaw.trim();

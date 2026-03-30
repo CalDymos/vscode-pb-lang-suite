@@ -973,7 +973,7 @@ type PbfdSymbols = {
   toolBarEntryKinds: readonly string[];
   containerGadgetKinds: readonly string[];
   windowKnownFlags?: readonly string[];
-  enumNames?: { windows: string; gadgets: string };
+  enumNames?: { windows: string; gadgets: string; menus: string; images: string; fonts: string };
   pbAny?: string;
 };
 
