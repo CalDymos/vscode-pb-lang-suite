@@ -137,6 +137,7 @@ import {
 } from "../core/toolboxPanelUtils";
 import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
 import { quotePbString } from "../core/parser/tokenizer";
+import { GADGET_KIND } from "../core/model";
 import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
@@ -1364,7 +1365,7 @@ function selectImageById(imageId: string): void {
   setSelectionAndRefresh({ kind: "image", id: imageId });
 }
 
-const IMAGE_CAPABLE_GADGET_KINDS = new Set(["ImageGadget", "ButtonImageGadget"]);
+const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
 
 function isPbStringLiteral(raw?: string): boolean {
   return /^"(?:[^"]|"")*"$/.test(raw?.trim() ?? "");
@@ -1604,7 +1605,7 @@ function setPendingInsertGadgetKind(kind: string | null): void {
     pendingSplitterInsertConfig = null;
     canvas.style.cursor = drag ? canvas.style.cursor : "default";
   }
-  if (pendingInsertGadgetKind !== "SplitterGadget") {
+  if (pendingInsertGadgetKind !== GADGET_KIND.SplitterGadget) {
     pendingSplitterInsertConfig = null;
   }
   if (pendingInsertGadgetKind) {
@@ -1700,7 +1701,7 @@ function openSplitterInsertDialog(): void {
       gadget2Id: gadget2.id,
     };
     closeSplitterInsertDialog();
-    setPendingInsertGadgetKind("SplitterGadget");
+    setPendingInsertGadgetKind(GADGET_KIND.SplitterGadget);
   };
   actions.appendChild(cancelBtn);
   actions.appendChild(okBtn);
@@ -1742,7 +1743,7 @@ function openSelectParentDialog(gadget: Gadget): void {
   title.className = "destructiveDialogTitle";
   title.textContent = `Change Parent — ${gadget.id}`;
   dialog.appendChild(title);
-  dialog.appendChild(mutedNote(gadget.kind === "SplitterGadget"
+  dialog.appendChild(mutedNote(gadget.kind === GADGET_KIND.SplitterGadget
     ? "This Select Parent flow follows the original splitter special case: gadget1 and gadget2 are moved together with the splitter into the selected parent block, and the splitter itself resets to X/Y = 0,0."
     : "This Select Parent flow follows the original path for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
 
@@ -1838,7 +1839,7 @@ function openSelectParentDialog(gadget: Gadget): void {
 
 function requestInsertGadgetPlacement(kind: string): void {
   if (!isInsertableGadgetKind(kind)) return;
-  if (kind === "SplitterGadget") {
+  if (kind === GADGET_KIND.SplitterGadget) {
     openSplitterInsertDialog();
     return;
   }
@@ -1937,7 +1938,7 @@ function renderInsertGadgetControls(): void {
       };
 
       if (entry.enabled && entry.kind) {
-        itemEl.title = entry.kind === "SplitterGadget"
+        itemEl.title = entry.kind === GADGET_KIND.SplitterGadget
           ? "Click to choose the two splitter gadgets, then place the splitter in the canvas."
           : "Click to place this gadget in the canvas. Double-click inserts it immediately at the default position.";
       }
@@ -2473,7 +2474,7 @@ function getSelectionSummary(): string {
 
 function getContextualInfoHint(): string {
   if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
-    if (pendingInsertGadgetKind === "SplitterGadget" && pendingSplitterInsertConfig) {
+    if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && pendingSplitterInsertConfig) {
       return `Click in the canvas to place a new Splitter for ${pendingSplitterInsertConfig.gadget1Id} and ${pendingSplitterInsertConfig.gadget2Id}. Press Escape to cancel placement mode.`;
     }
     return `Click in the canvas to place a new ${getGadgetInsertLabel(pendingInsertGadgetKind)}. Press Escape to cancel placement mode.`;
@@ -2656,7 +2657,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
     if (!layout.visible) continue;
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
-    if (g.kind === "SplitterGadget") {
+    if (g.kind === GADGET_KIND.SplitterGadget) {
       const splitterBarRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
       if (!isPointOnRectBorder(layout.rect, lx, ly) && !rectContainsPoint(splitterBarRect, lx, ly)) {
         continue;
@@ -3165,7 +3166,7 @@ canvas.addEventListener("mousedown", (e) => {
     if (placement && isInsertableGadgetKind(pendingInsertGadgetKind)) {
       postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
       setPendingInsertGadgetKind(null);
-    } else if (pendingInsertGadgetKind === "SplitterGadget") {
+    } else if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget) {
       errEl.textContent = "Choose a valid placement position for the splitter inside the window or a container parent.";
       renderInfoPanel();
     }
@@ -3820,14 +3821,14 @@ function getGadgetPreviewLayout(
       clip = intersectRect(parentLayout.clip, parentContentRect);
       let localX = g.x;
       let localY = g.y;
-      if (parent.kind === "ScrollAreaGadget") {
+      if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
         localX -= getScrollAreaOffsetX(parent, parentLayout.rect, metrics);
         localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
       }
       rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
       visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
 
-      if (parent.kind === "PanelGadget" && typeof g.parentItem === "number") {
+      if (parent.kind === GADGET_KIND.PanelGadget && typeof g.parentItem === "number") {
         visible = visible && g.parentItem === getPanelActiveItem(parent);
       }
     }
@@ -3856,7 +3857,7 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
 
-    if (g.kind === "SplitterGadget") {
+    if (g.kind === GADGET_KIND.SplitterGadget) {
       if (isPointOnRectBorder(layout.rect, lx, ly)) {
         return { gadget: g, zone: "containerBorder" };
       }
@@ -3867,7 +3868,7 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
       continue;
     }
 
-    if (g.kind === "PanelGadget") {
+    if (g.kind === GADGET_KIND.PanelGadget) {
       const panelHeight = Math.min(metrics.panelHeight, Math.max(18, layout.rect.h));
       const headerRect = intersectRect({ x: layout.rect.x, y: layout.rect.y, w: layout.rect.w, h: panelHeight }, layout.clip);
       if (rectContainsPoint(headerRect, lx, ly)) {
@@ -3875,13 +3876,13 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
       }
     }
 
-    if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget" || g.kind === "FrameGadget") {
+    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget || g.kind === GADGET_KIND.FrameGadget) {
       if (isPointOnRectBorder(layout.rect, lx, ly)) {
         return { gadget: g, zone: "containerBorder" };
       }
     }
 
-    if (g.kind === "ScrollAreaGadget") {
+    if (g.kind === GADGET_KIND.ScrollAreaGadget) {
       const verticalBar = intersectRect(getScrollAreaVerticalBarRect(layout.rect, metrics), layout.clip);
       if (rectContainsPoint(verticalBar, lx, ly)) {
         return { gadget: g, zone: "scrollAreaVBar" };
@@ -3908,7 +3909,7 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
     const cache = new Map<string, GadgetPreviewLayout>();
     for (let i = model.gadgets.length - 1; i >= 0; i--) {
       const g = model.gadgets[i];
-      if (g.kind !== "PanelGadget") continue;
+      if (g.kind !== GADGET_KIND.PanelGadget) continue;
       const layout = getGadgetPreviewLayout(g, metrics, cache);
       if (!layout.visible) continue;
       const tabs = getPanelTabRects(ctx, g, layout.rect, metrics);
@@ -3927,7 +3928,7 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
 
 function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
   if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
-  if (pendingInsertGadgetKind === "SplitterGadget" && !pendingSplitterInsertConfig) return null;
+  if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && !pendingSplitterInsertConfig) return null;
   if (!hitWindow(mx, my)) return null;
 
   const { lx, ly } = toLocal(mx, my);
@@ -3957,7 +3958,7 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
     const contentRect = getGadgetContentRect(gadget.kind, layout.rect, metrics);
     let x = alignedX - contentRect.x;
     let y = alignedY - contentRect.y;
-    if (gadget.kind === "ScrollAreaGadget") {
+    if (gadget.kind === GADGET_KIND.ScrollAreaGadget) {
       x += getScrollAreaOffsetX(gadget, layout.rect, metrics);
       y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
     }
@@ -3966,7 +3967,7 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
       x,
       y,
       parentId: gadget.id,
-      parentItem: gadget.kind === "PanelGadget" ? getPanelActiveItem(gadget) : undefined,
+      parentItem: gadget.kind === GADGET_KIND.PanelGadget ? getPanelActiveItem(gadget) : undefined,
     };
   }
 
@@ -5904,20 +5905,20 @@ function render() {
     let labelY = gy + 14;
 
     switch (g.kind) {
-      case "ContainerGadget":
+      case GADGET_KIND.ContainerGadget:
         drawContainerChrome(ctx, gx, gy, gw, gh, fg);
         break;
 
-      case "PanelGadget":
+      case GADGET_KIND.PanelGadget:
         drawPanelChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         labelY = gy + Math.min(gh - 8, chromeMetrics.panelHeight + 14);
         break;
 
-      case "ScrollAreaGadget":
+      case GADGET_KIND.ScrollAreaGadget:
         drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         break;
 
-      case "SplitterGadget":
+      case GADGET_KIND.SplitterGadget:
         drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         break;
 
@@ -8718,7 +8719,7 @@ function renderProps() {
     }
   }
 
-  if (g.kind === "CustomGadget") {
+  if (g.kind === GADGET_KIND.CustomGadget) {
     propsEl.appendChild(
       row(
         "SelectGadget",
@@ -8852,7 +8853,7 @@ function renderProps() {
   propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
 
-  if (g.kind === "SplitterGadget") {
+  if (g.kind === GADGET_KIND.SplitterGadget) {
     propsEl.appendChild(
       row(
         "Splitter Position",
@@ -8925,7 +8926,7 @@ function renderProps() {
 
   const itemsBox = miniList();
   (g.items ?? []).forEach((it, idx) => {
-    const label = g.kind === "PanelGadget"
+    const label = g.kind === GADGET_KIND.PanelGadget
       ? getPanelInspectorItemLabel(it, idx)
       : `${idx}  ${it.text ?? it.textRaw ?? ""}`;
     const canPatch = typeof it.source?.line === "number";

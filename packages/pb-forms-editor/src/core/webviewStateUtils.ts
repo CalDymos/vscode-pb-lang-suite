@@ -1,3 +1,5 @@
+import { GADGET_KIND } from "./model";
+
 export type RectSnapshotLike = {
   x: number;
   y: number;
@@ -27,7 +29,7 @@ export function retainPanelActiveItems(
   const next = new Map<string, number>();
 
   for (const gadget of gadgets) {
-    if (gadget.kind !== "PanelGadget") continue;
+    if (gadget.kind !== GADGET_KIND.PanelGadget) continue;
 
     const stored = previous.get(gadget.id);
     if (typeof stored !== "number" || !Number.isFinite(stored)) continue;
@@ -63,7 +65,7 @@ export function syncPanelActiveItemsForSelection(
     const parent = gadgetById.get(parentId);
     if (!parent) break;
 
-    if (parent.kind === "PanelGadget" && typeof current.parentItem === "number" && Number.isFinite(current.parentItem)) {
+    if (parent.kind === GADGET_KIND.PanelGadget && typeof current.parentItem === "number" && Number.isFinite(current.parentItem)) {
       const itemCount = parent.items?.length ?? 0;
       if (itemCount > 0) {
         const clamped = Math.max(0, Math.min(Math.trunc(current.parentItem), itemCount - 1));
