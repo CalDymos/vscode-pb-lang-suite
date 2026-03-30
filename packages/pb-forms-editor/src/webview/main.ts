@@ -5481,8 +5481,8 @@ function render() {
 
       ctx.save();
       ctx.strokeStyle = bodyDecoration.clientBorderStyle === "windows7-inner"
-        ? "rgb(93, 108, 122)"
-        : "rgb(91, 147, 209)";
+        ? (windowsChromeColors?.threeDShadow ?? "rgb(93, 108, 122)")
+        : (windowsChromeColors?.hotTrackingColor ?? windowsChromeColors?.activeTitle ?? "rgb(91, 147, 209)");
       ctx.strokeRect(
         windowClientSurface.borderRect.x + 0.5,
         windowClientSurface.borderRect.y + 0.5,
@@ -5562,7 +5562,7 @@ function render() {
     const titleBarMetrics = getWindowPreviewTitleBarMetrics(settings.osSkin);
     const isWindowsTitleBar = titleBarDecoration.backgroundStyle === "default" && Boolean(windowsChromeColors);
     const titleFg = isWindowsTitleBar
-      ? windowsChromeColors!.titleText
+      ? (windowsChromeColors!.menuText ?? windowsChromeColors!.buttonText ?? "rgb(0, 0, 0)")
       : (titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg);
     const buttonStrokeColor = titleFg;
     const fallbackButtonSize = Math.max(12, Math.min(18, tbH - 8));
