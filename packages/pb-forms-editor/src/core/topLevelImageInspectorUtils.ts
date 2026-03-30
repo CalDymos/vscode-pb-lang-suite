@@ -16,7 +16,7 @@ export function getTopLevelSelectedImageInspectorConfig(target: TopLevelSelected
     case "menuEntry":
       return {
         currentImageEditable: true,
-        currentImageTitle: "Use Select to change the image for this menu entry.",
+        currentImageTitle: "Edit the image path directly or use Select to choose a file for this menu entry.",
         //currentImageHint: "Direct text editing is not available here. Use Select to choose a file and assign it to this menu entry.",
         changeImageButtonLabel: "Select",
         changeImageButtonTitle: "Choose a file for this menu entry.",
@@ -27,7 +27,7 @@ export function getTopLevelSelectedImageInspectorConfig(target: TopLevelSelected
     case "toolBarEntry":
       return {
         currentImageEditable: true,
-        currentImageTitle: "Use Select to choose a file for this toolbar button.",
+        currentImageTitle: "Edit the image path directly or use Select to choose a file for this toolbar button.",
         changeImageButtonLabel: "Select",
         changeImageButtonTitle: "Choose a file for this toolbar button.",
         showExpertActions: false,
