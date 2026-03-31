@@ -4841,10 +4841,18 @@ function drawMenuFlyoutPanelPreview(
     ? windowsSkinColors.menu
     : (flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)");
   const panelBorder = windowsSkinColors
-    ? windowsSkinColors.scrollbar
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.scrollbar,
+      panelBg,
+      "rgb(200,200,200)"
+    )
     : (flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg);
   const separatorColor = windowsSkinColors
-    ? windowsSkinColors.scrollbar
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.scrollbar,
+      panelBg,
+      "rgb(200,200,200)"
+    )
     : (flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder);
   const menuTextColor = windowsSkinColors
     ? windowsSkinColors.menuText
@@ -5010,7 +5018,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.stroke();
       break;
     case "windows7-triple":
-      ctx.strokeStyle = windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
+      ctx.strokeStyle = windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
@@ -5131,8 +5139,13 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   const border = getCssVar("--vscode-panel-border") || fg;
   const toolBarDecoration = getWindowPreviewToolBarDecoration(osSkin);
   const windowsSkinColors = resolveWindowsSkinColors();
+  const toolbarBg = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
   const toolbarSeparatorColor = windowsSkinColors
-    ? windowsSkinColors.threeDShadow
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+      toolbarBg,
+      "rgb(132,132,132)"
+    )
     : (toolBarDecoration.separatorColorStyle === "toolbar-dark"
       ? "rgb(132,132,132)"
       : border);
@@ -5151,7 +5164,7 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   } else {
     ctx.fillStyle = windowsSkinColors
-      ? windowsSkinColors.buttonFace
+      ? toolbarBg
       : (toolBarDecoration.backgroundStyle === "linux-light"
         ? "rgb(242, 241, 240)"
         : "rgb(240, 240, 240)");
@@ -5167,8 +5180,15 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   if (toolBarDecoration.showBottomSeparator) {
     ctx.save();
-    ctx.strokeStyle = toolBarDecoration.useDarkBottomSeparator ? "rgb(105, 105, 105)" : border;
-    ctx.globalAlpha = toolBarDecoration.useDarkBottomSeparator ? 1 : 0.28;
+    const toolbarBottomSeparatorColor = windowsSkinColors
+      ? ensurePreviewLineContrast(
+        windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+        toolbarBg,
+        "rgb(160, 160, 160)"
+      )
+      : (toolBarDecoration.useDarkBottomSeparator ? "rgb(160, 160, 160)" : border);
+    ctx.strokeStyle = toolbarBottomSeparatorColor;
+    ctx.globalAlpha = windowsSkinColors ? 1 : (toolBarDecoration.useDarkBottomSeparator ? 1 : 0.28);
     ctx.beginPath();
     ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
     ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
@@ -5261,6 +5281,21 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
   const border = getCssVar("--vscode-panel-border") || fg;
   const statusBarDecoration = getWindowPreviewStatusBarDecoration(osSkin);
   const windowsSkinColors = resolveWindowsSkinColors();
+  const statusBarBg = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+  const statusBarTopSeparatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+      statusBarBg,
+      "rgb(145, 145, 145)"
+    )
+    : "rgb(145, 145, 145)";
+  const statusBarFieldSeparatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.threeDLightShadow ?? windowsSkinColors.scrollbar,
+      statusBarBg,
+      "rgb(215, 215, 215)"
+    )
+    : "rgb(215, 215, 215)";
   const statusBarTextColor = windowsSkinColors
     ? windowsSkinColors.windowText
     : (statusBarDecoration.textColorStyle === "black"
@@ -5292,7 +5327,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     ctx.save();
     ctx.strokeStyle = statusBarDecoration.topSeparatorStyle === "macos-dark"
       ? "rgb(118, 118, 118)"
-      : (windowsSkinColors?.threeDShadow ?? "rgb(145, 145, 145)");
+      : statusBarTopSeparatorColor;
     ctx.beginPath();
     ctx.moveTo(rect.x, rect.y + 0.5);
     ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
@@ -5315,7 +5350,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
 
     if (statusBarDecoration.showFieldSeparators && i > 0) {
       ctx.save();
-      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(215, 215, 215)";
+      ctx.strokeStyle = statusBarFieldSeparatorColor;
       ctx.beginPath();
       ctx.moveTo(x + 0.5, rect.y + 1);
       ctx.lineTo(x + 0.5, rect.y + rect.h - 1);
@@ -9502,6 +9537,40 @@ function getSystemColor(keyword: string): string {
   return value;
 }
 
+function parseCssRgb(color: string): [number, number, number] | null {
+  const match = color.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (match) {
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  }
+
+  const hexMatch = color.match(/^#([\da-f]{6})$/i);
+  if (!hexMatch) return null;
+
+  const value = hexMatch[1];
+  return [
+    Number.parseInt(value.slice(0, 2), 16),
+    Number.parseInt(value.slice(2, 4), 16),
+    Number.parseInt(value.slice(4, 6), 16),
+  ];
+}
+
+function getRgbDistance(colorA: string, colorB: string): number | null {
+  const rgbA = parseCssRgb(colorA);
+  const rgbB = parseCssRgb(colorB);
+  if (!rgbA || !rgbB) return null;
+
+  const r = rgbA[0] - rgbB[0];
+  const g = rgbA[1] - rgbB[1];
+  const b = rgbA[2] - rgbB[2];
+  return Math.sqrt((r * r) + (g * g) + (b * b));
+}
+
+function ensurePreviewLineContrast(candidate: string, background: string, fallback: string, minDistance = 28): string {
+  const distance = getRgbDistance(candidate, background);
+  if (distance === null || distance >= minDistance) return candidate;
+  return fallback;
+}
+
 function clearSystemColorCache(): void {
   systemColorCache.clear();
 }
@@ -9523,6 +9592,10 @@ type WindowsSkinSystemColors = {
   grayText: string;
   /** Border / 3-D shadow edge */
   threeDShadow: string;
+  /** Medium control shadow, closer to classic separator lines */
+  buttonShadow: string;
+  /** Light 3-D edge, closer to pale separator lines */
+  threeDLightShadow: string;
   // --- Registry colors (HKCU\Control Panel\Colors) ---
   /** Menu popup background */
   menu: string;
@@ -9568,7 +9641,9 @@ function resolveWindowsSkinColors(): WindowsSkinSystemColors | null {
     highlight:     getSystemColor("Highlight"),
     highlightText: getSystemColor("HighlightText"),
     grayText:      getSystemColor("GrayText"),
-    threeDShadow:  getSystemColor("ThreeDShadow"),
+    threeDShadow:      getSystemColor("ThreeDShadow"),
+    buttonShadow:      getSystemColor("ButtonShadow"),
+    threeDLightShadow: getSystemColor("ThreeDLightShadow"),
     // Registry colors — only available after the extension sent them
     menu:                reg?.menu                 ?? "rgb(240, 240, 240)",
     menuBar:             reg?.menuBar              ?? "rgb(240, 240, 240)",
