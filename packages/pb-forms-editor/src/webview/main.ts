@@ -5650,7 +5650,12 @@ function render() {
     const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
       ? winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW
       : winX + winW - titleBarMetrics.buttonInsetX;
-    const titleLeft = Math.max(showWindowsIcon ? iconX + iconSize.width + 5 : winX + titleBarMetrics.buttonInsetX, leftButtonBandEnd);
+    const windowsTitleTextStart = showWindowsIcon
+      ? (settings.osSkin === "windows8"
+        ? iconX + iconSize.width
+        : iconX + iconSize.width + 5)
+      : winX + titleBarMetrics.buttonInsetX;
+    const titleLeft = Math.max(windowsTitleTextStart, leftButtonBandEnd);
     const titleRight = Math.min(winX + winW - titleBarMetrics.buttonInsetX, rightButtonBandStart);
     const titleTop = winY + titleBarMetrics.titleOffsetY;
 
