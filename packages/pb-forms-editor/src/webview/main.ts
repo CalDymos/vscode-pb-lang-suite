@@ -4849,7 +4849,9 @@ function drawMenuFlyoutPanelPreview(
   const menuTextColor = windowsSkinColors
     ? windowsSkinColors.menuText
     : (flyoutDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
-  const selectedOutlineColor = flyoutDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg;
+  const selectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (flyoutDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg);
 
   ctx.save();
   ctx.fillStyle = panelBg;
@@ -4953,7 +4955,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     ? windowsSkinColors.menuText
     : (menuBarDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
   const selectedOutlineColor = windowsSkinColors
-    ? windowsSkinColors.hotTrackingColor
+    ? windowsSkinColors.menuText
     : (menuBarDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg);
 
   ctx.save();
