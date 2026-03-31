@@ -816,9 +816,21 @@ let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
 const PREVIEW_PLUS_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAABuwAAAbsBOuzj4gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAHVSURBVDiNhZK/axNhGMc/75sD2wZBCkpRinOyGSfrVgc3d6d2yX/QDiIUS6gFhw5FQRwqDtLVLEr31CINtgqNm0rQyw8HJSR3Sd7c+zjcXbwcrX3g4X25u+/n+dx7p4BLQJ7zapV7uZu5pcK1wuxR46hV69Uey7I8d4B8u93etyJordFao5Sa6Jdfd9j9s8vilUU285s8rD2Yz/7KPlM7SjSAlf8P3/6yTcNvcPCtDMD3Rhk7amosqw5AJqMBUEqNDXTCoPm7iXffGwNf36mFzz9VVx0ArTWIoKJX0EqF+wgwd30O55XiBnC4JBTLio8CXMbV8eRxOOpMYr+SW0EuatxMaPAZ+GSxzPDkn0G0xgbJwyzOF0HD1s8tsm+yeA4/mKIkd+WFAhY6nc7+BCDq2C65AjiOc1tE3gM4ACptEE0/C5CsEBCfQ6QeV3ztXACpcPpHArDWYq2l1/MEMJMGqUA6XK/XcV2Xqelp3r7b+wAcJy0WPM+Tfr8vw+FQjDEyGo0kCAKx1ooxRiqVigRBII82Nk6AGREh7hDg+2cCut2uVKtVWSuVToDZZDgG3PJ83w4GAzHGTABERFqttl1bXz9IT45bAReAQvQxTisDHIuIOe3mX6/JBlGoABR2AAAAAElFTkSuQmCC";
 const PREVIEW_SUBMENU_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAKCAYAAABmBXS+AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iaWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpGN0RBRDc4M0YxNjkxMUUxODg1NDg1ODU1QThCQTAyQSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpGN0RBRDc4NEYxNjkxMUUxODg1NDg1ODU1QThCQTAyQSI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkY3REFENzgxRjE2OTExRTE4ODU0ODU4NTVBOEJBMDJBIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkY3REFENzgyRjE2OTExRTE4ODU0ODU4NTVBOEJBMDJBIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+qIRuegAAAKNJREFUeNp0jsEJhDAQRX9EsAQPgXRhjnbhzUuuHiRgByE92IM92IJYQUgD3oOX2ayQZdlNHgwzzDxmplrXlc7zpAhKUTnnoLWGtZau6yJkqFKx7zvGccS2bVSU3oQQEM9DKUXHcVBWSnjvsSwLjDFUlBL3fT+5zg0555jnGVJK9ic1TfM8H4N99z9S3/eYpglt27LfzbUQAsMwoOs6VvrtJcAAFhhIFeyORTUAAAAASUVORK5CYII=";
+const PREVIEW_WINDOWS_TITLE_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAOCAIAAACpTQvdAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxNDY5QTkwQkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxNDY5QTkwQ0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjE0NjlBOTA5RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjE0NjlBOTBBRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+f/Kg1AAAAYZJREFUeNqMUttKw0AQnd2dTS2N1kiLIlasBrwg+OY/+LGCb74KteiLT4IvClbxWrxV09p2L+NuEql4ASfLZpOcM+fMZNhu8zh5fYF/RGm8XIvXsNtu1euLAPQDwBjzt+u7RyD/9eXmbLI6i1NRtL4aE/2ZeG05TtnQaB4OhwMUgrUu2juNU8bJL0Fc0NZGPDM9kSRd7yQsbe+fu0N93PORrGVMtDoJQxKB4dIKaZUyQParjgjSRwIcKu0O1UrhsffWUYk2A9Aqq4EyCMBY1JdFBW/CK2QJTu6veqaHBSMCLZiGHEoMfOGlKEF0hPKI0IeuLGpnSUiNQa6QoV2sVObdfnP7MCJgUaHUIl0oVZp/1Lg4WvQE+EKQhaEzg+jRAr2lUaMJlNZa6Ty1Ux4M3jcrS4xbzg33u3VvAMo5nsgaY2zeNLSWVpdrC7Uos8C407QOhTIIw1Abj3UX53k9+NxJ9hoHP38wT8Pltp/m2g9Pc1XGji67yWuHvs3Gb5PiZiucKH8IMAAyqbbrB8MXagAAAABJRU5ErkJggg==";
+const PREVIEW_WINDOWS7_CLOSE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC8AAAAUCAYAAAAdmmTCAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpEMkFFQzRCNkVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpEMkFFQzRCN0VGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkQyQUVDNEI0RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkQyQUVDNEI1RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+qu35VAAABQZJREFUeNrUVk2IHEUUfq+qpnt6dnayoDEJJDFBvEgUwkZQMIIiSFBvET0IHkTFm2AiEfSkYNAoXoIoePMieFAQcxINiIpmTwrGKPizISKJLmFWMjvTXeV7r6q6q2dnUdaD2PCmql7VdH/v1fe+Krzuhv0ONvEopeC/fsyRuw7Ao6++Dv+35+F77gZjJyWs/PA9/HnuW3IhaKRf9Au0ePhxYGLGgwFYabFes/ETtxanfE7e4t+ajrmtwj9svYb8NFGR9XbvAWsrMI5HFU1PJvL2in4EoPRtHYANPpsAtiGQf8q76XV2xtgFkHEsPqeSQKktK6goOmPLCUVhYTIeex4JQBRUGDLAAVh0debFhzEAB3/Hfjtjh2zIbATbzjj7sAnGTs2XJflKynw5pkhKKMcjD0y+gnXGVfJFEz7Kc/R3aVWSkbe//gk+/vFivf6OvVvhoRv3bOi3SRAW1gcgPtfsAIR+SXhtxbQZT8Bx9tdGNe8gBBB53wCOfHd1FqukzwDffeeNGuThBx6XxJxeXlnnf/D6bTNAY4suDW2SHWFjvPReU46uUNbHMBqu1lznV5QI9ViFLGNSxLqmQgP+9u19ARaBcpuOI3BeN1kdyj/bmcZ1wCuhTUIhsnxtDarxGhcs84dKkwKwqZqIlDjxmbAbKm0TDsfx/bsHlCW7LoAU+MFtPVlXUfagpTh+ZyM1mC5lzXnVDqqKtOEtoE7FBYuJIijOim1AYhsxzlARbg/v6IGj9zHQt958qV7zyGNPw21X5zIfEzUN3ibFawNVZoOvvFRe/u4bGC7/Aj9/dpqogEITVhId1Nco7rPOO1EiLgUTaKM30PhRtoMmr4LRaNT2/3YBfl/+tRV0lYDiTLNye+BKaqC07McW/2F+AS5fOM+Z91tgSecZiMM0oySDLJlCH7IAPpW+afCnip2wRMBfe+U5OjomtZ/HTz71PEVewaEr51sHVWrWRYVRvgZsuxYYvAu0UYwG2QLbEckIMWpOOeVe0CuQKFSYk74O1sydKnbBUucaePn4MQHOxoBjn/1naJ7XQesdU4baZwnb32RsvN8Y1FA5TSQwBlS3AzDXAVVkAN0MkEwXOflzGnfJCsC8B5gRp7s9gKK7zpY6W+HFF46IDrMdPXYcFt2KtNHH82doXeu/9G6xrACV03cKb8Df7+WEw+NhbMgYMyNBGgaPHQN6ri8RafR7oIMMSl/TXiERR3ZINmTms1gO4ZlnTzRjM4RDZFCalv8A+zgBiVoxPeJVgw9zRVcCbRuVMOlJ3enShhjKuaGIsgzMfN+fqOADMOHWZUR4QhAcnEYJSqOdurwB3AcTsj+mQuq3/FjXU1+Kld9fElDf+oLCULzofLKY52UITlgy1yN8HfpPJweTdSEfLDQHK4MPgMWUVx0fAJWS8rfPqPm4yWstplXL30kkUXGhWmwUOiiJLvpgiwEsbOlTHHmHeJxB1h8EMDacqgRQh8yiv7CxdHI9aSlyr9DmX9zJq0Aa5byiuKq5CrOPM26s3wVD9NZUc/1de+Grc2dh8eZbxqbIMxjsvBbg1oM1z+N9XgX+Y+C4UTaeX4CAm874rKty+86uxJFeHYgecGk0hk+/+Bw+fP89OPHBJ/vM2YuX4Il772y2Ej1azryXURApFckCrOfjOL0eJIT2fdcepj6bnCWi3c4Fs+FU9WMbfPxsn5+DfTfth5MffXlytTTDvwQYAM0QZCZ+lrBKAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS7_MINIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB0AAAAUCAYAAABxnDbHAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpFQjRENDQ1RkVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpFQjRENDQ2MEVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkQyQUVDNEI4RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkVCNEQ0NDVFRUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+p/e6vAAAAo5JREFUeNq8Vr1uFDEQnvF6LwkRoiAEohVQIQR5AiBNmkREJyoQj0CJxAMEiZcgQbwAEkKiIgnU9KRIBQUFIDjEKSRc7vbHxn9re327p02QsG5/PGvPN/PNeObw8tVFDnYgIJqnekcr43YVN3cO+udtV6v9VdW38itdvnUDnj/bgP81nm5sAu0dDOHX4QgOjlJtCZb2OK+rg1vjQy/DaSg4NR3D4TADikhAai+p1HhooVBtDe7qhUO5SoOX1nLPTAzI1RjURE9MSMVLKBUFdtuYIY7FcYwVXpXILYwx6SkCE1YXYoL/FC1e4aZuFIwrLConrGCQ5wXUpSHyOp8nx65pMBZBIbAUaJbncDRM61ca1HrCjwc8FRPIslyDSmrzIm9N5Em9low6egXXuRCEEcEJik4Sf+mcSiSprtffh4+ffzQS+H5nC3rfvrZSfG5hAZZWVmu/XbpwVmD9dp5KKwwJquShdyQk4MsXm61A795/4OkKPOVCN1OJpA+wBnLnqSIQo9/vH4NIbJCiOt9UlzVXIsq6ERoyGAzaQ8oq55VJDICpVEwIEVdk04Ubb8vF80kCDx89aQV4XqxFpMZYV53lyUOBQYRBtDM9BSwXRZjGKrNCZlBYdXOlC67heSEIWyIPPa4CE4wkMtDZ2dNQ5KnoAB0YpYX1laMp6GUjJdUAlB2IILqcb6oeRkYphUhc9Mq16/D23Tas3bkHP/f/QJrJ7OXAbe/gXn9A25HkRWyT8FtiUzJx6MQxxJEA7a4uL62vP341StP57tptmLuYqPo43lsMMLpEkU8ta9FxDMkzglHc+vApSc7MLL5+s7O9t7sLve9fKk0a/V6I7m+MTAj0+jB6QDihXBGh868AAwCym/9kGgDH1gAAAABJRU5ErkJggg==";
+const PREVIEW_WINDOWS7_MINIMIZE_DISABLED_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB0AAAAUCAIAAAD+/qGQAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpFQjRENDQ2M0VGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpFQjRENDQ2NEVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkVCNEQ0NDYxRUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkVCNEQ0NDYyRUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+Q/1iRgAAAkFJREFUeNqslD1v1EAQhndmx/FdchJfIqIJDRJS6FDS0FBDg2goIip+CPkb4URFS5EqiF9hCihS0FAeJCQBRXfxeXeH2V1/3Feci8QUZ5+988y7784YHjx6rK4Orm5g4r4t6OmT7ff9PfVfY+9dn36fF2fD4vzCiA6uJC2WBTyrflGspjTMLZYr2bOgymK+xIylPPCrsPkjegMaVKusJdDWOZKLc2ytazbL17ASZiuydegiV6CFMVemLanWOS1AzxXo6GLcknkteprguDAU7aj1wjwvQACW5TrrmJnkuMQOY+28LpgehUk0x7e8YC+i0vsrx/Tr5M/3HwMpAjE1NhzA6PTImrxtqJJ07ebdmYf37905Ov0retkYOzZFrUOwENB5Ptza2o7FJtXV9mRZljoHPOWgZcdeLzvrO8JUm41cUCWu7Gqe62uoGxPCJDZV5QmQwFlKSA+HFxj1KkCFflICPibCnJUQYuo8KrTnytV6Xb6wjAdiuWlKO1n2RTJRxVp1fnmXpD2EZPK74UWgRkCiJGFbkNZG2eAABnsRUXdvrGtZ5NeVm5hHN7zKIAQtbOr21pw1q510NPajoUGKiWJfU4MmTYGrIey6/Gn95hBJEtHDzc2D/Y8vdt4MTs5ymQ6OYI/WSF6v1tpzY+/F82SYbfRmUlYSSgT88vmzt7u7+Yf+q53Xt9c35ADFCiitgCi8VDr9bYZLuBLdzgocZIcbt3r7nz4ffvt6/HMQXPTn5FWryBQ+VEhone8yUPE/AQYA4uf6hDL9lasAAAAASUVORK5CYII=";
+const PREVIEW_WINDOWS7_MAXIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAUCAIAAAAcIrrpAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoyMUVBREM2NEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoyMUVBREM2NUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjIxRUFEQzYyRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjIxRUFEQzYzRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+rT1B0wAAAbZJREFUeNqsVMFKw0AQzSSbFm+Ch5681IPBk0cFf0HBovgBgv0CwYJ48KJQf8Bjj0KxPyGIZ/FWD17sqZSoxdTs7ri7STbZWNNGnECSmd1582Z2ZmFlbd0qErDKCFBKrf8TMp7w0UeQseBUgmCwVBoYj9AXKo49R0gZADEbCJXJeKJle75i4WyTQiSUUcpYDq/Xvb2/eyggvLm10dhviKQhyl19GAMieAu83G6B1b25LoDbO2hu7+7EOMmbc4eElH4Gkz8covKCFBCsqgOEc4yTxekschbNOsopxQOLcS6S5UzXLoPo+370c3zW0sb2+YW2Sy8jV5EsJ6O3cf/l9SevIIibUazCb3Z9EordV22JIEfGuNEeimMYhpHW63SyYbSdch73smg3WTuQyUoVbNmYZsNFbu3LkxxrDQeJgyCGUpXNTABsxRnSroOo0jNmOesFySQSSdUmihxqxLrntU6vCrDq3qrwys2S5PX0PHjsD5IhyYTDWXMG+Ylcri0S4riVSjWZbLSsEohgIAIRYjsSD9LtKSLOcXlmNoDrujD0g+F7YCxi6YHTtyE5PGqW9MUCwG8BBgBMp7wXgqQXtAAAAABJRU5ErkJggg==";
+const PREVIEW_WINDOWS7_MAXIMIZE_DISABLED_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAUCAIAAAAcIrrpAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDowMjEyMDQwNEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxNDY5QTkwNEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjAyMTIwNDAyRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjAyMTIwNDAzRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+De1eFQAAAfFJREFUeNqsVG1P2zAQ9jlHqk1iwNiY0MSE+ID4wqfwj5DGr233fdImTUjVBmpIAakvcXzcOYnruGmRJhzHL+e78+PnfIbTi0ulSClpXOdLdyYFAFwrA2inIllpGGPU2xV8npvJ08z5J+rXIYfIoWjQOXh1X4N037s0QdUsqNYmPCUFYmh/gHg3AvexNkK7aUCR9wc91Pklahvx1xihqarK2oj9u7/j6cOk66sz3Ds4PDr+2kaiBg6VrZAhGlNF0XzI77Ms20C3GA+Hw4+fv0QRt1ZjacxsvogslqXhuiWCy7KczRbKw3P+BghIlvi8Ebe2Iq6CYjSMLqBDzUCodFbeoVaKSUNLxORFNpZYXwi11p6cnXv57e+fvMDKLGfOIQi4dcpYPD7/+jOmgDheLPLiLi8kJnmxSMY+DNO8uHdybpfJeMWlO+y340/Iuxkf2dYjM0CCQgbFv9tw1doGtbFV5z7Wka0v9FqKQq2TZVcbstilwgpZfRMBhcQ6X0QdAmVQfUnXpJsU3UUnHXKrNXoRkfgcvP8wGv3YkL9SWEHrJLriAAlq0JhgpL+7f6S49r5SXgRxxvAGiMlOmg7WTNpzb3G3Yq2ZMSzUifgDtc1sSwkN0xRhMp1PnuY9i+Gz8ppnDxOvv9/879NLazDhRYABAG2+48dQb60XAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC0AAAAUCAIAAACWDSOoAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo1MUJFQ0U3QkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo1MUJFQ0U3Q0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjUxQkVDRTc5RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjUxQkVDRTdBRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+4um6UwAAAGNJREFUeNpiPB4QwDAIABPD4ACj7hh1x/B2h8X69UCEX4Qe7jgRGAixG+4IuCAZgJHCcgw5AMh2BBXSB9xuShxBBXegxcvAuAOeJtDSCr3zC2a8kO0UxtH6dtQdo+4gGgAEGADwzyWzACxe8AAAAABJRU5ErkJggg==";
+const PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAAUCAIAAADkwkEeAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0OTZDQTk5NkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo0OTZDQTk5N0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ5NkNBOTk0RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5NkNBOTk1RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+ljHgfwAAACxJREFUeNpizF77jYFEwMRAOhjVM6oHBBg1NDSwSji3nqOqPaPpmiw9AAEGAE/1BlABkyDhAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAAUCAIAAADz4NHXAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0OTZDQTk5RUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo1MUJFQ0U3NEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ5NkNBOTlDRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5NkNBOTlERUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+rUFpngAAAEBJREFUeNpiyV77jYGqgImB2mDUROoAFjxye6uN8Mg6t54bBG7E4xA8zh9NPXSJGfwJiGQTcUX0aMwMTRMBAgwAqnwLQW6xssAAAAAASUVORK5CYII=";
+
 
 let previewPlusIconImage: HTMLImageElement | null = null;
 let previewSubmenuIconImage: HTMLImageElement | null = null;
+let previewWindowsTitleIconImage: HTMLImageElement | null = null;
+const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 
 function createPreviewRasterIcon(dataUri: string): HTMLImageElement | null {
   if (typeof Image === "undefined") {
@@ -846,6 +858,60 @@ function getPreviewSubmenuIconImage(): HTMLImageElement | null {
   }
 
   return previewSubmenuIconImage;
+}
+
+function getPreviewWindowsTitleIconImage(): HTMLImageElement | null {
+  if (!previewWindowsTitleIconImage) {
+    previewWindowsTitleIconImage = createPreviewRasterIcon(PREVIEW_WINDOWS_TITLE_ICON_DATA_URI);
+  }
+
+  return previewWindowsTitleIconImage;
+}
+
+function getPreviewWindowsTitleButtonDataUri(
+  osSkin: "windows7" | "windows8",
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): string {
+  if (osSkin === "windows7") {
+    if (kind === "close") {
+      return PREVIEW_WINDOWS7_CLOSE_BUTTON_DATA_URI;
+    }
+
+    if (kind === "minimize") {
+      return enabled
+        ? PREVIEW_WINDOWS7_MINIMIZE_BUTTON_DATA_URI
+        : PREVIEW_WINDOWS7_MINIMIZE_DISABLED_BUTTON_DATA_URI;
+    }
+
+    return enabled
+      ? PREVIEW_WINDOWS7_MAXIMIZE_BUTTON_DATA_URI
+      : PREVIEW_WINDOWS7_MAXIMIZE_DISABLED_BUTTON_DATA_URI;
+  }
+
+  if (kind === "close") {
+    return PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI;
+  }
+
+  return kind === "minimize"
+    ? PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI
+    : PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI;
+}
+
+function getPreviewWindowsTitleButtonImage(
+  osSkin: "windows7" | "windows8",
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${osSkin}:${kind}:${enabled ? "enabled" : "disabled"}`;
+  const cached = previewWindowsTitleButtonImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewWindowsTitleButtonDataUri(osSkin, kind, enabled));
+  previewWindowsTitleButtonImageCache.set(cacheKey, image);
+  return image;
 }
 
 function drawPreviewRasterIcon(
@@ -5665,28 +5731,35 @@ function render() {
     }
 
     if (showWindowsIcon) {
-      ctx.save();
-      if (isWindowsTitleBar) {
-        ctx.fillStyle = windowsChromeColors!.inactiveTitle;
-        ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
-        ctx.strokeStyle = titleFg;
-      } else {
-        ctx.globalAlpha = 0.20;
-        ctx.fillStyle = focus;
-        ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
-        ctx.globalAlpha = 0.5;
-        ctx.strokeStyle = fg;
-      }
-      ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize.width - 1), Math.max(0, iconSize.height - 1));
-      ctx.restore();
+      const windowsTitleIconImage = isWindowsTitleBar ? getPreviewWindowsTitleIconImage() : null;
+      const drewWindowsTitleIcon = isWindowsTitleBar
+        ? drawPreviewRasterIcon(ctx, windowsTitleIconImage, iconX, iconY, iconSize.width, iconSize.height)
+        : false;
 
-      ctx.save();
-      if (!isWindowsTitleBar) {
-        ctx.globalAlpha = 0.85;
+      if (!drewWindowsTitleIcon) {
+        ctx.save();
+        if (isWindowsTitleBar) {
+          ctx.fillStyle = windowsChromeColors!.inactiveTitle;
+          ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+          ctx.strokeStyle = titleFg;
+        } else {
+          ctx.globalAlpha = 0.20;
+          ctx.fillStyle = focus;
+          ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = fg;
+        }
+        ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize.width - 1), Math.max(0, iconSize.height - 1));
+        ctx.restore();
+
+        ctx.save();
+        if (!isWindowsTitleBar) {
+          ctx.globalAlpha = 0.85;
+        }
+        ctx.fillStyle = titleFg;
+        ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize.width - 6), Math.max(4, iconSize.height - 6));
+        ctx.restore();
       }
-      ctx.fillStyle = titleFg;
-      ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize.width - 6), Math.max(4, iconSize.height - 6));
-      ctx.restore();
     }
 
     if (titleRight > titleLeft) {
@@ -5717,6 +5790,7 @@ function render() {
         : winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW;
       const isMacPreview = titleBarDecoration.buttonStyle === "macos-circles";
       const isLinuxPreview = titleBarDecoration.buttonStyle === "linux-glyphs";
+      const isWindowsPreview = isWindowsTitleBar;
       for (let index = 0; index < titleButtonSlots.length; index += 1) {
         const slot = titleButtonSlots[index];
         const size = titleButtonSizes[index] ?? fallbackButtonDims;
@@ -5725,60 +5799,74 @@ function render() {
         const buttonH = size.height;
         const kind = slot.kind;
         const isEnabled = slot.enabled;
-        if (isMacPreview) {
-          const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
-          const cx = buttonX + Math.trunc(buttonW / 2);
-          const cy = buttonY + Math.trunc(buttonH / 2);
-          ctx.save();
-          ctx.globalAlpha = isEnabled ? 0.24 : 0.12;
-          ctx.fillStyle = focus;
-          ctx.beginPath();
-          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = isEnabled ? 0.35 : 0.18;
-          ctx.strokeStyle = buttonStrokeColor;
-          ctx.beginPath();
-          ctx.arc(cx, cy, Math.max(0, radius - 0.5), 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-        } else if (!isLinuxPreview) {
-          ctx.save();
-          ctx.globalAlpha = isEnabled
-            ? (kind === "close" ? 0.28 : 0.18)
-            : 0.08;
-          ctx.fillStyle = focus;
-          ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
-          ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
-          ctx.strokeStyle = buttonStrokeColor;
-          ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, Math.max(0, buttonW - 1), Math.max(0, buttonH - 1));
-          ctx.restore();
+        let drewWindowsTitleButton = false;
+        if (isWindowsPreview && (settings.osSkin === "windows7" || settings.osSkin === "windows8")) {
+          drewWindowsTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewWindowsTitleButtonImage(settings.osSkin, kind, isEnabled),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
         }
 
-        if (isEnabled || !isMacPreview) {
-          ctx.save();
-          ctx.strokeStyle = buttonStrokeColor;
-          ctx.globalAlpha = isLinuxPreview ? 1 : (isEnabled ? 0.85 : 0.22);
-          const glyphBoxWidth = isLinuxPreview ? Math.max(8, buttonW - 9) : Math.min(10, Math.max(6, buttonW - 8));
-          const glyphBoxHeight = isLinuxPreview ? Math.max(8, buttonH - 9) : Math.min(8, Math.max(6, buttonH - 8));
-          const glyphLeft = buttonX + Math.max(4, Math.trunc((buttonW - glyphBoxWidth) / 2));
-          const glyphTop = buttonY + Math.max(4, Math.trunc((buttonH - glyphBoxHeight) / 2));
-          const glyphRight = glyphLeft + glyphBoxWidth;
-          const glyphBottom = glyphTop + glyphBoxHeight;
-          ctx.beginPath();
-          if (kind === "close") {
-            ctx.moveTo(glyphLeft + 0.5, glyphTop + 0.5);
-            ctx.lineTo(glyphRight - 0.5, glyphBottom - 0.5);
-            ctx.moveTo(glyphRight - 0.5, glyphTop + 0.5);
-            ctx.lineTo(glyphLeft + 0.5, glyphBottom - 0.5);
-          } else if (kind === "maximize") {
-            ctx.strokeRect(glyphLeft + 0.5, glyphTop + 0.5, Math.max(4, glyphBoxWidth - 1), Math.max(4, glyphBoxHeight - 1));
-          } else {
-            const lineY = glyphBottom - 0.5;
-            ctx.moveTo(glyphLeft + 0.5, lineY);
-            ctx.lineTo(glyphRight - 0.5, lineY);
+        if (!drewWindowsTitleButton) {
+          if (isMacPreview) {
+            const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
+            const cx = buttonX + Math.trunc(buttonW / 2);
+            const cy = buttonY + Math.trunc(buttonH / 2);
+            ctx.save();
+            ctx.globalAlpha = isEnabled ? 0.24 : 0.12;
+            ctx.fillStyle = focus;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = isEnabled ? 0.35 : 0.18;
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(0, radius - 0.5), 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          } else if (!isLinuxPreview && !isWindowsPreview) {
+            ctx.save();
+            ctx.globalAlpha = isEnabled
+              ? (kind === "close" ? 0.28 : 0.18)
+              : 0.08;
+            ctx.fillStyle = focus;
+            ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
+            ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, Math.max(0, buttonW - 1), Math.max(0, buttonH - 1));
+            ctx.restore();
           }
-          ctx.stroke();
-          ctx.restore();
+
+          if (isEnabled || !isMacPreview) {
+            ctx.save();
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.globalAlpha = isLinuxPreview || isWindowsPreview ? 1 : (isEnabled ? 0.85 : 0.22);
+            const glyphBoxWidth = isLinuxPreview ? Math.max(8, buttonW - 9) : Math.min(10, Math.max(6, buttonW - 8));
+            const glyphBoxHeight = isLinuxPreview ? Math.max(8, buttonH - 9) : Math.min(8, Math.max(6, buttonH - 8));
+            const glyphLeft = buttonX + Math.max(4, Math.trunc((buttonW - glyphBoxWidth) / 2));
+            const glyphTop = buttonY + Math.max(4, Math.trunc((buttonH - glyphBoxHeight) / 2));
+            const glyphRight = glyphLeft + glyphBoxWidth;
+            const glyphBottom = glyphTop + glyphBoxHeight;
+            ctx.beginPath();
+            if (kind === "close") {
+              ctx.moveTo(glyphLeft + 0.5, glyphTop + 0.5);
+              ctx.lineTo(glyphRight - 0.5, glyphBottom - 0.5);
+              ctx.moveTo(glyphRight - 0.5, glyphTop + 0.5);
+              ctx.lineTo(glyphLeft + 0.5, glyphBottom - 0.5);
+            } else if (kind === "maximize") {
+              ctx.strokeRect(glyphLeft + 0.5, glyphTop + 0.5, Math.max(4, glyphBoxWidth - 1), Math.max(4, glyphBoxHeight - 1));
+            } else {
+              const lineY = glyphBottom - 0.5;
+              ctx.moveTo(glyphLeft + 0.5, lineY);
+              ctx.lineTo(glyphRight - 0.5, lineY);
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
         }
 
         buttonX += buttonW + buttonGap;
