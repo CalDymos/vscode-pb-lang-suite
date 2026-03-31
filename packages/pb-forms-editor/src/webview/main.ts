@@ -4060,6 +4060,139 @@ function drawContainerChrome(
   ctx.restore();
 }
 
+
+function getPreviewGadgetDefaultTextColor(windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  return windowsSkinColors?.windowText ?? "rgb(0, 0, 0)";
+}
+
+function getPreviewGadgetDefaultControlBg(osSkin: DesignerSettings["osSkin"], windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  switch (osSkin) {
+    case "windows7":
+    case "windows8":
+      return windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+    case "macos":
+      return "rgb(237, 237, 237)";
+    case "linux":
+      return "rgb(242, 241, 240)";
+    default:
+      return "rgb(240, 240, 240)";
+  }
+}
+
+function getPreviewGadgetDefaultClientBg(windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  return windowsSkinColors?.window ?? "rgb(255, 255, 255)";
+}
+
+function drawStringLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = (g.text && g.text.length > 0)
+    ? g.text
+    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : "StringGadget");
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    const borderColor = ensurePreviewLineContrast(
+      (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)"),
+      fillColor,
+      "rgb(171, 173, 179)"
+    );
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  } else {
+    const borderColor = osSkin === "windows7"
+      ? ensurePreviewLineContrast(
+        (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)"),
+        fillColor,
+        "rgb(165, 165, 165)"
+      )
+      : "rgb(165, 165, 165)";
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 1.5);
+    ctx.lineTo(x + w - 1.5, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(245, 245, 245)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + w - 1.5, y + 2.5);
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + 1.5, y + h - 2.5);
+    ctx.moveTo(x + w - 2.5, y + 2.5);
+    ctx.lineTo(x + w - 2.5, y + h - 2.5);
+    ctx.stroke();
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 2, y + 3, Math.max(0, w - 4), Math.max(0, h - 4));
+  }
+
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.restore();
+}
+
+function drawTextLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isTextGadget = g.kind === GADGET_KIND.TextGadget;
+  const label = (g.text && g.text.length > 0)
+    ? g.text
+    : (isTextGadget ? "TextGadget" : "HyperLinkGadget");
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const bgColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (isTextGadget) {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  }
+
+  let textX = x + 1;
+  const textWidth = ctx.measureText(label).width;
+  if (hasPbFlag(g.flagsExpr, "#PB_Text_Right")) {
+    textX = x + Math.max(1, w - textWidth - 1);
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Text_Center")) {
+    textX = x + Math.max(1, (w - textWidth) / 2);
+  }
+
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, textX, y + Math.max(0, Math.trunc((h - 12) / 2)));
+
+  if (isTextGadget && hasPbFlag(g.flagsExpr, "#PB_Text_Border")) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)"),
+      bgColor,
+      "rgb(142, 142, 142)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  }
+
+  ctx.restore();
+}
+
 function drawPanelChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -6058,6 +6191,7 @@ function render() {
     ctx.clip();
 
     let labelY = gy + 14;
+    let drawDefaultLabel = true;
 
     switch (g.kind) {
       case GADGET_KIND.ContainerGadget:
@@ -6077,12 +6211,26 @@ function render() {
         drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
         break;
 
+      case GADGET_KIND.StringGadget:
+      case GADGET_KIND.IPAddressGadget:
+        drawStringLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TextGadget:
+      case GADGET_KIND.HyperLinkGadget:
+        drawTextLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
       default:
         ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
         break;
     }
 
-    ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
+    if (drawDefaultLabel) {
+      ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
+    }
     ctx.restore();
 
     const sel = selection;
