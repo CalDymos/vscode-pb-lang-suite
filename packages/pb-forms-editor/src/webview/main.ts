@@ -4484,6 +4484,44 @@ function drawCalendarGadgetChrome(
   ctx.restore();
 }
 
+function drawCanvasLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  label: string
+) {
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgb(237, 237, 237)";
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  ctx.strokeStyle = "rgb(0, 0, 0)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = "rgb(0, 0, 0)";
+  ctx.fillText(label, x + 3, y + 3);
+  ctx.restore();
+}
+
+function drawWebLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  label: string
+) {
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = "rgb(194, 194, 194)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.fillStyle = "rgb(0, 0, 0)";
+  ctx.fillText(label, x + 3, y + 3);
+  ctx.restore();
+}
+
 function drawComboLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -7604,6 +7642,26 @@ function render() {
 
       case GADGET_KIND.CalendarGadget:
         drawCalendarGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CanvasGadget:
+        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "Canvas Gadget");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.OpenGLGadget:
+        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "OpenGL Gadget");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.WebGadget:
+        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "Web");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.WebViewGadget:
+        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "WebView");
         drawDefaultLabel = false;
         break;
 
