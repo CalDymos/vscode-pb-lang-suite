@@ -826,11 +826,28 @@ const PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGg
 const PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAAUCAIAAADkwkEeAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0OTZDQTk5NkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo0OTZDQTk5N0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ5NkNBOTk0RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5NkNBOTk1RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+ljHgfwAAACxJREFUeNpizF77jYFEwMRAOhjVM6oHBBg1NDSwSji3nqOqPaPpmiw9AAEGAE/1BlABkyDhAAAAAElFTkSuQmCC";
 const PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAAUCAIAAADz4NHXAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0OTZDQTk5RUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo1MUJFQ0U3NEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ5NkNBOTlDRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5NkNBOTlERUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+rUFpngAAAEBJREFUeNpiyV77jYGqgImB2mDUROoAFjxye6uN8Mg6t54bBG7E4xA8zh9NPXSJGfwJiGQTcUX0aMwMTRMBAgwAqnwLQW6xssAAAAAASUVORK5CYII=";
 
+const PREVIEW_MAC_CHECKBOX_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAPCAIAAABbdmkjAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDowMjEyMDNGQ0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDowMjEyMDNGREVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjAyMTIwM0ZBRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjAyMTIwM0ZCRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+apznaAAAAMtJREFUeNqM0s8ORDAQBnAzKUcPwMnB0Rt4/xeQuAh18CfhIhKXFeyn3fSy1d3vUGp+pslAXddJKfu+X9fVsyUMwziOkyQRTdNs25bnOfZWii5FUYBx27ZZlj05BCUAMF6WxeGMBhOnivcrMEJf3JqZsX7ocRzXdVkdEembm75UHDQIgru393dYv2dOsXbVVWE2T9qUGN9tHEdWoa/o5wBgjPGWZTlNk3gISgBgVNd1VVXDMDh+lyiK0jSleZ4xqX3fHcPyfR/zegswAHZacOrvctIyAAAAAElFTkSuQmCC";
+const PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAARCAYAAAACCvahAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo4MjA2RTk4N0VGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo4MjA2RTk4OEVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjgyMDZFOTg1RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjgyMDZFOTg2RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+uTGnVAAAAn5JREFUeNqUk1tIVEEYx/+znj1eqBWTco1iWY1au2hG9lC0KxnRS1BhLz1FEAQWdrHTilgWbEQEPhRBl6eE6G2X3nqIiDS0stQuEKa7JyXdVGrNvXl2z/TN7LIVgeHABx8z/998M98FnHMsxnp6X3PX9v288ehZzsTGYlZ1/SH+/tMonKvLoYiNrgdv+MDQNMLhxIJgKNwLAYp1WTsOdr/rFf8yY6BupxNrq+zIywMYI8sC4l3icaOjY9i9pxFpI4Wt1Vvw8vFdpvQPTcBzoA7LV9ox+5Mgy28Qf1xw+kyHBG3FNtS6GuS+MjkRQUn5CkSTBkXkZOwfOOAPYODtgPTbvC3of/Jd+hTHQHTeRIxMa9Gwy+3B02c9iBuQNvZ1Crdu3JRit2cHttXvhWAyMJ8nEUc8xRAaGcF8IgnfpYsYDuqIpYDO69cQnZtDQVERzp1vxVTUhGBycIwuEkLfFR/UgnzESexr8+JRIIC+7udSeKr5JGJqqdTmYNM0EJoFghFgdlkVtPYOeTCuB3Gv86r0N9RsRqX7IIbpq0IrGAlzcvKtFqhWhhRnqKhrwLGmplyyFNWK5tYLiFAwoRFanoWpSZKwFTJYLQwWCx1QqvcdPoIf01Pw+/3QWr0oLFsFC+XENE0YpqhFMgNzytzSQkg40yAM4kcnvBra2jV8S3CKShFVjnSaESzqno1sL1uCeDiE0koHrIqInqkz5Q8zJMxTGUpU8U8qUIpjfCQEwUi4ptqJUF83ivNNONZXQMlG/7s9OVJpDv1jkLQvIBix5FTdvvOQD777jMnJmQUHw24vRc2mNfC4az+4XOs25kZS13X+v/EUL3I4HLnu/SXAAH8uNYXaysDiAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS7_CHECKBOX_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAIAAAD9iXMrAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0OTZDQTk5QUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo0OTZDQTk5QkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ5NkNBOTk4RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQ5NkNBOTk5RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+aVrkRwAAAMJJREFUeNqMkU0OgjAQhen8td4B9+rWxMQD4XFkLzdx48qrsME7lFdK1LIQX0oyHb68NzDu2rbVHxI8l6b5Dd26TnJ1fzwX75xzquxVzqfj7Je1ret3rcKqYsp9339yv0XkVMRMEjqdJUdEzCRM3uAkIriRmRYcusEjikGgAIX50A9hU3A2cZNTEvMcF0JY+sFJU1gSZoBfjBERpZ/mmSRD0PxrpOSCt2F4ee/V1PC1eb5YMZfcYb9b3xvWsrrfUYABAJm/FqKKXQlOAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS7_CHECKBOX_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAIAAAD9iXMrAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo2REIxQjIxMkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo2REIxQjIxM0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjZEQjFCMjEwRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjZEQjFCMjExRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+9U1l0QAAARNJREFUeNpi7OnrYSACsABxdmY2pgQHCweQ/PHnB5CcOn0qC0R02+5jyIoUZSXPXf9w/cHz7EgrSQkBqHlwObgdijKKLbOWfvjw477Fe4g6JkyHSAoI7jt9HahIUUZQSxOqGaGOg4dDQESQg4NDQEBg7fbrQA1Rfobff7xHUScpKfjjC8Px088lRQSPXbj/4c17RQlBJwvNHz9+IPwLBBISkr2zjgEdrqkpuWzbeaBwkKch0LNA41HMAxpQnOYEFKtpW/v8xXugE71sNYHinCycKOqAWgV5OJzAckCnAg1jQLEPRgNNev/meZCnETiEGZwsFT98+cDwBxraCHWaOhCTGIoTnSDGw1Ug1AGjhWD8AgQYACCGWsW49NXoAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS8_CHECKBOX_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAIAAAD9iXMrAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozQTcyMzQxOUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozQTcyMzQxQUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjIxRUFEQzZBRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjNBNzIzNDE4RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+4MrthwAAAChJREFUeNpiLCgoYCAGANX9JwSAapgYiAOj6uijjgWICwsLCaoDCDAAu0smPNGUMYcAAAAASUVORK5CYII=";
+const PREVIEW_WINDOWS8_CHECKBOX_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAIAAAD9iXMrAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozQTcyMzQyMUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozQTcyMzQyMkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjNBNzIzNDFGRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjNBNzIzNDIwRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+mo4YUgAAALRJREFUeNqMkeENgyAQhVvT/7iJbMAoOgJOoE7ACLABjOAGOAIbABPQZ6GmodH2EsgL7zvu4O6c89sf8cASQlxD4zg2F/Y8z865rE85Y8yyLJTSKy6EMAwDxNF981ll27asAcUYu67DYbGRkVKSUkITQqy1WutsQadX7LdmznuP7GyDxj5NU3oHmFK3bdt1XRlj0HXFqr+M9n0PrZSqXla/FwTaOr7jlEN8Q2VuGMvP+T4FGACmhVg3stIz9gAAAABJRU5ErkJggg==";
+const PREVIEW_MAC_OPTION_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAARCAIAAABbzbuTAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpEMkFFQzRBRUVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpEMkFFQzRBRkVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkFDRUEwNTkzRUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOkFDRUEwNTk0RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+BKT9gQAAAXpJREFUeNqMk0mLwkAQRtNNoyCIKC7B/Sx6EiF3f7dHQRAvIh5FxX1FBMEkE32xJyKMynynpOrVkqqK2O/3RqD5fD6bzVar1el04jUWi5mmmc/nc7nckxE64Hw+D4fD7XZbLBbL5XImk8G4Xq/H4/F0Ok2lUpVKJRqN/gZAd7vdSCRSr9c1+irCer3e5XJpNBrE+AGdTgdHs9kMh8PGO12v11arxYNlWZK+d7sduT/RCBcAGLCaTCb0TZeu6xqfBQAGLJfLJXP4+YfAgNXhcNDpb7fblwqe54EBKzjHcbyHvgRIKSkCLNkO4/cHLMQnWrvAgCWDXywWJDC+CgAMWBYKhdFoRHPiobfpEQAYsCyVSolEot/v06J8SLxIW3ABgAFLpVStVuM62u328XiUf4QRFwAYsH8azIctDgYDfORg3slkkmYwcrwsKx6PV6tVjH59fa3E2LbNbfJlm83med7pdDqbzXK/oVBID0a8/g9uIL0TCBXoydwFGAD0rBGF/IJfUAAAAABJRU5ErkJggg==";
+const PREVIEW_MAC_OPTION_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAARCAYAAADUryzEAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozRTI2MjUyMEVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozRTI2MjUyMUVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjE3MzUwMTdGRUZCRTExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjE3MzUwMTgwRUZCRTExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+E9gJjgAAArRJREFUeNpsk99OE1EQxr/dPaG4hZYSkBarWylWlhgCCQlETC+qF2r0Ibz02ufwWu9M5MIXMJBIhNhYg4kJxj+tqW2hBCjQplZKK1u6HGe2gbTibCaZzHy/2TlndxQpJdotsZqRqWQF2fwhivsHTm7wogdhowfmeB/mZkeVdr1y2iCd3pbx9wVktw4xOj6EkZF+BEM+p7a18Qu5XBmZ5B7CwR5EbwUQiVxSzhoQXHm9kPXabh3TN6/BH/Dif7Zb+I1PH35Cq9Xx4H7YaaJyIf5u3dtwuTB7ZxIenxfVoxMc1I47nHNcYw1riXGaqonED5naquD69BhsaKhaTdStE/xpKh3OOa6xhrXMEHsoviZ34DP8cPk8qNtcbpllWYivvHHiuWgMuu52Ypse1jJDrFvksiVcjkZQozcI0L0ICatWw5PHj1DI5x3olTGPp89ewOWmJjRNEyfw+v3IxXNQd3eL6Pb1o2HT6CRukGB5ZekMZuOYc1xzNKRlhlnBQ21WaSxb0Pg2oEkcN8W5L8C53EGT5AqpFFh12zmQOjB4Ac1yCRqBQhMQQmAmFkPQMM7gAMWc4xprWMsMsyIcGkCmtIFA5Aq6IKHQy1W48fzlPBLLb50G0dhtbFrd8FAsCW7Q4PvEjBIrTHMY3xa/QJomdP8gNKE5x6hCx9zdh06DCk2r62iNr9mw6OxH+QzMexNQY7EZZSzUi53Pq3QHR3B3SXhcBJDbouUcc45rrGEtM8yq5XK5LxadKPY0yvi+tIDjagG9LmriJteVllPMOa6xhrXEdC7T2loqFY9/HFsvVWGYEYQiYfiN4dYO5Hewkc4in0rj6kAvotEZOTVlqh0NTm1xaVmmk5vI5fdQpLM660x3M2IMITJ+BZM3zO1AIBA8t87tVigUJP/K7eaiBSJQ+Vf7V4ABALpiUZRT2LKKAAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS7_OPTION_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoxNDY5QTkwN0VGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoxNDY5QTkwOEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjE0NjlBOTA1RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjE0NjlBOTA2RUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+Kfcx0AAAAdJJREFUeNpkUkFvEkEYfTO7CykLlF1SQW2Kra3cyoHUP1AvNanxwM2jFw+eTDxpNI1Hz/VgYpr+C0JsKrEnD4ZggIsW8ABEGsKm7IZlWdbvWzXROMnLZOZ778v73owIgiAKIEm43+l03n47P0e/30ewWCCTySCXyyGfzz+n+iFBCBa4rvuuWq0++DEcorC9DTOdhqDqeDxGo9FAJBrFnd3dV7quv2bBi0qlciCkxO2dHXxtf4dlXUJRJYzlJNZWr6HZbKLX66FUKj0T7XY7+Hh2hnv7+/j0+QsSCR2xmI6IqsL3PTiOjVubmzj9cIqN9XWI9ycnwZWVFcx8wJvPocfiiES0XyDRbDbFnO5VVUGtVoPkAdkz24gt6f+QeTeMVNgobZphGKrv+1DIv5DiPzKDaxqdhRBYUHLyajaL0WgEM5XEgjz/TdY0FdPplGZaChPLUsySc+bobqytwrZteJ4b+lUUCcd2YDsOEvF4mBRzJT3KQ86ZRVs3N0jgoT8YkN8B3JkLI7WMbreL4cUFisXiG36Hrclk8qhcLj9RNQ2FQgGmYYCXZVlotVoh+e7e3oFpmkcsuE41l/C4Xq+//PM1eMDs769BnY+llE+Jc/lTgAEAXUzKK6PZ3p4AAAAASUVORK5CYII=";
+const PREVIEW_WINDOWS7_OPTION_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDoyMUVBREM2MEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDoyMUVBREM2MUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjE0NjlBOTBERUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjE0NjlBOTBFRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+6AO1NgAAAglJREFUeNp0kd9rUnEYxp/jmR61w2wtj0rlXCcaeNNiTsaSJgQz9KLbICmItqvsrrtddLE/oEYEUdf9YBCMplTClJLGdnGmSOXWFDVMPR7Q6TGm5Vnfc+i29+b5wsOH7/O+D9VqtXgAcq/XW65Wq3fy+TyIQh2HwwGe51VdYRjmlcViyVEEMBJvLhqNvrVarXqn0wmiGtBoNFAulzUNhUJPCXCfjkQiS/F4/Pn4aZ52uy8i97WEjfgW0sIujAYW0x4vBv3f2EikPFOeSZkOh8MJiqLAnz+Hl2vrePTiNUSKxk6phNX1NbDHDPDNevCnD3Tk5hU6EAg8UHPuFQp4vPoGl24uwHf7FroWO7Lfc/ic/IB53wxOjnDY2/8GnSiKWubN7Qw6Rybox9z4WFGQkXU4Ne3H4dAwUpsCnM4x7RhD+DcMMwJJ7OJ9LIUD6xn0+32YmwNAMcFkGkW73YGiKNBxHKddYcZLvjUasf8pAfPPEobFCvLkfcJggP+yH93uL9htNlCCIBxJkoQJ9xTiqS0srzyDPNBBr9fjOKPD0r0FXJ2bRVbIwswqoCqVSjqZTF4Y513gz05AkprIftnVYno9k+C4UQg72/hRaOP6jeATtTiaeHdjsdhDdfn/FRcMBjOkuGsqYCLeoSzL7+r1+nyxWEStVtMAu90Ol8sFm82WZVl2kQDpvwIMAJKc20s9LUm8AAAAAElFTkSuQmCC";
+const PREVIEW_WINDOWS8_OPTION_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAYAAABy6+R8AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo2REIxQjIwRUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo2REIxQjIwRkVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjUxQkVDRTdERUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjUxQkVDRTdFRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+xzpIiAAAATJJREFUeNqMkr9KhmAUxs/3FtJgkDgGEoKDdyBObV6B+zfU0CotdgVNXUBBU5NCs5stqVeQkODgKIgiNiiJnaepoU984PjnnN9B3/OcXdd150R0wXGV5/m+KAqqqoratiVFUUjTNDIMg0zTfGLmhePjmC9fwzBcJkmyz7KMXNclx3FIVVVqmobKsqQwDMmyrGvbtgtZlmviL90FQbBEUbSM47j8J+RRB8f8LaVpunied7DhbyM48AJnwC9JkkRrQh0ceIFD67pOWwQOvMCUcOgtAgdeYKyY0haBAy/gA8a6ReDACxgHH6ZpWm1AHRx4wU4/snEUx/HBRuRRB8f8veDcKzv91vf9t+/7hK2o65rmef694x15rhNz78w/7NjhM3444Tjl3ftc2b0bZp45jn4EGADZF+kebrS9nwAAAABJRU5ErkJggg==";
+const PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAANCAYAAABy6+R8AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDowMjEyMDQwMEVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDowMjEyMDQwMUVGQzAxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjAyMTIwM0ZFRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjAyMTIwM0ZGRUZDMDExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+435AUAAAAX1JREFUeNqckjFrAkEQhd8aEYvjREQkjUHhEIWUgtjZWNlK0pkmSZFOCDE/ISn9BwppvFaCSMBOBbuIWCgWV58oYhEvyGbfwVkY0+TBcLuz3xyzb0es12sdwIWK++l0+jCbzWBZFlarFcLhMOLxOAzDQDabvRNCfOz3e0eoIrHdbl/6/f7jcDhEuVxGMplEJBLBcrnEYrGAaZrI5XLI5/PXmqa9s+iy2+1+6rqOQqGAQCCAYzmOg16vh81mg2Kx+IbBYCCr1arc7XaSUn+VlUpFZjIZ98s9xXNy5NFsNt2FV5BKpWQikTgE914hOfI+Xpp3oNrtttvKcWvMU+TI++kSL02NRiOckpcnR95HW+kSpWw9WeTlyZH38R1oK1UqlX65xz3zFDny/3NPvdNzq9X67nQ6h8JjMc9zxUnFP53VajURi8XO5/O50Wg0EAqF3JaCwSBs28Z4PEa9Xkc0GuVEXKmzCSfCr9rVVNyq2Xv9a/bS6fSNYkwVXz8CDAAUuCXX1bCpjgAAAABJRU5ErkJggg==";
+const PREVIEW_DATE_ICON_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABUAAAAWCAIAAACg4UBvAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo5RTU0RUJBOEVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo5RTU0RUJBOUVGQkYxMUUxODk5NEQ4M0UyMzg4NEQ1NCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjlFNTRFQkE2RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjlFNTRFQkE3RUZCRjExRTE4OTk0RDgzRTIzODg0RDU0Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+CwqEwwAAAYVJREFUeNqklE2OgkAQhem2TYwrF6CQoMGEGMLeHQtv4C0MGw/gCbwWC89g3GnQSIxCWBgTQHGeMlGGyWDrvEXx119XdVVRxPf9/X6/Xq93u93pdBI4VK/XW61Wu92WJIksFov5fK6qarfbFUWRhz8cDsvlcrPZmKbJVquVoij9fl/glnjX5XIBS7fbra7rwvsCBZYej0fOsH9HAZamaSp8KrAsu1yv13dhQgjsjQf8QRSU0m8+vSsfwnQ6nc1mmYfMgWVZk8mk4PyH/zw/Ho89zwvDMHtsNBp4k4+R3HWL4sHnVavVbNuGRas97gtrMn83/0mSxHFcSCHacTAYOI4Di/soigrJe/J/1WY4HAZBAFuSXVqe5NFo9KIK5Z9xtPIFLJ/Mt5rnmf9/8agQkpRvCc7OBQWWyrKMYcAYQz9WKhX6StkarAcFlnU6HYwg7KdpGvqMxz/6EpMDP79hGAzDB+V1XRe78M+/ZrPZ6/XAEszP8/mMOsFy/sU4P+KvVquwXwIMAJ1D59HeVtwFAAAAAElFTkSuQmCC";
+
 
 let previewPlusIconImage: HTMLImageElement | null = null;
 let previewSubmenuIconImage: HTMLImageElement | null = null;
 let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
+let previewDateIconImage: HTMLImageElement | null = null;
+
 
 function createPreviewRasterIcon(dataUri: string): HTMLImageElement | null {
   if (typeof Image === "undefined") {
@@ -912,6 +929,61 @@ function getPreviewWindowsTitleButtonImage(
   const image = createPreviewRasterIcon(getPreviewWindowsTitleButtonDataUri(osSkin, kind, enabled));
   previewWindowsTitleButtonImageCache.set(cacheKey, image);
   return image;
+}
+
+
+function getPreviewCheckableImageDataUri(
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  checked: boolean
+): string {
+  if (kind === "checkbox") {
+    switch (osSkin) {
+      case "macos":
+        return checked ? PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI : PREVIEW_MAC_CHECKBOX_DATA_URI;
+      case "windows8":
+        return checked ? PREVIEW_WINDOWS8_CHECKBOX_CHECKED_DATA_URI : PREVIEW_WINDOWS8_CHECKBOX_DATA_URI;
+      case "windows7":
+      case "linux":
+      default:
+        return checked ? PREVIEW_WINDOWS7_CHECKBOX_CHECKED_DATA_URI : PREVIEW_WINDOWS7_CHECKBOX_DATA_URI;
+    }
+  }
+
+  switch (osSkin) {
+    case "macos":
+      return checked ? PREVIEW_MAC_OPTION_CHECKED_DATA_URI : PREVIEW_MAC_OPTION_DATA_URI;
+    case "windows8":
+      return checked ? PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI : PREVIEW_WINDOWS8_OPTION_DATA_URI;
+    case "windows7":
+    case "linux":
+    default:
+      return checked ? PREVIEW_WINDOWS7_OPTION_CHECKED_DATA_URI : PREVIEW_WINDOWS7_OPTION_DATA_URI;
+  }
+}
+
+function getPreviewCheckableImage(
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  checked: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${kind}:${osSkin}:${checked ? "checked" : "unchecked"}`;
+  const cached = previewCheckableImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewCheckableImageDataUri(kind, osSkin, checked));
+  previewCheckableImageCache.set(cacheKey, image);
+  return image;
+}
+
+function getPreviewDateIconImage(): HTMLImageElement | null {
+  if (!previewDateIconImage) {
+    previewDateIconImage = createPreviewRasterIcon(PREVIEW_DATE_ICON_DATA_URI);
+  }
+
+  return previewDateIconImage;
 }
 
 function drawPreviewRasterIcon(
@@ -4214,6 +4286,204 @@ function drawComboDropArrow(
   ctx.restore();
 }
 
+
+function drawCheckableGadgetFallbackMark(
+  ctx: CanvasRenderingContext2D,
+  kind: "checkbox" | "option",
+  checked: boolean,
+  x: number,
+  y: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+): void {
+  ctx.save();
+
+  if (kind === "checkbox") {
+    const size = 13;
+    const borderColor = osSkin === "windows8"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+        "rgb(255, 255, 255)",
+        "rgb(142, 142, 142)"
+      )
+      : "rgb(142, 142, 142)";
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    if (checked) {
+      ctx.strokeStyle = osSkin === "windows8" ? "rgb(49, 106, 197)" : "rgb(0, 0, 0)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 2.5, y + 6.5);
+      ctx.lineTo(x + 5.5, y + 9.5);
+      ctx.lineTo(x + 10.5, y + 3.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const size = 13;
+  ctx.strokeStyle = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+      "rgb(255, 255, 255)",
+      "rgb(142, 142, 142)"
+    )
+    : "rgb(142, 142, 142)";
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2 - 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (checked) {
+    ctx.fillStyle = osSkin === "windows8" ? "rgb(49, 106, 197)" : "rgb(0, 0, 0)";
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCheckableGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const checked = Boolean(g.state);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = g.text ?? "";
+  const image = getPreviewCheckableImage(kind, osSkin, checked);
+  const fallbackWidth = kind === "option" ? 16 : 14;
+  const fallbackHeight = kind === "option" ? 17 : 15;
+  const imageWidth = image && image.complete && image.naturalWidth > 0 ? image.naturalWidth : fallbackWidth;
+  const imageHeight = image && image.complete && image.naturalHeight > 0 ? image.naturalHeight : fallbackHeight;
+  const markX = x;
+  const markY = y + Math.trunc((h - imageHeight) / 2);
+  const textX = x + (kind === "option" ? 19 : 17);
+  const textY = y + Math.trunc((h - (kind === "option" ? 17 : 15)) / 2);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (!drawPreviewRasterIcon(ctx, image, markX, markY, imageWidth, imageHeight)) {
+    drawCheckableGadgetFallbackMark(ctx, kind, checked, markX, markY, osSkin, windowsSkinColors);
+  }
+
+  if (label.length > 0) {
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, textX, textY);
+  }
+
+  ctx.restore();
+}
+
+function drawDateGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = g.text ?? "";
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows7" || osSkin === "windows8") {
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(150, 150, 150)",
+      fillColor,
+      "rgb(150, 150, 150)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    drawComboDropArrow(ctx, x + w - 8, y + Math.trunc(h / 2), textColor);
+    if (label.length > 0) {
+      ctx.fillStyle = textColor;
+      ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+    }
+    ctx.restore();
+    return;
+  }
+
+  const iconImage = getPreviewDateIconImage();
+  const iconWidth = iconImage && iconImage.complete && iconImage.naturalWidth > 0 ? iconImage.naturalWidth : 21;
+  const iconHeight = iconImage && iconImage.complete && iconImage.naturalHeight > 0 ? iconImage.naturalHeight : 22;
+  const bodyWidth = Math.max(0, w - 27);
+
+  ctx.strokeStyle = "rgb(165, 165, 165)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 1), Math.max(0, h - 1));
+  ctx.strokeStyle = "rgb(227, 227, 227)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y + 1.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + 1.5);
+  ctx.stroke();
+  ctx.strokeStyle = "rgb(245, 245, 245)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y + 2.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + 2.5);
+  ctx.moveTo(x + 1.5, y + 2.5);
+  ctx.lineTo(x + 1.5, y + h - 1.5);
+  ctx.moveTo(x + bodyWidth - 1.5, y + 2.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + h - 1.5);
+  ctx.stroke();
+
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
+
+  if (label.length > 0) {
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+  }
+
+  if (!drawPreviewRasterIcon(ctx, iconImage, x + w - 21, y + Math.trunc((h - iconHeight) / 2), iconWidth, iconHeight)) {
+    const fallbackY = y + Math.trunc((h - 18) / 2);
+    ctx.strokeStyle = "rgb(128, 128, 128)";
+    ctx.strokeRect(x + w - 20.5, fallbackY + 0.5, 17, 17);
+    ctx.fillStyle = "rgb(222, 79, 79)";
+    ctx.fillRect(x + w - 20, fallbackY + 1, 16, 4);
+  }
+
+  ctx.restore();
+}
+
+function drawCalendarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  ctx.strokeStyle = "rgb(0, 0, 0)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = textColor;
+  ctx.fillText("Calendar Gadget", x + 3, y + 3);
+  ctx.restore();
+}
+
 function drawComboLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -7301,6 +7571,16 @@ function render() {
         drawDefaultLabel = false;
         break;
 
+      case GADGET_KIND.CheckBoxGadget:
+        drawCheckableGadgetChrome(ctx, g, gx, gy, gw, gh, "checkbox", settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.OptionGadget:
+        drawCheckableGadgetChrome(ctx, g, gx, gy, gw, gh, "option", settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
       case GADGET_KIND.ComboBoxGadget:
       case GADGET_KIND.ExplorerComboGadget:
         drawComboLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
@@ -7314,6 +7594,16 @@ function render() {
 
       case GADGET_KIND.ProgressBarGadget:
         drawProgressBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.DateGadget:
+        drawDateGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CalendarGadget:
+        drawCalendarGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
         drawDefaultLabel = false;
         break;
 
