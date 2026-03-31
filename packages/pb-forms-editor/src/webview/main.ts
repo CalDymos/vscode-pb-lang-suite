@@ -4836,10 +4836,19 @@ function drawMenuFlyoutPanelPreview(
   if (panelRect.w <= 0 || panelRect.h <= 0) return;
 
   const flyoutDecoration = getWindowPreviewMenuFlyoutDecoration();
-  const panelBg = flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)";
-  const panelBorder = flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg;
-  const separatorColor = flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder;
-  const menuTextColor = flyoutDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg;
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const panelBg = windowsSkinColors
+    ? windowsSkinColors.menu
+    : (flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)");
+  const panelBorder = windowsSkinColors
+    ? windowsSkinColors.scrollbar
+    : (flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg);
+  const separatorColor = windowsSkinColors
+    ? windowsSkinColors.scrollbar
+    : (flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder);
+  const menuTextColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (flyoutDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
   const selectedOutlineColor = flyoutDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg;
 
   ctx.save();
