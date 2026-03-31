@@ -4083,6 +4083,120 @@ function getPreviewGadgetDefaultClientBg(windowsSkinColors?: WindowsSkinSystemCo
   return windowsSkinColors?.window ?? "rgb(255, 255, 255)";
 }
 
+function mixCssRgb(colorA: string, colorB: string, ratio: number): string {
+  const rgbA = parseCssRgb(colorA);
+  const rgbB = parseCssRgb(colorB);
+  if (!rgbA || !rgbB) return colorA;
+
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const mixChannel = (a: number, b: number) => Math.round(a + ((b - a) * clampedRatio));
+  return `rgb(${mixChannel(rgbA[0], rgbB[0])}, ${mixChannel(rgbA[1], rgbB[1])}, ${mixChannel(rgbA[2], rgbB[2])})`;
+}
+
+function drawButtonGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const label = (g.text && g.text.length > 0) ? g.text : "ButtonGadget";
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+  const buttonRadius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  switch (osSkin) {
+    case "windows7": {
+      const topFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.02);
+      const bottomFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.12);
+      const innerBorder = mixCssRgb(baseControlColor, "rgb(255, 255, 255)", 0.6);
+      const outerBorder = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(111, 111, 111)",
+        bottomFill,
+        "rgb(111, 111, 111)"
+      );
+      const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+      gradient.addColorStop(0, topFill);
+      gradient.addColorStop(0.45, topFill);
+      gradient.addColorStop(0.46, bottomFill);
+      gradient.addColorStop(1, bottomFill);
+
+      traceRoundedRect(ctx, x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2), buttonRadius);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.strokeStyle = innerBorder;
+      ctx.stroke();
+
+      traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
+      ctx.strokeStyle = outerBorder;
+      ctx.stroke();
+      break;
+    }
+
+    case "windows8": {
+      const topFill = baseControlColor;
+      const bottomFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.05);
+      const borderColor = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(172, 172, 172)",
+        baseControlColor,
+        "rgb(172, 172, 172)"
+      );
+      const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+      gradient.addColorStop(0, topFill);
+      gradient.addColorStop(1, bottomFill);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+      ctx.strokeStyle = borderColor;
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      break;
+    }
+
+    case "macos":
+    case "linux":
+    default: {
+      traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
+      ctx.strokeStyle = "rgb(220, 220, 220)";
+      ctx.stroke();
+
+      traceRoundedRect(ctx, x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3), buttonRadius);
+      ctx.fillStyle = "rgb(241, 241, 241)";
+      ctx.fill();
+      ctx.strokeStyle = "rgb(174, 174, 174)";
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgb(255, 255, 255)";
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y + 2.5);
+      ctx.lineTo(x + Math.max(4, w - 4), y + 2.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(250, 250, 250)";
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + 3.5);
+      ctx.lineTo(x + Math.max(3, w - 3), y + 3.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(246, 246, 246)";
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + 4.5);
+      ctx.lineTo(x + Math.max(2, w - 2), y + 4.5);
+      ctx.stroke();
+      break;
+    }
+  }
+
+  const textWidth = ctx.measureText(label).width;
+  const textX = x + Math.max(1, (w - textWidth) / 2);
+  const textY = y + Math.max(1, Math.trunc((h - 12) / 2));
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, textX, textY);
+  ctx.restore();
+}
+
 function drawStringLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -6209,6 +6323,11 @@ function render() {
 
       case GADGET_KIND.SplitterGadget:
         drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
+        break;
+
+      case GADGET_KIND.ButtonGadget:
+        drawButtonGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.StringGadget:
