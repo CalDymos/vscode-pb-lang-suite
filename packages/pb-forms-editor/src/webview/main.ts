@@ -5137,7 +5137,7 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ? "rgb(132,132,132)"
       : border);
   const toolbarSelectedOutlineColor = windowsSkinColors
-    ? windowsSkinColors.hotTrackingColor
+    ? windowsSkinColors.buttonText
     : (toolBarDecoration.selectedOutlineColorStyle === "black"
       ? "rgb(0,0,0)"
       : fg);
@@ -5267,7 +5267,7 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       ? "rgb(0,0,0)"
       : fg);
   const statusBarSelectedOutlineColor = windowsSkinColors
-    ? windowsSkinColors.hotTrackingColor
+    ? windowsSkinColors.windowText
     : (statusBarDecoration.selectedOutlineColorStyle === "black"
       ? "rgb(0,0,0)"
       : fg);
