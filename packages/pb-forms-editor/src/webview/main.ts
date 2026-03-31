@@ -4369,6 +4369,173 @@ function drawListLikeGadgetChrome(
   ctx.restore();
 }
 
+function parsePreviewInteger(raw?: string): number | null {
+  const trimmed = (raw ?? "").trim();
+  if (!/^[-+]?\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getPreviewGadgetColumnLabel(column: GadgetColumn): string {
+  return column.title ?? unquotePbString(column.titleRaw);
+}
+
+function drawListIconLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  variant: "listicon" | "explorerlist",
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+    fillColor,
+    "rgb(142, 142, 142)"
+  );
+  const headerTopColor = windowsSkinColors?.window ?? "rgb(255, 255, 255)";
+  const headerBottomColor = windowsSkinColors?.buttonFace ?? "rgb(244, 244, 244)";
+  const headerBandColor = windowsSkinColors?.buttonFace ?? "rgb(236, 236, 236)";
+  const headerHighlightColor = ensurePreviewLineContrast(
+    mixCssRgb(headerTopColor, headerBottomColor, 0.35),
+    headerBandColor,
+    "rgb(244, 244, 244)",
+    10
+  );
+  const headerShadowColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 182, 182)",
+    headerBandColor,
+    "rgb(182, 182, 182)",
+    12
+  );
+  const headerTextColor = windowsSkinColors?.buttonText ?? "rgb(0, 0, 0)";
+  const headerHeight = Math.min(Math.max(17, h), 17);
+  const contentStartY = y + 20;
+  const rows = variant === "explorerlist"
+    ? ["File 1", "File 2"]
+    : (g.items ?? []).map(getPreviewGadgetItemLabel);
+  const columns = variant === "explorerlist"
+    ? [{ label: "Files/Drawers", width: Math.max(0, w - 2) }]
+    : (() => {
+        const sourceCols = g.columns ?? [];
+        if (sourceCols.length === 0) return [] as { label: string; width: number }[];
+
+        const availableWidth = Math.max(0, w - 2);
+        const parsedWidths = sourceCols.map((column) => Math.max(0, parsePreviewInteger(column.widthRaw) ?? 0));
+        const explicitWidthSum = parsedWidths.reduce((sum, width) => sum + width, 0);
+        const unresolvedCount = parsedWidths.filter((width) => width <= 0).length;
+        const unresolvedWidth = unresolvedCount > 0
+          ? Math.max(24, Math.trunc(Math.max(0, availableWidth - explicitWidthSum) / unresolvedCount))
+          : 0;
+
+        return sourceCols.map((column, index) => ({
+          label: getPreviewGadgetColumnLabel(column),
+          width: parsedWidths[index] > 0 ? parsedWidths[index] : unresolvedWidth
+        }));
+      })();
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+
+  const headerGradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 9);
+  headerGradient.addColorStop(0, headerTopColor);
+  headerGradient.addColorStop(1, headerBottomColor);
+  ctx.fillStyle = headerGradient;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.min(8, Math.max(0, headerHeight - 1)));
+  ctx.fillStyle = headerBandColor;
+  ctx.fillRect(x + 1, y + 9, Math.max(0, w - 2), Math.max(0, Math.min(6, headerHeight - 8)));
+  ctx.strokeStyle = headerHighlightColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 15.5);
+  ctx.lineTo(x + Math.max(1, w - 1), y + 15.5);
+  ctx.stroke();
+  ctx.strokeStyle = headerShadowColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 16.5);
+  ctx.lineTo(x + Math.max(1, w - 1), y + 16.5);
+  ctx.stroke();
+
+  ctx.fillStyle = headerTextColor;
+  ctx.font = '11px sans-serif';
+
+  if (columns.length > 0) {
+    let xCol = x + 2;
+    for (let index = 0; index < columns.length; index += 1) {
+      const column = columns[index];
+      const label = column.label ?? "";
+      ctx.fillText(label, xCol + 2, y + 2);
+      xCol += column.width;
+      if (index < columns.length - 1 && xCol < x + w - 1) {
+        ctx.strokeStyle = headerShadowColor;
+        ctx.beginPath();
+        ctx.moveTo(xCol + 0.5, y + 1);
+        ctx.lineTo(xCol + 0.5, y + 16);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = textColor;
+
+  let rowY = contentStartY;
+  const rowBottom = y + Math.max(0, h - 14);
+  for (const row of rows) {
+    if (rowY > rowBottom) break;
+
+    if (variant === "listicon" && row.includes("|") && columns.length > 0) {
+      const fields = row.split("|");
+      let xCol = x + 2;
+      for (let index = 0; index < fields.length && index < columns.length; index += 1) {
+        ctx.fillText(fields[index] ?? "", xCol, rowY);
+        xCol += columns[index].width;
+      }
+    } else {
+      ctx.fillText(row, x + 6, rowY);
+    }
+
+    rowY += 16;
+  }
+
+  ctx.restore();
+}
+
+function drawExplorerTreeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+    fillColor,
+    "rgb(142, 142, 142)"
+  );
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.fillStyle = textColor;
+  ctx.fillText("Explorer Tree", x + 3, y + 3);
+  ctx.restore();
+}
+
 function drawPanelChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -6421,6 +6588,21 @@ function render() {
 
       case GADGET_KIND.ScintillaGadget:
         drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "scintilla", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ListIconGadget:
+        drawListIconLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "listicon", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ExplorerTreeGadget:
+        drawExplorerTreeGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ExplorerListGadget:
+        drawListIconLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "explorerlist", windowsChromeColors);
         drawDefaultLabel = false;
         break;
 
