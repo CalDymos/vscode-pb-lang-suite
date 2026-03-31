@@ -5640,23 +5640,13 @@ function render() {
     const titleTop = winY + titleBarMetrics.titleOffsetY;
 
     if (titleBarDecoration.backgroundStyle === "default") {
-      ctx.save();
-      if (isWindowsTitleBar) {
-        if (settings.osSkin === "windows7") {
-          const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
-          gradient.addColorStop(0, windowsChromeColors!.activeTitle);
-          gradient.addColorStop(0.5, windowsChromeColors!.gradientActiveTitle);
-          gradient.addColorStop(1, windowsChromeColors!.activeTitle);
-          ctx.fillStyle = gradient;
-        } else {
-          ctx.fillStyle = windowsChromeColors!.activeTitle;
-        }
-      } else {
+      if (!isWindowsTitleBar) {
+        ctx.save();
         ctx.globalAlpha = 0.10;
         ctx.fillStyle = focus;
+        ctx.fillRect(winX, winY, winW, tbH);
+        ctx.restore();
       }
-      ctx.fillRect(winX, winY, winW, tbH);
-      ctx.restore();
     } else if (titleBarDecoration.backgroundStyle === "linux-dark") {
       ctx.save();
       traceRoundedTopRect(ctx, winX - 1, winY - 1, winW + 2, tbH + 1, 6);
