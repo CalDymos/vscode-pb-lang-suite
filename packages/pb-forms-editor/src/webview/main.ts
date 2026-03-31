@@ -847,6 +847,7 @@ let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
+const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
 
 
 function createPreviewRasterIcon(dataUri: string): HTMLImageElement | null {
@@ -984,6 +985,30 @@ function getPreviewDateIconImage(): HTMLImageElement | null {
   }
 
   return previewDateIconImage;
+}
+
+function createResolvedPreviewImage(src: string): HTMLImageElement | null {
+  const trimmed = src.trim();
+  if (!trimmed.length) return null;
+
+  const image = new Image();
+  image.decoding = "sync";
+  image.src = trimmed;
+  return image;
+}
+
+function getResolvedPreviewImage(src?: string): HTMLImageElement | null {
+  const trimmed = src?.trim();
+  if (!trimmed?.length) return null;
+
+  const cached = previewResolvedGadgetImageCache.get(trimmed);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createResolvedPreviewImage(trimmed);
+  previewResolvedGadgetImageCache.set(trimmed, image);
+  return image;
 }
 
 function drawPreviewRasterIcon(
@@ -1501,6 +1526,33 @@ function findImageEntryById(imageId?: string): ImageEntry | undefined {
 
 function selectImageById(imageId: string): void {
   setSelectionAndRefresh({ kind: "image", id: imageId });
+}
+
+function resolvePreviewImageSrc(entry?: ImageEntry): string | undefined {
+  const resolved = entry?.image?.trim();
+  if (!resolved?.length || entry?.inline) return undefined;
+  if (/^(?:data:|https?:|vscode-webview-resource:|vscode-resource:|blob:)/i.test(resolved)) {
+    return resolved;
+  }
+  return undefined;
+}
+
+function drawResolvedPreviewImage(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): boolean {
+  if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+    return false;
+  }
+
+  const dx = Math.round(x + (w - image.naturalWidth) / 2);
+  const dy = Math.round(y + (h - image.naturalHeight) / 2);
+  ctx.drawImage(image, dx, dy);
+  return true;
 }
 
 const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
@@ -4112,23 +4164,42 @@ function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: n
   return { x: snappedLocalX, y: snappedLocalY };
 }
 
-function drawContainerChrome(
+function drawContainerGadgetChrome(
   ctx: CanvasRenderingContext2D,
+  g: Gadget,
   x: number,
   y: number,
   w: number,
-  h: number,
-  fg: string
+  h: number
 ) {
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
 
   ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = bg;
-  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+
+  if (hasPbFlag(g.flagsExpr, "#PB_Container_Single")) {
+    ctx.strokeStyle = "rgb(130, 130, 130)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Flat")) {
+    ctx.strokeStyle = "rgb(0, 0, 0)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Double")) {
+    ctx.strokeStyle = "rgb(130, 130, 130)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    if (w > 2 && h > 2) {
+      ctx.strokeStyle = "rgb(194, 194, 194)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    }
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Raised")) {
+    ctx.strokeStyle = "rgb(194, 194, 194)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    if (w > 2 && h > 2) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    }
+  }
+
   ctx.restore();
 }
 
@@ -4519,6 +4590,68 @@ function drawWebLikeGadgetChrome(
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
   ctx.fillStyle = "rgb(0, 0, 0)";
   ctx.fillText(label, x + 3, y + 3);
+  ctx.restore();
+}
+
+function drawImageGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  ctx.save();
+  ctx.textBaseline = "top";
+  const imageEntry = findImageEntryById(g.imageId);
+  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+  if (!drawResolvedPreviewImage(ctx, previewImage, x, y, w, h)) {
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillText("ImageGadget", x, y);
+  }
+  ctx.restore();
+}
+
+function drawButtonImageGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  ctx.save();
+  ctx.strokeStyle = "rgb(165, 165, 165)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + h - 1);
+  gradient.addColorStop(0, "rgb(250, 250, 250)");
+  gradient.addColorStop(1, "rgb(239, 239, 239)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+
+  const imageEntry = findImageEntryById(g.imageId);
+  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+  drawResolvedPreviewImage(ctx, previewImage, x, y, w, h);
+  ctx.restore();
+}
+
+function drawCustomGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
+
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "rgb(130, 130, 130)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.restore();
 }
 
@@ -5578,35 +5711,157 @@ function drawPanelChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
-  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, h));
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
-  const inactiveBg = getCssVar("--vscode-sideBar-background") || bg;
-  const activeBg = getCssVar("--vscode-input-background") || bg;
-  ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = bg;
-  ctx.fillRect(x + 1, y + panelHeight, Math.max(0, w - 2), Math.max(0, h - panelHeight - 1));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + panelHeight + 0.5, w, Math.max(0, h - panelHeight));
-  ctx.restore();
+  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index + 1}`);
+  const activeIndex = resolvePanelActiveItem(getPanelActiveItem(g), labels.length || 1);
 
-  for (const tab of getPanelTabRects(ctx, g, { x, y, w, h }, metrics)) {
-    ctx.save();
-    ctx.fillStyle = tab.active ? activeBg : inactiveBg;
-    ctx.globalAlpha = tab.active ? 1 : 0.92;
-    ctx.fillRect(tab.rect.x + 1, tab.rect.y + 1, Math.max(0, tab.rect.w - 2), Math.max(0, tab.rect.h - 1));
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = fg;
-    ctx.strokeRect(tab.rect.x + 0.5, tab.rect.y + 0.5, tab.rect.w, tab.rect.h);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = fg;
-    ctx.fillText(tab.label, tab.rect.x + 7, y + Math.min(panelHeight - 7, 15));
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "macos") {
+    const topOffset = 11;
+    ctx.fillStyle = "rgb(231, 231, 231)";
+    traceRoundedRect(ctx, x + 2, y + topOffset + 2, Math.max(0, w - 4), Math.max(0, h - topOffset - 4), 3);
+    ctx.fill();
+    ctx.strokeStyle = "rgb(222, 222, 222)";
+    traceRoundedRect(ctx, x + 1.5, y + topOffset + 1.5, Math.max(0, w - 3), Math.max(0, h - topOffset - 3), 3);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(200, 200, 200)";
+    traceRoundedRect(ctx, x + 0.5, y + topOffset + 0.5, Math.max(0, w - 1), Math.max(0, h - topOffset - 1), 3);
+    ctx.stroke();
+
+    if (labels.length > 0) {
+      const widths = labels.map((label) => Math.ceil(ctx.measureText(label).width) + 24);
+      const totalWidth = widths.reduce((sum, value) => sum + value, 0);
+      let tabX = x + Math.trunc((w - totalWidth) / 2);
+
+      const gradient = ctx.createLinearGradient(0, y + 1, 0, y + 10);
+      gradient.addColorStop(0, "rgb(255, 255, 255)");
+      gradient.addColorStop(1, "rgb(244, 244, 244)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(tabX + 1, y + 1, Math.max(0, totalWidth - 2), 10);
+      ctx.fillStyle = "rgb(236, 236, 236)";
+      ctx.fillRect(tabX + 1, y + 11, Math.max(0, totalWidth - 2), 9);
+      ctx.strokeStyle = "rgb(144, 144, 144)";
+      traceRoundedRect(ctx, tabX + 0.5, y + 0.5, Math.max(0, totalWidth - 1), 21, 3);
+      ctx.stroke();
+
+      for (let index = 0; index < labels.length; index += 1) {
+        const label = labels[index];
+        const tabWidth = widths[index];
+        const active = index === activeIndex;
+        const textWidth = Math.ceil(ctx.measureText(label).width);
+
+        if (active) {
+          ctx.fillStyle = "rgb(140, 140, 140)";
+          traceRoundedRect(ctx, tabX - 11.5, y + 0.5, tabWidth - 1, 21, 3);
+          ctx.fill();
+          if (index > 0) {
+            ctx.fillRect(tabX - 12, y, 3, 22);
+          }
+          if (index < labels.length - 1) {
+            ctx.fillRect(tabX + textWidth + 9, y, 3, 22);
+          }
+          ctx.fillStyle = "rgb(255, 255, 255)";
+        } else {
+          if (index < labels.length - 1) {
+            ctx.fillStyle = "rgb(189, 189, 189)";
+            ctx.fillRect(tabX + textWidth + 12, y + 3, 1, 16);
+          }
+          ctx.fillStyle = "rgb(0, 0, 0)";
+        }
+
+        ctx.fillText(label, tabX, y + 3);
+        tabX += tabWidth;
+      }
+    }
+
     ctx.restore();
+    return;
   }
+
+  if (osSkin === "linux") {
+    const bodyTop = y + 28;
+    ctx.strokeStyle = "rgb(184, 180, 176)";
+    traceRoundedRect(ctx, x + 0.5, bodyTop + 0.5, Math.max(0, w - 1), Math.max(0, h - 29), 3);
+    ctx.stroke();
+    ctx.fillStyle = "rgb(247, 246, 246)";
+    traceRoundedRect(ctx, x + 1.5, bodyTop + 1.5, Math.max(0, w - 3), Math.max(0, h - 31), 3);
+    ctx.fill();
+    ctx.fillRect(x + 1, bodyTop + 1, 3, 3);
+    ctx.fillStyle = "rgb(184, 180, 176)";
+    ctx.fillRect(x, bodyTop, 3, 1);
+
+    let tabX = x;
+    for (let index = 0; index < labels.length; index += 1) {
+      const label = labels[index];
+      const textWidth = Math.ceil(ctx.measureText(label).width);
+      const tabWidth = textWidth + 14;
+      const active = index === activeIndex;
+
+      if (active) {
+        ctx.strokeStyle = "rgb(184, 180, 176)";
+        traceRoundedRect(ctx, tabX + 0.5, y + 0.5, tabWidth - 1, 30, 3);
+        ctx.stroke();
+        ctx.fillStyle = "rgb(247, 246, 246)";
+        traceRoundedRect(ctx, tabX + 1.5, y + 1.5, tabWidth - 3, 33, 3);
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = "rgb(200, 197, 194)";
+        traceRoundedRect(ctx, tabX + 0.5, y + 2.5, tabWidth - 1, 28, 3);
+        ctx.stroke();
+        ctx.fillStyle = "rgb(232, 232, 232)";
+        traceRoundedRect(ctx, tabX + 1.5, y + 3.5, tabWidth - 3, 31, 3);
+        ctx.fill();
+        ctx.fillStyle = "rgb(247, 246, 246)";
+        ctx.fillRect(tabX, y + 29, tabWidth, 6);
+        ctx.fillStyle = "rgb(184, 180, 176)";
+        ctx.fillRect(tabX, y + 28, tabWidth, 1);
+      }
+
+      ctx.fillStyle = "rgb(0, 0, 0)";
+      ctx.fillText(label, tabX + 6, y + 6);
+      tabX += tabWidth + 8;
+    }
+
+    ctx.fillStyle = "rgb(184, 180, 176)";
+    ctx.fillRect(x, bodyTop, 1, 7);
+    ctx.restore();
+    return;
+  }
+
+  ctx.strokeStyle = "rgb(137, 140, 140)";
+  ctx.strokeRect(x + 0.5, y + 20.5, Math.max(0, w - 1), Math.max(0, h - 21));
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.fillRect(x + 1, y + 21, Math.max(0, w - 2), Math.max(0, h - 22));
+
+  let tabX = x;
+  for (let index = 0; index < labels.length; index += 1) {
+    const label = labels[index];
+    const textWidth = Math.ceil(ctx.measureText(label).width);
+    const tabWidth = textWidth + 12;
+    const active = index === activeIndex;
+
+    if (active) {
+      ctx.strokeStyle = "rgb(137, 140, 140)";
+      ctx.strokeRect(tabX + 0.5, y + 0.5, tabWidth - 1, 20);
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(tabX + 1, y + 1, Math.max(0, tabWidth - 2), 20);
+    } else {
+      ctx.fillStyle = "rgb(137, 140, 140)";
+      ctx.fillRect(tabX, y + 2, tabWidth, 19);
+      ctx.fillStyle = "rgb(240, 240, 240)";
+      ctx.fillRect(tabX + 1, y + 3, Math.max(0, tabWidth - 2), 17);
+    }
+
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillText(label, tabX + 6, y + 3);
+    tabX += tabWidth;
+  }
+
+  ctx.restore();
 }
 
 function drawScrollAreaChrome(
@@ -5616,14 +5871,12 @@ function drawScrollAreaChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
   const rect = { x, y, w, h };
   const bar = getScrollAreaBarSize(rect, metrics);
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
-  const trackBg = getCssVar("--vscode-sideBar-background") || bg;
-  const thumbBg = getCssVar("--vscode-scrollbarSlider-background") || fg;
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
   const viewportRect = getScrollAreaViewportRect(rect, metrics);
   const viewportW = viewportRect.w;
   const viewportH = viewportRect.h;
@@ -5631,41 +5884,125 @@ function drawScrollAreaChrome(
   const innerH = typeof g.max === "number" && g.max > 0 ? g.max : viewportH;
   const offsetX = getScrollAreaOffsetX(g, rect, metrics);
   const offsetY = getScrollAreaOffsetY(g, rect, metrics);
+  const maxScrollX = Math.max(0, innerW - viewportW);
+  const maxScrollY = Math.max(0, innerH - viewportH);
   const verticalTrack = getScrollAreaVerticalBarRect(rect, metrics);
   const horizontalTrack = getScrollAreaHorizontalBarRect(rect, metrics);
-  const verticalThumb = getScrollAreaVerticalThumbRect(rect, metrics, innerH, offsetY);
-  const horizontalThumb = getScrollAreaHorizontalThumbRect(rect, metrics, innerW, offsetX);
 
   ctx.save();
-  ctx.fillStyle = bg;
+  ctx.strokeStyle = "rgb(130, 130, 130)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-  ctx.restore();
 
-  ctx.save();
-  ctx.fillStyle = trackBg;
-  ctx.globalAlpha = 0.9;
-  ctx.fillRect(verticalTrack.x + 1, verticalTrack.y + 1, Math.max(0, verticalTrack.w - 1), Math.max(0, verticalTrack.h - 1));
-  ctx.fillRect(horizontalTrack.x + 1, horizontalTrack.y + 1, Math.max(0, horizontalTrack.w - 1), Math.max(0, horizontalTrack.h - 1));
-  ctx.restore();
+  if (osSkin === "macos") {
+    const verticalLength = Math.max(8, Math.trunc(verticalTrack.h / 3));
+    const verticalTravel = Math.max(0, verticalTrack.h - verticalLength);
+    const verticalStart = maxScrollY > 0 ? Math.trunc((offsetY / maxScrollY) * verticalTravel) : 0;
+    const horizontalLength = Math.max(8, Math.trunc(horizontalTrack.w / 3));
+    const horizontalTravel = Math.max(0, horizontalTrack.w - horizontalLength);
+    const horizontalStart = maxScrollX > 0 ? Math.trunc((offsetX / maxScrollX) * horizontalTravel) : 0;
 
-  if (innerH > viewportH && viewportH > 0) {
-    ctx.save();
-    ctx.fillStyle = thumbBg;
-    ctx.globalAlpha = 0.45;
-    ctx.fillRect(verticalThumb.x + 3, verticalThumb.y + 3, Math.max(3, verticalThumb.w - 6), Math.max(10, verticalThumb.h - 6));
+    ctx.fillStyle = "rgb(228, 228, 228)";
+    ctx.fillRect(verticalTrack.x, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(242, 242, 242)";
+    ctx.fillRect(verticalTrack.x + 1, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(244, 244, 244)";
+    ctx.fillRect(verticalTrack.x + 2, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(245, 245, 245)";
+    ctx.fillRect(verticalTrack.x + 3, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(250, 250, 250)";
+    ctx.fillRect(verticalTrack.x + 4, verticalTrack.y, 10, Math.max(0, verticalTrack.h));
+    if (maxScrollY > 0) {
+      traceRoundedRect(ctx, verticalTrack.x + 4.5, verticalTrack.y + verticalStart + 0.5, 8, verticalLength, 3);
+      ctx.fillStyle = "rgb(195, 195, 195)";
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgb(228, 228, 228)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(242, 242, 242)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 1, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(244, 244, 244)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 2, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(245, 245, 245)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 3, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(250, 250, 250)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 4, Math.max(0, horizontalTrack.w), 10);
+    if (maxScrollX > 0) {
+      traceRoundedRect(ctx, horizontalTrack.x + horizontalStart + 0.5, horizontalTrack.y + 4.5, horizontalLength, 8, 3);
+      ctx.fillStyle = "rgb(195, 195, 195)";
+      ctx.fill();
+    }
+
     ctx.restore();
+    return;
   }
 
-  if (innerW > viewportW && viewportW > 0) {
-    ctx.save();
-    ctx.fillStyle = thumbBg;
-    ctx.globalAlpha = 0.45;
-    ctx.fillRect(horizontalThumb.x + 3, horizontalThumb.y + 3, Math.max(10, horizontalThumb.w - 6), Math.max(3, horizontalThumb.h - 6));
-    ctx.restore();
+  const isWindows8 = osSkin === "windows8";
+  const trackColor = isWindows8 ? "rgb(240, 240, 240)" : "rgb(233, 233, 233)";
+  const thumbTopColor = "rgb(236, 236, 236)";
+  const thumbBottomColor = "rgb(202, 202, 202)";
+  const thumbBorderColor = "rgb(155, 155, 155)";
+  const thumbFillColor = "rgb(205, 205, 205)";
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(verticalTrack.x, verticalTrack.y, Math.max(0, verticalTrack.w), Math.max(0, verticalTrack.h));
+  if (isWindows8) {
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(verticalTrack.x, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
   }
+  drawScrollBarArrowGlyph(ctx, "up", verticalTrack.x + Math.trunc(verticalTrack.w / 2), verticalTrack.y + 8, "rgb(110, 110, 110)");
+  drawScrollBarArrowGlyph(ctx, "down", verticalTrack.x + Math.trunc(verticalTrack.w / 2), verticalTrack.y + verticalTrack.h - 8, "rgb(110, 110, 110)");
+  if (maxScrollY > 0 && verticalTrack.h > 34) {
+    const thumbLength = Math.max(8, Math.trunc((verticalTrack.h - 34) / 3));
+    const thumbTravel = Math.max(0, verticalTrack.h - 34 - thumbLength);
+    const thumbStart = Math.trunc((offsetY / maxScrollY) * thumbTravel);
+    if (isWindows8) {
+      ctx.fillStyle = thumbFillColor;
+      ctx.fillRect(verticalTrack.x + 1, verticalTrack.y + 17 + thumbStart, Math.max(0, verticalTrack.w - 1), thumbLength);
+    } else {
+      traceRoundedRect(ctx, verticalTrack.x + 1.5, verticalTrack.y + 18.5 + thumbStart, Math.max(0, verticalTrack.w - 3), thumbLength, 1);
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorderColor;
+      ctx.stroke();
+      ctx.fillStyle = thumbTopColor;
+      ctx.fillRect(verticalTrack.x + 2, verticalTrack.y + 19 + thumbStart, Math.max(0, Math.trunc((verticalTrack.w * 3) / 8) - 4), Math.max(0, thumbLength - 2));
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fillRect(verticalTrack.x + 2 + Math.trunc((verticalTrack.w * 3) / 8), verticalTrack.y + 19 + thumbStart, Math.max(0, Math.trunc((verticalTrack.w * 5) / 8) - 4), Math.max(0, thumbLength - 2));
+    }
+  }
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), Math.max(0, horizontalTrack.h));
+  if (isWindows8) {
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), 1);
+  }
+  drawScrollBarArrowGlyph(ctx, "left", horizontalTrack.x + 8, horizontalTrack.y + Math.trunc(horizontalTrack.h / 2), "rgb(110, 110, 110)");
+  drawScrollBarArrowGlyph(ctx, "right", horizontalTrack.x + horizontalTrack.w - 8, horizontalTrack.y + Math.trunc(horizontalTrack.h / 2), "rgb(110, 110, 110)");
+  if (maxScrollX > 0 && horizontalTrack.w > 34) {
+    const thumbLength = Math.max(8, Math.trunc((horizontalTrack.w - 34) / 3));
+    const thumbTravel = Math.max(0, horizontalTrack.w - 34 - thumbLength);
+    const thumbStart = Math.trunc((offsetX / maxScrollX) * thumbTravel);
+    if (isWindows8) {
+      ctx.fillStyle = thumbFillColor;
+      ctx.fillRect(horizontalTrack.x + 17 + thumbStart, horizontalTrack.y + 1, thumbLength, Math.max(0, horizontalTrack.h - 1));
+    } else {
+      traceRoundedRect(ctx, horizontalTrack.x + 18.5 + thumbStart, horizontalTrack.y + 1.5, thumbLength, Math.max(0, horizontalTrack.h - 3), 1);
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorderColor;
+      ctx.stroke();
+      ctx.fillStyle = thumbTopColor;
+      ctx.fillRect(horizontalTrack.x + 19 + thumbStart, horizontalTrack.y + 2, Math.max(0, thumbLength - 2), Math.max(0, Math.trunc((horizontalTrack.h * 3) / 8) - 4));
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fillRect(horizontalTrack.x + 19 + thumbStart, horizontalTrack.y + 2 + Math.trunc((horizontalTrack.h * 3) / 8), Math.max(0, thumbLength - 2), Math.max(0, Math.trunc((horizontalTrack.h * 5) / 8) - 4));
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawSplitterChrome(
@@ -5675,7 +6012,7 @@ function drawSplitterChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
   const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
@@ -5684,53 +6021,54 @@ function drawSplitterChrome(
   const range = Math.max(0, (vertical ? w : h) - bar);
   const rawPos = typeof g.state === "number" ? Math.trunc(g.state) : Math.trunc(range / 2);
   const pos = clamp(rawPos, 0, range);
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  const fillColor = osSkin === "macos"
+    ? "rgb(237, 237, 237)"
+    : (osSkin === "linux" ? "rgb(242, 241, 240)" : "rgb(240, 240, 240)");
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-  ctx.restore();
+  ctx.fillStyle = fillColor;
 
-  ctx.save();
-  ctx.fillStyle = getCssVar("--vscode-sideBar-background") || bg;
-  ctx.globalAlpha = 0.95;
   if (vertical) {
-    ctx.fillRect(x + pos, y + 1, bar, Math.max(0, h - 2));
+    ctx.fillRect(x + pos, y, bar, Math.max(0, h));
   } else {
-    ctx.fillRect(x + 1, y + pos, Math.max(0, w - 2), bar);
+    ctx.fillRect(x, y + pos, Math.max(0, w), bar);
   }
-  ctx.restore();
 
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  if (separator) {
+  if (osSkin === "macos") {
+    ctx.fillStyle = "rgb(140, 140, 140)";
     if (vertical) {
       ctx.beginPath();
-      ctx.moveTo(x + pos + Math.trunc(bar / 2) + 0.5, y + 2);
-      ctx.lineTo(x + pos + Math.trunc(bar / 2) + 0.5, y + h - 2);
-      ctx.stroke();
+      ctx.arc(x + pos + (bar - 6), y + Math.trunc(h / 2), 2, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       ctx.beginPath();
-      ctx.moveTo(x + 2, y + pos + Math.trunc(bar / 2) + 0.5);
-      ctx.lineTo(x + w - 2, y + pos + Math.trunc(bar / 2) + 0.5);
-      ctx.stroke();
+      ctx.arc(x + Math.trunc(w / 2), y + pos + (bar - 6), 2, 0, Math.PI * 2);
+      ctx.fill();
     }
-  } else {
-    const dots = 3;
-    for (let i = 0; i < dots; i++) {
-      if (vertical) {
-        const cy = y + Math.trunc(h / 2) - 8 + i * 8;
-        ctx.strokeRect(x + pos + Math.trunc((bar - 4) / 2) + 0.5, cy + 0.5, 3, 3);
-      } else {
-        const cx = x + Math.trunc(w / 2) - 8 + i * 8;
-        ctx.strokeRect(cx + 0.5, y + pos + Math.trunc((bar - 4) / 2) + 0.5, 3, 3);
-      }
+    ctx.restore();
+    return;
+  }
+
+  if (separator) {
+    if (vertical) {
+      const lineX = x + pos + 3;
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(lineX, y, 1, Math.max(0, h));
+      ctx.fillRect(lineX + 1, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(140, 140, 140)";
+      ctx.fillRect(lineX + 2, y, 1, Math.max(0, h));
+      ctx.fillRect(lineX, y + h - 1, 3, 1);
+    } else {
+      const lineY = y + pos + 3;
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(x, lineY, Math.max(0, w), 1);
+      ctx.fillRect(x, lineY + 1, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(140, 140, 140)";
+      ctx.fillRect(x, lineY + 2, Math.max(0, w), 1);
+      ctx.fillRect(x + w - 1, lineY, 1, 3);
     }
   }
+
   ctx.restore();
 }
 
@@ -7573,20 +7911,23 @@ function render() {
 
     switch (g.kind) {
       case GADGET_KIND.ContainerGadget:
-        drawContainerChrome(ctx, gx, gy, gw, gh, fg);
+        drawContainerGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.PanelGadget:
-        drawPanelChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
-        labelY = gy + Math.min(gh - 8, chromeMetrics.panelHeight + 14);
+        drawPanelChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.ScrollAreaGadget:
-        drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
+        drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.SplitterGadget:
-        drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
+        drawSplitterChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.FrameGadget:
@@ -7642,6 +7983,21 @@ function render() {
 
       case GADGET_KIND.CalendarGadget:
         drawCalendarGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ImageGadget:
+        drawImageGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ButtonImageGadget:
+        drawButtonImageGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CustomGadget:
+        drawCustomGadgetChrome(ctx, g, gx, gy, gw, gh);
         drawDefaultLabel = false;
         break;
 
