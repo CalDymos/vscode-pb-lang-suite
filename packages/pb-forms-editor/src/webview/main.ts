@@ -5035,8 +5035,20 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.stroke();
       break;
     case "windows8-light":
+      ctx.strokeStyle = windowsSkinColors
+        ? ensurePreviewLineContrast(
+          windowsSkinColors.scrollbar ?? "rgb(232, 233, 234)",
+          windowsSkinColors.menuBar ?? "rgb(245, 246, 247)",
+          "rgb(232, 233, 234)"
+        )
+        : "rgb(232, 233, 234)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
     case "linux-light":
-      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(232, 233, 234)";
+      ctx.strokeStyle = "rgb(232, 233, 234)";
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
