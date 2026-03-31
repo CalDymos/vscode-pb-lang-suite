@@ -5600,26 +5600,6 @@ function render() {
     }
   }
 
-  if (tbH === 0 && platformSkin === "windows" && chromeTopPadding > 0) {
-    const captionlessTopFill = windowsChromeColors?.activeTitle ?? focus;
-    const captionlessTopStroke = windowsChromeColors?.threeDShadow ?? focus;
-
-    ctx.save();
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = captionlessTopFill;
-    ctx.fillRect(winX, winY, winW, chromeTopPadding);
-    ctx.restore();
-
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = captionlessTopStroke;
-    ctx.beginPath();
-    ctx.moveTo(winX + 0.5, winY + chromeTopPadding + 0.5);
-    ctx.lineTo(winX + winW - 0.5, winY + chromeTopPadding + 0.5);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   // Optional title bar
   if (tbH > 0) {
     const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
