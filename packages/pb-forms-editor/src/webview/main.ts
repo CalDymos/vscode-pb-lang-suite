@@ -4307,6 +4307,68 @@ function drawTextLikeGadgetChrome(
   ctx.restore();
 }
 
+function getPreviewGadgetItemLabel(item: GadgetItem): string {
+  return item.text ?? unquotePbString(item.textRaw);
+}
+
+function drawListLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  variant: "tree" | "listview" | "editor" | "scintilla",
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const originalBorderColor = (variant === "editor" || variant === "scintilla")
+    ? "rgb(194, 194, 194)"
+    : "rgb(142, 142, 142)";
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? originalBorderColor,
+    fillColor,
+    originalBorderColor
+  );
+  const isTree = variant === "tree";
+  const fallbackLabel = variant === "tree"
+    ? "TreeGadget"
+    : variant === "listview"
+      ? "ListViewGadget"
+      : variant === "scintilla"
+        ? "ScintillaGadget"
+        : "EditorGadget";
+  const itemX = x + (isTree ? 30 : 6);
+  const placeholderX = x + 30;
+  const rows = (g.items ?? []).map(getPreviewGadgetItemLabel);
+  let textY = y + 4;
+  const lineAdvance = isTree ? 18 : 16;
+  const lastTextY = y + Math.max(0, h - 14);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.fillStyle = textColor;
+
+  if (rows.length === 0) {
+    ctx.fillText(fallbackLabel, placeholderX, y + 4);
+    ctx.restore();
+    return;
+  }
+
+  for (const row of rows) {
+    if (textY > lastTextY) break;
+    ctx.fillText(row, itemX, textY);
+    textY += lineAdvance;
+  }
+
+  ctx.restore();
+}
+
 function drawPanelChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -6339,6 +6401,26 @@ function render() {
       case GADGET_KIND.TextGadget:
       case GADGET_KIND.HyperLinkGadget:
         drawTextLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TreeGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "tree", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ListViewGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "listview", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.EditorGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "editor", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ScintillaGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "scintilla", windowsChromeColors);
         drawDefaultLabel = false;
         break;
 
