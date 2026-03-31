@@ -5559,7 +5559,7 @@ function render() {
       ctx.save();
       ctx.strokeStyle = bodyDecoration.clientBorderStyle === "windows7-inner"
         ? (windowsChromeColors?.threeDShadow ?? "rgb(93, 108, 122)")
-        : (windowsChromeColors?.activeTitle ?? windowsChromeColors?.hotTrackingColor ?? "rgb(91, 147, 209)");
+        : (windowsChromeColors?.gradientActiveTitle ?? windowsChromeColors?.activeTitle ?? "rgb(91, 147, 209)");
       ctx.strokeRect(
         windowClientSurface.borderRect.x + 0.5,
         windowClientSurface.borderRect.y + 0.5,
@@ -6181,9 +6181,9 @@ function drawWindowPreviewFrame(
   ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark"
     ? "rgb(118, 118, 118)"
     : decoration.strokeColorStyle === "windows7-dark"
-      ? (windowsChromeColors?.threeDShadow ?? "rgb(37, 37, 37)")
+      ? (windowsChromeColors?.buttonText ?? windowsChromeColors?.menuText ?? "rgb(37, 37, 37)")
       : decoration.strokeColorStyle === "windows8-blue"
-        ? (windowsChromeColors?.hotTrackingColor ?? windowsChromeColors?.activeTitle ?? "rgb(82, 132, 188)")
+        ? (windowsChromeColors?.activeTitle ?? windowsChromeColors?.hotTrackingColor ?? "rgb(82, 132, 188)")
         : focus;
 
   if (decoration.borderStyle === "none") {
