@@ -5638,11 +5638,8 @@ function render() {
     const leftButtonBandEnd = titleButtonLayout.buttonSide === "left"
       ? winX + titleBarMetrics.buttonInsetX + buttonAreaW
       : winX + titleBarMetrics.buttonInsetX;
-    const windowsRightButtonBandStart = isWindowsTitleBar && titleButtonLayout.buttonSide === "right"
-      ? winX + titleBarMetrics.iconInsetX + winW - buttonAreaW
-      : null;
     const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
-      ? (windowsRightButtonBandStart ?? (winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW))
+      ? winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW
       : winX + winW - titleBarMetrics.buttonInsetX;
     const windowsTitleTextStart = showWindowsIcon
       ? (settings.osSkin === "windows8"
