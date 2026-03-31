@@ -4500,6 +4500,430 @@ function drawProgressBarGadgetChrome(
   ctx.restore();
 }
 
+function drawFrameGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const caption = g.text ?? "";
+  const captionColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const captionBgColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+  const isSingle = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Single");
+  const isDouble = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Double");
+  const isFlat = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Flat");
+  const captionHeight = 12;
+  const lineY = y + 9.5;
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "macos") {
+    if (isSingle) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.restore();
+      return;
+    }
+
+    if (isDouble) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.strokeStyle = "rgb(194, 194, 194)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+      ctx.restore();
+      return;
+    }
+
+    if (isFlat) {
+      ctx.strokeStyle = "rgb(0, 0, 0)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.restore();
+      return;
+    }
+
+    if (caption.length > 0) {
+      ctx.fillStyle = captionColor;
+      ctx.fillText(caption, x + 10, y);
+    }
+
+    traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
+    ctx.strokeStyle = "rgb(222, 222, 222)";
+    ctx.stroke();
+    traceRoundedRect(ctx, x + 0.5, y + captionHeight + 1.5, Math.max(0, w - 1), Math.max(0, h - captionHeight - 1), 3);
+    ctx.strokeStyle = "rgb(200, 200, 200)";
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isSingle) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(160, 160, 160)",
+      captionBgColor,
+      "rgb(160, 160, 160)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y + h - 0.5);
+    ctx.lineTo(x + w + 0.5, y + h - 0.5);
+    ctx.moveTo(x + w - 0.5, y + 0.5);
+    ctx.lineTo(x + w - 0.5, y + h + 0.5);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isDouble) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(160, 160, 160)",
+      captionBgColor,
+      "rgb(160, 160, 160)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y + h - 0.5);
+    ctx.lineTo(x + w + 0.5, y + h - 0.5);
+    ctx.moveTo(x + w - 0.5, y + 0.5);
+    ctx.lineTo(x + w - 0.5, y + h + 0.5);
+    ctx.stroke();
+
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? "rgb(105, 105, 105)",
+      captionBgColor,
+      "rgb(105, 105, 105)"
+    );
+    ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + h - 1.5);
+    ctx.lineTo(x + w - 1.5, y + h - 1.5);
+    ctx.moveTo(x + w - 1.5, y + 1.5);
+    ctx.lineTo(x + w - 1.5, y + h - 1.5);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isFlat) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? "rgb(100, 100, 100)",
+      captionBgColor,
+      "rgb(100, 100, 100)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.restore();
+    return;
+  }
+
+  const lineColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(221, 221, 221)",
+    captionBgColor,
+    "rgb(221, 221, 221)"
+  );
+  const captionWidth = caption.length > 0 ? ctx.measureText(caption).width + 2 : 0;
+
+  ctx.strokeStyle = lineColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y + 9.5);
+  ctx.lineTo(x + 0.5, y + h - 0.5);
+  ctx.moveTo(x + w - 0.5, y + 9.5);
+  ctx.lineTo(x + w - 0.5, y + h - 0.5);
+  ctx.moveTo(x + 0.5, y + h - 0.5);
+  ctx.lineTo(x + w - 0.5, y + h - 0.5);
+  if (captionWidth > 0) {
+    ctx.moveTo(x + 0.5, lineY);
+    ctx.lineTo(x + 8.5, lineY);
+    ctx.moveTo(x + 10.5 + captionWidth, lineY);
+    ctx.lineTo(x + w - 0.5, lineY);
+  } else {
+    ctx.moveTo(x + 0.5, lineY);
+    ctx.lineTo(x + w - 0.5, lineY);
+  }
+  ctx.stroke();
+
+  if (captionWidth > 0) {
+    ctx.fillStyle = captionBgColor;
+    ctx.fillRect(x + 8, y, captionWidth + 4, captionHeight);
+    ctx.fillStyle = captionColor;
+    ctx.fillText(caption, x + 10, y);
+  }
+
+  ctx.restore();
+}
+
+function drawTrackBarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isVertical = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Vertical");
+  const showTicks = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Ticks");
+  const trackFill = osSkin === "windows8"
+    ? (windowsSkinColors?.buttonFace ?? "rgb(231, 231, 231)")
+    : "rgb(231, 231, 231)";
+  const trackBorder = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(176, 176, 176)",
+      trackFill,
+      "rgb(176, 176, 176)"
+    )
+    : "rgb(176, 176, 176)";
+  const tickColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(154, 154, 154)",
+      trackFill,
+      "rgb(154, 154, 154)"
+    )
+    : "rgb(154, 154, 154)";
+  const thumbFill = osSkin === "windows8"
+    ? mixCssRgb(windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)", "rgb(0, 0, 0)", 0.04)
+    : (osSkin === "macos" ? "rgb(237, 237, 237)" : "rgb(240, 240, 240)");
+  const thumbBorder = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(161, 161, 161)",
+      thumbFill,
+      "rgb(161, 161, 161)"
+    )
+    : "rgb(161, 161, 161)";
+
+  ctx.save();
+
+  if (isVertical) {
+    traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
+    ctx.fillStyle = trackFill;
+    ctx.fill();
+    ctx.strokeStyle = trackBorder;
+    ctx.stroke();
+
+    const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
+    const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbFill;
+      ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+      ctx.strokeStyle = thumbBorder;
+      ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+    } else {
+      traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
+      ctx.fillStyle = thumbFill;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorder;
+      ctx.stroke();
+    }
+
+    if (showTicks) {
+      for (let tickY = y + 9; tickY <= y + h - 9; tickY += 8) {
+        ctx.fillStyle = tickColor;
+        ctx.fillRect(x + 17, tickY, 4, 1);
+      }
+    }
+  } else {
+    traceRoundedRect(ctx, x + 0.5, y + 3.5, Math.max(0, w - 1), 5, 1);
+    ctx.fillStyle = trackFill;
+    ctx.fill();
+    ctx.strokeStyle = trackBorder;
+    ctx.stroke();
+
+    const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
+    const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbFill;
+      ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+      ctx.strokeStyle = thumbBorder;
+      ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+    } else {
+      traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
+      ctx.fillStyle = thumbFill;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorder;
+      ctx.stroke();
+    }
+
+    if (showTicks) {
+      for (let tickX = x + 9; tickX <= x + w - 9; tickX += 8) {
+        ctx.fillStyle = tickColor;
+        ctx.fillRect(tickX, y + 17, 1, 4);
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawScrollBarArrowGlyph(
+  ctx: CanvasRenderingContext2D,
+  direction: "up" | "down" | "left" | "right",
+  centerX: number,
+  centerY: number,
+  color: string
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  if (direction === "up") {
+    ctx.moveTo(centerX, centerY - 3);
+    ctx.lineTo(centerX - 4, centerY + 2);
+    ctx.lineTo(centerX + 4, centerY + 2);
+  } else if (direction === "down") {
+    ctx.moveTo(centerX, centerY + 3);
+    ctx.lineTo(centerX - 4, centerY - 2);
+    ctx.lineTo(centerX + 4, centerY - 2);
+  } else if (direction === "left") {
+    ctx.moveTo(centerX - 3, centerY);
+    ctx.lineTo(centerX + 2, centerY - 4);
+    ctx.lineTo(centerX + 2, centerY + 4);
+  } else {
+    ctx.moveTo(centerX + 3, centerY);
+    ctx.lineTo(centerX - 2, centerY - 4);
+    ctx.lineTo(centerX - 2, centerY + 4);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawScrollBarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isVertical = hasPbFlag(g.flagsExpr, "#PB_ScrollBar_Vertical");
+  const trackColor = osSkin === "windows8"
+    ? (windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)")
+    : (osSkin === "macos" ? "rgb(250, 250, 250)" : "rgb(240, 240, 240)");
+  const borderColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(233, 233, 233)",
+      trackColor,
+      "rgb(233, 233, 233)"
+    )
+    : "rgb(233, 233, 233)";
+  const thumbColor = osSkin === "windows8"
+    ? mixCssRgb(trackColor, "rgb(0, 0, 0)", 0.15)
+    : (osSkin === "macos" ? "rgb(195, 195, 195)" : "rgb(202, 202, 202)");
+  const thumbHighlight = osSkin === "windows8" ? null : "rgb(236, 236, 236)";
+  const arrowColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? windowsSkinColors?.windowText ?? "rgb(0, 0, 0)",
+      trackColor,
+      "rgb(0, 0, 0)"
+    )
+    : "rgb(110, 110, 110)";
+
+  ctx.save();
+
+  if (osSkin === "macos") {
+    if (isVertical) {
+      const bandX = x + 4;
+      ctx.fillStyle = "rgb(228, 228, 228)";
+      ctx.fillRect(x, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(242, 242, 242)";
+      ctx.fillRect(x + 1, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(244, 244, 244)";
+      ctx.fillRect(x + 2, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(245, 245, 245)";
+      ctx.fillRect(x + 3, y, 1, Math.max(0, h));
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(bandX, y, 10, Math.max(0, h));
+      traceRoundedRect(ctx, bandX + 0.5, y + 1.5, 8, Math.max(0, Math.trunc(h / 3)), 3);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+    } else {
+      const bandY = y + 4;
+      ctx.fillStyle = "rgb(228, 228, 228)";
+      ctx.fillRect(x, y, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(242, 242, 242)";
+      ctx.fillRect(x, y + 1, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(244, 244, 244)";
+      ctx.fillRect(x, y + 2, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(245, 245, 245)";
+      ctx.fillRect(x, y + 3, Math.max(0, w), 1);
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(x, bandY, Math.max(0, w), 10);
+      traceRoundedRect(ctx, x + 1.5, bandY + 0.5, Math.max(0, Math.trunc(w / 3)), 8, 3);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  if (osSkin === "windows8") {
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    if (isVertical) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, y);
+      ctx.lineTo(x + 0.5, y + h);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y + 0.5);
+      ctx.lineTo(x + w, y + 0.5);
+      ctx.stroke();
+    }
+  } else {
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  }
+
+  if (isVertical) {
+    drawScrollBarArrowGlyph(ctx, "up", x + Math.trunc(w / 2), y + 8, arrowColor);
+    drawScrollBarArrowGlyph(ctx, "down", x + Math.trunc(w / 2), y + h - 8, arrowColor);
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbColor;
+      ctx.fillRect(x + 1, y + 17, Math.max(0, w - 1), Math.max(0, Math.trunc((h - 34) / 3)));
+    } else {
+      traceRoundedRect(ctx, x + 1.5, y + 18.5, Math.max(0, w - 3), Math.max(0, Math.trunc((h - 34) / 3)), 1);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+      ctx.strokeStyle = "rgb(155, 155, 155)";
+      ctx.stroke();
+      if (thumbHighlight) {
+        ctx.fillStyle = thumbHighlight;
+        ctx.fillRect(x + 2, y + 19, Math.max(0, Math.trunc((w * 3) / 8) - 4), Math.max(0, Math.trunc((h - 34) / 3) - 2));
+      }
+    }
+  } else {
+    drawScrollBarArrowGlyph(ctx, "left", x + 8, y + Math.trunc(h / 2), arrowColor);
+    drawScrollBarArrowGlyph(ctx, "right", x + w - 8, y + Math.trunc(h / 2), arrowColor);
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbColor;
+      ctx.fillRect(x + 17, y + 1, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 1));
+    } else {
+      traceRoundedRect(ctx, x + 18.5, y + 1.5, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 3), 1);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+      ctx.strokeStyle = "rgb(155, 155, 155)";
+      ctx.stroke();
+      if (thumbHighlight) {
+        ctx.fillStyle = thumbHighlight;
+        ctx.fillRect(x + 19, y + 2, Math.max(0, Math.trunc((w - 34) / 3) - 2), Math.max(0, Math.trunc((h * 3) / 8) - 4));
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
 function drawStringLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -6855,6 +7279,21 @@ function render() {
 
       case GADGET_KIND.SplitterGadget:
         drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
+        break;
+
+      case GADGET_KIND.FrameGadget:
+        drawFrameGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TrackBarGadget:
+        drawTrackBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ScrollBarGadget:
+        drawScrollBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.ButtonGadget:
