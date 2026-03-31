@@ -5693,14 +5693,10 @@ function render() {
       ctx.restore();
     }
 
-    if (titleBarDecoration.showFrameBorder) {
+    if (titleBarDecoration.showFrameBorder && !isWindowsTitleBar) {
       ctx.save();
-      if (isWindowsTitleBar) {
-        ctx.strokeStyle = windowsChromeColors!.threeDShadow;
-      } else {
-        ctx.globalAlpha = 0.22;
-        ctx.strokeStyle = focus;
-      }
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = focus;
       ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
       ctx.restore();
     }
