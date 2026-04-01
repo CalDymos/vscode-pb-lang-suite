@@ -4077,7 +4077,7 @@ function drawButtonGadgetChrome(
   osSkin: DesignerSettings["osSkin"],
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const label = (g.text && g.text.length > 0) ? g.text : "ButtonGadget";
+  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.ButtonGadget;
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
   const buttonRadius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
@@ -4438,7 +4438,7 @@ function drawImageGadgetChrome(
   const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
   if (!drawResolvedPreviewImage(ctx, previewImage, x, y, w, h)) {
     ctx.fillStyle = "rgb(0, 0, 0)";
-    ctx.fillText("ImageGadget", x, y);
+    ctx.fillText(GADGET_KIND.ImageGadget, x, y);
   }
   ctx.restore();
 }
@@ -4618,7 +4618,7 @@ function drawSpinGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = (g.text && g.text.length > 0) ? g.text : "SpinGadget";
+  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.SpinGadget;
   const spinnerWidth = osSkin === "windows8" ? 18 : 20;
   const bodyWidth = Math.max(0, w - spinnerWidth);
 
@@ -5210,7 +5210,7 @@ function drawStringLikeGadgetChrome(
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const label = (g.text && g.text.length > 0)
     ? g.text
-    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : "StringGadget");
+    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -5271,7 +5271,7 @@ function drawTextLikeGadgetChrome(
   const isTextGadget = g.kind === GADGET_KIND.TextGadget;
   const label = (g.text && g.text.length > 0)
     ? g.text
-    : (isTextGadget ? "TextGadget" : "HyperLinkGadget");
+    : (isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const bgColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
 
@@ -5332,12 +5332,12 @@ function drawListLikeGadgetChrome(
   );
   const isTree = variant === "tree";
   const fallbackLabel = variant === "tree"
-    ? "TreeGadget"
+    ? GADGET_KIND.TreeGadget
     : variant === "listview"
-      ? "ListViewGadget"
+      ? GADGET_KIND.ListViewGadget
       : variant === "scintilla"
-        ? "ScintillaGadget"
-        : "EditorGadget";
+        ? GADGET_KIND.ScintillaGadget
+        : GADGET_KIND.EditorGadget;
   const itemX = x + (isTree ? 30 : 6);
   const placeholderX = x + 30;
   const rows = (g.items ?? []).map(getPreviewGadgetItemLabel);
