@@ -32,6 +32,7 @@ export const GADGET_KIND = {
   IPAddressGadget: "IPAddressGadget",
   ScrollBarGadget: "ScrollBarGadget",
   ScintillaGadget: "ScintillaGadget",
+  MDIGadget: "MDIGadget",
   CustomGadget: "CustomGadget",
   Unknown: "Unknown",
 } as const;

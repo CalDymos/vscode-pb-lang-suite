@@ -110,7 +110,7 @@ const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.HyperLinkGadget,
   GADGET_KIND.ListIconGadget,
   GADGET_KIND.ListViewGadget,
-  "MDIGadget",
+  GADGET_KIND.MDIGadget,
   GADGET_KIND.OptionGadget,
   GADGET_KIND.PanelGadget,
   GADGET_KIND.ScintillaGadget,
