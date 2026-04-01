@@ -1,4 +1,4 @@
-import { quotePbString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "./parser/tokenizer";
 
 // Matches plain "..." and PureBasic escaped ~"..." string literals.
 const PB_STRING_LITERAL_RE = /^~?"(?:[^"]|"")*"$/;
@@ -10,9 +10,7 @@ export function isPbStringLiteral(raw?: string): boolean {
 export function parsePbStringLiteral(raw?: string): string | undefined {
   const trimmed = raw?.trim();
   if (!trimmed || !isPbStringLiteral(trimmed)) return undefined;
-  // Strip optional leading ~ before removing surrounding quotes.
-  const unescaped = trimmed.startsWith('~"') ? trimmed.slice(1) : trimmed;
-  return unescaped.slice(1, -1).replace(/""/g, '"');
+  return unquoteString(trimmed);
 }
 
 export function toPbStringLiteral(value: string): string {

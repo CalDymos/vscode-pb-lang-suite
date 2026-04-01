@@ -1,5 +1,5 @@
 import { GADGET_KIND } from "./model";
-import { quotePbString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "./parser/tokenizer";
 
 export type GadgetTextLike = {
   textRaw?: string;
@@ -163,22 +163,8 @@ const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ListIconGadget
 ]);
 
-function quotePbStringLiteral(value: string): string {
-  return quotePbString(value);
-}
-
-function unquotePbStringLiteral(raw?: string): string | undefined {
-  if (!raw) return undefined;
-  const trimmed = raw.trim();
-  const unescaped = trimmed.startsWith('~"') ? trimmed.slice(1) : trimmed;
-  if (unescaped.length >= 2 && unescaped.startsWith('"') && unescaped.endsWith('"')) {
-    return unescaped.slice(1, -1).replace(/""/g, '"');
-  }
-  return undefined;
-}
-
 function buildInspectorValue(raw: string | undefined, fallback: string | undefined): string {
-  const literal = unquotePbStringLiteral(raw);
+  const literal = raw ? unquoteString(raw) : undefined;
   if (literal !== undefined) return literal;
   if (typeof fallback === "string") return fallback;
   return raw?.trim() ?? "";
@@ -272,14 +258,14 @@ export function buildGadgetTextRaw(value: string, isVariable: boolean): string {
   if (isVariable) {
     return value;
   }
-  return quotePbStringLiteral(value);
+  return quotePbString(value);
 }
 
 export function buildGadgetTooltipRaw(value: string, isVariable: boolean): string | undefined {
   if (isVariable) {
     return value.length ? value : undefined;
   }
-  return value.length ? quotePbStringLiteral(value) : undefined;
+  return value.length ? quotePbString(value) : undefined;
 }
 
 

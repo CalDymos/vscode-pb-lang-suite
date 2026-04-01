@@ -1,4 +1,4 @@
-import { quotePbString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "./parser/tokenizer";
 import { parseStatusBarWidth } from "./statusbarPreviewUtils";
 
 export type SourceLineLike = {
@@ -102,12 +102,8 @@ export type VisibleMenuEntryLike = {
 export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
 
-function toPbStringLiteral(value: string): string {
-  return quotePbString(value);
-}
-
 export function buildOptionalInspectorLiteralRaw(value: string): string {
-  return value.length ? toPbStringLiteral(value) : "";
+  return value.length ? quotePbString(value) : "";
 }
 
 export function buildOptionalInspectorPlainValue(value: string): string | undefined {
@@ -116,14 +112,7 @@ export function buildOptionalInspectorPlainValue(value: string): string | undefi
 
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
-  const trimmed = raw.trim();
-  // Strip optional PureBasic escape-literal prefix (~"...") before unquoting.
-  const unescaped = trimmed.startsWith('~"') ? trimmed.slice(1) : trimmed;
-  if (unescaped.length >= 2 && unescaped.startsWith('"') && unescaped.endsWith('"')) {
-    // Unescape PureBasic doubled-quote sequences ("" → ").
-    return unescaped.slice(1, -1).replace(/""/g, '"');
-  }
-  return trimmed;
+  return unquoteString(raw) ?? raw.trim();
 }
 
 export function getMenuEntryLevel(entry: MenuEntryLike | undefined): number {
@@ -145,7 +134,7 @@ export function getDefaultMenuItemInsertArgs(menu: MenuModelLike): { idRaw: stri
   const nextIndex = logicalCount + 1;
   return {
     idRaw: `#MenuItem_${nextIndex}`,
-    textRaw: toPbStringLiteral(`MenuItem${nextIndex}`)
+    textRaw: quotePbString(`MenuItem${nextIndex}`)
   };
 }
 
