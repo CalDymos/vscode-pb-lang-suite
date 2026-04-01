@@ -222,3 +222,76 @@ EndProcedure
   );
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
 });
+
+
+test("inserts FormMenu before an existing FormFont block when no window or gadget enum is present", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormFont
+  #FontMain
+EndEnumeration
+
+LoadFont(#FontMain, "Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#PB_Any))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormMenu',
+    '  #MenuSave',
+    'EndEnumeration',
+    '',
+    'Enumeration FormFont',
+    '  #FontMain',
+    'EndEnumeration',
+  ].join("\n")));
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});
+
+test("inserts FormMenu before image decoder lines when no enum anchor exists yet", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+UsePNGImageDecoder()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#PB_Any))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormMenu',
+    '  #MenuSave',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+  ].join("\n")));
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});

@@ -492,11 +492,18 @@ EndEnumeration
 `;
 }
 
-function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
-  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets];
+function isNamedEnumerationLine(text: string, enumName: string): boolean {
+  return new RegExp(`^Enumeration\\s+${enumName}\\b`, "i").test(text.trim());
+}
+
+function findTopLevelEnumInsertLine(
+  document: vscode.TextDocument,
+  preferredEnumNames: readonly string[],
+  boundaryEnumNames: readonly string[]
+): number {
   let lastBlock: LineBlock | undefined;
 
-  for (const enumName of preferredEnums) {
+  for (const enumName of preferredEnumNames) {
     const block = findNamedEnumerationBlock(document, enumName);
     if (block && (!lastBlock || block.endLine > lastBlock.endLine)) {
       lastBlock = block;
@@ -510,8 +517,7 @@ function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]):
   for (let i = 0; i < document.lineCount; i++) {
     const text = document.lineAt(i).text;
     const trimmed = text.trim();
-    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
-      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
+    if (boundaryEnumNames.some(enumName => isNamedEnumerationLine(trimmed, enumName))
       || isCustomGadgetInitMarkerLine(text)
       || isImageDecoderLine(text)
       || /^LoadImage\s*\(/i.test(trimmed)
@@ -525,6 +531,14 @@ function findMenuEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]):
   return document.lineCount;
 }
 
+function findMenuEnumInsertLine(document: vscode.TextDocument): number {
+  return findTopLevelEnumInsertLine(
+    document,
+    [ENUM_NAMES.windows, ENUM_NAMES.gadgets],
+    [ENUM_NAMES.images, ENUM_NAMES.fonts]
+  );
+}
+
 function applyMenuEnumPatch(
   edit: vscode.WorkspaceEdit,
   document: vscode.TextDocument,
@@ -536,7 +550,7 @@ function applyMenuEnumPatch(
     edit,
     document,
     menuEnumBlock ? expandBlockWithTrailingBlank(document, menuEnumBlock) : undefined,
-    findMenuEnumInsertLine(document, calls),
+    findMenuEnumInsertLine(document),
     buildMenuEnumBlock(symbols)
   );
 }
@@ -687,24 +701,11 @@ function removeGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocum
 }
 
 function findWindowEnumInsertLine(document: vscode.TextDocument): number {
-  for (let i = 0; i < document.lineCount; i++) {
-    const text = document.lineAt(i).text;
-    const trimmed = text.trim();
-    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.gadgets}\\b`, "i").test(trimmed)
-      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.menus}\\b`, "i").test(trimmed)
-      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
-      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
-      || isCustomGadgetInitMarkerLine(text)
-      || isImageDecoderLine(text)
-      || /^LoadImage\s*\(/i.test(trimmed)
-      || /^CatchImage\s*\(/i.test(trimmed)
-      || /^LoadFont\s*\(/i.test(trimmed)
-      || isTopLevelHeadBoundaryLine(text)) {
-      return i;
-    }
-  }
-
-  return document.lineCount;
+  return findTopLevelEnumInsertLine(
+    document,
+    [],
+    [ENUM_NAMES.gadgets, ENUM_NAMES.menus, ENUM_NAMES.images, ENUM_NAMES.fonts]
+  );
 }
 
 function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, enumSymbol: string, enumValueRaw: string | undefined) {

@@ -1501,6 +1501,64 @@ EndProcedure
   assert.equal(parsed.window?.pbAny, false);
 });
 
+test("re-inserts Enumeration FormWindow before an existing FormFont block", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormFont
+  #FontMain
+EndEnumeration
+
+LoadFont(#FontMain, "Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'Enumeration FormFont',
+  ].join("\n")));
+  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, '#FrmMain');
+  assert.equal(parsed.window?.pbAny, false);
+});
+
+test("re-inserts Enumeration FormWindow before image decoder lines when no enum anchor exists yet", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+UsePNGImageDecoder()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 220, height = 140)
+  win = OpenWindow(#PB_Any, x, y, width, height, "Window Basic")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowPbAnyToggle(document, "win", false, "win", "#FrmMain", undefined)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormWindow',
+    '  #FrmMain',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+  ].join("\n")));
+  assert.match(patchedText, /OpenWindow\(#FrmMain, x, y, width, height, "Window Basic"\)/);
+  assert.equal(parsed.window?.id, '#FrmMain');
+  assert.equal(parsed.window?.pbAny, false);
+});
+
 test("re-inserts Enumeration FormWindow before ProcedureDLL and XIncludeFile boundaries", () => {
   const text = `; Form Designer for PureBasic - 6.30
 
