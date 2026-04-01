@@ -51,6 +51,7 @@ export interface Gadget {
   kind: GadgetKind;
   pbAny: boolean;
   variable?: string;     // e.g. "Gadget_1" (used when pbAny is true)
+  enumValueRaw?: string; // e.g. "500" or undefined; only set when pbAny is false
   firstParam: string;    // raw first param token
   parentId?: string;     // parent gadget id (Container/Panel/ScrollArea/OpenGadgetList)
   parentItem?: number;   // for PanelGadget children: active tab index (best-effort)

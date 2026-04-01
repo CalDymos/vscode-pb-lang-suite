@@ -2379,6 +2379,358 @@ export function applyWindowEnumValuePatch(
   return edit;
 }
 
+// -----------------------------------------------------------------------------
+// Helpers for gadget id / pbAny patching
+// -----------------------------------------------------------------------------
+
+/**
+ * Removes a single symbol entry from the Enumeration FormGadget block.
+ * If the block would become empty, the whole block is deleted.
+ */
+function removeGadgetEnumEntry(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  block: LineBlock,
+  enumSymbol: string
+): void {
+  let entryLine: number | undefined;
+  let entryCount = 0;
+
+  for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+    const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+    if (!noComment.length) continue;
+    const m = /^(#\w+)\b/.exec(noComment);
+    if (!m) continue;
+    entryCount++;
+    if (m[1] === enumSymbol) entryLine = i;
+  }
+
+  if (entryLine === undefined) return;
+
+  if (entryCount <= 1) {
+    // Block becomes empty: remove the whole block including trailing blank line.
+    const expanded = expandBlockWithTrailingBlank(document, block);
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(expanded.startLine, 0),
+        document.lineAt(expanded.endLine).rangeIncludingLineBreak.end
+      )
+    );
+    return;
+  }
+
+  // Just delete the specific entry line.
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(entryLine, 0),
+      document.lineAt(entryLine).rangeIncludingLineBreak.end
+    )
+  );
+}
+
+/**
+ * Ensures the Enumeration FormGadget block contains enumSymbol.
+ * Creates the block if absent; updates an existing entry if present.
+ */
+function ensureGadgetEnumeration(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  enumSymbol: string,
+  enumValueRaw: string | undefined
+): void {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (block) {
+    for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+      const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+      if (!noComment.length) continue;
+      const m = /^(#\w+)\b/.exec(noComment);
+      if (!m || m[1] !== enumSymbol) continue;
+      const indent = getLineIndent(document, i);
+      const newLine = enumValueRaw && enumValueRaw.trim().length
+        ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+        : `${indent}${enumSymbol}`;
+      edit.replace(document.uri, document.lineAt(i).range, newLine);
+      return;
+    }
+    // Symbol not yet in block — insert before EndEnumeration.
+    const newLine = enumValueRaw && enumValueRaw.trim().length
+      ? `  ${enumSymbol}=${enumValueRaw.trim()}\n`
+      : `  ${enumSymbol}\n`;
+    edit.insert(document.uri, new vscode.Position(block.endLine, 0), newLine);
+    return;
+  }
+
+  // Block does not exist — create it.
+  const anchor = findGadgetEnumInsertLine(document);
+  const entry = enumValueRaw && enumValueRaw.trim().length
+    ? `  ${enumSymbol}=${enumValueRaw.trim()}`
+    : `  ${enumSymbol}`;
+  const blockText = `Enumeration ${ENUM_NAMES.gadgets}\n${entry}\nEndEnumeration\n\n`;
+  edit.insert(document.uri, new vscode.Position(anchor, 0), blockText);
+}
+
+export function applyGadgetPbAnyToggle(
+  document: vscode.TextDocument,
+  gadgetId: string,
+  toPbAny: boolean,
+  variableName: string,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const gadgetCall = findCallByStableKey(calls, gadgetId, name => /gadget$/i.test(name));
+  if (!gadgetCall) return undefined;
+
+  const params = splitParams(gadgetCall.args);
+  if (params.length < 5) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  const proc = findProcedureBlock(document, gadgetCall.range.line);
+
+  if (toPbAny) {
+    // 1) Remove the symbol from Enumeration FormGadget (entry only, not whole block).
+    const enumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+    if (enumBlock) {
+      removeGadgetEnumEntry(edit, document, enumBlock, enumSymbol);
+    }
+
+    // 2) Ensure Global variable declaration exists.
+    ensureWindowGlobalLine(edit, document, variableName);
+
+    // 3) Rewrite constructor: "Var = KindGadget(#PB_Any, x, y, w, h, ...)".
+    params[0] = PB_ANY;
+    const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+    const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+    const updated = `${indent}${variableName} = ${rebuilt}`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+      updated
+    );
+
+    // 4) Best-effort: replace enumSymbol with variableName in p[0] of all
+    //    other calls inside the same procedure scope.
+    if (proc) {
+      for (const c of calls) {
+        if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+        if (c === gadgetCall) continue;
+        const p = splitParams(c.args);
+        if (!p.length) continue;
+        if ((p[0] ?? "").trim() !== enumSymbol) continue;
+        p[0] = variableName;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const lineIndent = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar
+          ? `${lineIndent}${c.assignedVar} = ${rebuiltCall}`
+          : `${lineIndent}${rebuiltCall}`;
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    return edit;
+  }
+
+  // toPbAny === false
+  // 1) Remove the Global variable declaration.
+  removeGlobalLine(edit, document, variableName);
+
+  // 2) Ensure Enumeration FormGadget block contains enumSymbol.
+  ensureGadgetEnumeration(edit, document, enumSymbol, enumValueRaw);
+
+  // 3) Rewrite constructor: "KindGadget(#Symbol, x, y, w, h, ...)" without assignment.
+  params[0] = enumSymbol;
+  const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+  const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+  const updated = `${indent}${rebuilt}`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+    updated
+  );
+
+  // 4) Best-effort: replace variableName with enumSymbol in p[0] of all
+  //    other calls inside the same procedure scope.
+  if (proc) {
+    for (const c of calls) {
+      if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+      if (c === gadgetCall) continue;
+      const p = splitParams(c.args);
+      if (!p.length) continue;
+      if ((p[0] ?? "").trim() !== variableName) continue;
+      p[0] = enumSymbol;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const lineIndent = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar
+        ? `${lineIndent}${c.assignedVar} = ${rebuiltCall}`
+        : `${lineIndent}${rebuiltCall}`;
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  return edit;
+}
+
+export function applyGadgetEnumValuePatch(
+  document: vscode.TextDocument,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (!block) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+    const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+    if (!noComment.length) continue;
+    const m = /^(#\w+)\b/.exec(noComment);
+    if (!m) continue;
+    if (m[1] !== enumSymbol) continue;
+
+    const indent = getLineIndent(document, i);
+    const newLine = enumValueRaw && enumValueRaw.trim().length
+      ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+      : `${indent}${enumSymbol}`;
+    edit.replace(document.uri, document.lineAt(i).range, newLine);
+    return edit;
+  }
+
+  // Not found — insert before EndEnumeration.
+  const newLine = enumValueRaw && enumValueRaw.trim().length
+    ? `  ${enumSymbol}=${enumValueRaw.trim()}\n`
+    : `  ${enumSymbol}\n`;
+  edit.insert(document.uri, new vscode.Position(block.endLine, 0), newLine);
+  return edit;
+}
+
+export function applyGadgetVariableNamePatch(
+  document: vscode.TextDocument,
+  gadgetId: string,
+  variableName: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (!variableName.length) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const gadgetCall = findCallByStableKey(calls, gadgetId, name => /gadget$/i.test(name));
+  if (!gadgetCall) return undefined;
+
+  const params = splitParams(gadgetCall.args);
+  if (params.length < 1) return undefined;
+
+  const first = (params[0] ?? "").trim();
+  const edit = new vscode.WorkspaceEdit();
+  const proc = findProcedureBlock(document, gadgetCall.range.line);
+
+  // -------------------------------------------------------------------------
+  // PB_Any mode: oldVar = KindGadget(#PB_Any, ...)
+  // -------------------------------------------------------------------------
+  if (first === PB_ANY) {
+    const oldVar = (gadgetCall.assignedVar ?? "").trim();
+    if (!oldVar.length) return undefined;
+
+    // 1) Rename Global line.
+    if (oldVar !== variableName) {
+      removeGlobalLine(edit, document, oldVar);
+      ensureWindowGlobalLine(edit, document, variableName);
+    } else {
+      ensureWindowGlobalLine(edit, document, variableName);
+    }
+
+    // 2) Rewrite constructor assignment line.
+    const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+    const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+      `${indent}${variableName} = ${rebuilt}`
+    );
+
+    // 3) Best-effort: rewrite p[0] usages oldVar -> variableName in procedure scope.
+    if (proc && oldVar !== variableName) {
+      for (const c of calls) {
+        if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+        if (c === gadgetCall) continue;
+        const p = splitParams(c.args);
+        if (!p.length || (p[0] ?? "").trim() !== oldVar) continue;
+        p[0] = variableName;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const li = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar ? `${li}${c.assignedVar} = ${rebuiltCall}` : `${li}${rebuiltCall}`;
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    return edit;
+  }
+
+  // -------------------------------------------------------------------------
+  // Enum mode: KindGadget(#OldSym, ...)
+  // -------------------------------------------------------------------------
+  const oldEnum = first; // e.g. "#Btn_0"
+  const newEnum = variableName.startsWith("#") ? variableName : `#${variableName}`;
+  if (oldEnum === newEnum) return undefined;
+
+  // 1) Rename entry in Enumeration FormGadget block.
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (block) {
+    for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+      const re = new RegExp(`^(\\s*)${escapeRegExp(oldEnum)}(\\b.*)$`);
+      const m = re.exec(document.lineAt(i).text);
+      if (!m) continue;
+      edit.replace(document.uri, document.lineAt(i).range, `${m[1]}${newEnum}${m[2]}`);
+      break;
+    }
+  }
+
+  // 2) Rewrite constructor first param.
+  params[0] = newEnum;
+  const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+  const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+    `${indent}${rebuilt}`
+  );
+
+  // 3) Best-effort: rewrite p[0] usages oldEnum -> newEnum in procedure scope.
+  if (proc) {
+    for (const c of calls) {
+      if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+      if (c === gadgetCall) continue;
+      const p = splitParams(c.args);
+      if (!p.length || (p[0] ?? "").trim() !== oldEnum) continue;
+      p[0] = newEnum;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const li = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar ? `${li}${c.assignedVar} = ${rebuiltCall}` : `${li}${rebuiltCall}`;
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  return edit;
+}
+
 export function applyWindowVariableNamePatch(
   document: vscode.TextDocument,
   variableName: string,

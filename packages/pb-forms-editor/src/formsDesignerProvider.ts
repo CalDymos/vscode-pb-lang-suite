@@ -48,6 +48,9 @@ import {
   applyWindowVariableNamePatch,
   applyWindowPbAnyToggle,
   applyWindowRectPatch,
+  applyGadgetPbAnyToggle,
+  applyGadgetEnumValuePatch,
+  applyGadgetVariableNamePatch,
   buildImageIdReference,
   toPbAnyAssignedVar,
   toEnumImageId
@@ -220,6 +223,9 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
   setGadgetResizeRaw: "setGadgetResizeRaw",
+  toggleGadgetPbAny: "toggleGadgetPbAny",
+  setGadgetEnumValue: "setGadgetEnumValue",
+  setGadgetVariableName: "setGadgetVariableName",
   setWindowRect: "setWindowRect",
   setWindowOpenArgs: "setWindowOpenArgs",
   setWindowProperties: "setWindowProperties",
@@ -290,6 +296,9 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny; gadgetId: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName; gadgetId: string; variableName: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
@@ -769,6 +778,42 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           await applyEditOrError(
             edit,
             `Could not patch FormWindow variable name '${msg.variableName}'. No matching OpenWindow call found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny: {
+          const edit = applyGadgetPbAnyToggle(
+            document,
+            msg.gadgetId,
+            msg.toPbAny,
+            msg.variableName,
+            msg.enumSymbol,
+            msg.enumValueRaw,
+            sr
+          );
+          await applyEditOrError(edit, `Could not toggle gadget pbAny. No matching gadget constructor found${rangeInfo}.`);
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue: {
+          const edit = applyGadgetEnumValuePatch(document, msg.enumSymbol, msg.enumValueRaw, sr);
+          await applyEditOrError(
+            edit,
+            `Could not patch FormGadget enumeration entry '${msg.enumSymbol}'. No Enumeration FormGadget block found${rangeInfo}.`
+          );
+          return;
+        }
+
+        case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName: {
+          if (!msg.variableName.length) {
+            postError(`Could not patch gadget variable name. Empty variable name is not allowed${rangeInfo}.`);
+            return;
+          }
+          const edit = applyGadgetVariableNamePatch(document, msg.gadgetId, msg.variableName, sr);
+          await applyEditOrError(
+            edit,
+            `Could not patch gadget variable name '${msg.variableName}'. No matching gadget constructor found${rangeInfo}.`
           );
           return;
         }

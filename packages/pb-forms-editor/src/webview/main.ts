@@ -220,6 +220,7 @@ type Gadget = {
   id: string;
   pbAny: boolean;
   variable?: string;
+  enumValueRaw?: string;
   firstParam: string;
   kind: string;
   parentId?: string;
@@ -451,6 +452,9 @@ const WEBVIEW_TO_EXT_MSG_TYPE = {
   setGadgetImageRaw: "setGadgetImageRaw",
   setGadgetStateRaw: "setGadgetStateRaw",
   setGadgetResizeRaw: "setGadgetResizeRaw",
+  toggleGadgetPbAny: "toggleGadgetPbAny",
+  setGadgetEnumValue: "setGadgetEnumValue",
+  setGadgetVariableName: "setGadgetVariableName",
   setWindowRect: "setWindowRect",
   setWindowOpenArgs: "setWindowOpenArgs",
   setWindowProperties: "setWindowProperties",
@@ -543,6 +547,9 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny; gadgetId: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName; gadgetId: string; variableName: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
@@ -10530,7 +10537,7 @@ function renderProps() {
   }
 
   const selId = sel.id;
-  const g = model.gadgets.find(it => it.id === selId);
+  const g: Gadget | undefined = model.gadgets.find(it => it.id === selId);
   if (!g) {
     propsEl.innerHTML = "";
     return;
@@ -10606,28 +10613,63 @@ function renderProps() {
   }
 
   propsEl.appendChild(section("Properties"));
+
+  const gadgetVariableName = getGadgetVariableInspectorValue(g) || "Gadget_0";
+  const gadgetEnumSymbol = `#${gadgetVariableName.trim()}`;
+
   propsEl.appendChild(
     row(
       PB_ANY,
-      checkboxInput(Boolean(g.pbAny), () => {}, {
-        disabled: true,
-        title: "Display-only for the current gadget patch path. PB_Any toggling is not wired here yet."
+      checkboxInput(Boolean(g.pbAny), v => {
+        // Pre-update selection to the new id so sanitizeSelectionAfterModelUpdate
+        // can still find this gadget after the stable key changes.
+        const newId = v ? gadgetVariableName : gadgetEnumSymbol;
+        selection = { kind: "gadget", id: newId };
+        vscode.postMessage({
+          type: "toggleGadgetPbAny",
+          gadgetId: g.id,
+          toPbAny: v,
+          variableName: gadgetVariableName,
+          enumSymbol: gadgetEnumSymbol,
+          enumValueRaw: g.enumValueRaw
+        });
       })
     )
   );
+
+  const gadgetVariableInputValue = getGadgetVariableInspectorValue(g);
   propsEl.appendChild(
     row(
       "Variable",
-      textInput(
-        getGadgetVariableInspectorValue(g),
-        () => {},
-        {
-          disabled: true,
-          title: "Shows the current assigned gadget variable or enum symbol tail. Renaming is not wired here yet."
+      textInput(gadgetVariableInputValue, v => {
+        const parsed = parseWindowVariableNameInspectorInput(v, gadgetVariableInputValue);
+        if (!parsed.ok) {
+          clearInfoError();
+          renderProps();
+          return;
         }
-      )
+        // Pre-update selection to the new id so sanitizeSelectionAfterModelUpdate
+        // can still find this gadget after the stable key changes.
+        const newId = g.pbAny ? parsed.value : `#${parsed.value}`;
+        selection = { kind: "gadget", id: newId };
+        vscode.postMessage({
+          type: "setGadgetVariableName",
+          gadgetId: g.id,
+          variableName: parsed.value
+        });
+      })
     )
   );
+
+  if (!g.pbAny) {
+    propsEl.appendChild(row("Enum Value", textInput(g.enumValueRaw ?? "", v => {
+      vscode.postMessage({
+        type: "setGadgetEnumValue",
+        enumSymbol: gadgetEnumSymbol,
+        enumValueRaw: v.trim().length ? v.trim() : undefined
+      });
+    })));
+  }
 
   const captionField = getGadgetCaptionFieldConfig(g.kind);
   const canEditColors = canEditGadgetColors(g.kind);

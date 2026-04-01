@@ -64,6 +64,7 @@ export function parseFormDocument(text: string): FormDocument {
 
   const enums = parseFormEnumerations(text, scanRange);
   const winEnumValues = parseEnumerationValueMap(text, scanRange, ENUM_NAMES.windows);
+  const gadgetEnumValues = parseEnumerationValueMap(text, scanRange, ENUM_NAMES.gadgets);
 
   const meta: FormMeta = {
     header: header ?? undefined,
@@ -726,6 +727,10 @@ export function parseFormDocument(text: string): FormDocument {
           message: `Found Gadget(${PB_ANY}, ...) without a stable assignment (expected: Var = Gadget(${PB_ANY}, ...)). Patching may be ambiguous.`,
           line: c.range.line
         });
+      }
+
+      if (!gadget.pbAny && gadget.firstParam.startsWith("#")) {
+        gadget.enumValueRaw = gadgetEnumValues[gadget.firstParam] ?? undefined;
       }
 
       if (gadget.kind === GADGET_KIND.SplitterGadget) {
@@ -1812,4 +1817,3 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     source: range
   };
 }
-
