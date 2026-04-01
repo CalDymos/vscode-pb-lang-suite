@@ -7752,50 +7752,6 @@ function render() {
     }
   }
 
-  if (menuBarRect) {
-    drawMenuBarPreview(ctx, menuBarRect, fg, settings.osSkin);
-    if (selection?.kind === "menu" && selection.id === getPrimaryMenu()?.id) {
-      ctx.save();
-      ctx.strokeStyle = focus;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(menuBarRect.x + 0.5, menuBarRect.y + 0.5, menuBarRect.w - 1, menuBarRect.h - 1);
-      ctx.restore();
-    }
-    if (selection?.kind === "menuEntry") {
-      const sel = selection;
-      const entryRect = menuEntryPreviewRects.find(entry => entry.ownerId === sel.menuId && entry.index === sel.entryIndex);
-      if (entryRect) {
-        ctx.save();
-        ctx.strokeStyle = focus;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
-        ctx.restore();
-      }
-    }
-
-    if (drag?.target === "menuEntry" && drag.moved && drag.moveTarget) {
-      const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
-      const indicator = drag.moveTarget.indicatorRect;
-      ctx.save();
-      ctx.strokeStyle = indicatorColor;
-      ctx.lineWidth = 2;
-      if (drag.moveTarget.indicatorOrientation === "vertical") {
-        const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
-        ctx.beginPath();
-        ctx.moveTo(x + 0.5, indicator.y);
-        ctx.lineTo(x + 0.5, indicator.y + indicator.h);
-        ctx.stroke();
-      } else {
-        const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
-        ctx.beginPath();
-        ctx.moveTo(indicator.x, y + 0.5);
-        ctx.lineTo(indicator.x + indicator.w, y + 0.5);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
-
   if (toolBarRect) {
     drawToolBarPreview(ctx, toolBarRect, fg, settings.osSkin);
     if (selection?.kind === "toolbar" && selection.id === getPrimaryToolbar()?.id) {
@@ -8094,6 +8050,50 @@ function render() {
       ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
       ctx.clip();
       drawHandles(ctx, gx, gy, gw, gh, focus);
+      ctx.restore();
+    }
+  }
+
+  if (menuBarRect) {
+    drawMenuBarPreview(ctx, menuBarRect, fg, settings.osSkin);
+    if (selection?.kind === "menu" && selection.id === getPrimaryMenu()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(menuBarRect.x + 0.5, menuBarRect.y + 0.5, menuBarRect.w - 1, menuBarRect.h - 1);
+      ctx.restore();
+    }
+    if (selection?.kind === "menuEntry") {
+      const sel = selection;
+      const entryRect = menuEntryPreviewRects.find(entry => entry.ownerId === sel.menuId && entry.index === sel.entryIndex);
+      if (entryRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
+        ctx.restore();
+      }
+    }
+
+    if (drag?.target === "menuEntry" && drag.moved && drag.moveTarget) {
+      const indicatorColor = getCssVar("--vscode-editorInfo-foreground") || "#0000ff";
+      const indicator = drag.moveTarget.indicatorRect;
+      ctx.save();
+      ctx.strokeStyle = indicatorColor;
+      ctx.lineWidth = 2;
+      if (drag.moveTarget.indicatorOrientation === "vertical") {
+        const x = indicator.x + Math.max(0, Math.trunc(indicator.w / 2));
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, indicator.y);
+        ctx.lineTo(x + 0.5, indicator.y + indicator.h);
+        ctx.stroke();
+      } else {
+        const y = indicator.y + Math.max(0, Math.trunc(indicator.h / 2));
+        ctx.beginPath();
+        ctx.moveTo(indicator.x, y + 0.5);
+        ctx.lineTo(indicator.x + indicator.w, y + 0.5);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
