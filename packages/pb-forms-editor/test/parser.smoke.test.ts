@@ -82,6 +82,33 @@ EndProcedure
   assert.equal(openItem?.iconId, "#ImgOpen");
 });
 
+test("keeps concatenated menu captions outside the plain literal path", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  If OpenWindow(#FrmMain, x, y, width, height, "Menu", #PB_Window_SystemMenu)
+    CreateImageMenu(0, WindowID(#FrmMain))
+    MenuTitle("File")
+    MenuItem(#MenuDynamic, "Open" + suffix$)
+  EndIf
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const menu = doc.menus[0];
+  const entry = menu?.entries.find((item) => item.kind === MENU_ENTRY_KIND.MenuItem && item.idRaw === "#MenuDynamic");
+
+  assert.ok(entry);
+  assert.equal(entry?.textRaw, '"Open" + suffix$');
+  assert.equal(entry?.text, undefined);
+  assert.equal(entry?.shortcut, undefined);
+});
+
 test("parses original PB 6.30 toolbar syntax with CreateToolbar", () => {
   const text = `; Form Designer for PureBasic - 6.30
 ; EnableExplicit

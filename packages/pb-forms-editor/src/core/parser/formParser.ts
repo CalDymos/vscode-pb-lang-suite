@@ -1228,6 +1228,16 @@ function parseMenuItemText(textRaw: string | undefined): { text?: string; shortc
     return { text: undefined, shortcut: undefined };
   }
 
+/**
+ * Parses only plain PureBasic string literals for the menu/text helper path.
+ *
+ * This intentionally stays stricter than `unquoteString()` from tokenizer.ts:
+ * it accepts `"..."` / `~"..."` literals with doubled quotes, but rejects any
+ * trailing or concatenated expression such as `"..." + Chr(9) + "..."`.
+ *
+ * The menu parser relies on that stricter boundary so plain captions and
+ * shortcut concatenations stay distinguishable.
+ */
 function parsePbStringLiteral(raw: string): string | undefined {
   const value = raw.trim();
   const unescaped = value.startsWith('~"') ? value.slice(1) : value;

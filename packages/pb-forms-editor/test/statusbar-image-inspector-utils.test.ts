@@ -58,6 +58,18 @@ test("rebinds CatchImage CurrentImage by matching the normalized inline label", 
   assert.equal(resolution.matchedImage?.id, "#ImgState");
 });
 
+test("rebinds CatchImage CurrentImage even when the inspector input keeps the leading question mark", () => {
+  const resolution = resolveStatusBarCurrentImageRebind(
+    [
+      { id: "#ImgState", imageRaw: "?ImgState", image: "ImgState", inline: true },
+    ],
+    "?ImgState",
+    "#ImgOther"
+  );
+
+  assert.equal(resolution.matchedImage?.id, "#ImgState");
+});
+
 test("rejects CurrentImage rebind when multiple parsed image entries match", () => {
   const resolution = resolveStatusBarCurrentImageRebind(
     [

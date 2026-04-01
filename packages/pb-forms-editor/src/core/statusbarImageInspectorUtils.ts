@@ -1,4 +1,4 @@
-import { quotePbString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "./parser/tokenizer";
 
 export interface StatusBarCurrentImageEditCandidate {
   id?: string;
@@ -36,9 +36,9 @@ function parseCurrentImageLoadPath(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed.length) return undefined;
 
-  const quoted = /^~?"([\s\S]*)"$/.exec(trimmed);
-  if (quoted) {
-    return quoted[1].replace(/""/g, '"');
+  const literal = unquoteString(trimmed);
+  if (literal !== undefined) {
+    return literal;
   }
 
   if (/[.\/]/.test(trimmed)) {
@@ -73,6 +73,14 @@ export function buildNextGeneratedImageIdRaw(
   return `#Img_${base}_${index}`;
 }
 
+/**
+ * Normalizes user-visible CurrentImage values only for the statusbar rebind flow.
+ *
+ * This intentionally stays local instead of becoming a generic PB-string helper:
+ * inline `CatchImage` labels strip leading `?`, while `LoadImage` values only
+ * remove one outer quote pair so the rebind matcher can compare inspector input,
+ * parsed `image`, and raw `imageRaw` consistently.
+ */
 function normalizeCurrentImageInput(raw: string, inline: boolean): string {
   const trimmed = raw.trim();
   if (!trimmed.length) return "";

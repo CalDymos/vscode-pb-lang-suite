@@ -1,3 +1,5 @@
+import { unquoteString } from "./parser/tokenizer";
+
 export const PB_VARIABLE_INVALID_CHARS = [" ", ".", "-", "/", "\\", "|", "?", "!", "@", "£", "$", "="] as const;
 
 const PB_VARIABLE_INVALID_CHAR_SET = new Set<string>(PB_VARIABLE_INVALID_CHARS);
@@ -20,9 +22,7 @@ export function isValidPbVariableReference(value: string): boolean {
 
 export function isPbStringLiteralRaw(raw: string | undefined): boolean {
   if (!raw) return false;
-  const trimmed = raw.trim();
-  const unescaped = trimmed.startsWith('~"') ? trimmed.slice(1) : trimmed;
-  return unescaped.length >= 2 && unescaped.startsWith('"') && unescaped.endsWith('"');
+  return unquoteString(raw) !== undefined;
 }
 
 export function requiresPbVariableValidation(raw: string | undefined): boolean {
