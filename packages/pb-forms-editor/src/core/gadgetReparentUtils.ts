@@ -1,4 +1,4 @@
-import type { FormWindow, Gadget } from "./model";
+import { GADGET_KIND, type FormWindow, type Gadget } from "./model";
 import { canHostInsertedGadgets } from "./gadgetInsertUtils";
 
 type ReparentDialogWindowLike = Pick<FormWindow, "variable" | "id">;
@@ -49,7 +49,7 @@ function collectDescendantIds(gadgets: readonly ReparentDialogGadgetLike[], root
 
 export function canOpenGadgetReparentDialog(gadget: { kind: string } | undefined): boolean {
   if (!gadget) return false;
-  return gadget.kind !== "CustomGadget";
+  return gadget.kind !== GADGET_KIND.CustomGadget;
 }
 
 export function getGadgetReparentParentOptions(
@@ -76,7 +76,7 @@ export function getGadgetReparentParentOptions(
       value: `gadget:${gadget.id}`,
       label: getGadgetLabel(gadget),
       parentId: gadget.id,
-      itemLabels: gadget.kind === "PanelGadget"
+      itemLabels: gadget.kind === GADGET_KIND.PanelGadget
         ? (gadget.items ?? []).map(item => item.text ?? item.textRaw ?? "")
         : [],
     });

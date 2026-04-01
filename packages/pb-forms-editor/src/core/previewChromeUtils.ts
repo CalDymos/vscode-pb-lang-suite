@@ -1,3 +1,5 @@
+import { GADGET_KIND } from "./model";
+
 export type PreviewRect = { x: number; y: number; w: number; h: number };
 export type PreviewOffset = { x: number; y: number };
 
@@ -323,7 +325,7 @@ export function getGadgetContentRect(
   metrics: PreviewChromeMetrics
 ): PreviewRect {
   switch (kind) {
-    case "PanelGadget": {
+    case GADGET_KIND.PanelGadget: {
       const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
       return {
         x: rect.x,
@@ -333,7 +335,7 @@ export function getGadgetContentRect(
       };
     }
 
-    case "ScrollAreaGadget": {
+    case GADGET_KIND.ScrollAreaGadget: {
       return getScrollAreaViewportRect(rect, metrics);
     }
 

@@ -1,3 +1,4 @@
+import { GADGET_KIND } from "./model";
 import { quotePbString } from "./parser/tokenizer";
 
 export type GadgetTextLike = {
@@ -93,73 +94,73 @@ export type GadgetInspectorDetailsLike = {
 };
 
 const GADGET_TEXT_CAPABLE_KINDS: ReadonlySet<string> = new Set([
-  "ButtonGadget",
-  "ButtonImageGadget",
-  "CalendarGadget",
-  "CheckBoxGadget",
-  "ComboBoxGadget",
-  "ContainerGadget",
-  "CustomGadget",
-  "DateGadget",
-  "EditorGadget",
-  "ExplorerComboGadget",
-  "ExplorerListGadget",
-  "ExplorerTreeGadget",
-  "FrameGadget",
-  "HyperLinkGadget",
-  "ListIconGadget",
-  "ListViewGadget",
+  GADGET_KIND.ButtonGadget,
+  GADGET_KIND.ButtonImageGadget,
+  GADGET_KIND.CalendarGadget,
+  GADGET_KIND.CheckBoxGadget,
+  GADGET_KIND.ComboBoxGadget,
+  GADGET_KIND.ContainerGadget,
+  GADGET_KIND.CustomGadget,
+  GADGET_KIND.DateGadget,
+  GADGET_KIND.EditorGadget,
+  GADGET_KIND.ExplorerComboGadget,
+  GADGET_KIND.ExplorerListGadget,
+  GADGET_KIND.ExplorerTreeGadget,
+  GADGET_KIND.FrameGadget,
+  GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.ListIconGadget,
+  GADGET_KIND.ListViewGadget,
   "MDIGadget",
-  "OptionGadget",
-  "PanelGadget",
-  "ScintillaGadget",
-  "StringGadget",
-  "TextGadget",
-  "TreeGadget",
-  "WebGadget"
+  GADGET_KIND.OptionGadget,
+  GADGET_KIND.PanelGadget,
+  GADGET_KIND.ScintillaGadget,
+  GADGET_KIND.StringGadget,
+  GADGET_KIND.TextGadget,
+  GADGET_KIND.TreeGadget,
+  GADGET_KIND.WebGadget
 ]);
 
 const GADGET_CHECKED_STATE_CAPABLE_KINDS: ReadonlySet<string> = new Set([
-  "CheckBoxGadget",
-  "OptionGadget"
+  GADGET_KIND.CheckBoxGadget,
+  GADGET_KIND.OptionGadget
 ]);
 
 const GADGET_CTOR_RANGE_FIELD_LABELS: ReadonlyMap<string, GadgetCtorRangeFieldLabels> = new Map([
-  ["ProgressBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-  ["ScrollBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-  ["SpinGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-  ["TrackBarGadget", { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
-  ["ScrollAreaGadget", { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }]
+  [GADGET_KIND.ProgressBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  [GADGET_KIND.ScrollBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  [GADGET_KIND.SpinGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  [GADGET_KIND.TrackBarGadget, { minLabel: "Min", maxLabel: "Max", title: "Matches the original Min / Max constructor arguments." }],
+  [GADGET_KIND.ScrollAreaGadget, { minLabel: "InnerWidth", maxLabel: "InnerHeight", title: "Matches the original InnerWidth / InnerHeight constructor arguments." }]
 ]);
 
 const GADGET_COLOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
-  "CalendarGadget",
-  "ContainerGadget",
-  "EditorGadget",
-  "ExplorerListGadget",
-  "ExplorerTreeGadget",
-  "HyperLinkGadget",
-  "ListIconGadget",
-  "ListViewGadget",
-  "ProgressBarGadget",
-  "ScrollAreaGadget",
-  "SpinGadget",
-  "StringGadget",
-  "TextGadget",
-  "TreeGadget"
+  GADGET_KIND.CalendarGadget,
+  GADGET_KIND.ContainerGadget,
+  GADGET_KIND.EditorGadget,
+  GADGET_KIND.ExplorerListGadget,
+  GADGET_KIND.ExplorerTreeGadget,
+  GADGET_KIND.HyperLinkGadget,
+  GADGET_KIND.ListIconGadget,
+  GADGET_KIND.ListViewGadget,
+  GADGET_KIND.ProgressBarGadget,
+  GADGET_KIND.ScrollAreaGadget,
+  GADGET_KIND.SpinGadget,
+  GADGET_KIND.StringGadget,
+  GADGET_KIND.TextGadget,
+  GADGET_KIND.TreeGadget
 ]);
 
 const GADGET_ITEM_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
-  "ComboBoxGadget",
-  "EditorGadget",
-  "ListIconGadget",
-  "ListViewGadget",
-  "PanelGadget",
-  "TreeGadget"
+  GADGET_KIND.ComboBoxGadget,
+  GADGET_KIND.EditorGadget,
+  GADGET_KIND.ListIconGadget,
+  GADGET_KIND.ListViewGadget,
+  GADGET_KIND.PanelGadget,
+  GADGET_KIND.TreeGadget
 ]);
 
 const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
-  "ListIconGadget"
+  GADGET_KIND.ListIconGadget
 ]);
 
 function quotePbStringLiteral(value: string): string {
@@ -213,8 +214,8 @@ export function shouldShowGadgetTabDetail(gadget: GadgetInspectorDetailsLike): b
 
 export function buildGadgetCheckedStateRaw(kind: string | undefined, checked: boolean): string | undefined {
   if (!checked) return undefined;
-  if (kind === "CheckBoxGadget") return "#PB_Checkbox_Checked";
-  if (kind === "OptionGadget") return "1";
+  if (kind === GADGET_KIND.CheckBoxGadget) return "#PB_Checkbox_Checked";
+  if (kind === GADGET_KIND.OptionGadget) return "1";
   return undefined;
 }
 
@@ -251,16 +252,16 @@ export function getGadgetVariableInspectorValue(gadget: { variable?: string; fir
 }
 
 export function getGadgetCaptionFieldConfig(kind: string | undefined): GadgetCaptionFieldConfig | undefined {
-  if (kind === "CanvasGadget") {
+  if (kind === GADGET_KIND.CanvasGadget) {
     return { label: "Caption", textEditable: false, variableToggleEditable: true };
   }
   if (!canEditGadgetText(kind)) return undefined;
   switch (kind) {
-    case "DateGadget":
+    case GADGET_KIND.DateGadget:
       return { label: "Mask", textEditable: true, variableToggleEditable: true };
-    case "ScintillaGadget":
+    case GADGET_KIND.ScintillaGadget:
       return { label: "Callback", textEditable: true, variableToggleEditable: false };
-    case "EditorGadget":
+    case GADGET_KIND.EditorGadget:
       return { label: "Caption", textEditable: false, variableToggleEditable: true };
     default:
       return { label: "Caption", textEditable: true, variableToggleEditable: true };
