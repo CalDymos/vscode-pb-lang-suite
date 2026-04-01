@@ -137,7 +137,21 @@ import {
 } from "../core/toolboxPanelUtils";
 import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
 import { quotePbString } from "../core/parser/tokenizer";
-import { GADGET_KIND } from "../core/model";
+import {
+  GADGET_KIND,
+  type SourceRange,
+  type Gadget,
+  type GadgetItem,
+  type GadgetColumn,
+  type FormWindow,
+  type FormMenuEntry,
+  type FormMenu,
+  type FormToolBarEntry,
+  type FormToolBar,
+  type FormStatusBarField,
+  type FormStatusBar,
+  type FormImage,
+} from "../core/model";
 import {
   buildWindowFlagsExpr,
   getWindowBooleanInspectorState,
@@ -194,204 +208,13 @@ import {
 import { getTopLevelSelectedImageInspectorConfig } from "../core/topLevelImageInspectorUtils";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/topLevelContextMenuUtils";
 
-type SourceRange = { line: number };
-
-type GadgetItem = {
-  index?: number;
-  posRaw: string;
-  textRaw?: string;
-  text?: string;
-  imageRaw?: string;
-  imageId?: string;
-  flagsRaw?: string;
-  source?: SourceRange;
-};
-
-type GadgetColumn = {
-  index?: number;
-  colRaw: string;
-  titleRaw?: string;
-  title?: string;
-  widthRaw?: string;
-  source?: SourceRange;
-};
-
-type Gadget = {
-  id: string;
-  pbAny: boolean;
-  variable?: string;
-  enumValueRaw?: string;
-  firstParam: string;
-  kind: string;
-  parentId?: string;
-  parentItem?: number;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  xRaw?: string;
-  yRaw?: string;
-  wRaw?: string;
-  hRaw?: string;
-  textRaw?: string;
-  text?: string;
-  textVariable?: boolean;
-  imageRaw?: string;
-  imageId?: string;
-  minRaw?: string;
-  min?: number;
-  maxRaw?: string;
-  max?: number;
-  gadget1Raw?: string;
-  gadget1Id?: string;
-  gadget2Raw?: string;
-  gadget2Id?: string;
-  splitterId?: string;
-  flagsExpr?: string;
-  tooltipRaw?: string;
-  tooltip?: string;
-  tooltipVariable?: boolean;
-  stateRaw?: string;
-  state?: number;
-  customSelectName?: string;
-  customInitRaw?: string;
-  customCreateRaw?: string;
-  frontColorRaw?: string;
-  frontColor?: number;
-  backColorRaw?: string;
-  backColor?: number;
-  gadgetFontRaw?: string;
-  gadgetFont?: string;
-  gadgetFontSize?: number;
-  gadgetFontFlagsRaw?: string;
-  hiddenRaw?: string;
-  hidden?: boolean;
-  disabledRaw?: string;
-  disabled?: boolean;
-  lockLeft?: boolean;
-  lockRight?: boolean;
-  lockTop?: boolean;
-  lockBottom?: boolean;
-  resizeXRaw?: string;
-  resizeYRaw?: string;
-  resizeWRaw?: string;
-  resizeHRaw?: string;
-  resizeSource?: SourceRange;
-  eventProc?: string;
-  items?: GadgetItem[];
-  columns?: GadgetColumn[];
-  source?: SourceRange;
-};
-
-type WindowModel = {
-  id: string;
-  pbAny: boolean;
-  variable?: string;
-  enumValueRaw?: string;
-  firstParam: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  xRaw?: string;
-  yRaw?: string;
-  wRaw?: string;
-  hRaw?: string;
-  captionRaw?: string;
-  captionVariable?: boolean;
-  title?: string;
-  flagsExpr?: string;
-  knownFlags?: string[];
-  customFlags?: string[];
-  hiddenRaw?: string;
-  hidden?: boolean;
-  disabledRaw?: string;
-  disabled?: boolean;
-  parentRaw?: string;
-  parent?: string;
-  colorRaw?: string;
-  color?: number;
-  eventFile?: string;
-  eventProc?: string;
-  generateEventLoop?: boolean;
-  hasEventGadgetBlock?: boolean;
-  hasEventGadgetCaseBranches?: boolean;
-  hasEventMenuBlock?: boolean;
-};
-
-type MenuEntry = {
-  kind: string;
-  level?: number;
-  idRaw?: string;
-  textRaw?: string;
-  text?: string;
-  shortcut?: string;
-  iconRaw?: string;
-  iconId?: string;
-  widthRaw?: string;
-  toggle?: boolean;
-  event?: string;
-  source?: SourceRange;
-};
-
-type MenuModel = {
-  id: string;
-  entries: MenuEntry[];
-};
-
-type ToolBarEntry = {
-  kind: string;
-  idRaw?: string;
-  iconRaw?: string;
-  iconId?: string;
-  textRaw?: string;
-  text?: string;
-  tooltip?: string;
-  toggle?: boolean;
-  event?: string;
-  source?: SourceRange;
-};
-
-type ToolbarModel = {
-  id: string;
-  entries: ToolBarEntry[];
-};
-
-type StatusbarField = {
-  widthRaw: string;
-  textRaw?: string;
-  text?: string;
-  imageRaw?: string;
-  imageId?: string;
-  flagsRaw?: string;
-  progressBar?: boolean;
-  progressRaw?: string;
-  source?: SourceRange;
-};
-
-type StatusbarModel = {
-  id: string;
-  fields: StatusbarField[];
-};
-
-type ImageEntry = {
-  id: string;
-  pbAny: boolean;
-  variable?: string;
-  firstParam: string;
-  imageRaw: string;
-  image?: string;
-  inline: boolean;
-  source?: SourceRange;
-};
-
 type Model = {
-  window?: WindowModel;
+  window?: FormWindow;
   gadgets: Gadget[];
-  menus?: MenuModel[];
-  toolbars?: ToolbarModel[];
-  statusbars?: StatusbarModel[];
-  images: ImageEntry[];
+  menus?: FormMenu[];
+  toolbars?: FormToolBar[];
+  statusbars?: FormStatusBar[];
+  images: FormImage[];
   procedureNames?: string[];
   meta?: {
     header?: { version?: string; line: number; hasStrictSyntaxWarning: boolean };
@@ -1193,11 +1016,11 @@ function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
   return isVariable ? value : toPbString(value);
 }
 
-function getWindowCurrentFlagsExpr(win: WindowModel): string | undefined {
+function getWindowCurrentFlagsExpr(win: FormWindow): string | undefined {
   return buildWindowFlagsExpr(win.knownFlags ?? [], (win.customFlags ?? []).join(" | "));
 }
 
-function postWindowOpenArgs(win: WindowModel, updates: { xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
+function postWindowOpenArgs(win: FormWindow, updates: { xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs,
     windowKey: win.id,
@@ -1211,7 +1034,7 @@ function postWindowOpenArgs(win: WindowModel, updates: { xRaw?: string; yRaw?: s
   });
 }
 
-function postWindowProperties(win: WindowModel, updates: { hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }) {
+function postWindowProperties(win: FormWindow, updates: { hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }) {
   post({
     type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties,
     windowKey: win.id,
@@ -1242,7 +1065,7 @@ function ensureValidPbVariableReference(value: string): boolean {
   return false;
 }
 
-function postWindowPositionRaw(win: WindowModel, axis: "x" | "y", rawValue: string): void {
+function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: string): void {
   const parsed = parseWindowPositionInspectorInput(rawValue);
   if (!parsed.ok) {
     setInfoError(`Window ${axis.toUpperCase()} accepts only an integer or ${WINDOW_POSITION_IGNORE_LITERAL}.`);
@@ -1526,7 +1349,7 @@ function countImageUsages(imageId: string): number {
   return collectImageUsages(imageId).length;
 }
 
-function findImageEntryById(imageId?: string): ImageEntry | undefined {
+function findImageEntryById(imageId?: string): FormImage | undefined {
   if (!imageId) return undefined;
   return (model.images ?? []).find(entry => entry.id === imageId);
 }
@@ -1535,7 +1358,7 @@ function selectImageById(imageId: string): void {
   setSelectionAndRefresh({ kind: "image", id: imageId });
 }
 
-function resolvePreviewImageSrc(entry?: ImageEntry): string | undefined {
+function resolvePreviewImageSrc(entry?: FormImage): string | undefined {
   const resolved = entry?.image?.trim();
   if (!resolved?.length || entry?.inline) return undefined;
   if (/^(?:data:|https?:|vscode-webview-resource:|vscode-resource:|blob:)/i.test(resolved)) {
@@ -1568,15 +1391,15 @@ function isPbStringLiteral(raw?: string): boolean {
   return /^"(?:[^"]|"")*"$/.test(raw?.trim() ?? "");
 }
 
-function canRelativizeImageEntry(entry?: ImageEntry): boolean {
+function canRelativizeImageEntry(entry?: FormImage): boolean {
   return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
 }
 
-function canChooseFileImageEntry(entry?: ImageEntry): boolean {
+function canChooseFileImageEntry(entry?: FormImage): boolean {
   return Boolean(entry && !entry.inline);
 }
 
-function canToggleImagePbAny(entry?: ImageEntry): boolean {
+function canToggleImagePbAny(entry?: FormImage): boolean {
   if (!entry) return false;
   if (entry.pbAny) {
     return Boolean((entry.variable ?? entry.id ?? "").trim().length);
@@ -1646,14 +1469,14 @@ function toPbString(v: string): string {
   return quotePbString(v ?? "");
 }
 
-function getMenuInsertLevel(menu: MenuModel, parentSourceLine?: number): number {
+function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
   if (typeof parentSourceLine !== "number") return 0;
   const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
   if (!parentEntry) return 0;
   return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
 }
 
-function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
+function postInsertMenuEntry(menu: FormMenu, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
   const preferredIndex = Math.max(0, menu.entries?.length ?? 0);
   pendingMenuEntrySelection = {
     menuId: menu.id,
@@ -1673,7 +1496,7 @@ function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: stri
   });
 }
 
-function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
+function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
   const preferredIndex = Math.max(0, toolBar.entries?.length ?? 0);
   pendingToolBarEntrySelection = {
     toolBarId: toolBar.id,
@@ -1694,7 +1517,7 @@ function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idR
   });
 }
 
-function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
+function postInsertStatusBarField(statusBar: FormStatusBar, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
   const preferredIndex = Math.max(0, statusBar.fields?.length ?? 0);
   pendingStatusBarFieldSelection = {
     statusBarId: statusBar.id,
@@ -2206,7 +2029,7 @@ function renderAfterInit() {
   renderProps();
 }
 
-function menuEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
+function menuEntryMatchesPendingSelection(entry: FormMenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
   if (!entry) return false;
   return entry.kind === pending.kind
     && getMenuEntryLevel(entry) === pending.level
@@ -2236,7 +2059,7 @@ function resolvePendingMenuEntrySelection() {
   }
 }
 
-function toolBarEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
+function toolBarEntryMatchesPendingSelection(entry: FormToolBarEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
   if (!entry) return false;
   return entry.kind === pending.kind
     && (entry.idRaw ?? "") === (pending.idRaw ?? "")
@@ -2265,7 +2088,7 @@ function resolvePendingToolBarEntrySelection() {
   }
 }
 
-function statusBarFieldMatchesPendingSelection(field: StatusbarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
+function statusBarFieldMatchesPendingSelection(field: FormStatusBarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
   if (!field) return false;
   return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
     && (field.textRaw ?? "") === (pending.textRaw ?? "")
@@ -2744,15 +2567,15 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
 }
 
 
-function getPrimaryMenu(): MenuModel | undefined {
+function getPrimaryMenu(): FormMenu | undefined {
   return model.menus?.[0];
 }
 
-function getPrimaryToolbar(): ToolbarModel | undefined {
+function getPrimaryToolbar(): FormToolBar | undefined {
   return model.toolbars?.[0];
 }
 
-function getPrimaryStatusbar(): StatusbarModel | undefined {
+function getPrimaryStatusbar(): FormStatusBar | undefined {
   return model.statusbars?.[0];
 }
 
@@ -6205,7 +6028,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
   });
 }
 
-function openImageEditor(entry: ImageEntry) {
+function openImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
   pendingImageEditor = {
     sourceLine: entry.source.line,
@@ -6222,12 +6045,12 @@ function closeImageEditor(sourceLine?: number) {
   pendingImageEditor = null;
 }
 
-function isImageEditorOpen(entry: ImageEntry): boolean {
+function isImageEditorOpen(entry: FormImage): boolean {
   return typeof entry.source?.line === "number"
     && pendingImageEditor?.sourceLine === entry.source.line;
 }
 
-function getImageEditorDraft(entry: ImageEntry): PendingImageEditor {
+function getImageEditorDraft(entry: FormImage): PendingImageEditor {
   if (isImageEditorOpen(entry) && pendingImageEditor) {
     return pendingImageEditor;
   }
@@ -6247,7 +6070,7 @@ function updateImageEditorDraft(patch: Partial<PendingImageEditor>) {
   renderProps();
 }
 
-function saveImageEditor(entry: ImageEntry) {
+function saveImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
   const draft = getImageEditorDraft(entry);
   const idRaw = draft.idRaw.trim();
@@ -6655,7 +6478,7 @@ function saveImageAssignmentDraft() {
 
 
 function buildPendingMenuEntrySelection(
-  menu: MenuModel,
+  menu: FormMenu,
   sourceEntryIndex: number,
   targetSourceLine: number,
   placement: MenuEntryMovePlacement
@@ -6683,7 +6506,7 @@ function buildPendingMenuEntrySelection(
 
 function drawMenuFlyoutPanelPreview(
   ctx: CanvasRenderingContext2D,
-  menu: MenuModel,
+  menu: FormMenu,
   parentIndex: number,
   panelRect: PreviewRect,
   fg: string
@@ -9160,7 +8983,7 @@ function renderProps() {
         : undefined;
 
       const eventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, e.idRaw, "menu");
-      const eventFn = eventEditState.canEdit && e.kind !== "ToolBarToolTip"
+      const eventFn = eventEditState.canEdit
         ? () => {
             setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
@@ -9788,7 +9611,7 @@ function renderProps() {
       return;
     }
 
-    const getStatusBarFieldUi = (field: StatusbarField) => {
+    const getStatusBarFieldUi = (field: FormStatusBarField) => {
       const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
       const canPatch = typeof field.source?.line === "number";
       const statusImage = findImageEntryById(field.imageId);

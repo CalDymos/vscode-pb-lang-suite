@@ -228,6 +228,7 @@ export interface FormMenuEntry {
   iconId?: string;       // normalized image identifier for menu icons
   widthRaw?: string;     // for StatusBar fields (optional)
   event?: string;
+  toggle?: boolean;
   source?: SourceRange;
 }
 
