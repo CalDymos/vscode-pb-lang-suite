@@ -4,7 +4,7 @@ import { parseFormDocument } from "../parser/formParser";
 import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadgetInsertUtils";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadgetDeleteUtils";
-import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind } from "../model";
+import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind, GADGET_KIND } from "../model";
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
@@ -1011,7 +1011,7 @@ export function applyMovePatch(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
-  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (customGadget) {
     const nextGadget: Gadget = { ...customGadget, x: Math.trunc(x), y: Math.trunc(y) };
     return applyCustomGadgetCreationLineEdit(document, nextGadget);
@@ -1043,7 +1043,7 @@ export function applyRectPatch(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
-  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (customGadget) {
     const nextGadget: Gadget = {
       ...customGadget,
@@ -1266,52 +1266,52 @@ type GadgetCtorLayout = {
 
 function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
   switch (name) {
-    case "ButtonGadget":
-    case "CheckBoxGadget":
-    case "ExplorerComboGadget":
-    case "ExplorerListGadget":
-    case "ExplorerTreeGadget":
-    case "FrameGadget":
-    case "StringGadget":
-    case "TextGadget":
-    case "WebGadget":
+    case GADGET_KIND.ButtonGadget:
+    case GADGET_KIND.CheckBoxGadget:
+    case GADGET_KIND.ExplorerComboGadget:
+    case GADGET_KIND.ExplorerListGadget:
+    case GADGET_KIND.ExplorerTreeGadget:
+    case GADGET_KIND.FrameGadget:
+    case GADGET_KIND.StringGadget:
+    case GADGET_KIND.TextGadget:
+    case GADGET_KIND.WebGadget:
       return { minParamCount: 6, textIndex: 5, flagsIndex: 6 };
 
-    case "ButtonImageGadget":
-    case "ImageGadget":
+    case GADGET_KIND.ButtonImageGadget:
+    case GADGET_KIND.ImageGadget:
       return { minParamCount: 6, imageIndex: 5, flagsIndex: 6 };
 
-    case "CalendarGadget":
+    case GADGET_KIND.CalendarGadget:
       return { minParamCount: 6, flagsIndex: 6 };
 
-    case "CanvasGadget":
-    case "ComboBoxGadget":
-    case "ContainerGadget":
-    case "EditorGadget":
-    case "ListViewGadget":
-    case "OpenGLGadget":
-    case "TreeGadget":
-    case "WebViewGadget":
+    case GADGET_KIND.CanvasGadget:
+    case GADGET_KIND.ComboBoxGadget:
+    case GADGET_KIND.ContainerGadget:
+    case GADGET_KIND.EditorGadget:
+    case GADGET_KIND.ListViewGadget:
+    case GADGET_KIND.OpenGLGadget:
+    case GADGET_KIND.TreeGadget:
+    case GADGET_KIND.WebViewGadget:
       return { minParamCount: 5, flagsIndex: 5 };
 
-    case "DateGadget":
-    case "HyperLinkGadget":
-    case "ListIconGadget":
+    case GADGET_KIND.DateGadget:
+    case GADGET_KIND.HyperLinkGadget:
+    case GADGET_KIND.ListIconGadget:
       return { minParamCount: 7, textIndex: 5, flagsIndex: 7 };
 
-    case "ProgressBarGadget":
-    case "SpinGadget":
-    case "TrackBarGadget":
+    case GADGET_KIND.ProgressBarGadget:
+    case GADGET_KIND.SpinGadget:
+    case GADGET_KIND.TrackBarGadget:
       return { minParamCount: 7, minIndex: 5, maxIndex: 6, flagsIndex: 7 };
 
-    case "ScrollBarGadget":
-    case "ScrollAreaGadget":
+    case GADGET_KIND.ScrollBarGadget:
+    case GADGET_KIND.ScrollAreaGadget:
       return { minParamCount: 8, minIndex: 5, maxIndex: 6, flagsIndex: 8 };
 
-    case "SplitterGadget":
+    case GADGET_KIND.SplitterGadget:
       return { minParamCount: 7, gadget1Index: 5, gadget2Index: 6, flagsIndex: 7 };
 
-    case "OptionGadget":
+    case GADGET_KIND.OptionGadget:
       return { minParamCount: 6, textIndex: 5 };
 
     default:
@@ -1396,77 +1396,77 @@ function buildInsertedGadgetBlock(
   const callbackRaw = `@Callback_${identity.name}()`;
 
   switch (args.kind) {
-    case "ButtonGadget":
+    case GADGET_KIND.ButtonGadget:
       return `${prefix}ButtonGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "ButtonImageGadget":
+    case GADGET_KIND.ButtonImageGadget:
       return `${prefix}ButtonImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
 `;
-    case "StringGadget":
+    case GADGET_KIND.StringGadget:
       return `${prefix}StringGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "TextGadget":
+    case GADGET_KIND.TextGadget:
       return `${prefix}TextGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "CheckBoxGadget":
+    case GADGET_KIND.CheckBoxGadget:
       return `${prefix}CheckBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "OptionGadget":
+    case GADGET_KIND.OptionGadget:
       return `${prefix}OptionGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "FrameGadget":
+    case GADGET_KIND.FrameGadget:
       return `${prefix}FrameGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "ComboBoxGadget":
+    case GADGET_KIND.ComboBoxGadget:
       return `${prefix}ComboBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "ListViewGadget":
+    case GADGET_KIND.ListViewGadget:
       return `${prefix}ListViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "ListIconGadget":
+    case GADGET_KIND.ListIconGadget:
       return `${prefix}ListIconGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "Column 1", 100)
 `;
-    case "TreeGadget":
+    case GADGET_KIND.TreeGadget:
       return `${prefix}TreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "EditorGadget":
+    case GADGET_KIND.EditorGadget:
       return `${prefix}EditorGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "SpinGadget":
+    case GADGET_KIND.SpinGadget:
       return `${prefix}SpinGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
 `;
-    case "TrackBarGadget":
+    case GADGET_KIND.TrackBarGadget:
       return `${prefix}TrackBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
 `;
-    case "ProgressBarGadget":
+    case GADGET_KIND.ProgressBarGadget:
       return `${prefix}ProgressBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
 `;
-    case "ImageGadget":
+    case GADGET_KIND.ImageGadget:
       return `${prefix}ImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
 `;
-    case "HyperLinkGadget":
+    case GADGET_KIND.HyperLinkGadget:
       return `${prefix}HyperLinkGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
 `;
-    case "CalendarGadget":
+    case GADGET_KIND.CalendarGadget:
       return `${prefix}CalendarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
 `;
-    case "DateGadget":
+    case GADGET_KIND.DateGadget:
       return `${prefix}DateGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
 `;
-    case "ContainerGadget":
+    case GADGET_KIND.ContainerGadget:
       return `${prefix}ContainerGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 ${indent}CloseGadgetList()
 `;
-    case "PanelGadget":
+    case GADGET_KIND.PanelGadget:
       return `${prefix}PanelGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 ${indent}AddGadgetItem(${identity.id}, -1, "Tab 1")
 ${indent}CloseGadgetList()
 `;
-    case "ScrollAreaGadget":
+    case GADGET_KIND.ScrollAreaGadget:
       return `${prefix}ScrollAreaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 300, 225, 1)
 ${indent}CloseGadgetList()
 `;
-    case "SplitterGadget": {
+    case GADGET_KIND.SplitterGadget: {
       const gadget1Raw = extraArgs?.gadget1Id?.trim();
       const gadget2Raw = extraArgs?.gadget2Id?.trim();
       if (!gadget1Raw || !gadget2Raw || gadget1Raw === gadget2Raw) return undefined;
@@ -1474,34 +1474,34 @@ ${indent}CloseGadgetList()
 ${indent}SetGadgetState(${identity.id}, 12)
 `;
     }
-    case "WebViewGadget":
+    case GADGET_KIND.WebViewGadget:
       return `${prefix}WebViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "WebGadget":
+    case GADGET_KIND.WebGadget:
       return `${prefix}WebGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "OpenGLGadget":
+    case GADGET_KIND.OpenGLGadget:
       return `${prefix}OpenGLGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "CanvasGadget":
+    case GADGET_KIND.CanvasGadget:
       return `${prefix}CanvasGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "ExplorerTreeGadget":
+    case GADGET_KIND.ExplorerTreeGadget:
       return `${prefix}ExplorerTreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "ExplorerListGadget":
+    case GADGET_KIND.ExplorerListGadget:
       return `${prefix}ExplorerListGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "ExplorerComboGadget":
+    case GADGET_KIND.ExplorerComboGadget:
       return `${prefix}ExplorerComboGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
 `;
-    case "IPAddressGadget":
+    case GADGET_KIND.IPAddressGadget:
       return `${prefix}IPAddressGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
 `;
-    case "ScrollBarGadget":
+    case GADGET_KIND.ScrollBarGadget:
       return `${prefix}ScrollBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0, 0)
 `;
-    case "ScintillaGadget":
+    case GADGET_KIND.ScintillaGadget:
       return `${prefix}ScintillaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${callbackRaw})
 `;
   }
@@ -1558,7 +1558,7 @@ function findChildSectionInsertAnchor(
   const parentCreate = findCallByStableKey(calls, parentId, name => /gadget$/i.test(name));
   if (!parentCreate) return undefined;
 
-  if (parent.kind === "PanelGadget") {
+  if (parent.kind === GADGET_KIND.PanelGadget) {
     const targetItem = typeof parentItem === "number" ? parentItem : 0;
     let depth = 1;
     let panelItemIndex = -1;
@@ -1637,7 +1637,7 @@ export function applyGadgetInsert(
   let splitterSourceParentId: string | undefined;
   let splitterSourceParentItem: number | undefined;
 
-  if (kind === "SplitterGadget") {
+  if (kind === GADGET_KIND.SplitterGadget) {
     const gadget1 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget1Id);
     const gadget2 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget2Id);
     if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) return undefined;
@@ -1668,7 +1668,7 @@ export function applyGadgetInsert(
   const edit = new vscode.WorkspaceEdit();
   const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
 
-  if (kind === "SplitterGadget" && splitterSourceGadget1 && splitterSourceGadget2) {
+  if (kind === GADGET_KIND.SplitterGadget && splitterSourceGadget1 && splitterSourceGadget2) {
     const targetParentId = parentId ?? undefined;
     const targetParentItem = parentItem ?? undefined;
     const needsReparentMove = targetParentId !== splitterSourceParentId || targetParentItem !== splitterSourceParentItem;
@@ -1782,7 +1782,7 @@ function collectDeletedCustomGadgetLineNumbers(
   const lines = new Set<number>();
 
   for (const gadget of deletedGadgets) {
-    if (gadget.kind !== "CustomGadget") continue;
+    if (gadget.kind !== GADGET_KIND.CustomGadget) continue;
 
     if (typeof gadget.source?.line === "number") {
       lines.add(gadget.source.line);
@@ -1902,7 +1902,7 @@ export function applyGadgetReparent(
   const parsed = parseFormDocument(document.getText());
   const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
   if (!target?.source) return undefined;
-  if (target.kind === "CustomGadget") return undefined;
+  if (target.kind === GADGET_KIND.CustomGadget) return undefined;
 
   const nextParentId = parentId ?? undefined;
   const nextParentItem = typeof parentItem === "number" ? Math.trunc(parentItem) : undefined;
@@ -1929,7 +1929,7 @@ export function applyGadgetReparent(
 
   let splitterGadget1: Gadget | undefined;
   let splitterGadget2: Gadget | undefined;
-  if (target.kind === "SplitterGadget") {
+  if (target.kind === GADGET_KIND.SplitterGadget) {
     splitterGadget1 = target.gadget1Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget1Id) : undefined;
     splitterGadget2 = target.gadget2Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget2Id) : undefined;
     if (!splitterGadget1 || !splitterGadget2) return undefined;
@@ -1967,7 +1967,7 @@ export function applyGadgetReparent(
   const movedBlocks: string[] = [];
   const deletedLines = new Set<number>();
 
-  if (target.kind === "SplitterGadget") {
+  if (target.kind === GADGET_KIND.SplitterGadget) {
     for (const gadget of [splitterGadget1!, splitterGadget2!]) {
       const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadget.id);
       const movedLines = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
@@ -2109,7 +2109,7 @@ export function applyGadgetOpenArgsUpdate(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
-  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (customGadget) {
     const nextGadget: Gadget = { ...customGadget };
     if (args.textRaw !== undefined) {
@@ -2159,7 +2159,7 @@ export function applyCustomGadgetCodeUpdate(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
-  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === "CustomGadget");
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
   if (!gadget) return undefined;
 
   const nextGadget: Gadget = { ...gadget };

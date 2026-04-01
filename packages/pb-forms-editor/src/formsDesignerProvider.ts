@@ -56,7 +56,7 @@ import {
   toEnumImageId
 } from "./core/emitter/patchEmitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
-import { FormDocument, PBFD_SYMBOLS, PB_ANY } from "./core/model";
+import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
 import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadgetInsertUtils";
 import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/formSettingsRuntimeUtils";
 import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
@@ -843,7 +843,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode: {
           const gadget = lastModel?.gadgets.find(entry => entry.id === msg.id);
-          if (!gadget || gadget.kind !== "CustomGadget") {
+          if (!gadget || gadget.kind !== GADGET_KIND.CustomGadget) {
             postError(`Could not patch custom gadget code for '${msg.id}'. The current selection is not a parsed CustomGadget${rangeInfo}.`);
             return;
           }
@@ -891,7 +891,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
 
           const trimmed = msg.stateRaw?.trim() ?? "";
-          if (gadget.kind === "SplitterGadget") {
+          if (gadget.kind === GADGET_KIND.SplitterGadget) {
             const nextState = Number(trimmed);
             if (!trimmed.length || !Number.isFinite(nextState)) {
               postError(`Splitter position must be a finite number.`);
@@ -911,7 +911,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             return;
           }
 
-          if (gadget.kind === "CheckBoxGadget" || gadget.kind === "OptionGadget") {
+          if (gadget.kind === GADGET_KIND.CheckBoxGadget || gadget.kind === GADGET_KIND.OptionGadget) {
             const edit = applyGadgetPropertyUpdate(document, msg.id, { stateRaw: trimmed || undefined }, sr);
             await applyEditOrError(edit, `Could not update checked state for '${msg.id}'${rangeInfo}.`);
             return;
