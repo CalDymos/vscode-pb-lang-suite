@@ -8,6 +8,14 @@ import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBar
 
 type PbCall = ReturnType<typeof scanCalls>[number];
 
+const PB_CALL = {
+  createImageMenu: "createimagemenu",
+  createMenu: "createmenu",
+  createStatusBar: "createstatusbar",
+  createToolBar: "createtoolbar",
+  openWindow: "openwindow",
+} as const;
+
 /**
  * Escape special characters in regular expressions
  */
@@ -329,17 +337,17 @@ export interface CustomGadgetCodeArgs {
 
 function isCreateBoundary(nameLower: string): boolean {
   return (
-    nameLower === "createmenu" ||
-    nameLower === "createimagemenu" ||
-    nameLower === "createtoolbar" ||
-    nameLower === "createstatusbar" ||
-    nameLower === "openwindow"
+    nameLower === PB_CALL.createMenu ||
+    nameLower === PB_CALL.createImageMenu ||
+    nameLower === PB_CALL.createToolBar ||
+    nameLower === PB_CALL.createStatusBar ||
+    nameLower === PB_CALL.openWindow
   );
 }
 
 function getCreateNameVariants(createNameLower: string): readonly string[] {
-  if (createNameLower === "createmenu") {
-    return ["createmenu", "createimagemenu"];
+  if (createNameLower === PB_CALL.createMenu) {
+    return [PB_CALL.createMenu, PB_CALL.createImageMenu];
   }
   return [createNameLower];
 }
@@ -604,7 +612,7 @@ function findToolBarToolTipCall(
 
   return calls.find(call => {
     if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
-    if (!isLineInCreateSection(calls, call.range.line, "createtoolbar", toolBarId)) return false;
+    if (!isLineInCreateSection(calls, call.range.line, PB_CALL.createToolBar, toolBarId)) return false;
 
     const parts = splitParams(call.args);
     const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
@@ -2742,7 +2750,7 @@ export function applyWindowVariableNamePatch(
 
   const calls = scanDocumentCalls(document, scanRange);
 
-  const openWindowCalls = calls.filter(c => c.name.toLowerCase() === "openwindow");
+  const openWindowCalls = calls.filter(c => c.name.toLowerCase() === PB_CALL.openWindow);
   const openWin = windowKey
     ? openWindowCalls.find(c => stableKey(c.assignedVar, splitParams(c.args)) === windowKey)
     : openWindowCalls[0];
@@ -4798,7 +4806,7 @@ function findAnchoredMenuEntryInsert(
   menuId: string,
   parentSourceLine: number
 ): { insertLine: number; indent: string } | undefined {
-  const create = findCreateCallById(calls, "createmenu", menuId);
+  const create = findCreateCallById(calls, PB_CALL.createMenu, menuId);
   if (!create) return undefined;
 
   const parsed = parseFormDocument(document.getText());
@@ -4843,12 +4851,12 @@ function findAnchoredMenuEntryInsert(
     && Math.max(0, insertBoundaryEntry.level ?? 0) === parentLevel
   ) {
     const parentLine = parentEntry.source?.line;
-    if (typeof parentLine === "number" && isLineInCreateSection(calls, parentLine, "createmenu", menuId)) {
+    if (typeof parentLine === "number" && isLineInCreateSection(calls, parentLine, PB_CALL.createMenu, menuId)) {
       return { insertLine, indent: getLineIndent(document, insertLine) };
     }
   }
 
-  if (!isLineInCreateSection(calls, insertLine, "createmenu", menuId)) return undefined;
+  if (!isLineInCreateSection(calls, insertLine, PB_CALL.createMenu, menuId)) return undefined;
   return { insertLine, indent: getLineIndent(document, insertLine) };
 }
 
@@ -4871,7 +4879,7 @@ function applyMenuEntryInsertIntoLeafMenuItem(
 ): vscode.WorkspaceEdit | undefined {
   const sourceLine = parentEntry.source?.line;
   if (typeof sourceLine !== "number") return undefined;
-  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createMenu, menuId)) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
   const replacement = [
@@ -4908,7 +4916,7 @@ function findMenuEntryBlockRange(
   entryNameLower: string
 ): { startLine: number; endLine: number } | undefined {
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
-  if (!isLineInCreateSection(calls, sourceLine, "createmenu", menuId)) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createMenu, menuId)) return undefined;
 
   const parsed = parseFormDocument(document.getText());
   const menu = parsed.menus.find(entry => entry.id === menuId);
@@ -5120,7 +5128,7 @@ function applyStatusBarFieldMutation(
   if (!mutate(nextFields)) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
-  const create = findCreateCallById(calls, "createstatusbar", statusBarId);
+  const create = findCreateCallById(calls, PB_CALL.createStatusBar, statusBarId);
   if (!create) return undefined;
 
   const startIdx = calls.indexOf(create);
@@ -5201,7 +5209,7 @@ export function applyMenuEntryInsert(
     edit = applySectionEntryInsert(
       document,
       calls,
-      "createmenu",
+      PB_CALL.createMenu,
       menuId,
       MENU_ENTRY_NAMES,
       insertText
@@ -5232,7 +5240,7 @@ export function applyMenuEntryUpdate(
   const edit = applySectionEntryUpdate(
     document,
     calls,
-    "createmenu",
+    PB_CALL.createMenu,
     menuId,
     sourceLine,
     args.kind.toLowerCase(),
@@ -5359,7 +5367,7 @@ export function applyToolBarEntryInsert(
   const edit = applySectionEntryInsert(
     document,
     calls,
-    "createtoolbar",
+    PB_CALL.createToolBar,
     toolBarId,
     TOOLBAR_ENTRY_NAMES,
     indent => buildToolBarEntryText(args, toolBarId, indent)
@@ -5393,7 +5401,7 @@ export function applyToolBarEntryUpdate(
   const calls = scanDocumentCalls(document, scanRange);
   const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase());
   if (!call) return undefined;
-  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
 
   const indent = getLineIndent(document, sourceLine);
   const rebuilt = buildToolBarEntryText(args, toolBarId, indent);
@@ -5447,7 +5455,7 @@ export function applyToolBarEntryDelete(
 
   const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase());
   if (!call) return undefined;
-  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
 
   const edit = new vscode.WorkspaceEdit();
   edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
@@ -5483,14 +5491,14 @@ export function applyToolBarEntryTooltipSet(
   if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
 
   const calls = scanDocumentCalls(document, scanRange);
-  if (!isLineInCreateSection(calls, sourceLine, "createtoolbar", toolBarId)) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
 
   const normalizedEntryId = entryIdRaw.trim();
   if (!normalizedEntryId.length) return undefined;
 
   const tipCall = calls.find(call => {
     if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
-    if (!isLineInCreateSection(calls, call.range.line, "createtoolbar", toolBarId)) return false;
+    if (!isLineInCreateSection(calls, call.range.line, PB_CALL.createToolBar, toolBarId)) return false;
     const parts = splitParams(call.args);
     const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
     return buttonIdRaw === normalizedEntryId;
@@ -5529,7 +5537,7 @@ export function applyMenuDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionDelete(document, calls, "createmenu", menuId);
+  return applySectionDelete(document, calls, PB_CALL.createMenu, menuId);
 }
 
 export function applyToolBarDelete(
@@ -5538,7 +5546,7 @@ export function applyToolBarDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionDelete(document, calls, "createtoolbar", toolBarId);
+  return applySectionDelete(document, calls, PB_CALL.createToolBar, toolBarId);
 }
 
 export function applyStatusBarDelete(
@@ -5547,7 +5555,7 @@ export function applyStatusBarDelete(
   scanRange?: ScanRange
 ): vscode.WorkspaceEdit | undefined {
   const calls = scanDocumentCalls(document, scanRange);
-  return applySectionDelete(document, calls, "createstatusbar", statusBarId);
+  return applySectionDelete(document, calls, PB_CALL.createStatusBar, statusBarId);
 }
 
 export function applyStatusBarFieldInsert(
