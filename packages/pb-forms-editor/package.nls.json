@@ -1,7 +1,6 @@
 {
   "purebasicFormsDesigner.command.openAsText": "Open Form as Text",
   "purebasicFormsDesigner.command.openInDesigner": "Open in Form Designer",
-
   "purebasicFormsDesigner.configurationTitle": "PureBasic Forms Designer",
   "purebasicFormsDesigner.showGrid.description": "Show a grid in the designer canvas.",
   "purebasicFormsDesigner.gridMode.description": "Grid rendering mode.",
@@ -14,5 +13,22 @@
   "purebasicFormsDesigner.snapMode.description": "Snapping behavior: live while dragging, or only on mouse release.",
   "purebasicFormsDesigner.outsideDimOpacity.description": "Dim opacity for the area outside the form window.",
   "purebasicFormsDesigner.titleBarHeight.description": "Title bar height drawn at the top of the form window (0 disables).",
-  "purebasicFormsDesigner.expectedPbVersion.description": "Optional: show a warning when the .pbf header PureBasic version differs from this value. Empty disables the check."
+  "purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding.description": "Windows-only top inset used when the preview window has no title bar.",
+  "purebasicFormsDesigner.windowPreviewWindowsClientSidePadding.description": "Windows-only left/right client inset used inside the preview window frame.",
+  "purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding.description": "Windows-only bottom client inset used inside the preview window frame.",
+  "purebasicFormsDesigner.expectedPbVersion.description": "Optional: show a warning when the .pbf header PureBasic version differs from this value. Empty disables the check.",
+  "purebasicFormsDesigner.newGadgetsUsePbAnyByDefault.description": "Create new gadgets with #PB_Any by default.",
+  "purebasicFormsDesigner.newGadgetsUseVariableAsCaption.description": "Create new gadgets with a variable reference instead of a text literal caption by default.",
+  "purebasicFormsDesigner.generateEventProcedure.description": "Enable event procedure generation by default for new forms.",
+  "purebasicFormsDesigner.osSkin.description": "Default operating system skin for the form preview.",
+  "purebasicFormsDesigner.osSkin.windows7": "Windows 7",
+  "purebasicFormsDesigner.osSkin.windows8": "Windows 8",
+  "purebasicFormsDesigner.osSkin.linux": "Linux",
+  "purebasicFormsDesigner.osSkin.macos": "macOS",
+  "purebasicFormsDesigner.warningUnrecognizedFile.description": "Warning mode when opening a file that is not recognised as a Form Designer file.",
+  "purebasicFormsDesigner.warningVersionUpgrade.description": "Warning mode when opening older Form Designer versions in a newer version.",
+  "purebasicFormsDesigner.warningVersionDowngrade.description": "Warning mode when opening newer Form Designer versions in an older version.",
+  "purebasicFormsDesigner.warningMode.never": "Never",
+  "purebasicFormsDesigner.warningMode.always": "Always",
+  "purebasicFormsDesigner.warningMode.ifBackwardCompatibilityIsAffected": "If backward compatibility is affected"
 }

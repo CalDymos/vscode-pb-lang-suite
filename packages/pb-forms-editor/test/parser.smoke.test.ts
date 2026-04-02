@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import { GADGET_KIND, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
 
@@ -80,6 +80,33 @@ EndProcedure
   assert.equal(openItem?.shortcut, "Ctrl+O");
   assert.equal(openItem?.iconRaw, "ImageID(#ImgOpen)");
   assert.equal(openItem?.iconId, "#ImgOpen");
+});
+
+test("keeps concatenated menu captions outside the plain literal path", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  If OpenWindow(#FrmMain, x, y, width, height, "Menu", #PB_Window_SystemMenu)
+    CreateImageMenu(0, WindowID(#FrmMain))
+    MenuTitle("File")
+    MenuItem(#MenuDynamic, "Open" + suffix$)
+  EndIf
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const menu = doc.menus[0];
+  const entry = menu?.entries.find((item) => item.kind === MENU_ENTRY_KIND.MenuItem && item.idRaw === "#MenuDynamic");
+
+  assert.ok(entry);
+  assert.equal(entry?.textRaw, '"Open" + suffix$');
+  assert.equal(entry?.text, undefined);
+  assert.equal(entry?.shortcut, undefined);
 });
 
 test("parses original PB 6.30 toolbar syntax with CreateToolbar", () => {
@@ -339,6 +366,20 @@ EndProcedure
   assert.equal(doc.window?.parent, "#FrmParent");
 });
 
+test("parses #PB_Ignore window positions while preserving raw OpenWindow arguments", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmIgnore(x = #PB_Ignore, y = 24, width = 220, height = 140)
+  OpenWindow(#FrmIgnore, x, y, width, height, "Ignore")
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  assert.equal(doc.window?.xRaw, "#PB_Ignore");
+  assert.equal(doc.window?.yRaw, "24");
+  assert.equal(doc.window?.x, 0);
+  assert.equal(doc.window?.y, 24);
+});
+
 test("normalizes non-WindowID OpenWindow parent references with leading equals", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
@@ -465,6 +506,38 @@ test("parses fixtures/smoke/15-object-event-bindings.pbf", () => {
   const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
   assert.ok(toolBarButton, "Expected #TbRefresh toolbar entry.");
   assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
+});
+
+test("assigns shared EventMenu cases to matching menu and toolbar entries", () => {
+  const text = `; Form Designer for PureBasic - 6.20
+;
+Procedure Open_Test()
+  If OpenWindow(#Window_0, 0, 0, 320, 240, "Test", #PB_Window_SystemMenu)
+    If CreateMenu(0, WindowID(#Window_0))
+      MenuItem(#SharedAction, "Shared")
+    EndIf
+    If CreateToolBar(0, WindowID(#Window_0))
+      ToolBarImageButton(#SharedAction, 0)
+    EndIf
+  EndIf
+EndProcedure
+
+Procedure Test_Events(event)
+  Select EventMenu()
+    Case #SharedAction
+      HandleShared()
+  EndSelect
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const menuItem = doc.menus[0]?.entries.find((entry) => entry.idRaw === "#SharedAction");
+  const toolBarButton = doc.toolbars[0]?.entries.find((entry) => entry.idRaw === "#SharedAction");
+
+  assert.ok(menuItem, "Expected shared menu item.");
+  assert.ok(toolBarButton, "Expected shared toolbar entry.");
+  assert.equal(menuItem?.event, "HandleShared");
+  assert.equal(toolBarButton?.event, "HandleShared");
 });
 
 
@@ -902,4 +975,95 @@ imgInline = CatchImage(#PB_Any, ?BinaryBlock)
   assert.ok(inlineImg, "Expected CatchImage entry.");
   assert.equal(inlineImg?.imageRaw, "?BinaryBlock");
   assert.equal(inlineImg?.image, "BinaryBlock");
+});
+
+
+test("parses gadget lock flags from ResizeGadget lines like the original opensave logic", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnLeftTop, 10, 12, 80, 24, "LeftTop")
+  ButtonGadget(#BtnRightBottom, 140, 120, 80, 24, "RightBottom")
+  ResizeGadget(#BtnRightBottom, FormWindowWidth - 180, FormWindowHeight - 100, 80, 24)
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, 10, 50, FormWindowWidth - 40, FormWindowHeight - 120)
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const leftTop = doc.gadgets.find(g => g.id === "#BtnLeftTop");
+  const rightBottom = doc.gadgets.find(g => g.id === "#BtnRightBottom");
+  const stretch = doc.gadgets.find(g => g.id === "#BtnStretch");
+
+  assert.ok(leftTop);
+  assert.equal(leftTop?.lockLeft, true);
+  assert.equal(leftTop?.lockRight, false);
+  assert.equal(leftTop?.lockTop, true);
+  assert.equal(leftTop?.lockBottom, false);
+
+  assert.ok(rightBottom);
+  assert.equal(rightBottom?.lockLeft, false);
+  assert.equal(rightBottom?.lockRight, true);
+  assert.equal(rightBottom?.lockTop, false);
+  assert.equal(rightBottom?.lockBottom, true);
+
+  assert.ok(stretch);
+  assert.equal(stretch?.lockLeft, true);
+  assert.equal(stretch?.lockRight, true);
+  assert.equal(stretch?.lockTop, true);
+  assert.equal(stretch?.lockBottom, true);
+});
+
+
+test("preserves raw ResizeGadget expressions and source ranges for later lock write paths", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+  ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
+EndProcedure
+`;
+
+  const doc = parseFormDocument(text);
+  const stretch = doc.gadgets.find(g => g.id === "#BtnStretch");
+
+  assert.ok(stretch);
+  assert.equal(stretch?.resizeXRaw, "10");
+  assert.equal(stretch?.resizeYRaw, "ToolBarHeight(0) + 10");
+  assert.equal(stretch?.resizeWRaw, "FormWindowWidth - 40");
+  assert.equal(stretch?.resizeHRaw, "FormWindowHeight - 120");
+  assert.equal(typeof stretch?.resizeSource?.line, "number");
+});
+
+
+test("preserves raw gadget rect expressions for future resize lock regeneration", () => {
+  const src = `; Form Designer for PureBasic - 6.30
+; EnableExplicit
+
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain()
+  OpenWindow(#FrmMain, 0, 0, 320, 220, "RawRect")
+  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, 25, "Apply")
+EndProcedure
+`;
+
+  const doc = parseFormDocument(src);
+  const gadget = doc.gadgets.find(entry => entry.id === "#BtnApply");
+
+  assert.ok(gadget);
+  assert.equal(gadget?.xRaw, "10");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 10");
+  assert.equal(gadget?.wRaw, "FormWindowWidth - 40");
+  assert.equal(gadget?.hRaw, "25");
+  assert.equal(gadget?.x, 10);
+  assert.equal(gadget?.y, 0);
+  assert.equal(gadget?.w, 0);
+  assert.equal(gadget?.h, 25);
 });

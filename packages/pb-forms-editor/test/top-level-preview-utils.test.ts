@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canEditToolBarTooltip,
+  buildOptionalInspectorLiteralRaw,
+  buildOptionalInspectorPlainValue,
   getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
+  getOpenSubMenuBalance,
   getDirectMenuChildIndices,
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
@@ -18,17 +21,23 @@ import {
   getMenuVisibleEntries,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedStatusBarInspectorFieldConfig,
+  getTopLevelSelectProcEditState,
   resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolvePreviewRectListHit,
   resolveTopLevelChromeHit,
+  getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
+  hasStatusBarPreviewAssignedImage,
+  hasToolBarPreviewAssignedImage,
   isBoundToolBarTooltipEntry,
+  shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry
-} from "../src/core/topLevelPreviewUtils";
+} from "../src/core/toplevel/preview";
 
 test("binds toolbar tooltips to the previous matching toolbar entry", () => {
   const toolBar = {
@@ -61,6 +70,14 @@ test("filters bound toolbar tooltip rows from the visible structure count", () =
   assert.equal(getVisibleToolBarEntryCount(toolBar), 3);
 });
 
+test("preserves whitespace-only inspector text values when converting to raw payloads", () => {
+  assert.equal(buildOptionalInspectorLiteralRaw(""), "");
+  assert.equal(buildOptionalInspectorLiteralRaw("   "), '"   "');
+  assert.equal(buildOptionalInspectorLiteralRaw(' A "quoted" value '), '" A ""quoted"" value "');
+  assert.equal(buildOptionalInspectorPlainValue(""), undefined);
+  assert.equal(buildOptionalInspectorPlainValue("   "), "   ");
+});
+
 test("builds default menu labels, levels and insert args", () => {
   const menu = {
     entries: [
@@ -76,10 +93,29 @@ test("builds default menu labels, levels and insert args", () => {
   assert.equal(getMenuPreviewLabel(menu.entries[3]), "");
   assert.equal(getMenuEntryLevel(menu.entries[1]), 1);
   assert.equal(getMenuEntryLevel(undefined), 0);
+  assert.equal(getOpenSubMenuBalance(menu), 0);
   assert.deepEqual(getDefaultMenuItemInsertArgs(menu), {
     idRaw: "#MenuItem_4",
     textRaw: '"MenuItem4"'
   });
+});
+
+test("tracks unmatched open submenu balance for root close guards", () => {
+  assert.equal(getOpenSubMenuBalance({
+    entries: [
+      { kind: "MenuTitle", textRaw: '"File"', level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Recent"', level: 1 },
+      { kind: "MenuItem", textRaw: '"Last"', level: 2 }
+    ]
+  }), 1);
+
+  assert.equal(getOpenSubMenuBalance({
+    entries: [
+      { kind: "CloseSubMenu", level: 0 },
+      { kind: "OpenSubMenu", textRaw: '"Recent"', level: 0 },
+      { kind: "CloseSubMenu", level: 0 }
+    ]
+  }), 0);
 });
 
 test("resolves direct menu children and ancestor chains from entry levels", () => {
@@ -152,6 +188,35 @@ test("exposes editable tooltip rows only for real toolbar command entries", () =
   assert.equal(canEditToolBarTooltip({ kind: "ToolBarImageButton", idRaw: "   " }), false);
 });
 
+test("selected toolbar inspector follows the original caption/current-image row set", () => {
+  const config = getSelectedToolBarInspectorFieldConfig();
+
+  assert.equal(config.captionLabel, "Caption");
+  assert.equal(config.showTextField, false);
+  assert.equal(config.showIconRawField, false);
+});
+
+test("selected statusbar inspector omits the non-original ProgressValue helper row", () => {
+  const config = getSelectedStatusBarInspectorFieldConfig();
+
+  assert.equal(config.showProgressValueField, false);
+});
+
+test("top-level SelectProc remains editable without an EventMenu block when an id exists", () => {
+  assert.deepEqual(getTopLevelSelectProcEditState(false, "#MenuItem_Open", "menu"), {
+    canEdit: true,
+    title: "Choose an existing procedure or type a procedure name. Writing it back still requires a parsed Select EventMenu() block in the source."
+  });
+  assert.deepEqual(getTopLevelSelectProcEditState(true, "#MenuItem_Open", "menu"), {
+    canEdit: true,
+    title: "Choose an existing procedure or type a procedure name."
+  });
+  assert.deepEqual(getTopLevelSelectProcEditState(false, "   ", "toolbar"), {
+    canEdit: false,
+    title: "Only toolbar entries with a parsed id can be patched safely."
+  });
+});
+
 test("builds default statusbar preview insert args", () => {
   assert.deepEqual(getStatusBarPreviewInsertArgs("image"), {
     widthRaw: "96",
@@ -165,7 +230,7 @@ test("builds default statusbar preview insert args", () => {
   assert.deepEqual(getStatusBarPreviewInsertArgs("progress"), {
     widthRaw: "120",
     progressBar: true,
-    progressRaw: "50"
+    progressRaw: "0"
   });
 });
 
@@ -214,6 +279,46 @@ test("resolves generic preview rect hits for add buttons and footers", () => {
   assert.deepEqual(
     resolvePreviewRectListHit([{ ownerId: "m1", index: 2, x: 30, y: 40, w: 20, h: 12 }], 35, 45),
     { ownerId: "m1", index: 2, x: 30, y: 40, w: 20, h: 12 }
+  );
+});
+
+test("resolves flyout menu entry hits outside the menu bar rectangle", () => {
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 92,
+      y: 132,
+      windowHit: true,
+      menuId: "menu-1",
+      menuRect: { x: 20, y: 80, w: 120, h: 22 },
+      menuEntryRects: [
+        { ownerId: "menu-1", index: 0, x: 20, y: 80, w: 40, h: 18 },
+        { ownerId: "menu-1", index: 2, x: 80, y: 120, w: 110, h: 20 }
+      ]
+    }),
+    {
+      selection: { kind: "menuEntry", menuId: "menu-1", entryIndex: 2 },
+      rect: { ownerId: "menu-1", index: 2, x: 80, y: 120, w: 110, h: 20 }
+    }
+  );
+});
+
+test("resolves flyout menu entry hits outside the window rectangle", () => {
+  assert.deepEqual(
+    resolveTopLevelChromeHit({
+      x: 212,
+      y: 132,
+      windowHit: false,
+      menuId: "menu-1",
+      menuRect: { x: 20, y: 80, w: 120, h: 22 },
+      menuEntryRects: [
+        { ownerId: "menu-1", index: 0, x: 20, y: 80, w: 40, h: 18 },
+        { ownerId: "menu-1", index: 4, x: 180, y: 120, w: 110, h: 20 }
+      ]
+    }),
+    {
+      selection: { kind: "menuEntry", menuId: "menu-1", entryIndex: 4 },
+      rect: { ownerId: "menu-1", index: 4, x: 180, y: 120, w: 110, h: 20 }
+    }
   );
 });
 
@@ -291,6 +396,10 @@ test("resolves visible menu entry and footer rectangles from preview caches", ()
     resolveMenuFooterHit({ x: 30, y: 65, windowHit: true, menuRect: { x: 0, y: 0, w: 100, h: 20 }, footerRects }),
     footerRects[0]
   );
+  assert.deepEqual(
+    resolveMenuFooterHit({ x: 30, y: 65, windowHit: false, footerRects }),
+    footerRects[0]
+  );
 });
 
 test("resolves menu move targets from visible flyout entries", () => {
@@ -363,4 +472,25 @@ test("resolves menu move targets from visible flyout entries", () => {
       indicatorOrientation: "horizontal"
     }
   );
+});
+
+
+test("treats toolbar image buttons with iconRaw 0 as empty preview buttons", () => {
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: "0" }), false);
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconRaw: " ImageID(#Img_Open) " }), true);
+  assert.equal(hasToolBarPreviewAssignedImage({ kind: "ToolBarImageButton", iconId: "#Img_Open", iconRaw: "0" }), true);
+});
+
+test("shows the generic unselected toolbar frame only for empty command buttons", () => {
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "0" }, false), true);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "ImageID(#Img_Open)" }, false), false);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarImageButton", iconRaw: "0" }, true), false);
+  assert.equal(shouldShowToolBarPreviewUnselectedFrame({ kind: "ToolBarSeparator" }, false), false);
+});
+
+
+test("treats statusbar imageRaw 0 as the empty fallback-image case", () => {
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageRaw: "0" }), false);
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageRaw: " #Img_Open " }), true);
+  assert.equal(hasStatusBarPreviewAssignedImage({ widthRaw: "96", imageId: "#Img_Open", imageRaw: "0" }), true);
 });

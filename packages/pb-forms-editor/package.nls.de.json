@@ -1,7 +1,6 @@
 {
   "purebasicFormsDesigner.command.openAsText": "Formular als Text öffnen",
   "purebasicFormsDesigner.command.openInDesigner": "Im Form Designer öffnen",
-
   "purebasicFormsDesigner.configurationTitle": "PureBasic Formular-Designer",
   "purebasicFormsDesigner.showGrid.description": "Raster im Designer-Canvas anzeigen.",
   "purebasicFormsDesigner.gridMode.description": "Darstellungsmodus des Rasters.",
@@ -14,5 +13,22 @@
   "purebasicFormsDesigner.snapMode.description": "Ausrichtungsverhalten: live während des Ziehens oder erst beim Loslassen der Maus.",
   "purebasicFormsDesigner.outsideDimOpacity.description": "Abdunklungs-Deckkraft für den Bereich außerhalb des Formularfensters.",
   "purebasicFormsDesigner.titleBarHeight.description": "Höhe der Titelleiste oben im Formularfenster (0 deaktiviert).",
-  "purebasicFormsDesigner.expectedPbVersion.description": "Optional: Warnung anzeigen, wenn die PureBasic-Version im .pbf-Header von diesem Wert abweicht. Leer deaktiviert die Prüfung."
+  "purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding.description": "Nur unter Windows verwendeter oberer Inset der Preview, wenn das Fenster keine Titelleiste hat.",
+  "purebasicFormsDesigner.windowPreviewWindowsClientSidePadding.description": "Nur unter Windows verwendeter linker/rechter Client-Inset innerhalb des Preview-Fensterrahmens.",
+  "purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding.description": "Nur unter Windows verwendeter unterer Client-Inset innerhalb des Preview-Fensterrahmens.",
+  "purebasicFormsDesigner.expectedPbVersion.description": "Optional: Warnung anzeigen, wenn die PureBasic-Version im .pbf-Header von diesem Wert abweicht. Leer deaktiviert die Prüfung.",
+  "purebasicFormsDesigner.newGadgetsUsePbAnyByDefault.description": "Neue Gadgets standardmäßig mit #PB_Any anlegen.",
+  "purebasicFormsDesigner.newGadgetsUseVariableAsCaption.description": "Neue Gadgets standardmäßig mit einer Variablenreferenz statt eines Textliterals als Caption anlegen.",
+  "purebasicFormsDesigner.generateEventProcedure.description": "Neue Formulare standardmäßig mit aktivierter Event-Procedure-Erzeugung anlegen.",
+  "purebasicFormsDesigner.osSkin.description": "Voreingestellte Betriebssystem-Skin für die Form-Preview.",
+  "purebasicFormsDesigner.osSkin.windows7": "Windows 7",
+  "purebasicFormsDesigner.osSkin.windows8": "Windows 8",
+  "purebasicFormsDesigner.osSkin.linux": "Linux",
+  "purebasicFormsDesigner.osSkin.macos": "macOS",
+  "purebasicFormsDesigner.warningUnrecognizedFile.description": "Warnmodus beim Öffnen einer nicht als Form-Designer-Datei erkannten Datei.",
+  "purebasicFormsDesigner.warningVersionUpgrade.description": "Warnmodus beim Öffnen älterer Form-Designer-Versionen in einer neueren Version.",
+  "purebasicFormsDesigner.warningVersionDowngrade.description": "Warnmodus beim Öffnen neuerer Form-Designer-Versionen in einer älteren Version.",
+  "purebasicFormsDesigner.warningMode.never": "Nie",
+  "purebasicFormsDesigner.warningMode.always": "Immer",
+  "purebasicFormsDesigner.warningMode.ifBackwardCompatibilityIsAffected": "Wenn die Abwärtskompatibilität betroffen ist"
 }

@@ -6,11 +6,10 @@
     "lib": [
       "ES2022"
     ],
-    "types": []
+    "types": ["node", "vscode"]
   },
   "include": [
     "src/core/**/*.ts",
     "test/**/*.ts",
-    "test/types/**/*.d.ts",
   ]
 }

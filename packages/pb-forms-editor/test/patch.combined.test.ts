@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
   applyGadgetOpenArgsUpdate,
   applyGadgetPropertyUpdate,
@@ -28,7 +28,7 @@ import {
   type MenuEntryArgs,
   type StatusBarFieldArgs,
   type ToolBarEntryArgs,
-} from "../src/core/emitter/patchEmitter";
+} from "../src/core/emitter/patch-emitter";
 import { MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
@@ -339,6 +339,44 @@ test("roundtrips nested menu entry insert into submenu footer", () => {
   assert.match(patchedText, /MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
 });
 
+test("roundtrips menu entry insert into leaf menu item footer by promoting parent into submenu", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === menuId);
+  const leafItem = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem && entry.idRaw === "#MenuRecent1");
+  const parentSourceLine = leafItem?.source?.line;
+
+  assert.ok(menu, "Expected menu.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for leaf MenuItem entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent2",
+    textRaw: '"Pinned file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
+  assert.ok(updatedMenu, "Expected menu after promoted submenu insert.");
+
+  const promotedIndex = updatedMenu!.entries.findIndex((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Last file");
+  const insertedIndex = updatedMenu!.entries.findIndex((entry) => entry.idRaw === "#MenuRecent2");
+  const closeIndex = updatedMenu!.entries.findIndex((entry, index) => index > promotedIndex && entry.kind === MENU_ENTRY_KIND.CloseSubMenu);
+
+  assert.ok(promotedIndex >= 0, "Expected leaf MenuItem to become OpenSubMenu.");
+  assert.ok(insertedIndex > promotedIndex, "Expected inserted child after promoted OpenSubMenu.");
+  assert.ok(closeIndex > insertedIndex, "Expected inserted child before promoted CloseSubMenu.");
+  assert.equal(updatedMenu!.entries[promotedIndex]?.level, 2);
+  assert.equal(updatedMenu!.entries[insertedIndex]?.level, 3);
+  assert.equal(updatedMenu!.entries.some((entry) => entry.idRaw === "#MenuRecent1"), false);
+  assert.match(patchedText, /OpenSubMenu\("Last file"\)\r?\n\s*MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/);
+  assert.match(patchedText, /Enumeration FormMenu[\s\S]*#MenuOpen[\s\S]*#MenuRecent2[\s\S]*EndEnumeration/);
+  assert.doesNotMatch(patchedText, /#MenuRecent1/);
+});
+
 test("roundtrips menu entry insert into empty submenu footer", () => {
   const text = [
     '; Form Designer for PureBasic - 6.30',
@@ -387,6 +425,49 @@ test("roundtrips menu entry insert into empty submenu footer", () => {
   assert.match(patchedText, /OpenSubMenu\("Recent"\)\r?\n\s*MenuItem\(#MenuRecent1, "Last file"\)\r?\n\s*CloseSubMenu\(\)/);
 });
 
+test("roundtrips menu entry insert into empty submenu footer with placeholder comment before close", () => {
+  const text = [
+    '; Form Designer for PureBasic - 6.30',
+    'Enumeration FormMenu',
+    '  #MenuOpen',
+    'EndEnumeration',
+    '',
+    'Procedure OpenFrmMain()',
+    '  CreateImageMenu(0, WindowID(#FrmMain))',
+    '  MenuTitle("File")',
+    '  OpenSubMenu("Recent")',
+    '  ; placeholder for future entries',
+    '  CloseSubMenu()',
+    'EndProcedure',
+    '',
+  ].join("\n");
+
+  const parsed = parseFormDocument(text);
+  const menu = parsed.menus.find((m) => m.id === menuId);
+  const emptySubMenu = menu?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.OpenSubMenu && entry.text === "Recent");
+  const parentSourceLine = emptySubMenu?.source?.line;
+
+  assert.ok(menu, "Expected CreateImageMenu section.");
+  assert.equal(typeof parentSourceLine, "number", "Expected source line for empty OpenSubMenu entry.");
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuRecent2",
+    textRaw: '"Pinned file"',
+  };
+
+  const { parsed: updated, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, menuId, args, undefined, { parentSourceLine: parentSourceLine! })
+  );
+
+  const updatedMenu = updated.menus.find((m) => m.id === menuId);
+  assert.ok(updatedMenu, "Expected menu after commented empty submenu insert.");
+  assert.match(
+    patchedText,
+    /OpenSubMenu\("Recent"\)\r?\n\s*; placeholder for future entries\r?\n\s*MenuItem\(#MenuRecent2, "Pinned file"\)\r?\n\s*CloseSubMenu\(\)/
+  );
+});
+
 test("roundtrips submenu insert with generated closing line", () => {
   const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
   const args: MenuEntryArgs = {
@@ -428,6 +509,26 @@ test("roundtrips menu entry update", () => {
   assert.match(patchedText, /MenuItem\(#MnuOpen, "Open File"\)/);
 });
 
+
+test("preserves surrounding whitespace for menu shortcut updates", () => {
+  const { text, menu, menuId } = parseFixture();
+  const openItem = menu.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.ok(openItem?.source?.line !== undefined, "Expected source line for existing menu item.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menuId, openItem!.source!.line, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: openItem!.idRaw,
+      textRaw: openItem!.textRaw,
+      shortcut: "  Ctrl+Shift+O  ",
+      iconRaw: openItem!.iconRaw,
+    })
+  );
+
+  const updatedItem = parsed.menus.find((m) => m.id === menuId)?.entries.find((entry) => entry.kind === MENU_ENTRY_KIND.MenuItem);
+  assert.equal(updatedItem?.shortcut, "  Ctrl+Shift+O  ");
+  assert.match(patchedText, /MenuItem\(#MnuOpen, "Open" \+ Chr\(9\) \+ "  Ctrl\+Shift\+O  ", ImageID\(#Img_FrmMain_0\)\)/);
+});
 
 test("roundtrips menu entry update with preserved shortcut and icon", () => {
   const { text, menu, menuId } = parseFixture();
@@ -954,6 +1055,27 @@ test("normalizes rebuilt statusbar sections to per-field Add/Decoration order", 
 });
 
 
+test("core statusbar patcher still preserves explicit progress raw values when used directly", () => {
+  const { text, statusBar, statusBarId } = parseStatusFixture();
+  const sourceLine = statusBar.fields[1]?.source?.line;
+  assert.equal(typeof sourceLine, "number", "Expected source line for progress statusbar field.");
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyStatusBarFieldUpdate(document, statusBarId, sourceLine!, {
+      widthRaw: "120",
+      progressBar: true,
+      progressRaw: "75",
+      flagsRaw: "#PB_StatusBar_Raised"
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((sb) => sb.id === statusBarId);
+  assert.ok(updatedStatusBar, "Expected statusbar after update.");
+  assert.equal(updatedStatusBar!.fields[1]?.progressBar, true);
+  assert.equal(updatedStatusBar!.fields[1]?.progressRaw, "75");
+  assert.match(patchedText, /StatusBarProgress\(0, 1, 75, #PB_StatusBar_Raised\)/);
+});
+
 test("roundtrips statusbar field switch from progress to label and clears old progress decoration", () => {
   const { text, statusBar, statusBarId } = parseStatusFixture();
   const sourceLine = statusBar.fields[1]?.source?.line;
@@ -1303,6 +1425,20 @@ test("roundtrips gadget property update for state and removes cleared lines", ()
   assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive, #PB_Checkbox_Checked\)/);
 });
 
+test("removes checkbox state lines when the checked property is cleared", () => {
+  const { text } = parseGadgetFixture();
+
+  const { parsed, patchedText } = patchAndReparse(text, (document) =>
+    applyGadgetPropertyUpdate(document, "#ChkActive", { stateRaw: undefined })
+  );
+
+  const chkActive = parsed.gadgets.find((g) => g.id === "#ChkActive");
+  assert.ok(chkActive, "Expected #ChkActive gadget after clearing the checked property.");
+  assert.equal(chkActive?.stateRaw, undefined);
+  assert.equal(chkActive?.state, undefined);
+  assert.doesNotMatch(patchedText, /SetGadgetState\(#ChkActive,/);
+});
+
 
 test("roundtrips splitter state update via SetGadgetState", () => {
   const text = loadFixture("fixtures/smoke/07-container-splitter.pbf");
@@ -1455,6 +1591,144 @@ test("roundtrips image pbAny toggle updates statusbar references", () => {
   assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(ImgState\)\)/);
 });
 
+
+test("roundtrips toolbar CurrentImage rebind to an existing parsed image and removes the orphaned image entry", () => {
+  const { text, parsed: initial, toolBarId } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
+
+  assert.equal(typeof imageButton?.source?.line, "number", "Expected source line for the toolbar image button.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old toolbar image entry.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, toolBarId, imageButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: imageButton!.idRaw,
+      iconRaw: "ImageID(#Img_FrmImages_0)",
+      toggle: imageButton!.toggle,
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!)
+  );
+
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const removedImage = parsed.images.find((entry) => entry.id === "Img_FrmImages_2");
+
+  assert.equal(updatedButton?.iconId, "#Img_FrmImages_0");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmImages_0\)\)/);
+  assert.doesNotMatch(patchedText, /Img_FrmImages_2 = LoadImage\(#PB_Any,\s*"save\.png"\)/);
+});
+
+
+test("roundtrips toolbar CurrentImage auto-create for a new path-like string and removes the orphaned image entry", () => {
+  const { text, parsed: initial, toolBarId } = parseImageFixture();
+  const toolBar = initial.toolbars.find((entry) => entry.id === toolBarId);
+  const imageButton = toolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "Img_FrmImages_2")?.source?.line;
+
+  assert.equal(typeof imageButton?.source?.line, "number", "Expected source line for the toolbar image button.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old toolbar image entry.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyToolBarEntryUpdate(document, toolBarId, imageButton!.source!.line, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: imageButton!.idRaw,
+      iconRaw: "ImageID(#Img_FrmImages_4)",
+      toggle: imageButton!.toggle,
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmImages_4",
+      imageRaw: '"./icons/save-alt.png"',
+    })
+  );
+
+  const updatedToolBar = parsed.toolbars.find((entry) => entry.id === toolBarId);
+  const updatedButton = updatedToolBar?.entries.find((entry) => entry.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && entry.idRaw === "#TbSave");
+  const insertedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_4");
+  const removedImage = parsed.images.find((entry) => entry.id === "Img_FrmImages_2");
+
+  assert.equal(updatedButton?.iconId, "#Img_FrmImages_4");
+  assert.ok(insertedImage, "Expected the new toolbar LoadImage entry to be inserted.");
+  assert.equal(insertedImage?.image, "./icons/save-alt.png");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_4,\s*"\.\/icons\/save-alt\.png"\)/);
+  assert.match(patchedText, /ToolBarImageButton\(#TbSave,\s*ImageID\(#Img_FrmImages_4\)\)/);
+  assert.doesNotMatch(patchedText, /Img_FrmImages_2 = LoadImage\(#PB_Any,\s*"save\.png"\)/);
+});
+
+
+test("roundtrips statusbar CurrentImage rebind to an existing parsed image and removes the orphaned image entry", () => {
+  const { text, parsed: initial, statusBarId } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_3");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
+
+  assert.equal(typeof imageField?.source?.line, "number", "Expected source line for the statusbar image field.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old CatchImage entry.");
+
+  const { parsed, patchedText } = patchTwiceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(#Img_FrmImages_0)",
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!)
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
+  const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_0");
+  const removedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_3");
+
+  assert.ok(updatedField, "Expected the statusbar field to point at the existing LoadImage entry.");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_0\)\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
+});
+
+
+test("roundtrips statusbar CurrentImage auto-create for a new path-like string and removes the orphaned image entry", () => {
+  const { text, parsed: initial, statusBarId } = parseImageFixture();
+  const statusBar = initial.statusbars.find((entry) => entry.id === statusBarId);
+  const imageField = statusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_3");
+  const oldImageSourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_3")?.source?.line;
+
+  assert.equal(typeof imageField?.source?.line, "number", "Expected source line for the statusbar image field.");
+  assert.equal(typeof oldImageSourceLine, "number", "Expected source line for the old CatchImage entry.");
+
+  const { parsed, patchedText } = patchThriceAndReparse(
+    text,
+    (document) => applyStatusBarFieldUpdate(document, statusBarId, imageField!.source!.line, {
+      widthRaw: imageField!.widthRaw,
+      imageRaw: "ImageID(#Img_FrmImages_2)",
+    }),
+    (document) => applyImageDelete(document, oldImageSourceLine!),
+    (document) => applyImageInsert(document, {
+      inline: false,
+      idRaw: "#Img_FrmImages_2",
+      imageRaw: '"./icons/new.png"',
+    })
+  );
+
+  const updatedStatusBar = parsed.statusbars.find((entry) => entry.id === statusBarId);
+  const updatedField = updatedStatusBar?.fields.find((field) => field.imageId === "#Img_FrmImages_2");
+  const insertedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_2");
+  const removedImage = parsed.images.find((entry) => entry.id === "#Img_FrmImages_3");
+
+  assert.ok(updatedField, "Expected the statusbar field to point at the newly inserted LoadImage entry.");
+  assert.ok(insertedImage, "Expected the new LoadImage entry to be inserted.");
+  assert.equal(insertedImage?.image, "./icons/new.png");
+  assert.equal(removedImage, undefined);
+  assert.match(patchedText, /LoadImage\(#Img_FrmImages_2, "\.\/icons\/new\.png"\)/);
+  assert.match(patchedText, /StatusBarImage\(0, 0, ImageID\(#Img_FrmImages_2\)\)/);
+  assert.doesNotMatch(patchedText, /CatchImage\(#Img_FrmImages_3,\?Img_FrmImages_3\)/);
+});
+
 test("roundtrips image pbAny toggle updates button image gadget references", () => {
   const { text, parsed: initial, menuId, toolBarId, statusBarId } = parseImageFixture();
   const sourceLine = initial.images.find((image) => image.id === "#Img_FrmImages_1")?.source?.line;
@@ -1495,6 +1769,14 @@ test("deletes full menu section", () => {
   assert.doesNotMatch(patchedText, /Create(Image)?Menu\(0,/);
   assert.doesNotMatch(patchedText, /MenuTitle\(/);
   assert.doesNotMatch(patchedText, /OpenSubMenu\(/);
+});
+
+test("rejects root close submenu inserts when no submenu is currently open", () => {
+  const text = loadFixture("fixtures/smoke/08-menu-basic.pbf");
+  const document = new FakeTextDocument(text).asTextDocument();
+  const edit = applyMenuEntryInsert(document, menuId, { kind: MENU_ENTRY_KIND.CloseSubMenu });
+
+  assert.equal(edit, undefined);
 });
 
 test("deletes full toolbar section", () => {
@@ -1572,4 +1854,45 @@ test("roundtrips combined top-level chrome updates in fixture 14", () => {
   assert.equal(statusField?.widthRaw, "140");
   assert.equal(statusField?.imageId, "#Img_FrmMain_1");
   assert.equal(statusField?.flagsRaw, "#PB_StatusBar_Raised");
+});
+
+
+test("trims menu constants during selected-entry style updates", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#FrmMain))
+  MenuItem(#MenuOpen, "Open")
+EndProcedure
+`;
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyMenuEntryUpdate(document, menuId, 4, {
+      kind: MENU_ENTRY_KIND.MenuItem,
+      idRaw: "  #MenuOpenRenamed  ",
+      textRaw: '"Open"'
+    })
+  );
+
+  assert.match(patchedText, /MenuItem\(#MenuOpenRenamed, "Open"\)/);
+});
+
+test("trims toolbar variables during selected-entry style updates", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Toolbar")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ToolBarImageButton(#TbOpen, 0)
+EndProcedure
+`;
+
+  const { patchedText } = patchAndReparse(text, (document) =>
+    applyToolBarEntryUpdate(document, toolBarId, 4, {
+      kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton,
+      idRaw: "  #TbOpenRenamed  ",
+      iconRaw: "0"
+    })
+  );
+
+  assert.match(patchedText, /ToolBarImageButton\(#TbOpenRenamed, 0\)/);
 });

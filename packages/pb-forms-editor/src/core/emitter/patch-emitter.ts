@@ -1,0 +1,5793 @@
+import * as vscode from "vscode";
+import { scanCalls } from "../parser/call-scanner";
+import { parseFormDocument } from "../parser/form-parser";
+import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
+import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadget/insert";
+import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadget/delete";
+import { ENUM_NAMES, FormFont, FormImage, FormMenu, FormMenuEntry, FormStatusBarField, FormToolBar, FormToolBarEntry, FormWindow, Gadget, ScanRange, MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND, MenuEntryKind, PB_ANY, ToolBarEntryKind, GADGET_KIND } from "../model";
+
+type PbCall = ReturnType<typeof scanCalls>[number];
+
+const PB_CALL = {
+  createImageMenu: "createimagemenu",
+  createMenu: "createmenu",
+  createStatusBar: "createstatusbar",
+  createToolBar: "createtoolbar",
+  openWindow: "openwindow",
+} as const;
+
+/**
+ * Escape special characters in regular expressions
+ */
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stableKey(assignedVar: string | undefined, params: string[]): string | undefined {
+  if (params.length < 1) return undefined;
+
+  const first = params[0].trim();
+  if (first === PB_ANY) {
+    return assignedVar ?? PB_ANY;
+  }
+
+  return first;
+}
+
+
+function tryPatchProcedureDefaults(
+  document: vscode.TextDocument,
+  fromLine: number,
+  updates: Record<string, string>
+): vscode.WorkspaceEdit | undefined {
+  for (let i = Math.min(fromLine, document.lineCount - 1); i >= 0; i--) {
+    const lineText = document.lineAt(i).text;
+
+    if (/^\s*EndProcedure\b/i.test(lineText)) break;
+
+    const m = /^(\s*Procedure(?:\.\w+)?\s+[\w:]+\s*)\((.*)\)\s*$/i.exec(lineText);
+    if (!m) continue;
+
+    const prefix = m[1];
+    const rawArgs = m[2];
+    const parts = splitParams(rawArgs);
+    if (parts.length === 0) return undefined;
+
+    let changed = false;
+    const rebuiltParts = parts.map(p => {
+      const eq = p.indexOf("=");
+      if (eq < 0) return p;
+
+      const left = p.slice(0, eq).trim();
+      const right = p.slice(eq + 1).trim();
+      const key = normalizeProcParamName(left);
+
+      const newVal = updates[key];
+      if (newVal === undefined) return p;
+      if (right === newVal) return p;
+
+      changed = true;
+      return `${left} = ${newVal}`;
+    });
+
+    if (!changed) return undefined;
+
+    const rebuiltLine = `${prefix}(${rebuiltParts.join(", ")})`;
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, document.lineAt(i).range, rebuiltLine);
+    return edit;
+  }
+
+  return undefined;
+}
+
+function getLineIndent(document: vscode.TextDocument, line: number): string {
+  if (line < 0 || line >= document.lineCount) return "";
+  const text = document.lineAt(line).text;
+  const m = /^\s*/.exec(text);
+  return m?.[0] ?? "";
+}
+
+function isBlankLine(document: vscode.TextDocument, line: number): boolean {
+  if (line < 0 || line >= document.lineCount) return false;
+  return document.lineAt(line).text.trim() === "";
+}
+
+function skipBlankLines(document: vscode.TextDocument, line: number): number {
+  let nextLine = line;
+  while (nextLine < document.lineCount && isBlankLine(document, nextLine)) {
+    nextLine += 1;
+  }
+  return nextLine;
+}
+
+function scanDocumentCalls(document: vscode.TextDocument, scanRange?: ScanRange): PbCall[] {
+  return scanCalls(document.getText(), scanRange);
+}
+
+function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.WorkspaceEdit | undefined): void {
+  if (!source) return;
+  const sourceWithOps = source as vscode.WorkspaceEdit & {
+    entries?: () => Array<[unknown, unknown[]]>;
+    getOperations?: () => Array<{
+      kind: "replace" | "insert" | "delete";
+      uri: vscode.Uri;
+      range?: vscode.Range;
+      position?: vscode.Position;
+      newText?: string;
+    }>;
+  };
+
+  if (typeof sourceWithOps.entries !== "function") {
+    const operations = sourceWithOps.getOperations?.() ?? [];
+    for (const operation of operations) {
+      if (operation.kind === "replace" && operation.range) {
+        target.replace(operation.uri, operation.range, operation.newText ?? "");
+      }
+      else if (operation.kind === "insert" && operation.position) {
+        target.insert(operation.uri, operation.position, operation.newText ?? "");
+      }
+      else if (operation.kind === "delete" && operation.range) {
+        target.delete(operation.uri, operation.range);
+      }
+    }
+    return;
+  }
+
+  if (typeof target.set !== "function" || typeof target.get !== "function") {
+    return;
+  }
+
+  for (const [uri, textEdits] of sourceWithOps.entries()) {
+    target.set(uri, [...target.get(uri), ...textEdits]);
+  }
+}
+
+function findCallByStableKey(
+  calls: PbCall[],
+  key: string,
+  namePredicate?: (name: string) => boolean
+) {
+  return calls.find(c => {
+    if (namePredicate && !namePredicate(c.name)) return false;
+    const params = splitParams(c.args);
+    const k = stableKey(c.assignedVar, params);
+    return k === key;
+  });
+}
+
+function findCallsByName(calls: PbCall[], nameLower: string) {
+  return calls.filter(c => c.name.toLowerCase() === nameLower);
+}
+
+function firstParamOfCall(callArgs: string): string {
+  const params = splitParams(callArgs);
+  return (params[0] ?? "").trim();
+}
+
+function buildAddGadgetItemArgs(gadgetKey: string, args: GadgetItemArgs): string {
+  const out: string[] = [];
+  out.push(gadgetKey);
+  out.push(args.posRaw);
+  out.push(args.textRaw);
+
+  if (args.imageRaw !== undefined || args.flagsRaw !== undefined) {
+    out.push((args.imageRaw ?? "0").trim().length ? args.imageRaw! : "0");
+  }
+
+  if (args.flagsRaw !== undefined) {
+    out.push(args.flagsRaw);
+  }
+
+  return out.join(", ");
+}
+
+function buildAddGadgetColumnArgs(gadgetKey: string, args: GadgetColumnArgs): string {
+  const out: string[] = [];
+  out.push(gadgetKey);
+  out.push(args.colRaw);
+  out.push(args.titleRaw);
+  out.push(args.widthRaw);
+  return out.join(", ");
+}
+
+function replaceCallLinePreserveSuffix(
+  document: vscode.TextDocument,
+  call: { name: string; args: string; range: { line: number; lineStart: number; end: number } },
+  rebuiltLine: string
+): vscode.WorkspaceEdit {
+  const line = call.range.line;
+  const lineText = document.lineAt(line).text;
+  const endInLine = Math.max(0, call.range.end - call.range.lineStart);
+  const suffix = lineText.slice(endInLine);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(line).range, rebuiltLine + suffix);
+  return edit;
+}
+
+export interface GadgetItemArgs {
+  posRaw: string;
+  textRaw: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+}
+
+export interface GadgetColumnArgs {
+  colRaw: string;
+  titleRaw: string;
+  widthRaw: string;
+}
+
+export interface WindowPropertyArgs {
+  hiddenRaw?: string;
+  disabledRaw?: string;
+  colorRaw?: string;
+}
+
+export interface WindowOpenArgs {
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
+  captionRaw?: string;
+  flagsExpr?: string;
+  parentRaw?: string;
+}
+
+export interface WindowEventArgs {
+  eventFileRaw?: string;
+}
+
+export interface WindowEventProcBlock {
+  selectLine: number;
+  endLine: number;
+  defaultLine?: number;
+  procLine?: number;
+  hasCaseBranches: boolean;
+}
+
+export interface EventCaseBranch {
+  caseLine: number;
+  caseRaw: string;
+  procLine?: number;
+  boundaryLine: number;
+}
+
+
+export interface MenuEntryArgs {
+  kind: MenuEntryKind;
+  idRaw?: string;
+  textRaw?: string;
+  shortcut?: string;
+  iconRaw?: string;
+}
+
+export interface MenuEntryInsertOptions {
+  parentSourceLine?: number;
+}
+
+export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
+
+export interface MenuEntryMoveOptions {
+  targetSourceLine: number;
+  placement: MenuEntryMovePlacement;
+}
+
+export interface ToolBarEntryArgs {
+  kind: ToolBarEntryKind;
+  idRaw?: string;
+  iconRaw?: string;
+  textRaw?: string;
+  tooltip?: string;
+  toggle?: boolean;
+}
+
+export interface StatusBarFieldArgs {
+  widthRaw: string;
+  textRaw?: string;
+  imageRaw?: string;
+  flagsRaw?: string;
+  progressBar?: boolean;
+  progressRaw?: string;
+}
+
+export interface FontArgs {
+  idRaw: string;
+  nameRaw: string;
+  sizeRaw: string;
+  flagsRaw?: string;
+  assignedVar?: string;
+}
+
+export interface ImageArgs {
+  inline: boolean;
+  idRaw: string;
+  imageRaw: string;
+  assignedVar?: string;
+  /** When true: convert enum image (firstParam=#Img_...) to #PB_Any variable
+   *  mode, move entry to end of list, and re-index all image IDs. */
+  pbAny?: boolean;
+}
+
+export interface GadgetPropertyArgs {
+  hiddenRaw?: string;
+  disabledRaw?: string;
+  tooltipRaw?: string;
+  stateRaw?: string;
+  frontColorRaw?: string;
+  backColorRaw?: string;
+  gadgetFontRaw?: string;
+}
+
+export interface GadgetOpenArgs {
+  textRaw?: string;
+  imageRaw?: string;
+  minRaw?: string;
+  maxRaw?: string;
+  gadget1Raw?: string;
+  gadget2Raw?: string;
+  flagsExpr?: string;
+}
+
+export interface CustomGadgetCodeArgs {
+  customInitRaw?: string;
+  customCreateRaw?: string;
+}
+
+function isCreateBoundary(nameLower: string): boolean {
+  return (
+    nameLower === PB_CALL.createMenu ||
+    nameLower === PB_CALL.createImageMenu ||
+    nameLower === PB_CALL.createToolBar ||
+    nameLower === PB_CALL.createStatusBar ||
+    nameLower === PB_CALL.openWindow
+  );
+}
+
+function getCreateNameVariants(createNameLower: string): readonly string[] {
+  if (createNameLower === PB_CALL.createMenu) {
+    return [PB_CALL.createMenu, PB_CALL.createImageMenu];
+  }
+  return [createNameLower];
+}
+
+function matchesCreateCallName(callNameLower: string, createNameLower: string): boolean {
+  return getCreateNameVariants(createNameLower).includes(callNameLower);
+}
+
+function findNearestCreateAbove(
+  calls: PbCall[],
+  line: number,
+  createNameLower: string
+) {
+  let best: (typeof calls)[number] | undefined;
+  for (const c of calls) {
+    if (!matchesCreateCallName(c.name.toLowerCase(), createNameLower)) continue;
+    if (c.range.line <= line) best = c;
+    else break;
+  }
+  return best;
+}
+
+function normalizeMenuTextForShortcut(textRaw: string): string {
+  const raw = textRaw.trim();
+  const tabConcat = /^(.*)\+\s*Chr\(\s*9\s*\)\s*\+\s*(.*)$/i.exec(raw);
+  if (tabConcat) {
+    const literal = unquoteString(tabConcat[1].trim());
+    if (literal !== undefined) {
+      return quotePbString(literal);
+    }
+  }
+
+  const literal = unquoteString(raw);
+  if (literal !== undefined) {
+    // A plain string literal has no embedded shortcut in PBF format;
+    // shortcuts are always expressed as "..." + Chr(9) + "..." (handled above).
+    return quotePbString(literal);
+  }
+
+  return raw;
+}
+
+function appendMenuShortcut(textRaw: string, shortcut: string | undefined): string {
+  if (shortcut === undefined || shortcut.length === 0) return textRaw;
+  const baseText = normalizeMenuTextForShortcut(textRaw);
+  return `${baseText} + Chr(9) + ${quotePbString(shortcut)}`;
+}
+
+function buildMenuEntryLine(args: MenuEntryArgs): string {
+  switch (args.kind) {
+    case MENU_ENTRY_KIND.MenuTitle:
+      return `MenuTitle(${(args.textRaw ?? "\"\"").trim()})`;
+    case MENU_ENTRY_KIND.MenuItem: {
+      const id = args.idRaw?.trim() || "0";
+      const text = appendMenuShortcut(args.textRaw ?? "\"\"", args.shortcut);
+      const icon = args.iconRaw;
+      return icon ? `MenuItem(${id}, ${text}, ${icon})` : `MenuItem(${id}, ${text})`;
+    }
+    case MENU_ENTRY_KIND.MenuBar:
+      return "MenuBar()";
+    case MENU_ENTRY_KIND.OpenSubMenu:
+      return `OpenSubMenu(${(args.textRaw ?? "\"\"").trim()})`;
+    case MENU_ENTRY_KIND.CloseSubMenu:
+      return "CloseSubMenu()";
+    default:
+      return "";
+  }
+}
+
+function cloneMenuEntry(entry: FormMenuEntry): FormMenuEntry {
+  return { ...entry };
+}
+
+function cloneToolBarEntry(entry: FormToolBarEntry): FormToolBarEntry {
+  return { ...entry };
+}
+
+function getGadgetGlobalVars(gadgets: Gadget[]): string[] {
+  return gadgets
+    .filter(gadget => gadget.pbAny)
+    .map(gadget => gadget.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getGadgetEnumSymbols(gadgets: Gadget[]): string[] {
+  return gadgets
+    .filter(gadget => !gadget.pbAny)
+    .map(gadget => gadget.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildGadgetGlobalBlock(gadgets: Gadget[]): string {
+  const globals = getGadgetGlobalVars(gadgets);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildGadgetEnumBlock(gadgets: Gadget[]): string {
+  const symbols = getGadgetEnumSymbols(gadgets);
+  if (!symbols.length) return "";
+  return `Enumeration FormGadget
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function collectMenuEnumSymbols(menus: FormMenu[], toolbars: FormToolBar[] = []): string[] {
+  const seen = new Set<string>();
+  const symbols: string[] = [];
+
+  for (const menu of menus) {
+    for (const entry of menu.entries) {
+      const idRaw = entry.idRaw?.trim();
+      if (!idRaw?.startsWith("#") || seen.has(idRaw)) continue;
+      seen.add(idRaw);
+      symbols.push(idRaw);
+    }
+  }
+
+  for (const toolBar of toolbars) {
+    for (const entry of toolBar.entries) {
+      if (!isToolBarButtonKind(entry.kind)) continue;
+      const idRaw = entry.idRaw?.trim();
+      if (!idRaw?.startsWith("#") || seen.has(idRaw)) continue;
+      seen.add(idRaw);
+      symbols.push(idRaw);
+    }
+  }
+
+  return symbols;
+}
+
+function buildMenuEnumBlock(symbols: string[]): string {
+  if (!symbols.length) return "";
+  return `Enumeration ${ENUM_NAMES.menus}
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function isNamedEnumerationLine(text: string, enumName: string): boolean {
+  return new RegExp(`^Enumeration\\s+${enumName}\\b`, "i").test(text.trim());
+}
+
+function findTopLevelEnumInsertLine(
+  document: vscode.TextDocument,
+  preferredEnumNames: readonly string[],
+  boundaryEnumNames: readonly string[]
+): number {
+  let lastBlock: LineBlock | undefined;
+
+  for (const enumName of preferredEnumNames) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) {
+      lastBlock = block;
+    }
+  }
+
+  if (lastBlock) {
+    return skipBlankLines(document, lastBlock.endLine + 1);
+  }
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const trimmed = text.trim();
+    if (boundaryEnumNames.some(enumName => isNamedEnumerationLine(trimmed, enumName))
+      || isCustomGadgetInitMarkerLine(text)
+      || isImageDecoderLine(text)
+      || /^LoadImage\s*\(/i.test(trimmed)
+      || /^CatchImage\s*\(/i.test(trimmed)
+      || /^LoadFont\s*\(/i.test(trimmed)
+      || isTopLevelHeadBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return document.lineCount;
+}
+
+function findMenuEnumInsertLine(document: vscode.TextDocument): number {
+  return findTopLevelEnumInsertLine(
+    document,
+    [ENUM_NAMES.windows, ENUM_NAMES.gadgets],
+    [ENUM_NAMES.images, ENUM_NAMES.fonts]
+  );
+}
+
+function applyMenuEnumPatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  symbols: string[]
+): void {
+  const menuEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.menus);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    menuEnumBlock ? expandBlockWithTrailingBlank(document, menuEnumBlock) : undefined,
+    findMenuEnumInsertLine(document),
+    buildMenuEnumBlock(symbols)
+  );
+}
+
+function buildToolBarImageButtonLine(args: ToolBarEntryArgs): string {
+  const id = args.idRaw?.trim() || "0";
+  const icon = args.iconRaw ?? "0";
+  const toggle = args.toggle ? ", #PB_ToolBar_Toggle" : "";
+  return `ToolBarImageButton(${id}, ${icon}${toggle})`;
+}
+
+function buildToolBarToolTipLine(toolBarId: string | undefined, args: ToolBarEntryArgs): string {
+  const id = args.idRaw?.trim() || "0";
+  const text = args.textRaw ?? "\"\"";
+  return toolBarId ? `ToolBarToolTip(${toolBarId.trim()}, ${id}, ${text})` : `ToolBarToolTip(${id}, ${text})`;
+}
+
+function buildToolBarEntryLines(args: ToolBarEntryArgs, toolBarId?: string): string[] {
+  switch (args.kind) {
+    case TOOLBAR_ENTRY_KIND.ToolBarStandardButton:
+      return [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton })];
+    case TOOLBAR_ENTRY_KIND.ToolBarButton: {
+      const lines = [buildToolBarImageButtonLine({ ...args, kind: TOOLBAR_ENTRY_KIND.ToolBarImageButton, toggle: false })];
+      const text = args.textRaw;
+      if (text?.length) {
+        lines.push(buildToolBarToolTipLine(toolBarId, {
+          kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+          idRaw: args.idRaw,
+          textRaw: text,
+        }));
+      }
+      return lines;
+    }
+    case TOOLBAR_ENTRY_KIND.ToolBarImageButton:
+      return [buildToolBarImageButtonLine(args)];
+    case TOOLBAR_ENTRY_KIND.ToolBarSeparator:
+      return ["ToolBarSeparator()"];
+    case TOOLBAR_ENTRY_KIND.ToolBarToolTip:
+      return [buildToolBarToolTipLine(toolBarId, args)];
+    default:
+      return [];
+  }
+}
+
+function buildToolBarEntryText(args: ToolBarEntryArgs, toolBarId: string | undefined, indent = ""): string {
+  return buildToolBarEntryLines(args, toolBarId)
+    .map(line => `${indent}${line}`)
+    .join("\n");
+}
+
+function buildToolBarEntryLine(args: ToolBarEntryArgs, toolBarId?: string): string {
+  return buildToolBarEntryText(args, toolBarId);
+}
+
+function isToolBarButtonKind(kind: ToolBarEntryKind): boolean {
+  return kind === TOOLBAR_ENTRY_KIND.ToolBarStandardButton
+    || kind === TOOLBAR_ENTRY_KIND.ToolBarButton
+    || kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton;
+}
+
+function getToolBarEntryIdFromCall(call: PbCall): string | undefined {
+  const params = splitParams(call.args);
+  return params[0]?.trim();
+}
+
+function findToolBarToolTipCall(
+  calls: PbCall[],
+  toolBarId: string,
+  entryIdRaw: string | undefined
+): PbCall | undefined {
+  const normalizedEntryId = entryIdRaw?.trim();
+  if (!normalizedEntryId?.length) return undefined;
+
+  return calls.find(call => {
+    if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
+    if (!isLineInCreateSection(calls, call.range.line, PB_CALL.createToolBar, toolBarId)) return false;
+
+    const parts = splitParams(call.args);
+    const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
+    return buttonIdRaw === normalizedEntryId;
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Helpers for window id / pbAny patching
+// -----------------------------------------------------------------------------
+
+type LineBlock = { startLine: number; endLine: number };
+
+function findNamedEnumerationBlock(document: vscode.TextDocument, enumName: string): LineBlock | undefined {
+  const startRe = new RegExp(`^\\s*Enumeration\\s+${enumName}\\b`, "i");
+  let startLine: number | undefined;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const t = document.lineAt(i).text;
+    if (startLine === undefined) {
+      if (startRe.test(t)) startLine = i;
+      continue;
+    }
+    if (/^\s*EndEnumeration\b/i.test(t)) {
+      return { startLine, endLine: i };
+    }
+  }
+  return undefined;
+}
+
+function findWindowGlobalInsertLine(document: vscode.TextDocument): number {
+  let firstGlobal = document.lineCount;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (firstGlobal === document.lineCount && /^\s*Global\b/i.test(line)) {
+      firstGlobal = i;
+    }
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
+      firstAnchor = i;
+    }
+  }
+
+  return firstGlobal !== document.lineCount ? firstGlobal : firstAnchor;
+}
+
+function ensureWindowGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
+  const re = new RegExp("^\\s*Global\\s+" + escapeRegExp(varName) + "(?:\\s|$)");
+  for (let i = 0; i < document.lineCount; i++) {
+    if (re.test(document.lineAt(i).text)) return;
+  }
+
+  const insertLine = findWindowGlobalInsertLine(document);
+  const block = `Global ${varName}\n\n`;
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), block);
+}
+
+function removeGlobalLine(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, varName: string) {
+  const re = new RegExp("^\\s*Global\\s+" + escapeRegExp(varName) + "(?:\\s|$)");
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i);
+    if (!re.test(line.text)) continue;
+
+    let end = line.rangeIncludingLineBreak.end;
+    if (i + 1 < document.lineCount && document.lineAt(i + 1).text.trim() === "") {
+      end = document.lineAt(i + 1).rangeIncludingLineBreak.end;
+    }
+
+    edit.delete(document.uri, new vscode.Range(line.range.start, end));
+  }
+}
+
+function findWindowEnumInsertLine(document: vscode.TextDocument): number {
+  return findTopLevelEnumInsertLine(
+    document,
+    [],
+    [ENUM_NAMES.gadgets, ENUM_NAMES.menus, ENUM_NAMES.images, ENUM_NAMES.fonts]
+  );
+}
+
+function ensureWindowEnumeration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, enumSymbol: string, enumValueRaw: string | undefined) {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
+  if (block) {
+    // Ensure the entry exists; if it exists, optionally update.
+    const current = applyWindowEnumValuePatch(document, enumSymbol, enumValueRaw);
+    if (current) {
+      // Merge edits by replaying them into the passed edit (WorkspaceEdit has no merge API).
+      // We'll just insert a replace into the same edit by re-running minimal logic here.
+      for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+        const line = document.lineAt(i).text;
+        const noComment = (line.split(";")[0] ?? "").trim();
+        const m = /^(#\w+)\b/.exec(noComment);
+        if (!m || m[1] !== enumSymbol) continue;
+        const indent = getLineIndent(document, i);
+        const newLine = enumValueRaw && enumValueRaw.trim().length
+          ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+          : `${indent}${enumSymbol}`;
+        edit.replace(document.uri, document.lineAt(i).range, newLine);
+        return;
+      }
+
+      const insertLine = block.endLine;
+      const indent = "  ";
+      const newLine = enumValueRaw && enumValueRaw.trim().length
+        ? `${indent}${enumSymbol}=${enumValueRaw.trim()}\n`
+        : `${indent}${enumSymbol}\n`;
+      edit.insert(document.uri, new vscode.Position(insertLine, 0), newLine);
+      return;
+    }
+    return;
+  }
+
+  const anchor = findWindowEnumInsertLine(document);
+
+  const entry = enumValueRaw && enumValueRaw.trim().length
+    ? `  ${enumSymbol}=${enumValueRaw.trim()}`
+    : `  ${enumSymbol}`;
+
+  const blockText = `Enumeration FormWindow\n${entry}\nEndEnumeration\n\n`;
+  edit.insert(document.uri, new vscode.Position(anchor, 0), blockText);
+}
+
+function findProcedureBlock(document: vscode.TextDocument, line: number): LineBlock | undefined {
+  let startLine: number | undefined;
+  for (let i = line; i >= 0; i--) {
+    const t = document.lineAt(i).text;
+    if (/^\s*EndProcedure\b/i.test(t)) break;
+    if (/^\s*Procedure\b/i.test(t)) {
+      startLine = i;
+      break;
+    }
+  }
+  if (startLine === undefined) return undefined;
+  for (let i = line; i < document.lineCount; i++) {
+    const t = document.lineAt(i).text;
+    if (/^\s*EndProcedure\b/i.test(t)) {
+      return { startLine, endLine: i };
+    }
+  }
+  return undefined;
+}
+
+function parseProcedureName(line: string): { name: string; nameStart: number; nameEnd: number } | undefined {
+  // Matches: Procedure xxx(...), Procedure.i xxx(...), Procedure.s xxx(...)
+  const m = /^\s*Procedure(?:\.\w+)?\s+([A-Za-z_]\w*)\s*\(/.exec(line);
+  if (!m) return undefined;
+
+  const name = m[1];
+  const idx = line.indexOf(name);
+  if (idx < 0) return undefined;
+
+  return { name, nameStart: idx, nameEnd: idx + name.length };
+}
+
+function findProcedureBlockByName(document: vscode.TextDocument, procName: string): LineBlock | undefined {
+  for (let i = 0; i < document.lineCount; i++) {
+    const parsed = parseProcedureName(document.lineAt(i).text);
+    if (!parsed || parsed.name !== procName) continue;
+    return findProcedureBlock(document, i);
+  }
+
+  return undefined;
+}
+
+function resolveWindowEventProcedureBlock(
+  document: vscode.TextDocument,
+  window: FormWindow,
+  openCallLine: number
+): { openProc: LineBlock; eventProc: LineBlock; usesSeparateEventProc: boolean } | undefined {
+  const openProc = findProcedureBlock(document, openCallLine);
+  if (!openProc) return undefined;
+
+  const eventProcName = `${window.variable}_Events`;
+  const separateProc = findProcedureBlockByName(document, eventProcName);
+  if (separateProc) {
+    return { openProc, eventProc: separateProc, usesSeparateEventProc: true };
+  }
+
+  return { openProc, eventProc: openProc, usesSeparateEventProc: false };
+}
+
+function replaceWordInRange(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  fromLine: number,
+  toLine: number,
+  oldWord: string,
+  newWord: string
+) {
+  const wordRe = new RegExp(`\\b${escapeRegExp(oldWord)}\\b`, "g");
+  for (let i = fromLine; i <= toLine; i++) {
+    const line = document.lineAt(i).text;
+    if (!wordRe.test(line)) continue;
+    const updated = line.replace(wordRe, newWord);
+    edit.replace(document.uri, document.lineAt(i).range, updated);
+  }
+}
+
+function toOpenProcName(windowName: string): string | undefined {
+  const base = windowName.trim().replace(/^#/, "");
+  if (!base.length) return undefined;
+
+  // PureBasic identifiers: keep it conservative
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(base)) return undefined;
+
+  return `Open${base}`;
+}
+
+function patchProcedureNameInBlock(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  proc: { startLine: number; endLine: number } | undefined,
+  oldProcName: string,
+  newProcName: string
+) {
+  if (!proc) return;
+  if (oldProcName === newProcName) return;
+
+  const headerLine = document.lineAt(proc.startLine);
+  const m = /^(\s*Procedure\s+)([A-Za-z_][A-Za-z0-9_]*)(\s*\()/.exec(headerLine.text);
+  if (!m) return;
+
+  if (m[2] !== oldProcName) return;
+
+  const rebuilt = `${m[1]}${newProcName}${m[3]}`;
+  edit.replace(document.uri, headerLine.range, headerLine.text.replace(/^(\s*Procedure\s+)([A-Za-z_][A-Za-z0-9_]*)(\s*\()/, rebuilt));
+}
+
+function patchProcedureCallsBestEffort(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  oldProcName: string,
+  newProcName: string,
+  scanRange?: ScanRange
+) {
+  if (oldProcName === newProcName) return;
+
+  // Prefer callScanner data when available; fallback would be raw regex, but we avoid that here.
+  const procedureHeaderRe = new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+${escapeRegExp(oldProcName)}\\s*\\(`, "i");
+  const procCalls = calls.filter(c => c.name === oldProcName);
+  for (const c of procCalls) {
+    if (procedureHeaderRe.test(document.lineAt(c.range.line).text)) continue;
+
+    // Replace only the name token (or the full assignment line), keep any leading control-flow code intact.
+    const indent = c.indent ?? getLineIndent(document, c.range.line);
+    const rebuiltCall = `${newProcName}(${c.args})`;
+    const updatedLine = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuiltCall}` : rebuiltCall;
+    const replaceStart = c.assignedVar ? c.range.lineStart : c.range.start;
+
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(replaceStart), document.positionAt(c.range.end)),
+      updatedLine
+    );
+  }
+}
+
+function replaceTokenGlobal(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  oldToken: string,
+  newToken: string
+) {
+  if (oldToken === newToken) return;
+
+  // Word boundary replacement, keeps things like OpenOldEx intact.
+  const re = new RegExp(`\\b${escapeRegExp(oldToken)}\\b`, "g");
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i);
+    if (!re.test(line.text)) continue;
+
+    const updated = line.text.replace(re, newToken);
+    if (updated !== line.text) {
+      edit.replace(document.uri, line.range, updated);
+    }
+  }
+}
+
+function windowBaseFromSymbol(sym: string): string {
+  return sym.trim().replace(/^#/, "");
+}
+
+function buildOpenProcName(base: string): string {
+  return `Open${base}`;
+}
+
+function buildEventsProcName(base: string): string {
+  return `${base}_Events`;
+}
+
+function buildResizeProcName(base: string): string {
+  return `ResizeGadgets${base}`;
+}
+
+function renameProcedureHeaderGlobal(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  oldProc: string,
+  newProc: string
+) {
+  if (oldProc === newProc) return;
+
+  const re = new RegExp(`^(\\s*Procedure(?:\\.\\w+)?\\s+)${escapeRegExp(oldProc)}(\\s*\\()`, "i");
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i);
+    if (!re.test(line.text)) continue;
+
+    const updated = line.text.replace(re, `$1${newProc}$2`);
+    edit.replace(document.uri, line.range, updated);
+  }
+}
+
+function renameCallsGlobalByScanner(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  oldName: string,
+  newName: string
+) {
+  if (oldName === newName) return;
+
+  const procedureHeaderRe = new RegExp(`^\\s*Procedure(?:\\.\\w+)?\\s+${escapeRegExp(oldName)}\\s*\\(`, "i");
+
+  for (const c of calls) {
+    if (c.name !== oldName) continue;
+    if (procedureHeaderRe.test(document.lineAt(c.range.line).text)) continue;
+
+    const rebuilt = `${newName}(${c.args})`;
+    const indent = c.indent ?? getLineIndent(document, c.range.line);
+    const updated = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuilt}` : `${indent}${rebuilt}`;
+
+    const replaceStart = c.assignedVar ? c.range.lineStart : c.range.start;
+
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(replaceStart), document.positionAt(c.range.end)),
+      updated
+    );
+  }
+}
+
+function replaceEnumSymbolGlobal(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  oldEnum: string,
+  newEnum: string
+) {
+  if (oldEnum === newEnum) return;
+
+  // Replace '#Old' as a token (avoid '#OldX'); allow punctuation after it.
+  const re = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(oldEnum)}(?![A-Za-z0-9_])`, "g");
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i);
+    if (!re.test(line.text)) continue;
+
+    const updated = line.text.replace(re, `$1${newEnum}`);
+    if (updated !== line.text) {
+      edit.replace(document.uri, line.range, updated);
+    }
+  }
+}
+
+function replaceCallArgsEdit(
+  document: vscode.TextDocument,
+  call: PbCall,
+  params: string[]
+): vscode.WorkspaceEdit {
+  const rebuilt = `${call.name}(${params.join(", ")})`;
+  const updated = call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : rebuilt;
+  const replaceStart = call.assignedVar ? call.range.lineStart : call.range.start;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(replaceStart), document.positionAt(call.range.end)),
+    updated
+  );
+  return edit;
+}
+
+export function applyMovePatch(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  x: number,
+  y: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
+  if (customGadget) {
+    const nextGadget: Gadget = { ...customGadget, x: Math.trunc(x), y: Math.trunc(y) };
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey);
+
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 3) return undefined;
+
+  params[1] = String(Math.trunc(x));
+  params[2] = String(Math.trunc(y));
+
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
+}
+
+export function applyRectPatch(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
+  if (customGadget) {
+    const nextGadget: Gadget = {
+      ...customGadget,
+      x: Math.trunc(x),
+      y: Math.trunc(y),
+      w: Math.trunc(w),
+      h: Math.trunc(h)
+    };
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey);
+
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  params[1] = String(Math.trunc(x));
+  params[2] = String(Math.trunc(y));
+  params[3] = String(Math.trunc(w));
+  params[4] = String(Math.trunc(h));
+
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
+}
+
+export type GadgetResizeRawArgs = {
+  xRaw: string;
+  yRaw: string;
+  wRaw: string;
+  hRaw: string;
+};
+
+export function applyResizeGadgetDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+  if (!call) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  return edit;
+}
+
+export function applyResizeGadgetRawUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetResizeRawArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  const xRaw = normalizeOptionalRaw(args.xRaw);
+  const yRaw = normalizeOptionalRaw(args.yRaw);
+  const wRaw = normalizeOptionalRaw(args.wRaw);
+  const hRaw = normalizeOptionalRaw(args.hRaw);
+  if (!xRaw || !yRaw || !wRaw || !hRaw) return undefined;
+
+  params[1] = xRaw;
+  params[2] = yRaw;
+  params[3] = wRaw;
+  params[4] = hRaw;
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
+export function applyWindowRectPatch(
+  document: vscode.TextDocument,
+  windowKey: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  // PureBasic Form Designer pattern:
+  //   Procedure OpenX(x=..., y=..., width=..., height=...)
+  //     OpenWindow(..., x, y, width, height, ...)
+  // In this case, patch the procedure defaults instead of hardcoding literals into OpenWindow().
+  const p1 = (params[1] ?? "").trim().toLowerCase();
+  const p2 = (params[2] ?? "").trim().toLowerCase();
+  const p3 = (params[3] ?? "").trim().toLowerCase();
+  const p4 = (params[4] ?? "").trim().toLowerCase();
+  const usesProcDefaults = p1 === "x" && p2 === "y" && p3 === "width" && p4 === "height";
+  if (usesProcDefaults) {
+    const procEdit = tryPatchProcedureDefaults(document, call.range.line, {
+      x: String(Math.trunc(x)),
+      y: String(Math.trunc(y)),
+      width: String(Math.trunc(w)),
+      height: String(Math.trunc(h))
+    });
+    if (procEdit) return procEdit;
+  }
+
+  params[1] = String(Math.trunc(x));
+  params[2] = String(Math.trunc(y));
+  params[3] = String(Math.trunc(w));
+  params[4] = String(Math.trunc(h));
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
+
+export function applyWindowOpenArgsUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowOpenArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+
+  if (!call) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 6) return undefined;
+
+  const hasLayoutUpdate = args.xRaw !== undefined || args.yRaw !== undefined || args.wRaw !== undefined || args.hRaw !== undefined;
+  if (hasLayoutUpdate) {
+    const xRaw = normalizeOptionalRaw(args.xRaw);
+    const yRaw = normalizeOptionalRaw(args.yRaw);
+    const wRaw = normalizeOptionalRaw(args.wRaw);
+    const hRaw = normalizeOptionalRaw(args.hRaw);
+
+    const p1 = (params[1] ?? "").trim().toLowerCase();
+    const p2 = (params[2] ?? "").trim().toLowerCase();
+    const p3 = (params[3] ?? "").trim().toLowerCase();
+    const p4 = (params[4] ?? "").trim().toLowerCase();
+    const usesProcDefaults = p1 === "x" && p2 === "y" && p3 === "width" && p4 === "height";
+
+    if (usesProcDefaults) {
+      const procUpdates: Record<string, string> = {};
+      if (args.xRaw !== undefined) {
+        if (!xRaw) return undefined;
+        procUpdates.x = xRaw;
+      }
+      if (args.yRaw !== undefined) {
+        if (!yRaw) return undefined;
+        procUpdates.y = yRaw;
+      }
+      if (args.wRaw !== undefined) {
+        if (!wRaw) return undefined;
+        procUpdates.width = wRaw;
+      }
+      if (args.hRaw !== undefined) {
+        if (!hRaw) return undefined;
+        procUpdates.height = hRaw;
+      }
+      return Object.keys(procUpdates).length ? tryPatchProcedureDefaults(document, call.range.line, procUpdates) : undefined;
+    }
+
+    if (args.xRaw !== undefined) {
+      if (!xRaw) return undefined;
+      params[1] = xRaw;
+    }
+    if (args.yRaw !== undefined) {
+      if (!yRaw) return undefined;
+      params[2] = yRaw;
+    }
+    if (args.wRaw !== undefined) {
+      if (!wRaw) return undefined;
+      params[3] = wRaw;
+    }
+    if (args.hRaw !== undefined) {
+      if (!hRaw) return undefined;
+      params[4] = hRaw;
+    }
+
+    return replaceCallArgsEdit(document, call, params);
+  }
+
+  const captionRaw = normalizeOptionalRaw(args.captionRaw) ?? (params[5]?.trim().length ? params[5].trim() : '""');
+  const parentRaw = normalizeOptionalRaw(args.parentRaw);
+  let flagsExpr = normalizeOptionalRaw(args.flagsExpr);
+
+  if (parentRaw && !flagsExpr) {
+    flagsExpr = "0";
+  }
+
+  params[5] = captionRaw;
+  params[6] = flagsExpr ?? "";
+  params[7] = parentRaw ?? "";
+
+  while (params.length > 6 && !(params[params.length - 1]?.trim().length)) {
+    params.pop();
+  }
+
+  return replaceCallArgsEdit(document, call, params);
+}
+
+type GadgetCtorLayout = {
+  minParamCount: number;
+  textIndex?: number;
+  imageIndex?: number;
+  minIndex?: number;
+  maxIndex?: number;
+  gadget1Index?: number;
+  gadget2Index?: number;
+  flagsIndex?: number;
+};
+
+function getGadgetCtorLayout(name: string): GadgetCtorLayout | undefined {
+  switch (name) {
+    case GADGET_KIND.ButtonGadget:
+    case GADGET_KIND.CheckBoxGadget:
+    case GADGET_KIND.ExplorerComboGadget:
+    case GADGET_KIND.ExplorerListGadget:
+    case GADGET_KIND.ExplorerTreeGadget:
+    case GADGET_KIND.FrameGadget:
+    case GADGET_KIND.StringGadget:
+    case GADGET_KIND.TextGadget:
+    case GADGET_KIND.WebGadget:
+      return { minParamCount: 6, textIndex: 5, flagsIndex: 6 };
+
+    case GADGET_KIND.ButtonImageGadget:
+    case GADGET_KIND.ImageGadget:
+      return { minParamCount: 6, imageIndex: 5, flagsIndex: 6 };
+
+    case GADGET_KIND.CalendarGadget:
+      return { minParamCount: 6, flagsIndex: 6 };
+
+    case GADGET_KIND.CanvasGadget:
+    case GADGET_KIND.ComboBoxGadget:
+    case GADGET_KIND.ContainerGadget:
+    case GADGET_KIND.EditorGadget:
+    case GADGET_KIND.ListViewGadget:
+    case GADGET_KIND.OpenGLGadget:
+    case GADGET_KIND.TreeGadget:
+    case GADGET_KIND.WebViewGadget:
+      return { minParamCount: 5, flagsIndex: 5 };
+
+    case GADGET_KIND.DateGadget:
+    case GADGET_KIND.HyperLinkGadget:
+    case GADGET_KIND.ListIconGadget:
+      return { minParamCount: 7, textIndex: 5, flagsIndex: 7 };
+
+    case GADGET_KIND.ProgressBarGadget:
+    case GADGET_KIND.SpinGadget:
+    case GADGET_KIND.TrackBarGadget:
+      return { minParamCount: 7, minIndex: 5, maxIndex: 6, flagsIndex: 7 };
+
+    case GADGET_KIND.ScrollBarGadget:
+    case GADGET_KIND.ScrollAreaGadget:
+      return { minParamCount: 8, minIndex: 5, maxIndex: 6, flagsIndex: 8 };
+
+    case GADGET_KIND.SplitterGadget:
+      return { minParamCount: 7, gadget1Index: 5, gadget2Index: 6, flagsIndex: 7 };
+
+    case GADGET_KIND.OptionGadget:
+      return { minParamCount: 6, textIndex: 5 };
+
+    default:
+      return undefined;
+  }
+}
+
+type GadgetInsertExtraArgs = {
+  gadget1Id?: string;
+  gadget2Id?: string;
+};
+
+type GadgetInsertDefaults = {
+  pbAny?: boolean;
+};
+
+type GadgetInsertArgs = {
+  kind: InsertableGadgetKind;
+  x: number;
+  y: number;
+  parentId?: string;
+  parentItem?: number;
+};
+
+type GadgetInsertAnchor = {
+  insertLine: number;
+  indent: string;
+};
+
+function buildGadgetListParentIds(gadgets: readonly Gadget[]): Set<string> {
+  const ids = new Set<string>();
+  for (const gadget of gadgets) {
+    if (canHostInsertedGadgets(gadget)) ids.add(gadget.id);
+  }
+  return ids;
+}
+
+function isImplicitGadgetListStarterCall(call: PbCall, gadgetListParentIds: ReadonlySet<string>): boolean {
+  if (!/gadget$/i.test(call.name)) return false;
+  const key = stableKey(call.assignedVar, splitParams(call.args));
+  return !!(key && gadgetListParentIds.has(key));
+}
+
+function isGadgetSectionCallName(nameLower: string): boolean {
+  return /gadget$/i.test(nameLower)
+    || nameLower === "closegadgetlist"
+    || nameLower === "opengadgetlist"
+    || nameLower === "addgadgetitem"
+    || nameLower === "addgadgetcolumn"
+    || nameLower === "resizegadget"
+    || GADGET_PROPERTY_NAMES.has(nameLower);
+}
+
+function buildInsertedGadgetStub(kind: InsertableGadgetKind, identity: ReturnType<typeof buildInsertedGadgetIdentity>): Gadget {
+  return {
+    id: identity.id,
+    kind,
+    pbAny: identity.pbAny,
+    variable: identity.variable,
+    firstParam: identity.firstParam,
+    parentId: undefined,
+    parentItem: undefined,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+  };
+}
+
+function buildInsertedGadgetBlock(
+  args: GadgetInsertArgs,
+  identity: ReturnType<typeof buildInsertedGadgetIdentity>,
+  indent: string,
+  extraArgs?: GadgetInsertExtraArgs
+): string | undefined {
+  const x = String(Math.trunc(args.x));
+  const y = String(Math.trunc(args.y));
+  const w = "100";
+  const h = "25";
+  const idRaw = identity.idRaw;
+  const prefix = identity.assignedVar ? `${indent}${identity.assignedVar} = ` : indent;
+  const callbackRaw = `@Callback_${identity.name}()`;
+
+  switch (args.kind) {
+    case GADGET_KIND.ButtonGadget:
+      return `${prefix}ButtonGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.ButtonImageGadget:
+      return `${prefix}ButtonImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case GADGET_KIND.StringGadget:
+      return `${prefix}StringGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.TextGadget:
+      return `${prefix}TextGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.CheckBoxGadget:
+      return `${prefix}CheckBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.OptionGadget:
+      return `${prefix}OptionGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.FrameGadget:
+      return `${prefix}FrameGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.ComboBoxGadget:
+      return `${prefix}ComboBoxGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.ListViewGadget:
+      return `${prefix}ListViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.ListIconGadget:
+      return `${prefix}ListIconGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "Column 1", 100)
+`;
+    case GADGET_KIND.TreeGadget:
+      return `${prefix}TreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.EditorGadget:
+      return `${prefix}EditorGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.SpinGadget:
+      return `${prefix}SpinGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case GADGET_KIND.TrackBarGadget:
+      return `${prefix}TrackBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case GADGET_KIND.ProgressBarGadget:
+      return `${prefix}ProgressBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0)
+`;
+    case GADGET_KIND.ImageGadget:
+      return `${prefix}ImageGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case GADGET_KIND.HyperLinkGadget:
+      return `${prefix}HyperLinkGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
+`;
+    case GADGET_KIND.CalendarGadget:
+      return `${prefix}CalendarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0)
+`;
+    case GADGET_KIND.DateGadget:
+      return `${prefix}DateGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "", 0)
+`;
+    case GADGET_KIND.ContainerGadget:
+      return `${prefix}ContainerGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+${indent}CloseGadgetList()
+`;
+    case GADGET_KIND.PanelGadget:
+      return `${prefix}PanelGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+${indent}AddGadgetItem(${identity.id}, -1, "Tab 1")
+${indent}CloseGadgetList()
+`;
+    case GADGET_KIND.ScrollAreaGadget:
+      return `${prefix}ScrollAreaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 300, 225, 1)
+${indent}CloseGadgetList()
+`;
+    case GADGET_KIND.SplitterGadget: {
+      const gadget1Raw = extraArgs?.gadget1Id?.trim();
+      const gadget2Raw = extraArgs?.gadget2Id?.trim();
+      if (!gadget1Raw || !gadget2Raw || gadget1Raw === gadget2Raw) return undefined;
+      return `${prefix}SplitterGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${gadget1Raw}, ${gadget2Raw})
+${indent}SetGadgetState(${identity.id}, 12)
+`;
+    }
+    case GADGET_KIND.WebViewGadget:
+      return `${prefix}WebViewGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.WebGadget:
+      return `${prefix}WebGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.OpenGLGadget:
+      return `${prefix}OpenGLGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.CanvasGadget:
+      return `${prefix}CanvasGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.ExplorerTreeGadget:
+      return `${prefix}ExplorerTreeGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.ExplorerListGadget:
+      return `${prefix}ExplorerListGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.ExplorerComboGadget:
+      return `${prefix}ExplorerComboGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, "")
+`;
+    case GADGET_KIND.IPAddressGadget:
+      return `${prefix}IPAddressGadget(${idRaw}, ${x}, ${y}, ${w}, ${h})
+`;
+    case GADGET_KIND.ScrollBarGadget:
+      return `${prefix}ScrollBarGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, 0, 0, 0)
+`;
+    case GADGET_KIND.ScintillaGadget:
+      return `${prefix}ScintillaGadget(${idRaw}, ${x}, ${y}, ${w}, ${h}, ${callbackRaw})
+`;
+  }
+}
+
+function applyGadgetHeadPatchForGadgets(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  gadgets: Gadget[]
+): void {
+  const gadgetGlobalBlock = findGadgetGlobalBlock(document, gadgets);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetGlobalBlock,
+    findGadgetGlobalInsertLine(document),
+    buildGadgetGlobalBlock(gadgets)
+  );
+
+  const gadgetEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    gadgetEnumBlock ? expandBlockWithTrailingBlank(document, gadgetEnumBlock) : undefined,
+    findGadgetEnumInsertLine(document),
+    buildGadgetEnumBlock(gadgets)
+  );
+}
+
+function findTopLevelGadgetInsertAnchor(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  openCall: PbCall,
+  proc: LineBlock
+): GadgetInsertAnchor {
+  const relevant = calls.filter(call => call.range.line >= openCall.range.line && call.range.line <= proc.endLine)
+    .filter(call => isGadgetSectionCallName(call.name.toLowerCase()));
+  const baseLine = relevant.length ? relevant[relevant.length - 1].range.line : openCall.range.line;
+  return {
+    insertLine: baseLine + 1,
+    indent: getLineIndent(document, baseLine),
+  };
+}
+
+function findChildSectionInsertAnchor(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  proc: LineBlock,
+  parent: Gadget,
+  gadgetListParentIds: ReadonlySet<string>,
+  parentItem?: number
+): GadgetInsertAnchor | undefined {
+  const parentId = parent.id;
+  const parentCreate = findCallByStableKey(calls, parentId, name => /gadget$/i.test(name));
+  if (!parentCreate) return undefined;
+
+  if (parent.kind === GADGET_KIND.PanelGadget) {
+    const targetItem = typeof parentItem === "number" ? parentItem : 0;
+    let depth = 1;
+    let panelItemIndex = -1;
+    for (const call of calls) {
+      if (call.range.line <= parentCreate.range.line) continue;
+      if (call.range.line > proc.endLine) break;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower === "closegadgetlist") {
+        depth -= 1;
+        if (depth === 0) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+        continue;
+      }
+      if (depth === 1 && nameLower === "addgadgetitem" && firstParamOfCall(call.args) === parentId) {
+        panelItemIndex += 1;
+        if (panelItemIndex > targetItem) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+      }
+      if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
+        depth += 1;
+      }
+    }
+    return undefined;
+  }
+
+  if (canHostInsertedGadgets(parent)) {
+    let depth = 1;
+    for (const call of calls) {
+      if (call.range.line <= parentCreate.range.line) continue;
+      if (call.range.line > proc.endLine) break;
+      const nameLower = call.name.toLowerCase();
+      if (nameLower === "closegadgetlist") {
+        depth -= 1;
+        if (depth === 0) {
+          return { insertLine: call.range.line, indent: getLineIndent(document, call.range.line) };
+        }
+        continue;
+      }
+      if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
+        depth += 1;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+export function applyGadgetInsert(
+  document: vscode.TextDocument,
+  kind: string,
+  x: number,
+  y: number,
+  parentId?: string,
+  parentItem?: number,
+  scanRange?: ScanRange,
+  extraArgs?: GadgetInsertExtraArgs,
+  insertDefaults?: GadgetInsertDefaults
+): vscode.WorkspaceEdit | undefined {
+  if (!isInsertableGadgetKind(kind)) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const windowKey = parsed.window?.id;
+  if (!windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  let splitterSourceGadget1: Gadget | undefined;
+  let splitterSourceGadget2: Gadget | undefined;
+  let splitterSourceParentId: string | undefined;
+  let splitterSourceParentItem: number | undefined;
+
+  if (kind === GADGET_KIND.SplitterGadget) {
+    const gadget1 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget1Id);
+    const gadget2 = parsed.gadgets.find(entry => entry.id === extraArgs?.gadget2Id);
+    if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) return undefined;
+    if (gadget1.splitterId || gadget2.splitterId) return undefined;
+    const sourceParentId = gadget1.parentId;
+    const sourceParentItem = gadget1.parentItem;
+    if (sourceParentId !== gadget2.parentId || sourceParentItem !== gadget2.parentItem) return undefined;
+    splitterSourceGadget1 = gadget1;
+    splitterSourceGadget2 = gadget2;
+    splitterSourceParentId = sourceParentId;
+    splitterSourceParentItem = sourceParentItem;
+  }
+
+  const pbAny = shouldInsertGadgetAsPbAny(parsed.gadgets, insertDefaults?.pbAny);
+  const identity = buildInsertedGadgetIdentity(kind, parsed.gadgets, pbAny);
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const anchor = parentId
+    ? (() => {
+        const parent = parsed.gadgets.find(entry => entry.id === parentId);
+        if (!parent || !canHostInsertedGadgets(parent)) return undefined;
+        return findChildSectionInsertAnchor(document, calls, proc, parent, gadgetListParentIds, parentItem);
+      })()
+    : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
+  if (!anchor) return undefined;
+
+  const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent, extraArgs);
+  if (!block) return undefined;
+  const edit = new vscode.WorkspaceEdit();
+  const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
+
+  if (kind === GADGET_KIND.SplitterGadget && splitterSourceGadget1 && splitterSourceGadget2) {
+    const targetParentId = parentId ?? undefined;
+    const targetParentItem = parentItem ?? undefined;
+    const needsReparentMove = targetParentId !== splitterSourceParentId || targetParentItem !== splitterSourceParentItem;
+
+    if (needsReparentMove) {
+      const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+      const movedBlocks: string[] = [];
+      const deletedLines = new Set<number>();
+
+      for (const rootId of [splitterSourceGadget1.id, splitterSourceGadget2.id]) {
+        const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, rootId);
+        const lineNumbers = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
+        if (!lineNumbers.size) return undefined;
+        movedBlocks.push(buildLineBlock(document, lineNumbers));
+        for (const line of lineNumbers) {
+          deletedLines.add(line);
+        }
+      }
+
+      edit.insert(document.uri, anchorPos, `${movedBlocks.join("")}${block}`);
+      for (const line of [...deletedLines].sort((a, b) => b - a)) {
+        edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+      }
+    }
+    else {
+      edit.insert(document.uri, anchorPos, block);
+    }
+  }
+  else {
+    edit.insert(document.uri, anchorPos, block);
+  }
+
+  applyGadgetHeadPatchForGadgets(edit, document, [...parsed.gadgets, buildInsertedGadgetStub(kind, identity)]);
+  return edit;
+}
+
+function collectDeletedContainerCloseLines(
+  calls: PbCall[],
+  deletedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
+  const lines = new Set<number>();
+  const stack: string[] = [];
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+
+    if (nameLower === "opengadgetlist") {
+      const targetId = firstParamOfCall(call.args);
+      if (targetId.length) stack.push(targetId);
+      continue;
+    }
+
+    if (isImplicitGadgetListStarterCall(call, gadgetListParentIds)) {
+      const key = stableKey(call.assignedVar, splitParams(call.args));
+      if (key) stack.push(key);
+      continue;
+    }
+
+    if (nameLower === "closegadgetlist") {
+      const targetId = stack.pop();
+      if (targetId && deletedIds.has(targetId)) {
+        lines.add(call.range.line);
+      }
+    }
+  }
+
+  return lines;
+}
+
+function collectDeletedGadgetLineNumbers(
+  calls: PbCall[],
+  deletedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
+  const lines = new Set<number>();
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    let targetId: string | undefined;
+
+    if (/gadget$/i.test(call.name)) {
+      targetId = stableKey(call.assignedVar, splitParams(call.args));
+    }
+    else if (
+      nameLower === "addgadgetitem"
+      || nameLower === "addgadgetcolumn"
+      || nameLower === "resizegadget"
+      || nameLower === "opengadgetlist"
+      || GADGET_PROPERTY_NAMES.has(nameLower)
+    ) {
+      targetId = firstParamOfCall(call.args);
+    }
+
+    if (targetId && deletedIds.has(targetId)) {
+      lines.add(call.range.line);
+    }
+  }
+
+  for (const line of collectDeletedContainerCloseLines(calls, deletedIds, gadgetListParentIds)) {
+    lines.add(line);
+  }
+
+  return lines;
+}
+
+function collectDeletedCustomGadgetLineNumbers(
+  document: vscode.TextDocument,
+  deletedGadgets: readonly Gadget[]
+): Set<number> {
+  const lines = new Set<number>();
+
+  for (const gadget of deletedGadgets) {
+    if (gadget.kind !== GADGET_KIND.CustomGadget) continue;
+
+    if (typeof gadget.source?.line === "number") {
+      lines.add(gadget.source.line);
+    }
+
+    if (typeof gadget.customCreateMarkerSource?.line === "number") {
+      lines.add(gadget.customCreateMarkerSource.line);
+    }
+
+    if (typeof gadget.customInitSource?.line === "number") {
+      lines.add(gadget.customInitSource.line);
+
+      const markerLine = gadget.customInitSource.line - 1;
+      if (markerLine >= 0 && isCustomGadgetInitMarkerLine(document.lineAt(markerLine).text)) {
+        lines.add(markerLine);
+      }
+    }
+  }
+
+  return lines;
+}
+
+function collectMovedGadgetLineNumbers(
+  calls: PbCall[],
+  movedIds: ReadonlySet<string>,
+  gadgetListParentIds: ReadonlySet<string>
+): Set<number> {
+  const lines = new Set<number>();
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    let targetId: string | undefined;
+
+    if (/gadget$/i.test(call.name)) {
+      targetId = stableKey(call.assignedVar, splitParams(call.args));
+    }
+    else if (
+      nameLower === "addgadgetitem"
+      || nameLower === "addgadgetcolumn"
+      || nameLower === "opengadgetlist"
+      || nameLower === "resizegadget"
+      || GADGET_PROPERTY_NAMES.has(nameLower)
+    ) {
+      targetId = firstParamOfCall(call.args);
+    }
+
+    if (targetId && movedIds.has(targetId)) {
+      lines.add(call.range.line);
+    }
+  }
+
+  for (const line of collectDeletedContainerCloseLines(calls, movedIds, gadgetListParentIds)) {
+    lines.add(line);
+  }
+
+  return lines;
+}
+
+function buildLineBlock(document: vscode.TextDocument, lineNumbers: ReadonlySet<number>): string {
+  const text = document.getText();
+  return [...lineNumbers]
+    .sort((a, b) => a - b)
+    .map(line => {
+      const lineInfo = document.lineAt(line);
+      const start = document.offsetAt(lineInfo.range.start);
+      const end = document.offsetAt(lineInfo.rangeIncludingLineBreak.end);
+      return text.slice(start, end);
+    })
+    .join("");
+}
+
+function buildUpdatedCallText(call: PbCall, params: string[]): string {
+  const rebuilt = `${call.name}(${params.join(", ")})`;
+  return call.assignedVar ? `${call.indent ?? ""}${call.assignedVar} = ${rebuilt}` : `${call.indent ?? ""}${rebuilt}`;
+}
+
+function buildLineBlockWithReplacements(
+  document: vscode.TextDocument,
+  lineNumbers: ReadonlySet<number>,
+  replacements: ReadonlyMap<number, string>
+): string {
+  const text = document.getText();
+  return [...lineNumbers]
+    .sort((a, b) => a - b)
+    .map(line => {
+      const replacement = replacements.get(line);
+      if (replacement !== undefined) {
+        const lineInfo = document.lineAt(line);
+        const hasBreak = lineInfo.rangeIncludingLineBreak.end.character !== lineInfo.range.end.character
+          || lineInfo.rangeIncludingLineBreak.end.line !== lineInfo.range.end.line;
+        return hasBreak ? `${replacement}\n` : replacement;
+      }
+
+      const lineInfo = document.lineAt(line);
+      const start = document.offsetAt(lineInfo.range.start);
+      const end = document.offsetAt(lineInfo.rangeIncludingLineBreak.end);
+      return text.slice(start, end);
+    })
+    .join("");
+}
+
+function buildReparentedRootGadgetLine(call: PbCall): string | undefined {
+  const params = splitParams(call.args);
+  if (params.length < 3) return undefined;
+  params[1] = "0";
+  params[2] = "0";
+  return buildUpdatedCallText(call, params);
+}
+
+export function applyGadgetReparent(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  parentId?: string,
+  parentItem?: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
+  if (!target?.source) return undefined;
+  if (target.kind === GADGET_KIND.CustomGadget) return undefined;
+
+  const nextParentId = parentId ?? undefined;
+  const nextParentItem = typeof parentItem === "number" ? Math.trunc(parentItem) : undefined;
+  const currentParentId = target.parentId ?? undefined;
+  const currentParentItem = typeof target.parentItem === "number" ? target.parentItem : undefined;
+
+  if (currentParentId === nextParentId && currentParentItem === nextParentItem) {
+    return undefined;
+  }
+
+  const windowKey = parsed.window?.id;
+  if (!windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const requestedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadgetKey);
+  const movedRootIds = [target.id];
+
+  let splitterGadget1: Gadget | undefined;
+  let splitterGadget2: Gadget | undefined;
+  if (target.kind === GADGET_KIND.SplitterGadget) {
+    splitterGadget1 = target.gadget1Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget1Id) : undefined;
+    splitterGadget2 = target.gadget2Id ? parsed.gadgets.find(gadget => gadget.id === target.gadget2Id) : undefined;
+    if (!splitterGadget1 || !splitterGadget2) return undefined;
+    movedRootIds.unshift(splitterGadget1.id, splitterGadget2.id);
+  }
+
+  const blockedTargetIds = new Set<string>(requestedIds);
+  for (const rootId of movedRootIds) {
+    for (const movedId of collectRequestedGadgetDeleteIds(parsed.gadgets, rootId)) {
+      blockedTargetIds.add(movedId);
+    }
+  }
+
+  if (nextParentId && blockedTargetIds.has(nextParentId)) {
+    return undefined;
+  }
+
+  const anchor = nextParentId
+    ? (() => {
+        const parent = parsed.gadgets.find(entry => entry.id === nextParentId);
+        if (!parent || !canHostInsertedGadgets(parent)) return undefined;
+        return findChildSectionInsertAnchor(document, calls, proc, parent, gadgetListParentIds, nextParentItem);
+      })()
+    : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
+  if (!anchor) return undefined;
+
+  const rootCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  if (!rootCall) return undefined;
+
+  const updatedRootLine = buildReparentedRootGadgetLine(rootCall);
+  if (!updatedRootLine) return undefined;
+
+  const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);
+  const edit = new vscode.WorkspaceEdit();
+  const movedBlocks: string[] = [];
+  const deletedLines = new Set<number>();
+
+  if (target.kind === GADGET_KIND.SplitterGadget) {
+    for (const gadget of [splitterGadget1!, splitterGadget2!]) {
+      const movedIds = collectRequestedGadgetDeleteIds(parsed.gadgets, gadget.id);
+      const movedLines = collectMovedGadgetLineNumbers(calls, movedIds, gadgetListParentIds);
+      if (!movedLines.size) return undefined;
+      movedBlocks.push(buildLineBlock(document, movedLines));
+      for (const line of movedLines) {
+        deletedLines.add(line);
+      }
+    }
+  }
+
+  const movedLines = collectMovedGadgetLineNumbers(calls, requestedIds, gadgetListParentIds);
+  if (!movedLines.size) return undefined;
+  movedBlocks.push(buildLineBlockWithReplacements(
+    document,
+    movedLines,
+    new Map([[rootCall.range.line, updatedRootLine]])
+  ));
+  for (const line of movedLines) {
+    deletedLines.add(line);
+  }
+
+  edit.insert(document.uri, anchorPos, movedBlocks.join(""));
+  for (const line of [...deletedLines].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  return edit;
+}
+
+export function applyGadgetDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const target = parsed.gadgets.find(gadget => gadget.id === gadgetKey);
+  if (!target?.source) return undefined;
+
+  const deletePlan = buildOriginalGadgetDeletePlan(parsed.gadgets, gadgetKey);
+  const deletedGadgets = parsed.gadgets.filter(gadget => deletePlan.deletedIds.has(gadget.id));
+  if (!deletedGadgets.length) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const gadgetListParentIds = buildGadgetListParentIds(parsed.gadgets);
+  const lineNumbers = collectDeletedGadgetLineNumbers(calls, deletePlan.deletedIds, gadgetListParentIds);
+  for (const line of collectDeletedCustomGadgetLineNumbers(document, deletedGadgets)) {
+    lineNumbers.add(line);
+  }
+  if (!lineNumbers.size) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (const line of [...lineNumbers].sort((a, b) => b - a)) {
+    edit.delete(document.uri, document.lineAt(line).rangeIncludingLineBreak);
+  }
+
+  for (const gadget of deletedGadgets) {
+    if (!gadget.eventProc) continue;
+    appendWorkspaceEdit(edit, applyGadgetEventProcUpdate(document, gadget.id, undefined, scanRange));
+  }
+
+  const remainingGadgets = parsed.gadgets.filter(gadget => !deletePlan.deletedIds.has(gadget.id));
+  applyGadgetHeadPatchForGadgets(edit, document, remainingGadgets);
+  return edit;
+}
+
+function buildCustomGadgetIdRaw(gadget: Gadget): string {
+  if (gadget.pbAny) {
+    return gadget.variable?.trim() || gadget.id;
+  }
+  return gadget.firstParam?.trim() || gadget.id;
+}
+
+function buildCustomGadgetTextReplacement(gadget: Gadget): string {
+  const textRaw = normalizeOptionalRaw(gadget.textRaw);
+  if (textRaw) return textRaw;
+  if (typeof gadget.text === "string") return quotePbString(gadget.text);
+  return '""';
+}
+
+function buildCustomGadgetCreationLine(gadget: Gadget, indent: string): string | undefined {
+  const templateRaw = normalizeOptionalGridString(gadget.customCreateRaw);
+  if (!templateRaw) return undefined;
+
+  const idRaw = buildCustomGadgetIdRaw(gadget);
+  const replacements: Record<string, string> = {
+    "%id%": idRaw,
+    "%x%": String(Math.trunc(gadget.x)),
+    "%y%": String(Math.trunc(gadget.y)),
+    "%w%": String(Math.trunc(gadget.w)),
+    "%h%": String(Math.trunc(gadget.h)),
+    "%txt%": buildCustomGadgetTextReplacement(gadget),
+    "%hwnd%": idRaw
+  };
+
+  let line = templateRaw;
+  for (const [token, value] of Object.entries(replacements)) {
+    line = line.split(token).join(value);
+  }
+
+  return `${indent}${line}`;
+}
+
+function applyCustomGadgetCreationLineEdit(
+  document: vscode.TextDocument,
+  gadget: Gadget
+): vscode.WorkspaceEdit | undefined {
+  if (!gadget.source) return undefined;
+
+  const line = gadget.source.line;
+  if (line < 0 || line >= document.lineCount) return undefined;
+
+  const rebuilt = buildCustomGadgetCreationLine(gadget, getLineIndent(document, line));
+  if (!rebuilt) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(line).range, rebuilt);
+  return edit;
+}
+
+function setRequiredCtorParam(params: string[], index: number | undefined, raw: string | undefined): void {
+  if (index === undefined || raw === undefined) return;
+  const normalized = normalizeOptionalRaw(raw);
+  if (!normalized) return;
+  while (params.length <= index) params.push("");
+  params[index] = normalized;
+}
+
+function setOptionalCtorParam(params: string[], index: number | undefined, raw: string | undefined): void {
+  if (index === undefined) return;
+  while (params.length <= index) params.push("");
+  params[index] = normalizeOptionalRaw(raw) ?? "";
+}
+
+export function applyGadgetOpenArgsUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetOpenArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
+  if (customGadget) {
+    const nextGadget: Gadget = { ...customGadget };
+    if (args.textRaw !== undefined) {
+      const nextTextRaw = normalizeOptionalRaw(args.textRaw) ?? '""';
+      const literalText = unquoteString(nextTextRaw);
+      nextGadget.textRaw = nextTextRaw;
+      nextGadget.text = literalText ?? nextTextRaw;
+      nextGadget.textVariable = literalText === undefined && nextTextRaw.length > 0;
+    }
+    return applyCustomGadgetCreationLineEdit(document, nextGadget);
+  }
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+
+  if (!call) return undefined;
+
+  const layout = getGadgetCtorLayout(call.name);
+  if (!layout) return undefined;
+
+  const params = splitParams(call.args);
+  if (params.length < 5) return undefined;
+
+  setRequiredCtorParam(params, layout.textIndex, args.textRaw);
+  setRequiredCtorParam(params, layout.imageIndex, args.imageRaw);
+  setRequiredCtorParam(params, layout.minIndex, args.minRaw);
+  setRequiredCtorParam(params, layout.maxIndex, args.maxRaw);
+  setRequiredCtorParam(params, layout.gadget1Index, args.gadget1Raw);
+  setRequiredCtorParam(params, layout.gadget2Index, args.gadget2Raw);
+  if (args.flagsExpr !== undefined) {
+    setOptionalCtorParam(params, layout.flagsIndex, args.flagsExpr);
+  }
+
+  while (params.length > layout.minParamCount && !(params[params.length - 1]?.trim().length)) {
+    params.pop();
+  }
+
+  const edit = replaceCallArgsEdit(document, call, params);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
+}
+
+export function applyCustomGadgetCodeUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: CustomGadgetCodeArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
+  if (!gadget) return undefined;
+
+  const nextGadget: Gadget = { ...gadget };
+  if (args.customInitRaw !== undefined) {
+    nextGadget.customInitRaw = normalizeOptionalGridString(args.customInitRaw);
+  }
+  if (args.customCreateRaw !== undefined) {
+    nextGadget.customCreateRaw = normalizeOptionalGridString(args.customCreateRaw);
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  let changed = false;
+
+  if (args.customInitRaw !== undefined) {
+    if (gadget.customInitSource) {
+      const markerLine = gadget.customInitSource.line - 1;
+      const hasMarker = markerLine >= 0 && /^\s*;\s*\d+\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i.test(document.lineAt(markerLine).text);
+      if (!nextGadget.customInitRaw) {
+        if (hasMarker) {
+          edit.delete(document.uri, document.lineAt(markerLine).rangeIncludingLineBreak);
+        }
+        edit.delete(document.uri, document.lineAt(gadget.customInitSource.line).rangeIncludingLineBreak);
+        changed = true;
+      } else {
+        const indent = getLineIndent(document, gadget.customInitSource.line);
+        edit.replace(document.uri, document.lineAt(gadget.customInitSource.line).range, `${indent}${nextGadget.customInitRaw}`);
+        changed = true;
+      }
+    } else if (nextGadget.customInitRaw) {
+      return undefined;
+    }
+  }
+
+  if (args.customCreateRaw !== undefined) {
+    if (!gadget.customCreateMarkerSource || !gadget.source || !nextGadget.customCreateRaw) {
+      return undefined;
+    }
+
+    const markerLine = gadget.customCreateMarkerSource.line;
+    const markerText = document.lineAt(markerLine).text;
+    const markerMatch = /^(\s*);\s*(\d+)\s+Custom gadget creation \(do not remove this line\)\s*(.*)$/i.exec(markerText);
+    if (!markerMatch) return undefined;
+
+    const markerIndent = markerMatch[1] ?? "";
+    const markerIndex = markerMatch[2];
+    edit.replace(
+      document.uri,
+      document.lineAt(markerLine).range,
+      `${markerIndent}; ${markerIndex} Custom gadget creation (do not remove this line) ${nextGadget.customCreateRaw}`
+    );
+
+    const rebuiltLine = buildCustomGadgetCreationLine(nextGadget, getLineIndent(document, gadget.source.line));
+    if (!rebuiltLine) return undefined;
+    edit.replace(document.uri, document.lineAt(gadget.source.line).range, rebuiltLine);
+    changed = true;
+  }
+
+  return changed ? edit : undefined;
+}
+
+export function applyWindowPbAnyToggle(
+  document: vscode.TextDocument,
+  windowKey: string,
+  toPbAny: boolean,
+  variableName: string,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const openWin = calls.find(c => {
+    if (c.name !== "OpenWindow") return false;
+    const params = splitParams(c.args);
+    return stableKey(c.assignedVar, params) === windowKey;
+  });
+  if (!openWin) return undefined;
+
+  const openParams = splitParams(openWin.args);
+  if (openParams.length < 6) return undefined;
+
+  const isFirstParamPbAny = (openParams[0] ?? "").trim() === PB_ANY;
+
+  const edit = new vscode.WorkspaceEdit();
+
+  // Locate the surrounding procedure block (used for consistent global/enum placement + optional id replacements).
+  const proc = findProcedureBlock(document, openWin.range.line);
+
+  if (toPbAny) {
+    // 1) Remove Enumeration FormWindow block.
+    const enumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
+    if (enumBlock) {
+      const expandedBlock = expandBlockWithTrailingBlank(document, enumBlock);
+      edit.delete(
+        document.uri,
+        new vscode.Range(
+          new vscode.Position(expandedBlock.startLine, 0),
+          document.lineAt(expandedBlock.endLine).rangeIncludingLineBreak.end
+        )
+      );
+    }
+
+    // 2) Ensure Global variable exists.
+    ensureWindowGlobalLine(edit, document, variableName);
+
+    // 3) Rewrite OpenWindow line to "Var = OpenWindow(#PB_Any, ...)".
+    openParams[0] = PB_ANY;
+    const rebuilt = `OpenWindow(${openParams.join(", ")})`;
+    const indent = openWin.indent ?? getLineIndent(document, openWin.range.line);
+    const updated = `${indent}${variableName} = ${rebuilt}`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(openWin.range.lineStart), document.positionAt(openWin.range.end)),
+      updated
+    );
+
+    // 4) Best-effort: replace enumSymbol usage in first-call-arg within the procedure to variableName.
+    if (proc) {
+      const inProc = calls.filter(c => c.range.line >= proc.startLine && c.range.line <= proc.endLine);
+      for (const c of inProc) {
+        if (c.name === "OpenWindow") continue;
+        const p = splitParams(c.args);
+        if (!p.length) continue;
+        if ((p[0] ?? "").trim() !== enumSymbol) continue;
+        p[0] = variableName;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const indent = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuiltCall}` : `${indent}${rebuiltCall}`;
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    return edit;
+  }
+
+  // toPbAny == false
+  // 1) Remove Global variable.
+  removeGlobalLine(edit, document, variableName);
+
+  // 2) Ensure Enumeration FormWindow block exists and has enumSymbol.
+  ensureWindowEnumeration(edit, document, enumSymbol, enumValueRaw);
+
+  // 3) Rewrite OpenWindow line to "OpenWindow(#Dlg, ...)" without assignment.
+  openParams[0] = enumSymbol;
+  const rebuilt = `OpenWindow(${openParams.join(", ")})`;
+  const indent = openWin.indent ?? getLineIndent(document, openWin.range.line);
+  const updated = `${indent}${rebuilt}`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(openWin.range.lineStart), document.positionAt(openWin.range.end)),
+    updated
+  );
+
+  // 4) Best-effort: replace variableName usage in first-call-arg within the procedure to enumSymbol.
+  if (proc) {
+    const inProc = calls.filter(c => c.range.line >= proc.startLine && c.range.line <= proc.endLine);
+    for (const c of inProc) {
+      if (c.name === "OpenWindow") continue;
+      const p = splitParams(c.args);
+      if (!p.length) continue;
+      if ((p[0] ?? "").trim() !== variableName) continue;
+      p[0] = enumSymbol;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const indent = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar ? `${indent}${c.assignedVar} = ${rebuiltCall}` : `${indent}${rebuiltCall}`;
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  return edit;
+}
+
+export function applyWindowEnumValuePatch(
+  document: vscode.TextDocument,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
+  if (!block) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  // Find the enum entry inside the block.
+  for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+    const line = document.lineAt(i).text;
+    const noComment = (line.split(";")[0] ?? "").trim();
+    if (!noComment.length) continue;
+    const m = /^(#\w+)\b/.exec(noComment);
+    if (!m) continue;
+    if (m[1] !== enumSymbol) continue;
+
+    const indent = getLineIndent(document, i);
+    const newLine = enumValueRaw && enumValueRaw.trim().length
+      ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+      : `${indent}${enumSymbol}`;
+
+    edit.replace(document.uri, document.lineAt(i).range, newLine);
+    return edit;
+  }
+
+  // If not found, insert it before EndEnumeration.
+  const insertLine = block.endLine;
+  const indent = "  ";
+  const newLine = enumValueRaw && enumValueRaw.trim().length
+    ? `${indent}${enumSymbol}=${enumValueRaw.trim()}\n`
+    : `${indent}${enumSymbol}\n`;
+
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), newLine);
+  return edit;
+}
+
+// -----------------------------------------------------------------------------
+// Helpers for gadget id / pbAny patching
+// -----------------------------------------------------------------------------
+
+/**
+ * Removes a single symbol entry from the Enumeration FormGadget block.
+ * If the block would become empty, the whole block is deleted.
+ */
+function removeGadgetEnumEntry(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  block: LineBlock,
+  enumSymbol: string
+): void {
+  let entryLine: number | undefined;
+  let entryCount = 0;
+
+  for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+    const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+    if (!noComment.length) continue;
+    const m = /^(#\w+)\b/.exec(noComment);
+    if (!m) continue;
+    entryCount++;
+    if (m[1] === enumSymbol) entryLine = i;
+  }
+
+  if (entryLine === undefined) return;
+
+  if (entryCount <= 1) {
+    // Block becomes empty: remove the whole block including trailing blank line.
+    const expanded = expandBlockWithTrailingBlank(document, block);
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(expanded.startLine, 0),
+        document.lineAt(expanded.endLine).rangeIncludingLineBreak.end
+      )
+    );
+    return;
+  }
+
+  // Just delete the specific entry line.
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(entryLine, 0),
+      document.lineAt(entryLine).rangeIncludingLineBreak.end
+    )
+  );
+}
+
+/**
+ * Ensures the Enumeration FormGadget block contains enumSymbol.
+ * Creates the block if absent; updates an existing entry if present.
+ */
+function ensureGadgetEnumeration(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  enumSymbol: string,
+  enumValueRaw: string | undefined
+): void {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (block) {
+    for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+      const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+      if (!noComment.length) continue;
+      const m = /^(#\w+)\b/.exec(noComment);
+      if (!m || m[1] !== enumSymbol) continue;
+      const indent = getLineIndent(document, i);
+      const newLine = enumValueRaw && enumValueRaw.trim().length
+        ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+        : `${indent}${enumSymbol}`;
+      edit.replace(document.uri, document.lineAt(i).range, newLine);
+      return;
+    }
+    // Symbol not yet in block — insert before EndEnumeration.
+    const newLine = enumValueRaw && enumValueRaw.trim().length
+      ? `  ${enumSymbol}=${enumValueRaw.trim()}\n`
+      : `  ${enumSymbol}\n`;
+    edit.insert(document.uri, new vscode.Position(block.endLine, 0), newLine);
+    return;
+  }
+
+  // Block does not exist — create it.
+  const anchor = findGadgetEnumInsertLine(document);
+  const entry = enumValueRaw && enumValueRaw.trim().length
+    ? `  ${enumSymbol}=${enumValueRaw.trim()}`
+    : `  ${enumSymbol}`;
+  const blockText = `Enumeration ${ENUM_NAMES.gadgets}\n${entry}\nEndEnumeration\n\n`;
+  edit.insert(document.uri, new vscode.Position(anchor, 0), blockText);
+}
+
+export function applyGadgetPbAnyToggle(
+  document: vscode.TextDocument,
+  gadgetId: string,
+  toPbAny: boolean,
+  variableName: string,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const gadgetCall = findCallByStableKey(calls, gadgetId, name => /gadget$/i.test(name));
+  if (!gadgetCall) return undefined;
+
+  const params = splitParams(gadgetCall.args);
+  if (params.length < 5) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  const proc = findProcedureBlock(document, gadgetCall.range.line);
+
+  if (toPbAny) {
+    // 1) Remove the symbol from Enumeration FormGadget (entry only, not whole block).
+    const enumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+    if (enumBlock) {
+      removeGadgetEnumEntry(edit, document, enumBlock, enumSymbol);
+    }
+
+    // 2) Ensure Global variable declaration exists.
+    ensureWindowGlobalLine(edit, document, variableName);
+
+    // 3) Rewrite constructor: "Var = KindGadget(#PB_Any, x, y, w, h, ...)".
+    params[0] = PB_ANY;
+    const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+    const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+    const updated = `${indent}${variableName} = ${rebuilt}`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+      updated
+    );
+
+    // 4) Best-effort: replace enumSymbol with variableName in p[0] of all
+    //    other calls inside the same procedure scope.
+    if (proc) {
+      for (const c of calls) {
+        if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+        if (c === gadgetCall) continue;
+        const p = splitParams(c.args);
+        if (!p.length) continue;
+        if ((p[0] ?? "").trim() !== enumSymbol) continue;
+        p[0] = variableName;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const lineIndent = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar
+          ? `${lineIndent}${c.assignedVar} = ${rebuiltCall}`
+          : `${lineIndent}${rebuiltCall}`;
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    return edit;
+  }
+
+  // toPbAny === false
+  // 1) Remove the Global variable declaration.
+  removeGlobalLine(edit, document, variableName);
+
+  // 2) Ensure Enumeration FormGadget block contains enumSymbol.
+  ensureGadgetEnumeration(edit, document, enumSymbol, enumValueRaw);
+
+  // 3) Rewrite constructor: "KindGadget(#Symbol, x, y, w, h, ...)" without assignment.
+  params[0] = enumSymbol;
+  const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+  const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+  const updated = `${indent}${rebuilt}`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+    updated
+  );
+
+  // 4) Best-effort: replace variableName with enumSymbol in p[0] of all
+  //    other calls inside the same procedure scope.
+  if (proc) {
+    for (const c of calls) {
+      if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+      if (c === gadgetCall) continue;
+      const p = splitParams(c.args);
+      if (!p.length) continue;
+      if ((p[0] ?? "").trim() !== variableName) continue;
+      p[0] = enumSymbol;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const lineIndent = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar
+        ? `${lineIndent}${c.assignedVar} = ${rebuiltCall}`
+        : `${lineIndent}${rebuiltCall}`;
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  return edit;
+}
+
+export function applyGadgetEnumValuePatch(
+  document: vscode.TextDocument,
+  enumSymbol: string,
+  enumValueRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (!block) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+    const noComment = (document.lineAt(i).text.split(";")[0] ?? "").trim();
+    if (!noComment.length) continue;
+    const m = /^(#\w+)\b/.exec(noComment);
+    if (!m) continue;
+    if (m[1] !== enumSymbol) continue;
+
+    const indent = getLineIndent(document, i);
+    const newLine = enumValueRaw && enumValueRaw.trim().length
+      ? `${indent}${enumSymbol}=${enumValueRaw.trim()}`
+      : `${indent}${enumSymbol}`;
+    edit.replace(document.uri, document.lineAt(i).range, newLine);
+    return edit;
+  }
+
+  // Not found — insert before EndEnumeration.
+  const newLine = enumValueRaw && enumValueRaw.trim().length
+    ? `  ${enumSymbol}=${enumValueRaw.trim()}\n`
+    : `  ${enumSymbol}\n`;
+  edit.insert(document.uri, new vscode.Position(block.endLine, 0), newLine);
+  return edit;
+}
+
+export function applyGadgetVariableNamePatch(
+  document: vscode.TextDocument,
+  gadgetId: string,
+  variableName: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (!variableName.length) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const gadgetCall = findCallByStableKey(calls, gadgetId, name => /gadget$/i.test(name));
+  if (!gadgetCall) return undefined;
+
+  const params = splitParams(gadgetCall.args);
+  if (params.length < 1) return undefined;
+
+  const first = (params[0] ?? "").trim();
+  const edit = new vscode.WorkspaceEdit();
+  const proc = findProcedureBlock(document, gadgetCall.range.line);
+
+  // -------------------------------------------------------------------------
+  // PB_Any mode: oldVar = KindGadget(#PB_Any, ...)
+  // -------------------------------------------------------------------------
+  if (first === PB_ANY) {
+    const oldVar = (gadgetCall.assignedVar ?? "").trim();
+    if (!oldVar.length) return undefined;
+
+    // 1) Rename Global line.
+    if (oldVar !== variableName) {
+      removeGlobalLine(edit, document, oldVar);
+      ensureWindowGlobalLine(edit, document, variableName);
+    } else {
+      ensureWindowGlobalLine(edit, document, variableName);
+    }
+
+    // 2) Rewrite constructor assignment line.
+    const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+    const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+      `${indent}${variableName} = ${rebuilt}`
+    );
+
+    // 3) Best-effort: rewrite p[0] usages oldVar -> variableName in procedure scope.
+    if (proc && oldVar !== variableName) {
+      for (const c of calls) {
+        if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+        if (c === gadgetCall) continue;
+        const p = splitParams(c.args);
+        if (!p.length || (p[0] ?? "").trim() !== oldVar) continue;
+        p[0] = variableName;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const li = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar ? `${li}${c.assignedVar} = ${rebuiltCall}` : `${li}${rebuiltCall}`;
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    return edit;
+  }
+
+  // -------------------------------------------------------------------------
+  // Enum mode: KindGadget(#OldSym, ...)
+  // -------------------------------------------------------------------------
+  const oldEnum = first; // e.g. "#Btn_0"
+  const newEnum = variableName.startsWith("#") ? variableName : `#${variableName}`;
+  if (oldEnum === newEnum) return undefined;
+
+  // 1) Rename entry in Enumeration FormGadget block.
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.gadgets);
+  if (block) {
+    for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+      const re = new RegExp(`^(\\s*)${escapeRegExp(oldEnum)}(\\b.*)$`);
+      const m = re.exec(document.lineAt(i).text);
+      if (!m) continue;
+      edit.replace(document.uri, document.lineAt(i).range, `${m[1]}${newEnum}${m[2]}`);
+      break;
+    }
+  }
+
+  // 2) Rewrite constructor first param.
+  params[0] = newEnum;
+  const indent = gadgetCall.indent ?? getLineIndent(document, gadgetCall.range.line);
+  const rebuilt = `${gadgetCall.name}(${params.join(", ")})`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(gadgetCall.range.lineStart), document.positionAt(gadgetCall.range.end)),
+    `${indent}${rebuilt}`
+  );
+
+  // 3) Best-effort: rewrite p[0] usages oldEnum -> newEnum in procedure scope.
+  if (proc) {
+    for (const c of calls) {
+      if (c.range.line < proc.startLine || c.range.line > proc.endLine) continue;
+      if (c === gadgetCall) continue;
+      const p = splitParams(c.args);
+      if (!p.length || (p[0] ?? "").trim() !== oldEnum) continue;
+      p[0] = newEnum;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const li = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar ? `${li}${c.assignedVar} = ${rebuiltCall}` : `${li}${rebuiltCall}`;
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  return edit;
+}
+
+export function applyWindowVariableNamePatch(
+  document: vscode.TextDocument,
+  variableName: string,
+  windowKey?: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const newVar = variableName;
+  if (!newVar.length) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const openWindowCalls = calls.filter(c => c.name.toLowerCase() === PB_CALL.openWindow);
+  const openWin = windowKey
+    ? openWindowCalls.find(c => stableKey(c.assignedVar, splitParams(c.args)) === windowKey)
+    : openWindowCalls[0];
+  if (!openWin) return undefined;
+
+  const params = splitParams(openWin.args);
+  if (params.length < 1) return undefined;
+
+  const first = (params[0] ?? "").trim();
+  const edit = new vscode.WorkspaceEdit();
+
+  const proc = findProcedureBlock(document, openWin.range.line);
+
+  // ---------------------------------------------------------------------------
+  // PB_Any mode:  <oldVar> = OpenWindow(#PB_Any, ...)
+  // ---------------------------------------------------------------------------
+  if (first === PB_ANY) {
+    const oldVar = (openWin.assignedVar ?? "").trim();
+    if (!oldVar.length) {
+      return undefined;
+    }
+
+    // 1) Rename Global line
+    if (oldVar !== newVar) {
+      removeGlobalLine(edit, document, oldVar);
+      ensureWindowGlobalLine(edit, document, newVar);
+    } else {
+      ensureWindowGlobalLine(edit, document, newVar);
+    }
+
+    // 2) Rewrite OpenWindow assignment line
+    const indent = openWin.indent ?? getLineIndent(document, openWin.range.line);
+    const rebuilt = `OpenWindow(${params.join(", ")})`;
+    const updated = `${indent}${newVar} = ${rebuilt}`;
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(openWin.range.lineStart), document.positionAt(openWin.range.end)),
+      updated
+    );
+
+    // 3) Best-effort: rewrite first-call-arg within the same procedure: oldVar -> newVar
+    if (proc && oldVar !== newVar) {
+      const inProc = calls.filter(c => c.range.line >= proc.startLine && c.range.line <= proc.endLine);
+      for (const c of inProc) {
+        if (c.name === "OpenWindow") continue;
+        const p = splitParams(c.args);
+        if (!p.length) continue;
+        if ((p[0] ?? "").trim() !== oldVar) continue;
+
+        p[0] = newVar;
+        const rebuiltCall = `${c.name}(${p.join(", ")})`;
+        const i2 = c.indent ?? getLineIndent(document, c.range.line);
+        const updatedLine = c.assignedVar ? `${i2}${c.assignedVar} = ${rebuiltCall}` : `${i2}${rebuiltCall}`;
+
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+          updatedLine
+        );
+      }
+    }
+
+    // --- rename derived procedure names + call-sites globally ---
+    if (oldVar !== newVar) {
+      const oldBase = oldVar;
+      const newBase = newVar;
+
+      const oldOpen = buildOpenProcName(oldBase);
+      const newOpen = buildOpenProcName(newBase);
+
+      const oldEvents = buildEventsProcName(oldBase);
+      const newEvents = buildEventsProcName(newBase);
+
+      const oldResize = buildResizeProcName(oldBase);
+      const newResize = buildResizeProcName(newBase);
+
+      // Procedure headers
+      renameProcedureHeaderGlobal(edit, document, oldOpen, newOpen);
+      renameProcedureHeaderGlobal(edit, document, oldEvents, newEvents);
+      renameProcedureHeaderGlobal(edit, document, oldResize, newResize);
+
+      // Calls (outside Open-procedure too)
+      renameCallsGlobalByScanner(edit, document, calls, oldOpen, newOpen);
+      renameCallsGlobalByScanner(edit, document, calls, oldEvents, newEvents);
+      renameCallsGlobalByScanner(edit, document, calls, oldResize, newResize);
+
+      // Best-effort: if someone references '#Dlg' even in PB_Any mode
+      replaceEnumSymbolGlobal(edit, document, `#${oldBase}`, `#${newBase}`);
+    }  
+
+    return edit;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Enum mode: OpenWindow(#Dlg, ...)  -> rename #Dlg to #NewVar
+  // ---------------------------------------------------------------------------
+  const oldEnum = first; // e.g. "#Dlg"
+  const newEnum = newVar.startsWith("#") ? newVar : `#${newVar}`;
+
+  const oldProcName = toOpenProcName(oldEnum);
+  const newProcName = toOpenProcName(newEnum);
+
+  // 1) Patch Enumeration FormWindow entry name if present
+  const block = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
+  if (block) {
+    for (let i = block.startLine + 1; i <= block.endLine - 1; i++) {
+      const lineText = document.lineAt(i).text;
+      const re = new RegExp(`^(\\s*)${escapeRegExp(oldEnum)}(\\b.*)$`);
+      const m = re.exec(lineText);
+      if (!m) continue;
+
+      const rebuiltLine = `${m[1]}${newEnum}${m[2]}`;
+      edit.replace(document.uri, document.lineAt(i).range, rebuiltLine);
+      break;
+    }
+  }
+
+  // 2) Rewrite OpenWindow first param
+  params[0] = newEnum;
+  const indent = openWin.indent ?? getLineIndent(document, openWin.range.line);
+  const rebuilt = `OpenWindow(${params.join(", ")})`;
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.positionAt(openWin.range.lineStart), document.positionAt(openWin.range.end)),
+    `${indent}${rebuilt}`
+  );
+
+  // 3) Best-effort: rewrite first-call-arg within the same procedure: oldEnum -> newEnum
+  if (proc && oldEnum !== newEnum) {
+    const inProc = calls.filter(c => c.range.line >= proc.startLine && c.range.line <= proc.endLine);
+    for (const c of inProc) {
+      if (c.name === "OpenWindow") continue;
+      const p = splitParams(c.args);
+      if (!p.length) continue;
+      if ((p[0] ?? "").trim() !== oldEnum) continue;
+
+      p[0] = newEnum;
+      const rebuiltCall = `${c.name}(${p.join(", ")})`;
+      const i2 = c.indent ?? getLineIndent(document, c.range.line);
+      const updatedLine = c.assignedVar ? `${i2}${c.assignedVar} = ${rebuiltCall}` : `${i2}${rebuiltCall}`;
+
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(c.range.lineStart), document.positionAt(c.range.end)),
+        updatedLine
+      );
+    }
+  }
+
+  // 4) Patch "Procedure OpenX(...)" (and calls) if possible
+  if (oldProcName && newProcName) {
+    patchProcedureNameInBlock(edit, document, proc, oldProcName, newProcName);
+    patchProcedureCallsBestEffort(edit, document, calls, oldProcName, newProcName, scanRange);
+  }
+
+  return edit;
+}
+
+function findInsertAfterLineForGadgetEntry(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  gadgetKey: string,
+  entryNameLower: string
+): { insertAfterLine: number; indent: string } | undefined {
+  const own = findCallsByName(calls, entryNameLower).filter(c => firstParamOfCall(c.args) === gadgetKey);
+
+  let insertAfterLine: number | undefined;
+  if (own.length > 0) {
+    insertAfterLine = own[own.length - 1].range.line;
+  } else {
+    const all = findCallsByName(calls, entryNameLower);
+    if (all.length > 0) {
+      insertAfterLine = all[all.length - 1].range.line;
+    } else {
+      const createCall = findCallByStableKey(calls, gadgetKey, n => /gadget$/i.test(n));
+      if (!createCall) return undefined;
+      insertAfterLine = createCall.range.line;
+    }
+  }
+
+  const indent = getLineIndent(document, insertAfterLine);
+  return { insertAfterLine, indent };
+}
+
+function findGadgetEntryCallAtLine(
+  calls: PbCall[],
+  entryNameLower: string,
+  gadgetKey: string,
+  sourceLine: number
+): PbCall | undefined {
+  return calls.find(
+    c => c.name.toLowerCase() === entryNameLower && c.range.line === sourceLine && firstParamOfCall(c.args) === gadgetKey
+  );
+}
+
+export function applyGadgetItemInsert(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetItemArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const insert = findInsertAfterLineForGadgetEntry(document, calls, gadgetKey, "addgadgetitem");
+  if (!insert) return undefined;
+
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insert.insertAfterLine + 1), 0);
+  const line = `${insert.indent}AddGadgetItem(${buildAddGadgetItemArgs(gadgetKey, args)})\n`;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, line);
+  return edit;
+}
+
+export function applyGadgetItemUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  sourceLine: number,
+  args: GadgetItemArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetitem", gadgetKey, sourceLine);
+  if (!call) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = `${indent}AddGadgetItem(${buildAddGadgetItemArgs(gadgetKey, args)})`;
+  return replaceCallLinePreserveSuffix(document, call, rebuilt);
+}
+
+export function applyGadgetItemDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetitem", gadgetKey, sourceLine);
+  if (!call) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
+}
+
+export function applyGadgetColumnInsert(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetColumnArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const insert = findInsertAfterLineForGadgetEntry(document, calls, gadgetKey, "addgadgetcolumn");
+  if (!insert) return undefined;
+
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insert.insertAfterLine + 1), 0);
+  const line = `${insert.indent}AddGadgetColumn(${buildAddGadgetColumnArgs(gadgetKey, args)})\n`;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, line);
+  return edit;
+}
+
+export function applyGadgetColumnUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  sourceLine: number,
+  args: GadgetColumnArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetcolumn", gadgetKey, sourceLine);
+  if (!call) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = `${indent}AddGadgetColumn(${buildAddGadgetColumnArgs(gadgetKey, args)})`;
+  return replaceCallLinePreserveSuffix(document, call, rebuilt);
+}
+
+export function applyGadgetColumnDelete(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+
+  const call = findGadgetEntryCallAtLine(calls, "addgadgetcolumn", gadgetKey, sourceLine);
+  if (!call) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  applyGadgetHeadPatch(edit, document);
+  return edit;
+}
+
+// -----------------------------------------------------------------------------
+// Menu / ToolBar / StatusBar emitters
+// -----------------------------------------------------------------------------
+
+const MENU_ENTRY_NAMES = new Set(["menutitle", "menuitem", "menubar", "opensubmenu", "closesubmenu"]);
+const TOOLBAR_ENTRY_NAMES = new Set([
+  "toolbarstandardbutton",
+  "toolbarbutton",
+  "toolbarimagebutton",
+  "toolbarseparator",
+  "toolbartooltip"
+]);
+const STATUSBAR_FIELD_NAMES = new Set(["addstatusbarfield", "statusbartext", "statusbarprogress", "statusbarimage"]);
+const IMAGE_ENTRY_NAMES = new Set(["loadimage", "catchimage"]);
+const WINDOW_PROPERTY_NAMES = new Set(["hidewindow", "disablewindow", "setwindowcolor"]);
+const GADGET_PROPERTY_NAMES = new Set(["hidegadget", "disablegadget", "gadgettooltip", "setgadgetstate", "setgadgetcolor", "setgadgetfont"]);
+
+function cloneGadgetForProperties(gadget: Gadget): Gadget {
+  return {
+    ...gadget,
+    items: gadget.items ? [...gadget.items] : undefined,
+    columns: gadget.columns ? [...gadget.columns] : undefined,
+  };
+}
+
+function normalizeOptionalRaw(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed && trimmed.length ? trimmed : undefined;
+}
+
+function normalizeOptionalGridString(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return raw.length ? raw : undefined;
+}
+
+function cloneWindowForProperties(window: FormWindow): FormWindow {
+  return { ...window };
+}
+
+function findWindowEventIncludeLine(document: vscode.TextDocument, procedureStartLine: number): number | undefined {
+  for (let i = Math.min(procedureStartLine - 1, document.lineCount - 1); i >= 0; i--) {
+    const line = document.lineAt(i).text;
+
+    if (/^\s*Procedure\b/i.test(line) || /^\s*EndProcedure\b/i.test(line)) {
+      break;
+    }
+
+    if (/^\s*XIncludeFile\s+(~?"(?:""|[^"])*")/i.test(line)) {
+      return i;
+    }
+  }
+
+  return undefined;
+}
+
+function findWindowEventGadgetBlock(document: vscode.TextDocument, proc: LineBlock): WindowEventProcBlock | undefined {
+  let selectLine: number | undefined;
+
+  for (let i = proc.startLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Select\s+EventGadget\s*\(\s*\)\s*$/i.test(line)) {
+      selectLine = i;
+      break;
+    }
+  }
+
+  if (selectLine === undefined) return undefined;
+
+  let depth = 0;
+  let defaultLine: number | undefined;
+  let procLine: number | undefined;
+  let pendingDefaultProc = false;
+  let hasCaseBranches = false;
+
+  for (let i = selectLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) {
+        return { selectLine, endLine: i, defaultLine, procLine, hasCaseBranches };
+      }
+      continue;
+    }
+
+    if (depth !== 1) continue;
+
+    if (/^Case\b/i.test(line)) {
+      hasCaseBranches = true;
+      pendingDefaultProc = false;
+      continue;
+    }
+
+    if (/^Default\b/i.test(line)) {
+      defaultLine = i;
+      pendingDefaultProc = true;
+      continue;
+    }
+
+    if (!pendingDefaultProc) continue;
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      procLine = i;
+      pendingDefaultProc = false;
+    }
+  }
+
+  return undefined;
+}
+
+function findEventCaseBranch(
+  document: vscode.TextDocument,
+  block: LineBlock,
+  matchesCase: (caseRaw: string) => boolean
+): EventCaseBranch | undefined {
+  let depth = 0;
+  let current: EventCaseBranch | undefined;
+
+  const finalizeCurrent = (boundaryLine: number): EventCaseBranch | undefined => {
+    if (!current) return undefined;
+    current.boundaryLine = boundaryLine;
+    const result = matchesCase(current.caseRaw) ? current : undefined;
+    current = undefined;
+    return result;
+  };
+
+  for (let i = block.startLine; i <= block.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      if (depth === 1) {
+        const branch = finalizeCurrent(i);
+        if (branch) return branch;
+      }
+
+      depth--;
+      if (depth <= 0) break;
+      continue;
+    }
+
+    if (depth !== 1) continue;
+
+    if (/^Default\b/i.test(line)) {
+      const branch = finalizeCurrent(i);
+      if (branch) return branch;
+      continue;
+    }
+
+    const caseMatch = /^Case\b(.+)$/.exec(line);
+    if (caseMatch) {
+      const branch = finalizeCurrent(i);
+      if (branch) return branch;
+
+      current = {
+        caseLine: i,
+        caseRaw: caseMatch[1]?.trim() ?? "",
+        boundaryLine: block.endLine,
+      };
+      continue;
+    }
+
+    if (!current || current.procLine !== undefined) continue;
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      current.procLine = i;
+    }
+  }
+
+  return undefined;
+}
+
+function insertEventCaseBranch(
+  document: vscode.TextDocument,
+  insertLine: number,
+  selectLine: number,
+  caseRaw: string,
+  procCall: string
+): vscode.WorkspaceEdit {
+  const selectIndent = getLineIndent(document, selectLine);
+  const caseIndent = `${selectIndent}  `;
+  const procIndent = `${caseIndent}  `;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `${caseIndent}Case ${caseRaw}
+${procIndent}${procCall}
+`);
+  return edit;
+}
+
+function replaceEventProcLine(
+  document: vscode.TextDocument,
+  procLine: number,
+  procCall: string
+): vscode.WorkspaceEdit {
+  const indent = getLineIndent(document, procLine);
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(procLine).range, `${indent}${procCall}`);
+  return edit;
+}
+
+function insertEventProcLineAfterCase(
+  document: vscode.TextDocument,
+  caseLine: number,
+  procCall: string
+): vscode.WorkspaceEdit {
+  const procIndent = `${getLineIndent(document, caseLine)}  `;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(caseLine + 1, 0), `${procIndent}${procCall}
+`);
+  return edit;
+}
+
+function deleteEventCaseBranch(
+  document: vscode.TextDocument,
+  branch: EventCaseBranch
+): vscode.WorkspaceEdit {
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(branch.caseLine, 0),
+      new vscode.Position(branch.boundaryLine, 0)
+    )
+  );
+  return edit;
+}
+
+function findWindowEventMenuBlock(document: vscode.TextDocument, proc: LineBlock): LineBlock | undefined {
+  let selectLine: number | undefined;
+
+  for (let i = proc.startLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Select\s+EventMenu\s*\(\s*\)\s*$/i.test(line)) {
+      selectLine = i;
+      break;
+    }
+  }
+
+  if (selectLine === undefined) return undefined;
+
+  let depth = 0;
+
+  for (let i = selectLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) {
+        return { startLine: selectLine, endLine: i };
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function findWindowEventSelectBlock(document: vscode.TextDocument, proc: LineBlock): WindowEventProcBlock | undefined {
+  let selectLine: number | undefined;
+
+  for (let i = proc.startLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Select\s+event\b/i.test(line)) {
+      selectLine = i;
+      break;
+    }
+  }
+
+  if (selectLine === undefined) return undefined;
+
+  let depth = 0;
+  let defaultLine: number | undefined;
+  let procLine: number | undefined;
+  let pendingDefaultProc = false;
+  let hasCaseBranches = false;
+
+  for (let i = selectLine; i <= proc.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) {
+        return { selectLine, endLine: i, defaultLine, procLine, hasCaseBranches };
+      }
+      continue;
+    }
+
+    if (depth !== 1) continue;
+
+    if (/^Case\b/i.test(line)) {
+      hasCaseBranches = true;
+      pendingDefaultProc = false;
+      continue;
+    }
+
+    if (/^Default\b/i.test(line)) {
+      defaultLine = i;
+      pendingDefaultProc = true;
+      continue;
+    }
+
+    if (!pendingDefaultProc) continue;
+
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      procLine = i;
+      pendingDefaultProc = false;
+    }
+  }
+
+  return undefined;
+}
+
+function findWindowDefaultHandlerBlock(document: vscode.TextDocument, proc: LineBlock): WindowEventProcBlock | undefined {
+  return findWindowEventSelectBlock(document, proc) ?? findWindowEventGadgetBlock(document, proc);
+}
+
+function blockHasCaseBranches(document: vscode.TextDocument, block: LineBlock): boolean {
+  let depth = 0;
+
+  for (let i = block.startLine; i <= block.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (!line.length) continue;
+
+    if (/^Select\b/i.test(line)) {
+      depth++;
+      continue;
+    }
+
+    if (/^EndSelect\b/i.test(line)) {
+      depth--;
+      if (depth <= 0) break;
+      continue;
+    }
+
+    if (depth === 1 && /^Case\b/i.test(line)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildWindowEventProcCall(window: FormWindow, procName: string, usesSeparateEventProc: boolean): string {
+  return usesSeparateEventProc ? `${procName}(event, ${window.id})` : `${procName}()`;
+}
+
+function buildGadgetEventProcCall(procName: string, usesSeparateEventProc: boolean): string {
+  return usesSeparateEventProc ? `${procName}(EventType())` : `${procName}()`;
+}
+
+function buildMenuEventProcCall(procName: string, usesSeparateEventProc: boolean): string {
+  return usesSeparateEventProc ? `${procName}(EventMenu())` : `${procName}()`;
+}
+
+export function applyWindowEventUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowEventArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  if (!proc) return undefined;
+
+  const includeLine = findWindowEventIncludeLine(document, proc.startLine);
+  const eventFileRaw = normalizeOptionalRaw(args.eventFileRaw);
+  const edit = new vscode.WorkspaceEdit();
+
+  if (includeLine !== undefined) {
+    if (!eventFileRaw) {
+      edit.delete(document.uri, document.lineAt(includeLine).rangeIncludingLineBreak);
+      return edit;
+    }
+
+    const indent = getLineIndent(document, includeLine);
+    edit.replace(document.uri, document.lineAt(includeLine).range, `${indent}XIncludeFile ${eventFileRaw}`);
+    return edit;
+  }
+
+  if (!eventFileRaw) return undefined;
+
+  edit.insert(document.uri, new vscode.Position(proc.startLine, 0), `XIncludeFile ${eventFileRaw}\n`);
+  return edit;
+}
+
+export function applyWindowGenerateEventLoopUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  enabled: boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return undefined;
+
+  const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
+  const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+
+  if (enabled) {
+    if (eventGadgetBlock || eventMenuBlock || context.usesSeparateEventProc) return undefined;
+
+    const bodyIndent = getLineIndent(document, openCall.range.line);
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(
+      document.uri,
+      new vscode.Position(context.openProc.endLine, 0),
+      `${bodyIndent}Select EventGadget()
+${bodyIndent}EndSelect
+`
+    );
+    return edit;
+  }
+
+  if (!eventGadgetBlock && !eventMenuBlock) return undefined;
+
+  if (context.usesSeparateEventProc) {
+    const menuHasCases = eventMenuBlock ? blockHasCaseBranches(document, eventMenuBlock) : false;
+    const gadgetHasCases = eventGadgetBlock?.hasCaseBranches ?? false;
+    if (menuHasCases || gadgetHasCases) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(context.eventProc.startLine, 0),
+        new vscode.Position(context.eventProc.endLine + 1, 0)
+      )
+    );
+    return edit;
+  }
+
+  if (eventMenuBlock) return undefined;
+  if (!eventGadgetBlock) return undefined;
+  if (eventGadgetBlock.hasCaseBranches) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(eventGadgetBlock.selectLine, 0),
+      new vscode.Position(eventGadgetBlock.endLine + 1, 0)
+    )
+  );
+  return edit;
+}
+
+export function applyWindowEventProcUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return undefined;
+
+  const block = findWindowDefaultHandlerBlock(document, context.eventProc);
+  if (!block) return undefined;
+
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  const procCall = normalizedEventProc
+    ? buildWindowEventProcCall(window, normalizedEventProc, context.usesSeparateEventProc)
+    : undefined;
+  const edit = new vscode.WorkspaceEdit();
+
+  if (block.procLine !== undefined) {
+    if (!procCall) {
+      edit.delete(document.uri, document.lineAt(block.procLine).rangeIncludingLineBreak);
+      return edit;
+    }
+
+    return replaceEventProcLine(document, block.procLine, procCall);
+  }
+
+  if (!procCall) return undefined;
+
+  if (block.defaultLine !== undefined) {
+    const indent = `${getLineIndent(document, block.defaultLine)}  `;
+    edit.insert(document.uri, new vscode.Position(block.defaultLine + 1, 0), `${indent}${procCall}
+`);
+    return edit;
+  }
+
+  const selectIndent = getLineIndent(document, block.selectLine);
+  const defaultIndent = `${selectIndent}  `;
+  const procIndent = `${defaultIndent}  `;
+  edit.insert(
+    document.uri,
+    new vscode.Position(block.endLine, 0),
+    `${defaultIndent}Default
+${procIndent}${procCall}
+`
+  );
+  return edit;
+}
+
+export function applyGadgetEventProcUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find((entry) => entry.id === gadgetKey);
+  if (!gadget) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return undefined;
+
+  const block = findWindowEventGadgetBlock(document, context.eventProc);
+  if (!block) return undefined;
+
+  const caseRaw = gadget.id;
+  const branch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, (raw) => raw === caseRaw);
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  const procCall = normalizedEventProc
+    ? buildGadgetEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    : undefined;
+
+  if (branch) {
+    if (!procCall) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, procCall);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, procCall);
+  }
+
+  if (!procCall) return undefined;
+
+  const insertLine = block.defaultLine ?? block.endLine;
+  return insertEventCaseBranch(document, insertLine, block.selectLine, caseRaw, procCall);
+}
+
+export function applyMenuEntryEventUpdate(
+  document: vscode.TextDocument,
+  entryIdRaw: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const menuEntry = parsed.menus.flatMap((menu) => menu.entries).find((entry) => entry.idRaw === entryIdRaw);
+  if (!menuEntry) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return undefined;
+
+  const block = findWindowEventMenuBlock(document, context.eventProc);
+  if (!block) return undefined;
+
+  const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const procCall = normalizedEventProc
+    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    : undefined;
+
+  if (branch) {
+    if (!procCall) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, procCall);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, procCall);
+  }
+
+  if (!procCall) return undefined;
+
+  return insertEventCaseBranch(document, block.endLine, block.startLine, entryIdRaw, procCall);
+}
+
+export function applyToolBarEntryEventUpdate(
+  document: vscode.TextDocument,
+  entryIdRaw: string,
+  eventProc: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const toolBarEntry = parsed.toolbars.flatMap((toolBar) => toolBar.entries).find((entry) => entry.idRaw === entryIdRaw);
+  if (!toolBarEntry) return undefined;
+  const window = parsed.window;
+  if (!window) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return undefined;
+
+  const block = findWindowEventMenuBlock(document, context.eventProc);
+  if (!block) return undefined;
+
+  const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  const procCall = normalizedEventProc
+    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    : undefined;
+
+  if (branch) {
+    if (!procCall) {
+      return deleteEventCaseBranch(document, branch);
+    }
+
+    if (branch.procLine !== undefined) {
+      return replaceEventProcLine(document, branch.procLine, procCall);
+    }
+
+    return insertEventProcLineAfterCase(document, branch.caseLine, procCall);
+  }
+
+  if (!procCall) return undefined;
+
+  return insertEventCaseBranch(document, block.endLine, block.startLine, entryIdRaw, procCall);
+}
+
+function buildWindowPropertyLines(windowKey: string, window: FormWindow, indent: string): string {
+  const lines: string[] = [];
+
+  const hiddenRaw = normalizeOptionalRaw(window.hiddenRaw);
+  if (hiddenRaw) {
+    lines.push(`${indent}HideWindow(${windowKey}, ${hiddenRaw})`);
+  }
+
+  const disabledRaw = normalizeOptionalRaw(window.disabledRaw);
+  if (disabledRaw) {
+    lines.push(`${indent}DisableWindow(${windowKey}, ${disabledRaw})`);
+  }
+
+  const colorRaw = normalizeOptionalRaw(window.colorRaw);
+  if (colorRaw) {
+    lines.push(`${indent}SetWindowColor(${windowKey}, ${colorRaw})`);
+  }
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function applyWindowPropertyMutation(
+  document: vscode.TextDocument,
+  windowKey: string,
+  mutate: (window: FormWindow) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const window = parsed.window;
+  if (!window || window.id !== windowKey) return undefined;
+
+  const nextWindow = cloneWindowForProperties(window);
+  if (!mutate(nextWindow)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
+  if (!openCall) return undefined;
+
+  const proc = findProcedureBlock(document, openCall.range.line);
+  const propertyCalls = calls.filter(call => {
+    const nameLower = call.name.toLowerCase();
+    if (!WINDOW_PROPERTY_NAMES.has(nameLower)) return false;
+    if (firstParamOfCall(call.args) !== windowKey) return false;
+    if (!proc) return true;
+    return call.range.line >= proc.startLine && call.range.line <= proc.endLine;
+  }).sort((a, b) => a.range.line - b.range.line);
+
+  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : openCall.range.line + 1;
+  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : openCall.range.line;
+  const indent = getLineIndent(document, indentSourceLine);
+  const rebuilt = buildWindowPropertyLines(windowKey, nextWindow, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const call of propertyCalls) {
+    edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  }
+
+  if (rebuilt) {
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchorLine), 0), rebuilt);
+  }
+
+  return propertyCalls.length || rebuilt ? edit : undefined;
+}
+
+export function applyWindowPropertyUpdate(
+  document: vscode.TextDocument,
+  windowKey: string,
+  args: WindowPropertyArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyWindowPropertyMutation(
+    document,
+    windowKey,
+    window => {
+      window.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
+      window.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
+      window.colorRaw = normalizeOptionalRaw(args.colorRaw);
+      return true;
+    },
+    scanRange
+  );
+}
+
+function buildGadgetPropertyLines(gadgetKey: string, gadget: Gadget, indent: string): string {
+  const lines: string[] = [];
+
+  const hiddenRaw = normalizeOptionalRaw(gadget.hiddenRaw);
+  if (hiddenRaw) {
+    lines.push(`${indent}HideGadget(${gadgetKey}, ${hiddenRaw})`);
+  }
+
+  const disabledRaw = normalizeOptionalRaw(gadget.disabledRaw);
+  if (disabledRaw) {
+    lines.push(`${indent}DisableGadget(${gadgetKey}, ${disabledRaw})`);
+  }
+
+  const tooltipRaw = normalizeOptionalRaw(gadget.tooltipRaw);
+  if (tooltipRaw) {
+    lines.push(`${indent}GadgetToolTip(${gadgetKey}, ${tooltipRaw})`);
+  }
+
+  const backColorRaw = normalizeOptionalRaw(gadget.backColorRaw);
+  if (backColorRaw) {
+    lines.push(`${indent}SetGadgetColor(${gadgetKey}, #PB_Gadget_BackColor, ${backColorRaw})`);
+  }
+
+  const frontColorRaw = normalizeOptionalRaw(gadget.frontColorRaw);
+  if (frontColorRaw) {
+    lines.push(`${indent}SetGadgetColor(${gadgetKey}, #PB_Gadget_FrontColor, ${frontColorRaw})`);
+  }
+
+  const gadgetFontRaw = normalizeOptionalRaw(gadget.gadgetFontRaw);
+  if (gadgetFontRaw) {
+    lines.push(`${indent}SetGadgetFont(${gadgetKey}, ${gadgetFontRaw})`);
+  }
+
+  const stateRaw = normalizeOptionalRaw(gadget.stateRaw);
+  if (stateRaw) {
+    lines.push(`${indent}SetGadgetState(${gadgetKey}, ${stateRaw})`);
+  }
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function applyGadgetPropertyMutation(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  mutate: (gadget: Gadget) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  if (!gadget) return undefined;
+
+  const nextGadget = cloneGadgetForProperties(gadget);
+  if (!mutate(nextGadget)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const createCall = findCallByStableKey(calls, gadgetKey, name => /gadget$/i.test(name));
+  const createLine = createCall?.range.line ?? gadget.source?.line;
+  if (createLine === undefined) return undefined;
+
+  const proc = findProcedureBlock(document, createLine);
+  const propertyCalls = calls.filter(call => {
+    const nameLower = call.name.toLowerCase();
+    if (!GADGET_PROPERTY_NAMES.has(nameLower)) return false;
+    if (firstParamOfCall(call.args) !== gadgetKey) return false;
+    if (!proc) return true;
+    return call.range.line >= proc.startLine && call.range.line <= proc.endLine;
+  }).sort((a, b) => a.range.line - b.range.line);
+
+  const anchorLine = propertyCalls.length ? propertyCalls[0].range.line : createLine + 1;
+  const indentSourceLine = propertyCalls.length ? propertyCalls[0].range.line : createLine;
+  const indent = getLineIndent(document, indentSourceLine);
+  const rebuilt = buildGadgetPropertyLines(gadgetKey, nextGadget, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  for (const call of propertyCalls) {
+    edit.delete(document.uri, document.lineAt(call.range.line).rangeIncludingLineBreak);
+  }
+
+  if (rebuilt) {
+    edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchorLine), 0), rebuilt);
+  }
+
+  return propertyCalls.length || rebuilt ? edit : undefined;
+}
+
+export function applyGadgetPropertyUpdate(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetPropertyArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyGadgetPropertyMutation(
+    document,
+    gadgetKey,
+    gadget => {
+      gadget.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
+      gadget.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
+      gadget.tooltipRaw = normalizeOptionalRaw(args.tooltipRaw);
+      gadget.stateRaw = normalizeOptionalRaw(args.stateRaw);
+      gadget.frontColorRaw = normalizeOptionalRaw(args.frontColorRaw);
+      gadget.backColorRaw = normalizeOptionalRaw(args.backColorRaw);
+      gadget.gadgetFontRaw = normalizeOptionalRaw(args.gadgetFontRaw);
+      return true;
+    },
+    scanRange
+  );
+}
+
+function buildImageLine(args: ImageArgs): string {
+  const procName = args.inline ? "CatchImage" : "LoadImage";
+  const idRaw = args.idRaw.trim();
+  const imageRaw = args.imageRaw.trim();
+
+  if (idRaw === PB_ANY) {
+    const assignedVar = args.assignedVar?.trim();
+    if (assignedVar) {
+      return `${assignedVar} = ${procName}(${PB_ANY}, ${imageRaw})`;
+    }
+  }
+
+  return `${procName}(${idRaw}, ${imageRaw})`;
+}
+
+function buildFontLine(args: FontArgs): string {
+  const idRaw = args.idRaw.trim();
+  const nameRaw = args.nameRaw.trim();
+  const sizeRaw = args.sizeRaw.trim();
+  const flagsRaw = normalizeOptionalRaw(args.flagsRaw);
+
+  if (idRaw === PB_ANY) {
+    const assignedVar = args.assignedVar?.trim();
+    if (assignedVar) {
+      return `${assignedVar} = LoadFont(${PB_ANY}, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
+    }
+  }
+
+  return `LoadFont(${idRaw}, ${nameRaw}, ${sizeRaw}${flagsRaw ? `, ${flagsRaw}` : ""})`;
+}
+
+function cloneFormFont(font: FormFont): FormFont {
+  return {
+    id: font.id,
+    pbAny: font.pbAny,
+    variable: font.variable,
+    firstParam: font.firstParam,
+    nameRaw: font.nameRaw,
+    name: font.name,
+    sizeRaw: font.sizeRaw,
+    size: font.size,
+    flagsRaw: font.flagsRaw,
+    source: font.source,
+  };
+}
+
+function mapFontArgsToFont(args: FontArgs): FormFont {
+  const firstParam = args.idRaw.trim();
+  const pbAny = firstParam === PB_ANY;
+  const assignedVar = args.assignedVar?.trim();
+  const nameRaw = args.nameRaw.trim();
+  const sizeRaw = args.sizeRaw.trim();
+  const name = unquoteString(nameRaw) ?? undefined;
+  const size = asNumber(sizeRaw);
+
+  return {
+    id: pbAny ? (assignedVar || PB_ANY) : firstParam,
+    pbAny,
+    variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    nameRaw,
+    name,
+    sizeRaw,
+    size: typeof size === "number" ? size : undefined,
+    flagsRaw: normalizeOptionalRaw(args.flagsRaw),
+  };
+}
+
+function cloneFormImage(image: FormImage): FormImage {
+  return {
+    id: image.id,
+    pbAny: image.pbAny,
+    variable: image.variable,
+    firstParam: image.firstParam,
+    imageRaw: image.imageRaw,
+    image: image.image,
+    inline: image.inline,
+    source: image.source,
+  };
+}
+
+function mapImageArgsToImage(args: ImageArgs): FormImage {
+  const firstParam = args.idRaw.trim();
+  const pbAny = firstParam === PB_ANY;
+  const assignedVar = args.assignedVar?.trim();
+  const imageRaw = args.imageRaw.trim();
+  const normalized = args.inline
+    ? imageRaw.replace(/^\?+/, "").trim() || undefined
+    : (imageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (imageRaw || undefined));
+
+  return {
+    id: pbAny ? (assignedVar || PB_ANY) : firstParam,
+    pbAny,
+    variable: pbAny ? (assignedVar || undefined) : firstParam.replace(/^#/, ""),
+    firstParam,
+    imageRaw,
+    image: normalized,
+    inline: args.inline,
+  };
+}
+
+function isTopLevelHeadBoundaryLine(text: string): boolean {
+  const trimmed = text.trim();
+  return /^Declare\b/i.test(trimmed)
+    || /^XIncludeFile\b/i.test(trimmed)
+    || /^ProcedureDLL\b/i.test(trimmed)
+    || /^Procedure(?:\.\w+)?\b/i.test(trimmed)
+    || /^\s*;\s*IDE Options\b/i.test(text);
+}
+
+function isCustomGadgetInitMarkerLine(text: string): boolean {
+  return /^\s*;\s*\d+\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i.test(text);
+}
+
+function isTopLevelImageOrFontBoundaryLine(text: string): boolean {
+  const trimmed = text.trim();
+  return isImageDecoderLine(text)
+    || /^LoadImage\s*\(/i.test(trimmed)
+    || /^CatchImage\s*\(/i.test(trimmed)
+    || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
+    || /^LoadFont\s*\(/i.test(trimmed)
+    || isTopLevelHeadBoundaryLine(text);
+}
+
+function findCustomGadgetInitMarkerLine(document: vscode.TextDocument, startLine = 0): number | undefined {
+  for (let i = Math.max(0, startLine); i < document.lineCount; i++) {
+    if (isCustomGadgetInitMarkerLine(document.lineAt(i).text)) {
+      return i;
+    }
+  }
+
+  return undefined;
+}
+
+function findCustomGadgetInitBoundaryLine(document: vscode.TextDocument, startLine = 0): number | undefined {
+  let seenMarker = false;
+
+  for (let i = Math.max(0, startLine); i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    if (!seenMarker) {
+      if (isCustomGadgetInitMarkerLine(text)) {
+        seenMarker = true;
+      }
+      continue;
+    }
+
+    if (isTopLevelImageOrFontBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return seenMarker ? document.lineCount : undefined;
+}
+
+function isTopLevelGlobalAnchorLine(text: string): boolean {
+  const trimmed = text.trim();
+  return /^Enumeration\b/i.test(trimmed)
+    || isCustomGadgetInitMarkerLine(text)
+    || isImageDecoderLine(text)
+    || /^LoadImage\s*\(/i.test(trimmed)
+    || /^CatchImage\s*\(/i.test(trimmed)
+    || /^LoadFont\s*\(/i.test(trimmed)
+    || isTopLevelHeadBoundaryLine(text);
+}
+
+function getFirstProcedureLine(document: vscode.TextDocument): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    if (/^\s*ProcedureDLL\b/i.test(document.lineAt(i).text) || /^\s*Procedure(?:\.\w+)?\b/i.test(document.lineAt(i).text)) return i;
+  }
+  return document.lineCount;
+}
+
+function findFontLoadCalls(calls: PbCall[], document: vscode.TextDocument): PbCall[] {
+  const firstProcedureLine = getFirstProcedureLine(document);
+  return calls.filter(call => call.name === "LoadFont" && call.range.line < firstProcedureLine);
+}
+
+function getFontGlobalVars(fonts: FormFont[]): string[] {
+  return fonts
+    .filter(font => font.pbAny)
+    .map(font => font.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getFontEnumSymbols(fonts: FormFont[]): string[] {
+  return fonts
+    .filter(font => !font.pbAny)
+    .map(font => font.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildFontGlobalBlock(fonts: FormFont[]): string {
+  const globals = getFontGlobalVars(fonts);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildFontEnumBlock(fonts: FormFont[]): string {
+  const symbols = getFontEnumSymbols(fonts);
+  if (!symbols.length) return "";
+  return `Enumeration ${ENUM_NAMES.fonts}
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function findFontGlobalBlock(document: vscode.TextDocument, fonts: FormFont[]): LineBlock | undefined {
+  const fontGlobalNames = new Set(getFontGlobalVars(fonts));
+  if (!fontGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (isTopLevelGlobalAnchorLine(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => fontGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findFontGlobalInsertLine(document: vscode.TextDocument): number {
+  return findImageGlobalInsertLine(document);
+}
+
+function findFontBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  const fontLoadCalls = findFontLoadCalls(calls, document);
+  if (fontLoadCalls.length) return fontLoadCalls[0].range.line;
+
+  const decoderLines: number[] = [];
+  for (let i = 0; i < document.lineCount; i++) {
+    if (isImageDecoderLine(document.lineAt(i).text)) decoderLines.push(i);
+  }
+
+  const imageCalls = calls.filter(c => IMAGE_ENTRY_NAMES.has(c.name.toLowerCase()));
+  if (imageCalls.length || decoderLines.length) {
+    const lastLine = Math.max(
+      imageCalls.length ? imageCalls[imageCalls.length - 1].range.line : -1,
+      decoderLines.length ? decoderLines[decoderLines.length - 1] : -1
+    );
+    return skipBlankLines(document, lastLine + 1);
+  }
+
+  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets, ENUM_NAMES.menus, ENUM_NAMES.images];
+  let lastBlock: LineBlock | undefined;
+  for (const enumName of preferredEnums) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) lastBlock = block;
+  }
+
+  if (lastBlock) {
+    const insertLine = skipBlankLines(document, lastBlock.endLine + 1);
+    const customInitBoundary = findCustomGadgetInitBoundaryLine(document, insertLine);
+    if (customInitBoundary !== undefined) return customInitBoundary;
+    return insertLine;
+  }
+
+  const customInitBoundary = findCustomGadgetInitBoundaryLine(document);
+  if (customInitBoundary !== undefined) return customInitBoundary;
+
+  return findImageBlockInsertLine(document, calls);
+}
+
+function buildFontLoadBlock(fonts: FormFont[], indent: string): string {
+  if (!fonts.length) return "";
+
+  const lines = fonts.map(font => `${indent}${buildFontLine({
+    idRaw: font.firstParam,
+    nameRaw: font.nameRaw,
+    sizeRaw: font.sizeRaw,
+    flagsRaw: font.flagsRaw,
+    assignedVar: font.pbAny ? font.id : undefined,
+  })}`);
+
+  return `${lines.join("\n")}
+
+`;
+}
+
+function applyFontMutation(
+  document: vscode.TextDocument,
+  mutate: (fonts: FormFont[]) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const nextFonts = parsed.fonts.map(cloneFormFont);
+  if (!mutate(nextFonts)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const fontLoadCalls = findFontLoadCalls(calls, document);
+  const anchorLine = fontLoadCalls.length ? fontLoadCalls[0].range.line : findFontBlockInsertLine(document, calls);
+  const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, Math.max(0, document.lineCount - 1))) : "";
+  const rebuiltLoadBlock = buildFontLoadBlock(nextFonts, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  const fontGlobalBlock = findFontGlobalBlock(document, parsed.fonts);
+  applyOptionalBlockPatch(edit, document, fontGlobalBlock, findFontGlobalInsertLine(document), "");
+
+  const fontEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.fonts);
+  const fontEnumInsertLine = findFontBlockInsertLine(document, calls);
+  const combineFreshEnumAndLoadInsert = !fontLoadCalls.length && !fontEnumBlock && !!buildFontEnumBlock(nextFonts);
+
+  if (!combineFreshEnumAndLoadInsert) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      fontEnumBlock ? expandBlockWithTrailingBlank(document, fontEnumBlock) : undefined,
+      fontEnumInsertLine,
+      buildFontEnumBlock(nextFonts)
+    );
+  }
+
+  if (fontLoadCalls.length) {
+    const firstLine = fontLoadCalls[0].range.line;
+    const lastLine = fontLoadCalls[fontLoadCalls.length - 1].range.line;
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
+      rebuiltLoadBlock
+    );
+    return edit;
+  }
+
+  if (!rebuiltLoadBlock) {
+    const hasStructuralFontBlock = !!fontGlobalBlock || !!fontEnumBlock || !!buildFontEnumBlock(nextFonts);
+    return hasStructuralFontBlock ? edit : undefined;
+  }
+
+  if (combineFreshEnumAndLoadInsert) {
+    edit.insert(document.uri, new vscode.Position(fontEnumInsertLine, 0), `${buildFontEnumBlock(nextFonts)}${rebuiltLoadBlock}`);
+    return edit;
+  }
+
+  edit.insert(document.uri, new vscode.Position(fontEnumInsertLine, 0), rebuiltLoadBlock);
+  return edit;
+}
+
+const IMAGE_DECODER_ORDER = [
+  { name: "UseJPEGImageDecoder", pattern: /(?:jpg|jpeg)/i },
+  { name: "UsePNGImageDecoder", pattern: /png/i },
+  { name: "UseJTAImageDecoder", pattern: /tga/i },
+  { name: "UseTIFFImageDecoder", pattern: /tiff/i },
+] as const;
+
+function getRequiredImageDecoders(images: FormImage[]): string[] {
+  const result: string[] = [];
+
+  for (const decoder of IMAGE_DECODER_ORDER) {
+    const hasMatch = images.some(image => !image.inline && decoder.pattern.test(image.image ?? image.imageRaw));
+    if (hasMatch) {
+      result.push(decoder.name);
+    }
+  }
+
+  return result;
+}
+
+function isImageDecoderLine(text: string): boolean {
+  const trimmed = text.trim();
+  return IMAGE_DECODER_ORDER.some(decoder => trimmed === `${decoder.name}()`);
+}
+
+function findImageBlockInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text.trim();
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(text)) return i;
+    if (/^LoadFont\s*\(/i.test(text)) return i;
+    if (isTopLevelHeadBoundaryLine(document.lineAt(i).text)) return i;
+  }
+
+  return document.lineCount;
+}
+
+function getImageGlobalVars(images: FormImage[]): string[] {
+  return images
+    .filter(image => image.pbAny)
+    .map(image => image.id?.trim() ?? "")
+    .filter(id => id.length > 0 && !id.startsWith("#"));
+}
+
+function getImageEnumSymbols(images: FormImage[]): string[] {
+  return images
+    .filter(image => !image.pbAny)
+    .map(image => image.firstParam.trim())
+    .filter(id => id.length > 0 && id.startsWith("#"));
+}
+
+function buildImageGlobalBlock(images: FormImage[]): string {
+  const globals = getImageGlobalVars(images);
+  if (!globals.length) return "";
+  return `Global ${globals.join(", ")}
+
+`;
+}
+
+function buildImageEnumBlock(images: FormImage[]): string {
+  const symbols = getImageEnumSymbols(images);
+  if (!symbols.length) return "";
+  return `Enumeration ${ENUM_NAMES.images}
+${symbols.map(symbol => `  ${symbol}`).join("\n")}
+EndEnumeration
+
+`;
+}
+
+function parseGlobalVarNames(line: string): string[] {
+  const match = /^\s*Global\s+(.+?)\s*$/.exec(line);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function expandBlockWithTrailingBlank(document: vscode.TextDocument, block: LineBlock): LineBlock {
+  let endLine = block.endLine;
+  if (endLine + 1 < document.lineCount && document.lineAt(endLine + 1).text.trim() === "") {
+    endLine += 1;
+  }
+  return { startLine: block.startLine, endLine };
+}
+
+function findGadgetGlobalBlock(document: vscode.TextDocument, gadgets: Gadget[]): LineBlock | undefined {
+  const gadgetGlobalNames = new Set(getGadgetGlobalVars(gadgets));
+  if (!gadgetGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (isTopLevelGlobalAnchorLine(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => gadgetGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findGadgetGlobalInsertLine(document: vscode.TextDocument): number {
+  const parsed = parseFormDocument(document.getText());
+  const windowGlobalNames = new Set(
+    parsed.window?.pbAny && parsed.window.id && !parsed.window.id.startsWith("#")
+      ? [parsed.window.id]
+      : []
+  );
+
+  let firstGlobal = document.lineCount;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (firstGlobal === document.lineCount && /^\s*Global\b/i.test(line)) {
+      firstGlobal = i;
+    }
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
+      firstAnchor = i;
+    }
+
+    const vars = parseGlobalVarNames(line);
+    if (!vars.length) continue;
+    if (!vars.some(name => windowGlobalNames.has(name))) continue;
+
+    const block = expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+    return block.endLine + 1;
+  }
+
+  return firstGlobal !== document.lineCount ? firstGlobal : firstAnchor;
+}
+
+function findGadgetEnumInsertLine(document: vscode.TextDocument): number {
+  const windowEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.windows);
+  if (windowEnumBlock) {
+    return skipBlankLines(document, windowEnumBlock.endLine + 1);
+  }
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const trimmed = text.trim();
+    if (new RegExp(`^Enumeration\\s+${ENUM_NAMES.menus}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.images}\\b`, "i").test(trimmed)
+      || new RegExp(`^Enumeration\\s+${ENUM_NAMES.fonts}\\b`, "i").test(trimmed)
+      || isCustomGadgetInitMarkerLine(text)
+      || isImageDecoderLine(text)
+      || /^LoadImage\s*\(/i.test(trimmed)
+      || /^CatchImage\s*\(/i.test(trimmed)
+      || /^LoadFont\s*\(/i.test(trimmed)
+      || isTopLevelHeadBoundaryLine(text)) {
+      return i;
+    }
+  }
+
+  return document.lineCount;
+}
+
+function applyGadgetHeadPatch(edit: vscode.WorkspaceEdit, document: vscode.TextDocument): void {
+  const parsed = parseFormDocument(document.getText());
+  applyGadgetHeadPatchForGadgets(edit, document, parsed.gadgets);
+}
+
+function findImageGlobalBlock(document: vscode.TextDocument, images: FormImage[]): LineBlock | undefined {
+  const imageGlobalNames = new Set(getImageGlobalVars(images));
+  if (!imageGlobalNames.size) return undefined;
+
+  let topAnchor = document.lineCount;
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (isTopLevelGlobalAnchorLine(line)) {
+      topAnchor = i;
+      break;
+    }
+  }
+
+  for (let i = 0; i < topAnchor; i++) {
+    const vars = parseGlobalVarNames(document.lineAt(i).text);
+    if (!vars.length) continue;
+    if (!vars.some(name => imageGlobalNames.has(name))) continue;
+    return expandBlockWithTrailingBlank(document, { startLine: i, endLine: i });
+  }
+
+  return undefined;
+}
+
+function findImageGlobalInsertLine(document: vscode.TextDocument): number {
+  let lastGlobal = -1;
+  let firstAnchor = document.lineCount;
+
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (/^\s*Global\b/i.test(line)) lastGlobal = i;
+    if (firstAnchor === document.lineCount && isTopLevelGlobalAnchorLine(line)) {
+      firstAnchor = i;
+    }
+  }
+
+  if (lastGlobal >= 0) {
+    return skipBlankLines(document, lastGlobal + 1);
+  }
+
+  return firstAnchor;
+}
+
+function findImageEnumInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  const preferredEnums = [ENUM_NAMES.windows, ENUM_NAMES.gadgets, ENUM_NAMES.menus];
+  let lastBlock: LineBlock | undefined;
+
+  for (const enumName of preferredEnums) {
+    const block = findNamedEnumerationBlock(document, enumName);
+    if (block && (!lastBlock || block.endLine > lastBlock.endLine)) {
+      lastBlock = block;
+    }
+  }
+
+  if (lastBlock) {
+    let insertLine = lastBlock.endLine + 1;
+    while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+      insertLine += 1;
+    }
+    return insertLine;
+  }
+
+  const customInitMarker = findCustomGadgetInitMarkerLine(document);
+  if (customInitMarker !== undefined) return customInitMarker;
+
+  return findImageBlockInsertLine(document, calls);
+}
+
+function applyOptionalBlockPatch(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  block: LineBlock | undefined,
+  insertLine: number,
+  rebuilt: string
+): void {
+  if (block) {
+    const range = new vscode.Range(
+      new vscode.Position(block.startLine, 0),
+      document.lineAt(block.endLine).rangeIncludingLineBreak.end
+    );
+    if (rebuilt.length) {
+      edit.replace(document.uri, range, rebuilt);
+    } else {
+      edit.delete(document.uri, range);
+    }
+    return;
+  }
+
+  if (rebuilt.length) {
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), rebuilt);
+  }
+}
+
+function getHeadBlockReplaceEnd(document: vscode.TextDocument, lastLine: number): vscode.Position {
+  const trailingBlankLine = lastLine + 1;
+  if (trailingBlankLine < document.lineCount && document.lineAt(trailingBlankLine).text.trim() === "") {
+    return document.lineAt(trailingBlankLine).rangeIncludingLineBreak.end;
+  }
+
+  return document.lineAt(lastLine).rangeIncludingLineBreak.end;
+}
+
+function buildImageBlock(images: FormImage[], indent: string): string {
+  if (!images.length) return "";
+
+  const decoderLines = getRequiredImageDecoders(images).map(name => `${indent}${name}()`);
+  const imageLines = images.map(image => `${indent}${buildImageLine({
+    inline: image.inline,
+    idRaw: image.firstParam,
+    imageRaw: image.imageRaw,
+    assignedVar: image.pbAny ? image.id : undefined,
+  })}`);
+
+  const parts: string[] = [];
+  if (decoderLines.length) {
+    parts.push(...decoderLines, "");
+  }
+  parts.push(...imageLines, "");
+  return `${parts.join("\n")}
+`;
+}
+
+function findImageInsertLine(document: vscode.TextDocument, calls: PbCall[]): number {
+  let insertAfterLine = -1;
+
+  for (const call of calls) {
+    const nameLower = call.name.toLowerCase();
+    if (IMAGE_ENTRY_NAMES.has(nameLower)) {
+      insertAfterLine = call.range.line;
+    }
+  }
+
+  if (insertAfterLine >= 0) return insertAfterLine;
+  return findImageBlockInsertLine(document, calls) - 1;
+}
+
+// ---------------------------------------------------------------------------
+// Image re-indexing helpers (mirrors codeviewer.pb FD_SelectCode logic)
+// ---------------------------------------------------------------------------
+
+interface ImageRename {
+  /** The old image id as it appears in ImageID(...) references. */
+  oldId: string;
+  /** The new image id that replaces it. */
+  newId: string;
+}
+
+/**
+ * Re-numbers every image in `images` by its position in the array —
+ * exactly as FD_SelectCode does via ListIndex(FormWindows()\FormImg()).
+ *
+ * Enum images  (pbAny=false): id/firstParam → "#Img_<windowVar>_<i>"
+ * Global images (pbAny=true):  id/variable  → "Img_<windowVar>_<i>",
+ *                               firstParam  → "#PB_Any"
+ *
+ * Returns the list of old→new renames for ImageID(...) body patching.
+ * Mutates `images` in place.
+ */
+function reindexImages(images: FormImage[], windowVar: string): ImageRename[] {
+  const renames: ImageRename[] = [];
+  images.forEach((image, idx) => {
+    const oldId = image.id;
+    if (image.pbAny) {
+      const newId = `Img_${windowVar}_${idx}`;
+      if (oldId !== newId) {
+        renames.push({ oldId, newId });
+      }
+      image.id = newId;
+      image.variable = newId;
+      image.firstParam = PB_ANY;
+    } else {
+      const newId = `#Img_${windowVar}_${idx}`;
+      if (oldId !== newId) {
+        renames.push({ oldId, newId });
+      }
+      image.id = newId;
+      image.firstParam = newId;
+      image.variable = `Img_${windowVar}_${idx}`;
+    }
+  });
+  return renames;
+}
+
+/**
+ * Applies ImageID(oldId) → ImageID(newId) substitutions across the
+ * whole document.  Only lines containing the `ImageID(` pattern are
+ * touched, so the substitution never overlaps with the image-block
+ * replacement (which uses LoadImage/CatchImage, not ImageID).
+ */
+function applyImageIdRenames(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  renames: ImageRename[]
+): void {
+  if (!renames.length) return;
+  const renameMap = new Map(renames.map(r => [r.oldId, r.newId]));
+  for (let i = 0; i < document.lineCount; i++) {
+    const line = document.lineAt(i).text;
+    if (!/ImageID\s*\(/i.test(line)) continue;
+    const updated = line.replace(/\bImageID\s*\(([^)]+)\)/gi, (match, inner) => {
+      const newId = renameMap.get(inner.trim());
+      return newId !== undefined ? `ImageID(${newId})` : match;
+    });
+    if (updated !== line) {
+      edit.replace(document.uri, document.lineAt(i).range, updated);
+    }
+  }
+}
+
+function applyImageMutation(
+  document: vscode.TextDocument,
+  mutate: (images: FormImage[]) => boolean,
+  scanRange?: ScanRange,
+  afterBuild?: (edit: vscode.WorkspaceEdit) => void
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const nextImages = parsed.images.map(cloneFormImage);
+  if (!mutate(nextImages)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const imageCalls = calls.filter(c => IMAGE_ENTRY_NAMES.has(c.name.toLowerCase()));
+  const decoderLines: number[] = [];
+  for (let i = 0; i < document.lineCount; i++) {
+    if (isImageDecoderLine(document.lineAt(i).text)) {
+      decoderLines.push(i);
+    }
+  }
+
+  const anchorLine = imageCalls.length
+    ? imageCalls[0].range.line
+    : (decoderLines.length ? decoderLines[0] : findImageBlockInsertLine(document, calls));
+  const indent = document.lineCount ? getLineIndent(document, Math.min(anchorLine, document.lineCount - 1)) : "";
+  const rebuilt = buildImageBlock(nextImages, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  const imageGlobalBlock = findImageGlobalBlock(document, parsed.images);
+  const rebuiltGlobalBlock = buildImageGlobalBlock(nextImages);
+  applyOptionalBlockPatch(
+    edit,
+    document,
+    imageGlobalBlock,
+    findImageGlobalInsertLine(document),
+    rebuiltGlobalBlock
+  );
+
+  const imageEnumBlock = findNamedEnumerationBlock(document, ENUM_NAMES.images);
+  const rebuiltEnumBlock = buildImageEnumBlock(nextImages);
+  const imageBlockInsertLine = findImageBlockInsertLine(document, calls);
+  const imageEnumInsertLine = findImageEnumInsertLine(document, calls);
+  const combineFreshEnumAndImageInsert = !imageCalls.length
+    && !decoderLines.length
+    && !imageEnumBlock
+    && !!rebuiltEnumBlock
+    && imageEnumInsertLine === imageBlockInsertLine;
+
+  if (!combineFreshEnumAndImageInsert) {
+    applyOptionalBlockPatch(
+      edit,
+      document,
+      imageEnumBlock ? expandBlockWithTrailingBlank(document, imageEnumBlock) : undefined,
+      imageEnumInsertLine,
+      rebuiltEnumBlock
+    );
+  }
+
+  if (imageCalls.length || decoderLines.length) {
+    const firstLine = Math.min(
+      imageCalls.length ? imageCalls[0].range.line : Number.MAX_SAFE_INTEGER,
+      decoderLines.length ? decoderLines[0] : Number.MAX_SAFE_INTEGER
+    );
+    const lastLine = Math.max(
+      imageCalls.length ? imageCalls[imageCalls.length - 1].range.line : -1,
+      decoderLines.length ? decoderLines[decoderLines.length - 1] : -1
+    );
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
+      rebuilt
+    );
+    afterBuild?.(edit);
+    return edit;
+  }
+
+  if (!rebuilt) return undefined;
+
+  if (combineFreshEnumAndImageInsert) {
+    edit.insert(document.uri, new vscode.Position(imageEnumInsertLine, 0), `${rebuiltEnumBlock}${rebuilt}`);
+    afterBuild?.(edit);
+    return edit;
+  }
+
+  edit.insert(document.uri, new vscode.Position(imageBlockInsertLine, 0), rebuilt);
+  afterBuild?.(edit);
+  return edit;
+}
+
+function findCreateCallById(calls: PbCall[], createNameLower: string, id: string): PbCall | undefined {
+  return calls.find(c => matchesCreateCallName(c.name.toLowerCase(), createNameLower) && firstParamOfCall(c.args) === id);
+}
+
+function findSectionEndIndex(calls: PbCall[], startIdx: number): number {
+  for (let i = startIdx + 1; i < calls.length; i++) {
+    if (isCreateBoundary(calls[i].name.toLowerCase())) {
+      return i;
+    }
+  }
+  return calls.length;
+}
+
+function findLastEntryLineInSection(
+  calls: PbCall[],
+  startIdx: number,
+  endIdx: number,
+  entryNamesLower: Set<string>
+): number {
+  let insertAfterLine = calls[startIdx].range.line;
+  for (let i = startIdx + 1; i < endIdx; i++) {
+    if (entryNamesLower.has(calls[i].name.toLowerCase())) {
+      insertAfterLine = calls[i].range.line;
+    }
+  }
+  return insertAfterLine;
+}
+
+function isLineInCreateSection(calls: PbCall[], line: number, createNameLower: string, expectedId: string): boolean {
+  const create = findNearestCreateAbove(calls, line, createNameLower);
+  return !!create && firstParamOfCall(create.args) === expectedId;
+}
+
+function applySectionEntryInsert(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  entryNamesLower: Set<string>,
+  buildLine: (indent: string) => string
+ ): vscode.WorkspaceEdit | undefined {
+  const create = findCreateCallById(calls, createNameLower, sectionId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, entryNamesLower);
+
+  const indent = getLineIndent(document, insertAfterLine);
+  const line = `${buildLine(indent)}\n`;
+  const insertPos = new vscode.Position(Math.min(document.lineCount, insertAfterLine + 1), 0);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, line);
+  return edit;
+}
+
+function findAnchoredMenuEntryInsert(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  parentSourceLine: number
+): { insertLine: number; indent: string } | undefined {
+  const create = findCreateCallById(calls, PB_CALL.createMenu, menuId);
+  if (!create) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  const parentIndex = menu.entries.findIndex(entry => entry.source?.line === parentSourceLine);
+  if (parentIndex < 0) return undefined;
+
+  const parentEntry = menu.entries[parentIndex];
+  if (parentEntry.kind !== MENU_ENTRY_KIND.MenuTitle && parentEntry.kind !== MENU_ENTRY_KIND.OpenSubMenu) {
+    return undefined;
+  }
+
+  const parentLevel = Math.max(0, parentEntry.level ?? 0);
+  let insertLine: number | undefined;
+  let insertBoundaryEntry: (typeof menu.entries)[number] | undefined;
+
+  for (let i = parentIndex + 1; i < menu.entries.length; i++) {
+    const entry = menu.entries[i];
+    const level = Math.max(0, entry.level ?? 0);
+    if (level <= parentLevel) {
+      insertLine = entry.source?.line;
+      insertBoundaryEntry = entry;
+      break;
+    }
+  }
+
+  if (typeof insertLine !== "number") {
+    const startIdx = calls.indexOf(create);
+    const endIdx = findSectionEndIndex(calls, startIdx);
+    const insertAfterLine = findLastEntryLineInSection(calls, startIdx, endIdx, MENU_ENTRY_NAMES);
+    return {
+      insertLine: Math.min(document.lineCount, insertAfterLine + 1),
+      indent: getLineIndent(document, insertAfterLine)
+    };
+  }
+
+  if (
+    parentEntry.kind === MENU_ENTRY_KIND.OpenSubMenu
+    && insertBoundaryEntry?.kind === MENU_ENTRY_KIND.CloseSubMenu
+    && Math.max(0, insertBoundaryEntry.level ?? 0) === parentLevel
+  ) {
+    const parentLine = parentEntry.source?.line;
+    if (typeof parentLine === "number" && isLineInCreateSection(calls, parentLine, PB_CALL.createMenu, menuId)) {
+      return { insertLine, indent: getLineIndent(document, insertLine) };
+    }
+  }
+
+  if (!isLineInCreateSection(calls, insertLine, PB_CALL.createMenu, menuId)) return undefined;
+  return { insertLine, indent: getLineIndent(document, insertLine) };
+}
+
+function buildPromotedSubMenuTextRaw(entry: FormMenuEntry): string {
+  if (typeof entry.text === "string") {
+    return quotePbString(entry.text);
+  }
+
+  const raw = entry.textRaw?.trim();
+  if (!raw?.length) return '""';
+  return normalizeMenuTextForShortcut(raw);
+}
+
+function applyMenuEntryInsertIntoLeafMenuItem(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  parentEntry: FormMenuEntry,
+  args: MenuEntryArgs
+): vscode.WorkspaceEdit | undefined {
+  const sourceLine = parentEntry.source?.line;
+  if (typeof sourceLine !== "number") return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createMenu, menuId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const replacement = [
+    `${indent}${buildMenuEntryLine({ kind: MENU_ENTRY_KIND.OpenSubMenu, textRaw: buildPromotedSubMenuTextRaw(parentEntry) })}`,
+    `${indent}${buildMenuEntryLine(args)}`,
+    `${indent}CloseSubMenu()`
+  ].join("\n");
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    document.uri,
+    new vscode.Range(document.lineAt(sourceLine).range.start, document.lineAt(sourceLine).rangeIncludingLineBreak.end),
+    `${replacement}\n`
+  );
+
+  const parsed = parseFormDocument(document.getText());
+  const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars)
+    .filter(symbol => symbol !== parentEntry.idRaw?.trim());
+
+  const nextId = args.idRaw?.trim();
+  if (nextId?.startsWith("#") && !symbols.includes(nextId)) {
+    symbols.push(nextId);
+  }
+
+  applyMenuEnumPatch(edit, document, calls, symbols);
+  return edit;
+}
+
+function findMenuEntryBlockRange(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  menuId: string,
+  sourceLine: number,
+  entryNameLower: string
+): { startLine: number; endLine: number } | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createMenu, menuId)) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  const entryIndex = menu.entries.findIndex(entry => {
+    const entryLine = entry.source?.line;
+    return entryLine === sourceLine && entry.kind.toLowerCase() === entryNameLower;
+  });
+  if (entryIndex < 0) return undefined;
+
+  const entry = menu.entries[entryIndex];
+  const startLine = entry.source?.line;
+  if (typeof startLine !== "number") return undefined;
+
+  if (entry.kind !== MENU_ENTRY_KIND.MenuTitle && entry.kind !== MENU_ENTRY_KIND.OpenSubMenu) {
+    return { startLine, endLine: startLine };
+  }
+
+  if (entry.kind === MENU_ENTRY_KIND.OpenSubMenu) {
+    const targetLevel = Math.max(0, entry.level ?? 0);
+    for (let i = entryIndex + 1; i < menu.entries.length; i++) {
+      const nextEntry = menu.entries[i];
+      if (nextEntry.kind !== MENU_ENTRY_KIND.CloseSubMenu) continue;
+      if (Math.max(0, nextEntry.level ?? 0) !== targetLevel) continue;
+
+      const endLine = nextEntry.source?.line;
+      if (typeof endLine === "number") {
+        return { startLine, endLine };
+      }
+      break;
+    }
+  }
+
+  const targetLevel = Math.max(0, entry.level ?? 0);
+  let endLine = startLine;
+
+  for (let i = entryIndex + 1; i < menu.entries.length; i++) {
+    const nextEntry = menu.entries[i];
+    const nextLine = nextEntry.source?.line;
+    if (typeof nextLine !== "number") continue;
+
+    const nextLevel = Math.max(0, nextEntry.level ?? 0);
+    if (nextLevel <= targetLevel && nextEntry.kind !== MENU_ENTRY_KIND.CloseSubMenu) {
+      break;
+    }
+
+    endLine = nextLine;
+  }
+
+  return { startLine, endLine };
+}
+
+function applySectionEntryUpdate(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  sourceLine: number,
+  entryNameLower: string,
+  rebuiltWithoutIndent: string
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === entryNameLower);
+  if (!call) return undefined;
+
+  if (!isLineInCreateSection(calls, sourceLine, createNameLower, sectionId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = `${indent}${rebuiltWithoutIndent}`;
+  return replaceCallLinePreserveSuffix(document, call, rebuilt);
+}
+
+function applySectionEntryDelete(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string,
+  sourceLine: number,
+  entryNameLower: string
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === entryNameLower);
+  if (!call) return undefined;
+
+  if (!isLineInCreateSection(calls, sourceLine, createNameLower, sectionId)) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+  return edit;
+}
+
+function applySectionDelete(
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  createNameLower: string,
+  sectionId: string
+): vscode.WorkspaceEdit | undefined {
+  const create = findCreateCallById(calls, createNameLower, sectionId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const endLine = endIdx > startIdx + 1
+    ? calls[endIdx - 1].range.line
+    : create.range.line;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(create.range.line, 0),
+      document.lineAt(endLine).rangeIncludingLineBreak.end
+    )
+  );
+  return edit;
+}
+
+function mapStatusBarArgsToField(args: StatusBarFieldArgs): FormStatusBarField {
+  return {
+    widthRaw: args.widthRaw,
+    textRaw: args.textRaw,
+    imageRaw: args.imageRaw,
+    flagsRaw: args.flagsRaw,
+    progressBar: args.progressBar,
+    progressRaw: args.progressRaw,
+  };
+}
+
+function mergeStatusBarFieldArgs(field: FormStatusBarField, args: StatusBarFieldArgs): FormStatusBarField {
+  const next: FormStatusBarField = {
+    ...field,
+    widthRaw: args.widthRaw,
+  };
+
+  if (args.textRaw !== undefined) next.textRaw = args.textRaw;
+  if (args.imageRaw !== undefined) next.imageRaw = args.imageRaw;
+  if (args.flagsRaw !== undefined) next.flagsRaw = args.flagsRaw;
+  if (args.progressBar !== undefined) next.progressBar = args.progressBar;
+  if (args.progressRaw !== undefined) next.progressRaw = args.progressRaw;
+
+  return next;
+}
+
+function buildStatusBarDecorationLine(statusBarId: string, field: FormStatusBarField, index: number): string | undefined {
+  const flags = field.flagsRaw?.trim();
+  const flagsSuffix = flags ? `, ${flags}` : "";
+
+  if (field.progressBar) {
+    const progress = field.progressRaw?.trim() || "0";
+    return `StatusBarProgress(${statusBarId}, ${index}, ${progress}${flagsSuffix})`;
+  }
+
+  const image = field.imageRaw?.trim();
+  if (image) {
+    return `StatusBarImage(${statusBarId}, ${index}, ${image}${flagsSuffix})`;
+  }
+
+  const text = field.textRaw?.trim();
+  if (text) {
+    return `StatusBarText(${statusBarId}, ${index}, ${text}${flagsSuffix})`;
+  }
+
+  return undefined;
+}
+
+function buildStatusBarSectionText(statusBarId: string, fields: FormStatusBarField[], indent: string): string {
+  const lines: string[] = [];
+
+  fields.forEach((field, index) => {
+    lines.push(`${indent}AddStatusBarField(${field.widthRaw.trim()})`);
+
+    const decoration = buildStatusBarDecorationLine(statusBarId, field, index);
+    if (decoration) {
+      lines.push(`${indent}${decoration}`);
+    }
+  });
+
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+function cloneStatusBarField(field: FormStatusBarField): FormStatusBarField {
+  return {
+    widthRaw: field.widthRaw,
+    textRaw: field.textRaw,
+    text: field.text,
+    imageRaw: field.imageRaw,
+    imageId: field.imageId,
+    flagsRaw: field.flagsRaw,
+    progressBar: field.progressBar,
+    progressRaw: field.progressRaw,
+    source: field.source,
+  };
+}
+
+function applyStatusBarFieldMutation(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  mutate: (fields: FormStatusBarField[]) => boolean,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const statusBar = parsed.statusbars.find(sb => sb.id === statusBarId);
+  if (!statusBar) return undefined;
+
+  const nextFields = statusBar.fields.map(cloneStatusBarField);
+  if (!mutate(nextFields)) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const create = findCreateCallById(calls, PB_CALL.createStatusBar, statusBarId);
+  if (!create) return undefined;
+
+  const startIdx = calls.indexOf(create);
+  const endIdx = findSectionEndIndex(calls, startIdx);
+  const endLineExclusive = endIdx < calls.length ? calls[endIdx].range.line : Number.POSITIVE_INFINITY;
+  const statusCalls = calls.filter(c => c.range.line > create.range.line && c.range.line < endLineExclusive && STATUSBAR_FIELD_NAMES.has(c.name.toLowerCase()));
+
+  const indentLine = statusCalls.length ? statusCalls[0].range.line : create.range.line;
+  const indent = getLineIndent(document, indentLine);
+  const rebuilt = buildStatusBarSectionText(statusBarId, nextFields, indent);
+
+  const edit = new vscode.WorkspaceEdit();
+
+  if (statusCalls.length) {
+    const firstLine = statusCalls[0].range.line;
+    const lastLine = statusCalls[statusCalls.length - 1].range.line;
+    edit.replace(
+      document.uri,
+      new vscode.Range(new vscode.Position(firstLine, 0), getHeadBlockReplaceEnd(document, lastLine)),
+      rebuilt
+    );
+    return edit;
+  }
+
+  if (!rebuilt) return undefined;
+
+  edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, create.range.line + 1), 0), rebuilt);
+  return edit;
+}
+
+export function applyMenuEntryInsert(
+  document: vscode.TextDocument,
+  menuId: string,
+  args: MenuEntryArgs,
+  scanRange?: ScanRange,
+  insertOptions?: MenuEntryInsertOptions
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const insertText = args.kind === MENU_ENTRY_KIND.OpenSubMenu
+    ? (indent: string) => `${indent}${buildMenuEntryLine(args)}\n${indent}CloseSubMenu()`
+    : (indent: string) => `${indent}${buildMenuEntryLine(args)}`;
+
+  let edit: vscode.WorkspaceEdit | undefined;
+  let menuEnumPatched = false;
+
+  if (typeof insertOptions?.parentSourceLine === "number") {
+    const parsed = parseFormDocument(document.getText());
+    const menu = parsed.menus.find(entry => entry.id === menuId);
+    const parentEntry = menu?.entries.find(entry => entry.source?.line === insertOptions.parentSourceLine);
+
+    if (parentEntry?.kind === MENU_ENTRY_KIND.MenuItem) {
+      edit = applyMenuEntryInsertIntoLeafMenuItem(document, calls, menuId, parentEntry, args);
+      menuEnumPatched = Boolean(edit);
+    } else {
+      const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, insertOptions.parentSourceLine);
+      if (!anchored) return undefined;
+
+      edit = new vscode.WorkspaceEdit();
+      edit.insert(document.uri, new vscode.Position(Math.min(document.lineCount, anchored.insertLine), 0), `${insertText(anchored.indent)}\n`);
+    }
+  } else {
+    if (args.kind === MENU_ENTRY_KIND.CloseSubMenu) {
+      const parsed = parseFormDocument(document.getText());
+      const menu = parsed.menus.find(entry => entry.id === menuId);
+      let openBalance = 0;
+      for (const entry of menu?.entries ?? []) {
+        if (entry.kind === MENU_ENTRY_KIND.OpenSubMenu) {
+          openBalance += 1;
+          continue;
+        }
+        if (entry.kind === MENU_ENTRY_KIND.CloseSubMenu) {
+          openBalance = Math.max(0, openBalance - 1);
+        }
+      }
+      if (openBalance <= 0) return undefined;
+    }
+
+    edit = applySectionEntryInsert(
+      document,
+      calls,
+      PB_CALL.createMenu,
+      menuId,
+      MENU_ENTRY_NAMES,
+      insertText
+    );
+  }
+
+  if (!edit) return undefined;
+
+  const idRaw = args.idRaw?.trim();
+  if (!menuEnumPatched && idRaw?.startsWith("#")) {
+    const parsed = parseFormDocument(document.getText());
+    const symbols = collectMenuEnumSymbols(parsed.menus, parsed.toolbars);
+    if (!symbols.includes(idRaw)) symbols.push(idRaw);
+    applyMenuEnumPatch(edit, document, calls, symbols);
+  }
+
+  return edit;
+}
+
+export function applyMenuEntryUpdate(
+  document: vscode.TextDocument,
+  menuId: string,
+  sourceLine: number,
+  args: MenuEntryArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const edit = applySectionEntryUpdate(
+    document,
+    calls,
+    PB_CALL.createMenu,
+    menuId,
+    sourceLine,
+    args.kind.toLowerCase(),
+    buildMenuEntryLine(args)
+  );
+  if (!edit) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menus = parsed.menus.map(menu => ({ ...menu, entries: menu.entries.map(cloneMenuEntry) }));
+  const menu = menus.find(entry => entry.id === menuId);
+  const target = menu?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
+  if (target) {
+    target.idRaw = args.idRaw;
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  return edit;
+}
+
+export function applyMenuEntryDelete(
+  document: vscode.TextDocument,
+  menuId: string,
+  sourceLine: number,
+  kind: MenuEntryKind,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const deleteRange = findMenuEntryBlockRange(document, calls, menuId, sourceLine, kind.toLowerCase());
+  if (!deleteRange) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(
+    document.uri,
+    new vscode.Range(
+      new vscode.Position(deleteRange.startLine, 0),
+      document.lineAt(deleteRange.endLine).rangeIncludingLineBreak.end
+    )
+  );
+
+  const parsed = parseFormDocument(document.getText());
+  const menus = parsed.menus.map(menu => ({ ...menu, entries: menu.entries.map(cloneMenuEntry) }));
+  const menu = menus.find(entry => entry.id === menuId);
+  if (menu) {
+    const targetIndex = menu.entries.findIndex(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === kind.toLowerCase());
+    if (targetIndex >= 0) menu.entries.splice(targetIndex, 1);
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(menus, parsed.toolbars));
+  return edit;
+}
+
+export function applyMenuEntryMove(
+  document: vscode.TextDocument,
+  menuId: string,
+  sourceLine: number,
+  kind: MenuEntryKind,
+  options: MenuEntryMoveOptions,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const blockRange = findMenuEntryBlockRange(document, calls, menuId, sourceLine, kind.toLowerCase());
+  if (!blockRange) return undefined;
+
+  const parsed = parseFormDocument(document.getText());
+  const menu = parsed.menus.find(entry => entry.id === menuId);
+  if (!menu) return undefined;
+
+  let insertLine: number | undefined;
+
+  if (options.placement === "appendChild") {
+    const anchored = findAnchoredMenuEntryInsert(document, calls, menuId, options.targetSourceLine);
+    if (!anchored) return undefined;
+    insertLine = anchored.insertLine;
+  } else {
+    const targetEntry = menu.entries.find(entry => entry.source?.line === options.targetSourceLine);
+    if (!targetEntry) return undefined;
+
+    const targetRange = findMenuEntryBlockRange(
+      document,
+      calls,
+      menuId,
+      options.targetSourceLine,
+      targetEntry.kind.toLowerCase()
+    );
+    if (!targetRange) return undefined;
+
+    insertLine = options.placement === "before"
+      ? targetRange.startLine
+      : Math.min(document.lineCount, targetRange.endLine + 1);
+  }
+
+  if (typeof insertLine !== "number") return undefined;
+  if (insertLine >= blockRange.startLine && insertLine <= blockRange.endLine + 1) {
+    return undefined;
+  }
+
+  const blockTextRange = new vscode.Range(
+    new vscode.Position(blockRange.startLine, 0),
+    document.lineAt(blockRange.endLine).rangeIncludingLineBreak.end
+  );
+  let blockText = "";
+  for (let line = blockRange.startLine; line <= blockRange.endLine; line++) {
+    const textLine = document.lineAt(line);
+    blockText += textLine.text;
+    if (textLine.rangeIncludingLineBreak.end.line > textLine.range.end.line) {
+      blockText += "\n";
+    }
+  }
+  if (insertLine < document.lineCount && !blockText.endsWith("\n") && !blockText.endsWith("\r\n")) {
+    blockText += "\n";
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, blockTextRange);
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), blockText);
+  return edit;
+}
+
+export function applyToolBarEntryInsert(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  args: ToolBarEntryArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  const edit = applySectionEntryInsert(
+    document,
+    calls,
+    PB_CALL.createToolBar,
+    toolBarId,
+    TOOLBAR_ENTRY_NAMES,
+    indent => buildToolBarEntryText(args, toolBarId, indent)
+  );
+  if (!edit) return undefined;
+
+  const idRaw = args.idRaw?.trim();
+  if (isToolBarButtonKind(args.kind) && idRaw?.startsWith("#")) {
+    const parsed = parseFormDocument(document.getText());
+    const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+    const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+    if (targetToolBar) {
+      targetToolBar.entries.push({ kind: args.kind, idRaw: args.idRaw });
+    }
+    applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
+  }
+
+  return edit;
+}
+
+
+export function applyToolBarEntryUpdate(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  sourceLine: number,
+  args: ToolBarEntryArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === args.kind.toLowerCase());
+  if (!call) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  const indent = getLineIndent(document, sourceLine);
+  const rebuilt = buildToolBarEntryText(args, toolBarId, indent);
+  const lineText = document.lineAt(sourceLine).text;
+  const endInLine = Math.max(0, call.range.end - call.range.lineStart);
+  const suffix = lineText.slice(endInLine);
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(document.uri, document.lineAt(sourceLine).range, rebuilt + suffix);
+
+  const previousEntryId = getToolBarEntryIdFromCall(call);
+  const nextEntryId = args.idRaw?.trim() || previousEntryId;
+  const tipCall = findToolBarToolTipCall(calls, toolBarId, previousEntryId);
+
+  if (tipCall && tipCall.range.line !== sourceLine) {
+    if (args.kind === TOOLBAR_ENTRY_KIND.ToolBarButton) {
+      edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    } else if (args.kind === TOOLBAR_ENTRY_KIND.ToolBarImageButton && previousEntryId && nextEntryId && previousEntryId !== nextEntryId) {
+      const tipParts = splitParams(tipCall.args);
+      const textRaw = (tipParts.length >= 3 ? tipParts[2] : tipParts[1])?.trim() ?? '""';
+      const rebuiltTipLine = buildToolBarEntryText({
+        kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+        idRaw: nextEntryId,
+        textRaw,
+      }, toolBarId, getLineIndent(document, tipCall.range.line));
+      edit.replace(document.uri, document.lineAt(tipCall.range.line).range, rebuiltTipLine);
+    }
+  }
+
+  const parsed = parseFormDocument(document.getText());
+  const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+  const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+  const target = targetToolBar?.entries.find(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === args.kind.toLowerCase());
+  if (target && isToolBarButtonKind(target.kind)) {
+    target.idRaw = args.idRaw;
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
+
+  return edit;
+}
+
+export function applyToolBarEntryDelete(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  sourceLine: number,
+  kind: ToolBarEntryKind,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const call = calls.find(c => c.range.line === sourceLine && c.name.toLowerCase() === kind.toLowerCase());
+  if (!call) return undefined;
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.delete(document.uri, document.lineAt(sourceLine).rangeIncludingLineBreak);
+
+  if (isToolBarButtonKind(kind)) {
+    const entryId = getToolBarEntryIdFromCall(call);
+    const tipCall = findToolBarToolTipCall(calls, toolBarId, entryId);
+    if (tipCall && tipCall.range.line !== sourceLine) {
+      edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    }
+  }
+
+  const parsed = parseFormDocument(document.getText());
+  const toolbars = parsed.toolbars.map(toolBar => ({ ...toolBar, entries: toolBar.entries.map(cloneToolBarEntry) }));
+  const targetToolBar = toolbars.find(entry => entry.id === toolBarId);
+  if (targetToolBar) {
+    const targetIndex = targetToolBar.entries.findIndex(entry => entry.source?.line === sourceLine && entry.kind.toLowerCase() === kind.toLowerCase());
+    if (targetIndex >= 0) targetToolBar.entries.splice(targetIndex, 1);
+  }
+  applyMenuEnumPatch(edit, document, calls, collectMenuEnumSymbols(parsed.menus, toolbars));
+
+  return edit;
+}
+
+export function applyToolBarEntryTooltipSet(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  sourceLine: number,
+  entryIdRaw: string,
+  textRaw: string | undefined,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  if (sourceLine < 0 || sourceLine >= document.lineCount) return undefined;
+
+  const calls = scanDocumentCalls(document, scanRange);
+  if (!isLineInCreateSection(calls, sourceLine, PB_CALL.createToolBar, toolBarId)) return undefined;
+
+  const normalizedEntryId = entryIdRaw.trim();
+  if (!normalizedEntryId.length) return undefined;
+
+  const tipCall = calls.find(call => {
+    if (call.name.toLowerCase() !== TOOLBAR_ENTRY_KIND.ToolBarToolTip.toLowerCase()) return false;
+    if (!isLineInCreateSection(calls, call.range.line, PB_CALL.createToolBar, toolBarId)) return false;
+    const parts = splitParams(call.args);
+    const buttonIdRaw = (parts.length >= 3 ? parts[1] : parts[0])?.trim() ?? "";
+    return buttonIdRaw === normalizedEntryId;
+  });
+
+  const normalizedText = textRaw?.trim();
+  if (!normalizedText?.length) {
+    if (!tipCall) return undefined;
+    const edit = new vscode.WorkspaceEdit();
+    edit.delete(document.uri, document.lineAt(tipCall.range.line).rangeIncludingLineBreak);
+    return edit;
+  }
+
+  const rebuiltLine = buildToolBarEntryLine({
+    kind: TOOLBAR_ENTRY_KIND.ToolBarToolTip,
+    idRaw: normalizedEntryId,
+    textRaw: normalizedText,
+  }, toolBarId);
+
+  if (tipCall) {
+    const indent = getLineIndent(document, tipCall.range.line);
+    return replaceCallLinePreserveSuffix(document, tipCall, `${indent}${rebuiltLine}`);
+  }
+
+  const indent = getLineIndent(document, sourceLine);
+  const insertPos = new vscode.Position(Math.min(document.lineCount, sourceLine + 1), 0);
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, insertPos, `${indent}${rebuiltLine}
+`);
+  return edit;
+}
+
+export function applyMenuDelete(
+  document: vscode.TextDocument,
+  menuId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, PB_CALL.createMenu, menuId);
+}
+
+export function applyToolBarDelete(
+  document: vscode.TextDocument,
+  toolBarId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, PB_CALL.createToolBar, toolBarId);
+}
+
+export function applyStatusBarDelete(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const calls = scanDocumentCalls(document, scanRange);
+  return applySectionDelete(document, calls, PB_CALL.createStatusBar, statusBarId);
+}
+
+export function applyStatusBarFieldInsert(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  args: StatusBarFieldArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyStatusBarFieldMutation(
+    document,
+    statusBarId,
+    fields => {
+      fields.push(mapStatusBarArgsToField(args));
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyStatusBarFieldUpdate(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  sourceLine: number,
+  args: StatusBarFieldArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyStatusBarFieldMutation(
+    document,
+    statusBarId,
+    fields => {
+      const index = fields.findIndex(field => field.source?.line === sourceLine);
+      if (index < 0) return false;
+      fields[index] = mergeStatusBarFieldArgs(fields[index], args);
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyStatusBarFieldDelete(
+  document: vscode.TextDocument,
+  statusBarId: string,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyStatusBarFieldMutation(
+    document,
+    statusBarId,
+    fields => {
+      const index = fields.findIndex(field => field.source?.line === sourceLine);
+      if (index < 0) return false;
+      fields.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
+
+
+export function applyFontInsert(
+  document: vscode.TextDocument,
+  args: FontArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      fonts.push(mapFontArgsToFont(args));
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyFontUpdate(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  args: FontArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      const index = fonts.findIndex(font => font.source?.line === sourceLine);
+      if (index < 0) return false;
+      fonts[index] = {
+        ...fonts[index],
+        ...mapFontArgsToFont(args),
+        source: fonts[index].source,
+      };
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyFontDelete(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyFontMutation(
+    document,
+    fonts => {
+      const index = fonts.findIndex(font => font.source?.line === sourceLine);
+      if (index < 0) return false;
+      fonts.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyImageInsert(
+  document: vscode.TextDocument,
+  args: ImageArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyImageMutation(
+    document,
+    images => {
+      images.push(mapImageArgsToImage(args));
+      return true;
+    },
+    scanRange
+  );
+}
+
+export function applyImageUpdate(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  args: ImageArgs,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  // Capture renames produced by reindexImages so afterBuild can apply them.
+  let pendingRenames: ImageRename[] = [];
+
+  return applyImageMutation(
+    document,
+    images => {
+      const index = images.findIndex(image => image.source?.line === sourceLine);
+      if (index < 0) return false;
+
+      if (args.pbAny === true && !images[index].pbAny) {
+        // Convert enum image → #PB_Any variable, move to list end, re-index.
+        // Mirrors FD_ProcessEventGridStatusbar case 2 → AddImage("") +
+        // CleanImageList() + FD_SelectCode re-numbering in codeviewer.pb.
+        const parsed2 = parseFormDocument(document.getText());
+        const windowVar =
+          parsed2.window?.variable ??
+          parsed2.window?.id?.replace(/^#/, "") ??
+          ENUM_NAMES.windows;
+
+        const [entry] = images.splice(index, 1);
+        const trimmedImageRaw = args.imageRaw.trim();
+        entry.pbAny = true;
+        entry.firstParam = PB_ANY;
+        entry.imageRaw = trimmedImageRaw;
+        entry.image = trimmedImageRaw.match(/^~?"([\s\S]*)"$/)?.[1]?.replace(/""/g, '"') ?? (trimmedImageRaw || undefined);
+        images.push(entry);
+
+        pendingRenames = reindexImages(images, windowVar);
+      } else {
+        images[index] = {
+          ...images[index],
+          ...mapImageArgsToImage(args),
+          source: images[index].source,
+        };
+      }
+      return true;
+    },
+    scanRange,
+    (edit) => applyImageIdRenames(edit, document, pendingRenames)
+  );
+}
+
+export function applyImageDelete(
+  document: vscode.TextDocument,
+  sourceLine: number,
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  return applyImageMutation(
+    document,
+    images => {
+      const index = images.findIndex(image => image.source?.line === sourceLine);
+      if (index < 0) return false;
+      images.splice(index, 1);
+      return true;
+    },
+    scanRange
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image reference synthesis helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the PureBasic ImageID(...) expression used to reference an image
+ * from a gadget/menu/toolbar/statusbar argument.
+ * Returns undefined when the input is empty or when #PB_Any is used without
+ * an assigned variable name (because the reference cannot be resolved).
+ */
+export function buildImageIdReference(idRaw: string, assignedVar?: string): string | undefined {
+  const trimmedId = idRaw.trim();
+  if (!trimmedId.length) return undefined;
+
+  if (trimmedId.toLowerCase() === "#pb_any") {
+    const variableName = assignedVar?.trim();
+    return variableName ? `ImageID(${variableName})` : undefined;
+  }
+
+  return `ImageID(${trimmedId})`;
+}
+
+/**
+ * Derives the #PB_Any assigned variable name from a raw first parameter.
+ * "#IMG" → "IMG", "imgSave" → "imgSave", "" → undefined.
+ */
+export function toPbAnyAssignedVar(firstParam: string): string | undefined {
+  const trimmed = firstParam.trim();
+  if (!trimmed.length) return undefined;
+  return trimmed.startsWith("#") ? trimmed.slice(1).trim() || undefined : trimmed;
+}
+
+/**
+ * Normalises a variable name or enum symbol to a PureBasic enum image ID
+ * with a leading "#". Idempotent: "#IMG" → "#IMG", "IMG" → "#IMG".
+ */
+export function toEnumImageId(variableOrId: string): string | undefined {
+  const trimmed = variableOrId.trim();
+  if (!trimmed.length) return undefined;
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}

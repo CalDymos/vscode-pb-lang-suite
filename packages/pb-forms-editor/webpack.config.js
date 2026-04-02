@@ -64,6 +64,11 @@ const webviewConfig = {
     devtoolModuleFilenameTemplate: "../../[resource-path]",
   },
 
+performance: {
+  maxEntrypointSize: 400000, // not a public website, so we can be a bit more lenient with bundle size
+  maxAssetSize: 400000, // not a public website, so we can be a bit more lenient with bundle size
+},
+
   devtool: "source-map",
 
   // No 'vscode' external — the webview has no access to the VS Code API.

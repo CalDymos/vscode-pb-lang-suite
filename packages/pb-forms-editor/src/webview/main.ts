@@ -1,3 +1,4 @@
+import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE } from "../shared/messages";
 import {
   type PreviewRect,
   type PreviewChromeMetrics,
@@ -23,6 +24,7 @@ import {
   getGadgetContentRect,
   getStatusBarAlignedX,
   getWindowChromeLayout,
+  getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   getRectHandlePoints,
   hitHandlePoints,
@@ -32,13 +34,20 @@ import {
   isPointInWindowRect,
   toWindowGlobalPoint,
   toWindowLocalPoint
-} from "../core/previewChromeUtils";
+} from "../core/preview/chrome";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
   getStatusBarFieldDisplaySummary,
+  getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth
-} from "../core/statusbarPreviewUtils";
+} from "../core/statusbar/preview";
+import {
+  getStatusBarProgressInspectorValue,
+  normalizeStatusBarProgressRaw,
+  parseStatusBarWidthInspectorInput,
+  STATUSBAR_WIDTH_IGNORE_LITERAL
+} from "../core/statusbar/inspector";
 import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
@@ -47,6 +56,7 @@ import {
   getMenuEntryMoveTarget,
   getMenuEntryRect,
   getMenuFlyoutPanelRect,
+  getOpenSubMenuBalance,
   getDirectMenuChildIndices,
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
@@ -58,159 +68,183 @@ import {
   getPredictedMenuEntryMoveIndex,
   getStatusBarFieldWidths,
   getStatusBarPreviewInsertArgs,
+  getSelectedStatusBarInspectorFieldConfig,
+  getSelectedToolBarInspectorFieldConfig,
+  getTopLevelSelectProcEditState,
+  buildOptionalInspectorLiteralRaw,
+  buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
   hasPbFlag,
+  hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
   resolvePreviewRectHit,
   resolveTopLevelChromeHit,
   unquotePbString,
   getVisibleToolBarEntryCount,
-  shouldShowToolBarStructureEntry
-} from "../core/topLevelPreviewUtils";
+  shouldShowToolBarPreviewUnselectedFrame,
+  shouldShowToolBarStructureEntry,
+  hasToolBarPreviewAssignedImage
+} from "../core/toplevel/preview";
 
-type SourceRange = { line: number };
+import {
+  buildGadgetCheckedStateRaw,
+  buildGadgetHorizontalLockResizeUpdate,
+  buildGadgetVerticalLockResizeUpdate,
+  buildGadgetTextRaw,
+  buildGadgetTooltipRaw,
+  canEditGadgetCheckedState,
+  canEditGadgetColors,
+  canEditGadgetHorizontalLocks,
+  canInspectGadgetColumns,
+  canInspectGadgetItems,
+  getCustomGadgetHelpDisplay,
+  getGadgetCaptionFieldConfig,
+  getGadgetCurrentImageDisplay,
+  getGadgetCtorRangeFieldLabels,
+  getGadgetCtorRangeInspectorValue,
+  getGadgetVariableInspectorValue,
+  getGadgetFontDisplaySummary,
+  getGadgetTextInspectorValue,
+  getGadgetTooltipInspectorValue,
+  shouldShowGadgetParentDetail,
+  shouldShowGadgetTabDetail
+} from "../core/gadget/inspector";
 
-type GadgetItem = {
-  index?: number;
-  posRaw: string;
-  textRaw?: string;
-  text?: string;
-  imageRaw?: string;
-  imageId?: string;
-  flagsRaw?: string;
-  source?: SourceRange;
-};
+import {
+  hasRectChanged,
+  retainPanelActiveItems,
+  syncPanelActiveItemsForSelection
+} from "../core/utils/webview-state";
+import {
+  buildInsertedGadgetIdentity,
+  canHostInsertedGadgets,
+  getGadgetInsertLabel,
+  isInsertableGadgetKind,
+  shouldInsertGadgetAsPbAny,
+  type InsertableGadgetKind
+} from "../core/gadget/insert";
+import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
+import {
+  canOpenGadgetReparentDialog,
+  getGadgetReparentParentOptions,
+} from "../core/gadget/reparent";
+import { getPanelInspectorItemLabel } from "../core/gadget/item-label";
+import {
+  canImmediateInsertFromToolbox,
+  getDefaultToolboxPanelKind,
+  getImmediateToolboxInsertPosition,
+  getToolboxPanelCategories,
+  type ToolboxPanelTabId
+} from "../core/toolbox/panel";
+import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
+import { quotePbString } from "../core/parser/tokenizer";
+import {
+  GADGET_KIND,
+  type SourceRange,
+  type Gadget,
+  type GadgetItem,
+  type GadgetColumn,
+  type FormWindow,
+  type FormMenuEntry,
+  type FormMenu,
+  type FormToolBarEntry,
+  type FormToolBar,
+  type FormStatusBarField,
+  type FormStatusBar,
+  type FormImage,
+} from "../core/model";
+import {
+  buildWindowFlagsExpr,
+  getWindowBooleanInspectorState,
+  getWindowParentAsRawExpressionWithOverride,
+  getWindowParentInspectorValue,
+  getWindowPositionInspectorValue,
+  getWindowPreviewTitleBarHeight,
+  getWindowPreviewChromeTopPadding,
+  getWindowPreviewClientBottomPadding,
+  getWindowPreviewClientSidePadding,
+  getWindowPreviewCanvasOrigin,
+  getWindowPreviewTitleButtonLayout,
+  getWindowPreviewTitleBarDecoration,
+  getWindowPreviewTitleBarMetrics,
+  getWindowPreviewTitleButtonSize,
+  getWindowPreviewTitleIconSize,
+  getWindowPreviewToolBarDecoration,
+  getWindowPreviewStatusBarDecoration,
+  getWindowPreviewStatusBarProgressDecoration,
+  getWindowPreviewMenuBarDecoration,
+  getWindowPreviewMenuFlyoutDecoration,
+  getWindowPreviewAddIconMetrics,
+  getWindowPreviewMenuSubmenuIconMetrics,
+  getWindowPreviewMenuRootEntryRect,
+  getWindowPreviewBodyDecoration,
+  getWindowPreviewFrameDecoration,
+  hasWindowPreviewResizeGrip,
+  hasWindowPreviewTitleIcon,
+  getWindowVariableInspectorValue,
+  parseWindowCustomFlagsInput,
+  parseWindowEventProcInspectorInput,
+  parseWindowParentInspectorInput,
+  parseWindowPositionInspectorInput,
+  parseWindowVariableNameInspectorInput,
+  WINDOW_POSITION_IGNORE_LITERAL
+} from "../core/window/inspector";
+import {
+  cssHexToPbRgbRaw,
+  getWindowColorInspectorDisplay,
+  parseWindowColorInspectorInput,
+  pbColorNumberToCssHex
+} from "../core/window/color-inspector";
+import {
+  PB_WRONG_VARIABLE_NAME_MESSAGE,
+  isValidPbVariableReference
+} from "../core/utils/property-validation";
+import {
+  buildNextGeneratedImageIdRaw,
+  getStatusBarCurrentImageEditState,
+  resolveStatusBarCurrentImageCreate,
+  resolveStatusBarCurrentImageRebind,
+  shouldCleanupStatusBarReboundImage
+} from "../core/statusbar/image-inspector";
+import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
+import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
 
-type GadgetColumn = {
-  index?: number;
-  colRaw: string;
-  titleRaw?: string;
-  title?: string;
-  widthRaw?: string;
-  source?: SourceRange;
-};
+import {
+  PREVIEW_PLUS_ICON_DATA_URI,
+  PREVIEW_SUBMENU_ICON_DATA_URI,
+  PREVIEW_WINDOWS_TITLE_ICON_DATA_URI,
+  PREVIEW_WINDOWS7_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS7_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS7_MINIMIZE_DISABLED_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS7_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS7_MAXIMIZE_DISABLED_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_CHECKBOX_DATA_URI,
+  PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI,
+  PREVIEW_WINDOWS7_CHECKBOX_DATA_URI,
+  PREVIEW_WINDOWS7_CHECKBOX_CHECKED_DATA_URI,
+  PREVIEW_WINDOWS8_CHECKBOX_DATA_URI,
+  PREVIEW_WINDOWS8_CHECKBOX_CHECKED_DATA_URI,
+  PREVIEW_MAC_OPTION_DATA_URI,
+  PREVIEW_MAC_OPTION_CHECKED_DATA_URI,
+  PREVIEW_WINDOWS7_OPTION_DATA_URI,
+  PREVIEW_WINDOWS7_OPTION_CHECKED_DATA_URI,
+  PREVIEW_WINDOWS8_OPTION_DATA_URI,
+  PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
+  PREVIEW_DATE_ICON_DATA_URI,
+} from "../core/preview/assets";
 
-type Gadget = {
-  id: string;
-  kind: string;
-  parentId?: string;
-  parentItem?: number;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  text?: string;
-  imageRaw?: string;
-  imageId?: string;
-  minRaw?: string;
-  min?: number;
-  maxRaw?: string;
-  max?: number;
-  gadget1Raw?: string;
-  gadget1Id?: string;
-  gadget2Raw?: string;
-  gadget2Id?: string;
-  splitterId?: string;
-  flagsExpr?: string;
-  stateRaw?: string;
-  state?: number;
-  eventProc?: string;
-  items?: GadgetItem[];
-  columns?: GadgetColumn[];
-};
-
-type WindowModel = {
-  id: string;
-  pbAny: boolean;
-  variable?: string;
-  enumValueRaw?: string;
-  firstParam: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  title?: string;
-  eventFile?: string;
-  eventProc?: string;
-  generateEventLoop?: boolean;
-  hasEventGadgetBlock?: boolean;
-  hasEventGadgetCaseBranches?: boolean;
-  hasEventMenuBlock?: boolean;
-};
-
-type MenuEntry = {
-  kind: string;
-  level?: number;
-  idRaw?: string;
-  textRaw?: string;
-  text?: string;
-  shortcut?: string;
-  iconRaw?: string;
-  iconId?: string;
-  widthRaw?: string;
-  toggle?: boolean;
-  event?: string;
-  source?: SourceRange;
-};
-
-type MenuModel = {
-  id: string;
-  entries: MenuEntry[];
-};
-
-type ToolBarEntry = {
-  kind: string;
-  idRaw?: string;
-  iconRaw?: string;
-  iconId?: string;
-  textRaw?: string;
-  text?: string;
-  tooltip?: string;
-  toggle?: boolean;
-  event?: string;
-  source?: SourceRange;
-};
-
-type ToolbarModel = {
-  id: string;
-  entries: ToolBarEntry[];
-};
-
-type StatusbarField = {
-  widthRaw: string;
-  textRaw?: string;
-  text?: string;
-  imageRaw?: string;
-  imageId?: string;
-  flagsRaw?: string;
-  progressBar?: boolean;
-  progressRaw?: string;
-  source?: SourceRange;
-};
-
-type StatusbarModel = {
-  id: string;
-  fields: StatusbarField[];
-};
-
-type ImageEntry = {
-  id: string;
-  pbAny: boolean;
-  variable?: string;
-  firstParam: string;
-  imageRaw: string;
-  image?: string;
-  inline: boolean;
-  source?: SourceRange;
-};
 
 type Model = {
-  window?: WindowModel;
+  window?: FormWindow;
   gadgets: Gadget[];
-  menus?: MenuModel[];
-  toolbars?: ToolbarModel[];
-  statusbars?: StatusbarModel[];
-  images: ImageEntry[];
+  menus?: FormMenu[];
+  toolbars?: FormToolBar[];
+  statusbars?: FormStatusBar[];
+  images: FormImage[];
+  procedureNames?: string[];
   meta?: {
     header?: { version?: string; line: number; hasStrictSyntaxWarning: boolean };
     issues?: Array<{ severity: "error" | "warning" | "info"; message: string; line?: number }>;
@@ -219,6 +253,9 @@ type Model = {
 
 type GridMode = "dots" | "lines";
 type SnapMode = "live" | "drop";
+type DesignerOsSkin = "windows7" | "windows8" | "linux" | "macos";
+type WarningPresenceMode = "never" | "always";
+type WarningVersionUpgradeMode = "never" | "ifBackwardCompatibilityIsAffected" | "always";
 
 type DesignerSettings = {
   showGrid: boolean;
@@ -232,98 +269,71 @@ type DesignerSettings = {
   windowFillOpacity: number;
   outsideDimOpacity: number;
   titleBarHeight: number;
+  windowPreviewWindowsCaptionlessTopPadding: number;
+  windowPreviewWindowsClientSidePadding: number;
+  windowPreviewWindowsClientBottomPadding: number;
 
   canvasBackground: string;
   canvasReadonlyBackground: string;
+
+  newGadgetsUsePbAnyByDefault: boolean;
+  newGadgetsUseVariableAsCaption: boolean;
+  generateEventProcedure: boolean;
+  osSkin: DesignerOsSkin;
+  warningUnrecognizedFile: WarningPresenceMode;
+  warningVersionUpgrade: WarningVersionUpgradeMode;
+  warningVersionDowngrade: WarningPresenceMode;
 };
 
-const EXT_TO_WEBVIEW_MSG_TYPE = {
-  init: "init",
-  settings: "settings",
-  error: "error"
-} as const;
-
-const WEBVIEW_TO_EXT_MSG_TYPE = {
-  ready: "ready",
-
-  moveGadget: "moveGadget",
-  setGadgetRect: "setGadgetRect",
-  setGadgetEventProc: "setGadgetEventProc",
-  setGadgetImageRaw: "setGadgetImageRaw",
-  setGadgetStateRaw: "setGadgetStateRaw",
-  setWindowRect: "setWindowRect",
-  toggleWindowPbAny: "toggleWindowPbAny",
-  setWindowEnumValue: "setWindowEnumValue",
-  setWindowVariableName: "setWindowVariableName",
-  setWindowEventFile: "setWindowEventFile",
-  setWindowEventProc: "setWindowEventProc",
-  setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
-
-  insertGadgetItem: "insertGadgetItem",
-  updateGadgetItem: "updateGadgetItem",
-  deleteGadgetItem: "deleteGadgetItem",
-
-  insertGadgetColumn: "insertGadgetColumn",
-  updateGadgetColumn: "updateGadgetColumn",
-  deleteGadgetColumn: "deleteGadgetColumn",
-
-  insertMenuEntry: "insertMenuEntry",
-  moveMenuEntry: "moveMenuEntry",
-  updateMenuEntry: "updateMenuEntry",
-  deleteMenuEntry: "deleteMenuEntry",
-  deleteMenu: "deleteMenu",
-  setMenuEntryEvent: "setMenuEntryEvent",
-
-  insertToolBarEntry: "insertToolBarEntry",
-  updateToolBarEntry: "updateToolBarEntry",
-  deleteToolBarEntry: "deleteToolBarEntry",
-  deleteToolBar: "deleteToolBar",
-  setToolBarEntryEvent: "setToolBarEntryEvent",
-  setToolBarEntryTooltip: "setToolBarEntryTooltip",
-
-  insertStatusBarField: "insertStatusBarField",
-  updateStatusBarField: "updateStatusBarField",
-  deleteStatusBarField: "deleteStatusBarField",
-  deleteStatusBar: "deleteStatusBar",
-
-  insertImage: "insertImage",
-  updateImage: "updateImage",
-  deleteImage: "deleteImage",
-  relativizeImagePath: "relativizeImagePath",
-  chooseImageFileForEntry: "chooseImageFileForEntry",
-  toggleImagePbAny: "toggleImagePbAny",
-
-  createAndAssignGadgetImage: "createAndAssignGadgetImage",
-  chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
-  createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
-  createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
-  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
-  chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
-  chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
-  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage"
-} as const;
-
 // Backwards compatible:
+/** Colors read from HKCU\Control Panel\Colors — sent by the extension on win32. */
+type WindowsRegistryColors = {
+  menu:                 string;
+  menuBar:              string;
+  menuText:             string;
+  menuHilight:          string;
+  activeTitle:          string;
+  gradientActiveTitle:  string;
+  inactiveTitle:        string;
+  titleText:            string;
+  hotTrackingColor:     string;
+  scrollbar:            string;
+};
+
 // - init may come without settings
 type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: Model; settings?: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.procedureNames; names: string[] };
 
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw; id: string; imageRaw: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw; id: string; stateRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw; id: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; deleteResize?: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny; gadgetId: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue; enumSymbol: string; enumValueRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName; gadgetId: string; variableName: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs; windowKey: string; xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties; windowKey: string; hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny; windowKey: string; toPbAny: boolean; variableName: string; enumSymbol: string; enumValueRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue; enumSymbol: string; enumValueRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; variableName?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName; windowKey: string; variableName?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem; id: string; sourceLine: number; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem; id: string; sourceLine: number }
@@ -347,7 +357,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField; statusBarId: string; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar; statusBarId: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertImage; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.updateImage; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string; pbAny?: boolean }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteImage; sourceLine: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath; sourceLine: number; inline: boolean; idRaw: string; imageRaw: string; assignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry; sourceLine: number; inline: boolean; idRaw: string; assignedVar?: string }
@@ -355,11 +365,13 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage; id: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage; id: string; x: number; y: number; resizeToImage: boolean; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newInline: boolean; newImageIdRaw: string; newImageRaw: string; newAssignedVar?: string; oldImageId?: string; oldImageSourceLine?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage; menuId: string; sourceLine: number; kind: string; idRaw?: string; textRaw?: string; shortcut?: string; newImageIdRaw: string; newAssignedVar?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; newImageIdRaw: string; newAssignedVar?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string };
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; newImageIdRaw: string; newAssignedVar?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage; toolBarId: string; sourceLine: number; kind: string; idRaw?: string; toggle?: boolean; iconRaw: string; oldImageId?: string; oldImageSourceLine?: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage; statusBarId: string; sourceLine: number; widthRaw: string; imageRaw: string; oldImageId?: string; oldImageSourceLine?: number };
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: WebviewToExtensionMessage) => void };
 
@@ -371,11 +383,24 @@ function post(msg: WebviewToExtensionMessage) {
 
 
 const canvas = document.getElementById("designer") as HTMLCanvasElement;
+const canvasWrap = canvas.parentElement as HTMLDivElement;
+const panelEl = document.querySelector(".panel") as HTMLDivElement | null;
+const panelTopSectionEl = document.getElementById("panelTopSection") as HTMLDivElement | null;
+const panelSectionResizerEl = document.getElementById("panelSectionResizer") as HTMLDivElement | null;
+const panelBodyEl = document.getElementById("panelBody") as HTMLDivElement | null;
+const toolboxTabButtonEl = document.getElementById("toolboxTabButton") as HTMLButtonElement | null;
+const objectsTabButtonEl = document.getElementById("objectsTabButton") as HTMLButtonElement | null;
+const toolboxTabPanelEl = document.getElementById("toolboxTabPanel") as HTMLDivElement | null;
+const objectsTabPanelEl = document.getElementById("objectsTabPanel") as HTMLDivElement | null;
+const toolboxListEl = document.getElementById("toolboxList") as HTMLDivElement | null;
 const propsEl = document.getElementById("props") as HTMLDivElement;
 const listEl = document.getElementById("list") as HTMLDivElement;
 const parentSelEl = document.getElementById("parentSel") as HTMLSelectElement;
+const cancelInsertGadgetButtonEl = document.getElementById("cancelInsertGadgetButton") as HTMLButtonElement;
 const errEl = document.getElementById("err") as HTMLDivElement;
 const diagEl = document.getElementById("diag") as HTMLDivElement;
+const infoHintEl = document.getElementById("infoHint") as HTMLDivElement;
+const infoSelectionEl = document.getElementById("infoSelection") as HTMLDivElement;
 
 let model: Model = { gadgets: [], images: [] };
 
@@ -392,6 +417,7 @@ type DesignerSelection =
   | { kind: "image"; id: string }
   | null;
 let selection: DesignerSelection = null;
+let windowParentAsRawExpressionOverrides = new Map<string, boolean>();
 
 type PendingMenuEntrySelection = {
   menuId: string;
@@ -425,9 +451,28 @@ type PendingStatusBarFieldSelection = {
   progressRaw?: string;
 };
 
+type PendingGadgetSelection = {
+  id: string;
+};
+
+type PendingSplitterInsertConfig = {
+  gadget1Id: string;
+  gadget2Id: string;
+};
+
 let pendingMenuEntrySelection: PendingMenuEntrySelection | null = null;
 let pendingToolBarEntrySelection: PendingToolBarEntrySelection | null = null;
 let pendingStatusBarFieldSelection: PendingStatusBarFieldSelection | null = null;
+let pendingGadgetSelection: PendingGadgetSelection | null = null;
+let pendingInsertGadgetKind: string | null = null;
+let pendingSplitterInsertConfig: PendingSplitterInsertConfig | null = null;
+let activeTopPanelTab: ToolboxPanelTabId = "toolbox";
+let selectedToolboxKind: InsertableGadgetKind = getDefaultToolboxPanelKind();
+
+function setActiveTopPanelTab(tab: ToolboxPanelTabId): void {
+  activeTopPanelTab = tab;
+  renderTopPanelTabs();
+}
 
 type PendingImageEditor = {
   sourceLine: number;
@@ -483,6 +528,7 @@ type PendingGadgetColumnEditor = {
 };
 
 type PendingDestructiveAction =
+  | { kind: "deleteGadget"; gadgetId: string; message: string; confirmLabel: string }
   | { kind: "deleteMenuEntry"; menuId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
   | { kind: "deleteMenu"; menuId: string; message: string; confirmLabel: string }
   | { kind: "deleteToolBarEntry"; toolBarId: string; entryIndex: number; sourceLine: number; entryKind: string; message: string; confirmLabel: string }
@@ -501,6 +547,34 @@ let pendingImageInsertDraft: PendingImageInsertDraft | null = null;
 let pendingGadgetItemEditor: PendingGadgetItemEditor | null = null;
 let pendingGadgetColumnEditor: PendingGadgetColumnEditor | null = null;
 let pendingDestructiveAction: PendingDestructiveAction | null = null;
+let pendingDestructiveDialogAction: PendingDestructiveAction | null = null;
+let destructiveDialogBackdropEl: HTMLDivElement | null = null;
+let splitterInsertDialogBackdropEl: HTMLDivElement | null = null;
+let selectParentDialogBackdropEl: HTMLDivElement | null = null;
+
+type PendingCanvasContextMenuActions = ReturnType<typeof resolveTopLevelCanvasContextMenuActions>;
+type GadgetCanvasContextMenuAction = {
+  kind: "deleteGadget";
+  label: "Delete Gadget…";
+  title: string;
+  enabled: boolean;
+  gadgetId: string;
+  confirmLabel: "Delete Gadget";
+  message: string;
+};
+type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
+type CanvasContextMenuSelection = Extract<DesignerSelection, { kind: "gadget" | "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" }>;
+
+type PendingCanvasContextMenu = {
+  x: number;
+  y: number;
+  actions: CanvasContextMenuAction[];
+  selection: CanvasContextMenuSelection;
+};
+
+let pendingCanvasContextMenu: PendingCanvasContextMenu | null = null;
+let canvasContextMenuEl: HTMLDivElement | null = null;
+let canvasContextMenuIgnoreMouseDownTimeStamp: number | null = null;
 
 const expanded = new Map<string, boolean>();
 const panelActiveItems = new Map<string, number>();
@@ -519,6 +593,275 @@ let statusBarAddPreviewRect: PreviewStatusBarAddRect | null = null;
 let toolBarEntryPreviewRects: PreviewEntryRect[] = [];
 let statusBarFieldPreviewRects: PreviewEntryRect[] = [];
 
+let previewPlusIconImage: HTMLImageElement | null = null;
+let previewSubmenuIconImage: HTMLImageElement | null = null;
+let previewWindowsTitleIconImage: HTMLImageElement | null = null;
+const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
+let previewDateIconImage: HTMLImageElement | null = null;
+const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
+
+
+function createPreviewRasterIcon(dataUri: string): HTMLImageElement | null {
+  if (typeof Image === "undefined") {
+    return null;
+  }
+
+  const image = new Image();
+  image.decoding = "sync";
+  image.addEventListener("load", () => render(), { once: true });
+  image.src = dataUri;
+  return image;
+}
+
+function getPreviewPlusIconImage(): HTMLImageElement | null {
+  if (!previewPlusIconImage) {
+    previewPlusIconImage = createPreviewRasterIcon(PREVIEW_PLUS_ICON_DATA_URI);
+  }
+
+  return previewPlusIconImage;
+}
+
+function getPreviewSubmenuIconImage(): HTMLImageElement | null {
+  if (!previewSubmenuIconImage) {
+    previewSubmenuIconImage = createPreviewRasterIcon(PREVIEW_SUBMENU_ICON_DATA_URI);
+  }
+
+  return previewSubmenuIconImage;
+}
+
+function getPreviewWindowsTitleIconImage(): HTMLImageElement | null {
+  if (!previewWindowsTitleIconImage) {
+    previewWindowsTitleIconImage = createPreviewRasterIcon(PREVIEW_WINDOWS_TITLE_ICON_DATA_URI);
+  }
+
+  return previewWindowsTitleIconImage;
+}
+
+function getPreviewWindowsTitleButtonDataUri(
+  osSkin: "windows7" | "windows8",
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): string {
+  if (osSkin === "windows7") {
+    if (kind === "close") {
+      return PREVIEW_WINDOWS7_CLOSE_BUTTON_DATA_URI;
+    }
+
+    if (kind === "minimize") {
+      return enabled
+        ? PREVIEW_WINDOWS7_MINIMIZE_BUTTON_DATA_URI
+        : PREVIEW_WINDOWS7_MINIMIZE_DISABLED_BUTTON_DATA_URI;
+    }
+
+    return enabled
+      ? PREVIEW_WINDOWS7_MAXIMIZE_BUTTON_DATA_URI
+      : PREVIEW_WINDOWS7_MAXIMIZE_DISABLED_BUTTON_DATA_URI;
+  }
+
+  if (kind === "close") {
+    return PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI;
+  }
+
+  return kind === "minimize"
+    ? PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI
+    : PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI;
+}
+
+function getPreviewWindowsTitleButtonImage(
+  osSkin: "windows7" | "windows8",
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${osSkin}:${kind}:${enabled ? "enabled" : "disabled"}`;
+  const cached = previewWindowsTitleButtonImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewWindowsTitleButtonDataUri(osSkin, kind, enabled));
+  previewWindowsTitleButtonImageCache.set(cacheKey, image);
+  return image;
+}
+
+
+function getPreviewCheckableImageDataUri(
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  checked: boolean
+): string {
+  if (kind === "checkbox") {
+    switch (osSkin) {
+      case "macos":
+        return checked ? PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI : PREVIEW_MAC_CHECKBOX_DATA_URI;
+      case "windows8":
+        return checked ? PREVIEW_WINDOWS8_CHECKBOX_CHECKED_DATA_URI : PREVIEW_WINDOWS8_CHECKBOX_DATA_URI;
+      case "windows7":
+      case "linux":
+      default:
+        return checked ? PREVIEW_WINDOWS7_CHECKBOX_CHECKED_DATA_URI : PREVIEW_WINDOWS7_CHECKBOX_DATA_URI;
+    }
+  }
+
+  switch (osSkin) {
+    case "macos":
+      return checked ? PREVIEW_MAC_OPTION_CHECKED_DATA_URI : PREVIEW_MAC_OPTION_DATA_URI;
+    case "windows8":
+      return checked ? PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI : PREVIEW_WINDOWS8_OPTION_DATA_URI;
+    case "windows7":
+    case "linux":
+    default:
+      return checked ? PREVIEW_WINDOWS7_OPTION_CHECKED_DATA_URI : PREVIEW_WINDOWS7_OPTION_DATA_URI;
+  }
+}
+
+function getPreviewCheckableImage(
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  checked: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${kind}:${osSkin}:${checked ? "checked" : "unchecked"}`;
+  const cached = previewCheckableImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewCheckableImageDataUri(kind, osSkin, checked));
+  previewCheckableImageCache.set(cacheKey, image);
+  return image;
+}
+
+function getPreviewDateIconImage(): HTMLImageElement | null {
+  if (!previewDateIconImage) {
+    previewDateIconImage = createPreviewRasterIcon(PREVIEW_DATE_ICON_DATA_URI);
+  }
+
+  return previewDateIconImage;
+}
+
+function createResolvedPreviewImage(src: string): HTMLImageElement | null {
+  const trimmed = src.trim();
+  if (!trimmed.length) return null;
+
+  const image = new Image();
+  image.decoding = "sync";
+  image.src = trimmed;
+  return image;
+}
+
+function getResolvedPreviewImage(src?: string): HTMLImageElement | null {
+  const trimmed = src?.trim();
+  if (!trimmed?.length) return null;
+
+  const cached = previewResolvedGadgetImageCache.get(trimmed);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createResolvedPreviewImage(trimmed);
+  previewResolvedGadgetImageCache.set(trimmed, image);
+  return image;
+}
+
+function drawPreviewRasterIcon(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): boolean {
+  if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+    return false;
+  }
+
+  ctx.drawImage(image, x, y, width, height);
+  return true;
+}
+
+function drawPreviewPlusIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const metrics = getWindowPreviewAddIconMetrics();
+  ctx.save();
+  if (drawPreviewRasterIcon(ctx, getPreviewPlusIconImage(), x, y, metrics.width, metrics.height)) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.fillRect(x + 3, y + 3, 9, 9);
+  ctx.strokeStyle = "rgb(176,176,176)";
+  ctx.strokeRect(x + 3.5, y + 3.5, 8, 8);
+  ctx.strokeStyle = "rgb(48,179,48)";
+  ctx.beginPath();
+  ctx.moveTo(x + 5.5, y + 7.5);
+  ctx.lineTo(x + 9.5, y + 7.5);
+  ctx.moveTo(x + 7.5, y + 5.5);
+  ctx.lineTo(x + 7.5, y + 9.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPreviewSubmenuIndicatorIcon(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const metrics = getWindowPreviewMenuSubmenuIconMetrics();
+  ctx.save();
+  if (drawPreviewRasterIcon(ctx, getPreviewSubmenuIconImage(), x, y, metrics.width, metrics.height)) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = "rgb(96,96,96)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 1);
+  ctx.lineTo(x + metrics.width - 1, y + Math.trunc(metrics.height / 2));
+  ctx.lineTo(x + 1, y + metrics.height - 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPreviewFallbackImageIcon(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const iconSize = Math.max(8, Math.trunc(size));
+  const iconX = Math.trunc(x);
+  const iconY = Math.trunc(y);
+
+  ctx.save();
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.fillRect(iconX + 1, iconY + 1, iconSize - 2, iconSize - 2);
+
+  ctx.strokeStyle = "rgb(128,128,128)";
+  ctx.strokeRect(iconX + 0.5, iconY + 0.5, iconSize - 1, iconSize - 1);
+
+  ctx.fillStyle = "rgb(128,180,255)";
+  ctx.fillRect(iconX + 2, iconY + 2, Math.max(2, iconSize - 4), Math.max(2, Math.trunc(iconSize / 3)));
+
+  ctx.fillStyle = "rgb(255,212,80)";
+  ctx.fillRect(iconX + iconSize - 5, iconY + 3, 2, 2);
+
+  ctx.strokeStyle = "rgb(90,140,90)";
+  ctx.beginPath();
+  ctx.moveTo(iconX + 2.5, iconY + iconSize - 3.5);
+  ctx.lineTo(iconX + Math.trunc(iconSize / 2) - 0.5, iconY + Math.trunc(iconSize / 2) + 0.5);
+  ctx.lineTo(iconX + iconSize - 2.5, iconY + iconSize - 4.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function getPreviewTopLevelAssignedImage(imageId?: string): HTMLImageElement | null {
+  const imageEntry = findImageEntryById(imageId);
+  return getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+}
+
+function drawPreviewTopLevelAssignedImage(
+  ctx: CanvasRenderingContext2D,
+  imageId: string | undefined,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): boolean {
+  return drawPreviewRasterIcon(ctx, getPreviewTopLevelAssignedImage(imageId), x, y, width, height);
+}
+
 let settings: DesignerSettings = {
   showGrid: true,
   gridMode: "dots",
@@ -531,22 +874,45 @@ let settings: DesignerSettings = {
   windowFillOpacity: 0.05,
   outsideDimOpacity: 0.12,
   titleBarHeight: 26,
+  windowPreviewWindowsCaptionlessTopPadding: 8,
+  windowPreviewWindowsClientSidePadding: 8,
+  windowPreviewWindowsClientBottomPadding: 8,
 
   canvasBackground: "",
-  canvasReadonlyBackground: ""
+  canvasReadonlyBackground: "",
+
+  newGadgetsUsePbAnyByDefault: true,
+  newGadgetsUseVariableAsCaption: false,
+  generateEventProcedure: true,
+  osSkin: "windows7",
+  warningUnrecognizedFile: "always",
+  warningVersionUpgrade: "ifBackwardCompatibilityIsAffected",
+  warningVersionDowngrade: "always"
 };
 
 const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
+
+// Cache for resolved CSS system color keywords (e.g. "ButtonFace").
+// Invalidated whenever osSkin changes via applySettings().
+const systemColorCache = new Map<string, string>();
+
+// Windows registry colors received from the extension (win32 only).
+// null = not yet received or non-Windows host.
+let windowsRegistryColors: WindowsRegistryColors | null = null;
+
 
 type PbfdSymbols = {
   menuEntryKinds: readonly string[];
   toolBarEntryKinds: readonly string[];
   containerGadgetKinds: readonly string[];
-  enumNames?: { windows: string; gadgets: string };
+  windowKnownFlags?: readonly string[];
+  enumNames?: { windows: string; gadgets: string; menus: string; images: string; fonts: string };
+  pbAny?: string;
 };
 
 type PbfdWindow = Window & {
   __PBFD_SYMBOLS__?: PbfdSymbols;
+  __PBFD_TOOLBOX_ICON_URIS__?: Record<string, string>;
 };
 
 const pbfdWindow = window as PbfdWindow;
@@ -557,28 +923,24 @@ if (!pbfdWindow.__PBFD_SYMBOLS__) {
 
 const EVENT_UI_HINT = {
   eventGadgetMissing: "Requires an existing Select EventGadget() block. Enable 'Generate Event Loop' first.",
-  eventMenuMissing: "Event editing requires an existing Select EventMenu() block.",
+  eventMenuMissing: "No parsed Select EventMenu() block was found. Procedure names remain editable here, but writing them back still requires such a block.",
   menuIdRequired: "Only menu entries with ids can have event procedures.",
   toolBarIdRequired: "Only toolbar entries with ids can have event procedures.",
   generateEventLoopMenuBlock: "Cannot disable while a Select EventMenu() block exists.",
   generateEventLoopGadgetCases: "Cannot disable while Select EventGadget() contains Case branches."
 } as const;
 
-function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entryLabel: "menu" | "toolbar" = "menu"): string {
-  if (!idRaw) {
-    return entryLabel === "menu" ? EVENT_UI_HINT.menuIdRequired : EVENT_UI_HINT.toolBarIdRequired;
-  }
-  return hasEventMenuBlock ? "" : EVENT_UI_HINT.eventMenuMissing;
+function getProcedureSuggestions(): string[] {
+  return Array.isArray(model.procedureNames) ? model.procedureNames : [];
 }
 
-function getGenerateEventLoopDisableHint(win?: WindowModel): string {
-  if (!win) return "";
-  if (win.hasEventMenuBlock) return EVENT_UI_HINT.generateEventLoopMenuBlock;
-  if (win.hasEventGadgetCaseBranches) return EVENT_UI_HINT.generateEventLoopGadgetCases;
-  return "";
+function getEventMenuEntryHint(hasEventMenuBlock: boolean, idRaw?: string, entryLabel: "menu" | "toolbar" = "menu"): string {
+  return getTopLevelSelectProcEditState(hasEventMenuBlock, idRaw, entryLabel).title;
 }
 
 const PBFD_SYMBOLS: PbfdSymbols = pbfdWindow.__PBFD_SYMBOLS__;
+const PB_ANY: string = PBFD_SYMBOLS.pbAny ?? "#PB_Any";
+const TOOLBOX_ICON_URIS: Record<string, string> = pbfdWindow.__PBFD_TOOLBOX_ICON_URIS__ ?? {};
 
 function menuEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.menuEntryKinds.join("/")})`;
@@ -586,6 +948,82 @@ function menuEntryKindHint(): string {
 
 function toolBarEntryKindHint(): string {
   return `Entry kind (${PBFD_SYMBOLS.toolBarEntryKinds.join("/")})`;
+}
+
+function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
+  return isVariable ? value : toPbString(value);
+}
+
+function getWindowCurrentFlagsExpr(win: FormWindow): string | undefined {
+  return buildWindowFlagsExpr(win.knownFlags ?? [], (win.customFlags ?? []).join(" | "));
+}
+
+function postWindowOpenArgs(win: FormWindow, updates: { xRaw?: string; yRaw?: string; wRaw?: string; hRaw?: string; captionRaw?: string; flagsExpr?: string; parentRaw?: string }) {
+  post({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowOpenArgs,
+    windowKey: win.id,
+    ...(Object.prototype.hasOwnProperty.call(updates, "xRaw") ? { xRaw: updates.xRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "yRaw") ? { yRaw: updates.yRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "wRaw") ? { wRaw: updates.wRaw } : {}),
+    ...(Object.prototype.hasOwnProperty.call(updates, "hRaw") ? { hRaw: updates.hRaw } : {}),
+    captionRaw: Object.prototype.hasOwnProperty.call(updates, "captionRaw") ? updates.captionRaw : (win.captionRaw ?? buildWindowCaptionRaw(win.title ?? "", Boolean(win.captionVariable))),
+    flagsExpr: Object.prototype.hasOwnProperty.call(updates, "flagsExpr") ? updates.flagsExpr : getWindowCurrentFlagsExpr(win),
+    parentRaw: Object.prototype.hasOwnProperty.call(updates, "parentRaw") ? updates.parentRaw : (win.parentRaw ?? "")
+  });
+}
+
+function postWindowProperties(win: FormWindow, updates: { hiddenRaw?: string; disabledRaw?: string; colorRaw?: string }) {
+  post({
+    type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowProperties,
+    windowKey: win.id,
+    hiddenRaw: Object.prototype.hasOwnProperty.call(updates, "hiddenRaw") ? updates.hiddenRaw : (win.hiddenRaw ?? ""),
+    disabledRaw: Object.prototype.hasOwnProperty.call(updates, "disabledRaw") ? updates.disabledRaw : (win.disabledRaw ?? ""),
+    colorRaw: Object.prototype.hasOwnProperty.call(updates, "colorRaw") ? updates.colorRaw : (win.colorRaw ?? "")
+  });
+}
+
+function setInfoError(message: string): void {
+  errEl.textContent = message;
+  renderInfoPanel();
+}
+
+function clearInfoError(): void {
+  if (!(errEl.textContent ?? "").trim().length) return;
+  errEl.textContent = "";
+  renderInfoPanel();
+}
+
+function ensureValidPbVariableReference(value: string): boolean {
+  if (isValidPbVariableReference(value)) {
+    clearInfoError();
+    return true;
+  }
+
+  setInfoError(PB_WRONG_VARIABLE_NAME_MESSAGE);
+  return false;
+}
+
+function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: string): void {
+  const parsed = parseWindowPositionInspectorInput(rawValue);
+  if (!parsed.ok) {
+    setInfoError(`Window ${axis.toUpperCase()} accepts only an integer or ${WINDOW_POSITION_IGNORE_LITERAL}.`);
+    return;
+  }
+
+  clearInfoError();
+
+  if (axis === "x") {
+    win.xRaw = parsed.raw;
+    win.x = parsed.previewValue;
+    postWindowOpenArgs(win, { xRaw: parsed.raw });
+  } else {
+    win.yRaw = parsed.raw;
+    win.y = parsed.previewValue;
+    postWindowOpenArgs(win, { yRaw: parsed.raw });
+  }
+
+  render();
+  renderProps();
 }
 
 type ImageUsage = {
@@ -627,13 +1065,11 @@ function closeDestructiveAction(): void {
   renderProps();
 }
 
-function confirmDestructiveAction(): void {
-  const action = pendingDestructiveAction;
-  if (!action) return;
-
-  pendingDestructiveAction = null;
-
+function executeDestructiveAction(action: PendingDestructiveAction): void {
   switch (action.kind) {
+    case "deleteGadget":
+      post({ type: "deleteGadget", id: action.gadgetId });
+      return;
     case "deleteMenuEntry":
       post({
         type: "deleteMenuEntry",
@@ -677,7 +1113,7 @@ function confirmDestructiveAction(): void {
         widthRaw: field.widthRaw,
         textRaw: "",
         imageRaw: "",
-        flagsRaw: "",
+        flagsRaw: field.flagsRaw ?? "",
         progressBar: false,
         progressRaw: ""
       });
@@ -696,6 +1132,83 @@ function confirmDestructiveAction(): void {
       post({ type: "deleteGadgetColumn", id: action.gadgetId, sourceLine: action.sourceLine });
       return;
   }
+}
+
+function confirmDestructiveAction(): void {
+  const action = pendingDestructiveAction;
+  if (!action) return;
+
+  pendingDestructiveAction = null;
+  executeDestructiveAction(action);
+}
+
+function renderDestructiveDialog(): void {
+  destructiveDialogBackdropEl?.remove();
+  destructiveDialogBackdropEl = null;
+
+  if (!pendingDestructiveDialogAction) return;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) {
+      closeDestructiveDialog();
+    }
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "alertdialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = "Confirm Delete";
+  dialog.appendChild(title);
+
+  dialog.appendChild(mutedNote(pendingDestructiveDialogAction.message));
+
+  const actions = document.createElement("div");
+  actions.className = "miniActions";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = pendingDestructiveDialogAction.confirmLabel;
+  confirmBtn.onclick = () => confirmDestructiveDialogAction();
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeDestructiveDialog();
+
+  actions.appendChild(confirmBtn);
+  actions.appendChild(cancelBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  destructiveDialogBackdropEl = backdrop;
+}
+
+function openDestructiveDialog(action: PendingDestructiveAction, nextSelection?: DesignerSelection): void {
+  pendingDestructiveDialogAction = action;
+  if (nextSelection) {
+    setSelectionAndRefresh(nextSelection);
+  } else {
+    renderProps();
+  }
+  renderDestructiveDialog();
+}
+
+function closeDestructiveDialog(): void {
+  pendingDestructiveDialogAction = null;
+  renderDestructiveDialog();
+}
+
+function confirmDestructiveDialogAction(): void {
+  const action = pendingDestructiveDialogAction;
+  if (!action) return;
+  pendingDestructiveDialogAction = null;
+  renderDestructiveDialog();
+  executeDestructiveAction(action);
 }
 
 function isMenuEntrySelection(sel: DesignerSelection, menuId: string, entryIndex: number): boolean {
@@ -774,7 +1287,7 @@ function countImageUsages(imageId: string): number {
   return collectImageUsages(imageId).length;
 }
 
-function findImageEntryById(imageId?: string): ImageEntry | undefined {
+function findImageEntryById(imageId?: string): FormImage | undefined {
   if (!imageId) return undefined;
   return (model.images ?? []).find(entry => entry.id === imageId);
 }
@@ -783,21 +1296,48 @@ function selectImageById(imageId: string): void {
   setSelectionAndRefresh({ kind: "image", id: imageId });
 }
 
-const IMAGE_CAPABLE_GADGET_KINDS = new Set(["ImageGadget", "ButtonImageGadget"]);
+function resolvePreviewImageSrc(entry?: FormImage): string | undefined {
+  const resolved = entry?.image?.trim();
+  if (!resolved?.length || entry?.inline) return undefined;
+  if (/^(?:data:|https?:|vscode-webview-resource:|vscode-resource:|blob:)/i.test(resolved)) {
+    return resolved;
+  }
+  return undefined;
+}
+
+function drawResolvedPreviewImage(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): boolean {
+  if (!image || !image.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+    return false;
+  }
+
+  const dx = Math.round(x + (w - image.naturalWidth) / 2);
+  const dy = Math.round(y + (h - image.naturalHeight) / 2);
+  ctx.drawImage(image, dx, dy);
+  return true;
+}
+
+const IMAGE_CAPABLE_GADGET_KINDS: ReadonlySet<string> = new Set([GADGET_KIND.ImageGadget, GADGET_KIND.ButtonImageGadget]);
 
 function isPbStringLiteral(raw?: string): boolean {
   return /^"(?:[^"]|"")*"$/.test(raw?.trim() ?? "");
 }
 
-function canRelativizeImageEntry(entry?: ImageEntry): boolean {
+function canRelativizeImageEntry(entry?: FormImage): boolean {
   return Boolean(entry && !entry.inline && isPbStringLiteral(entry.imageRaw));
 }
 
-function canChooseFileImageEntry(entry?: ImageEntry): boolean {
+function canChooseFileImageEntry(entry?: FormImage): boolean {
   return Boolean(entry && !entry.inline);
 }
 
-function canToggleImagePbAny(entry?: ImageEntry): boolean {
+function canToggleImagePbAny(entry?: FormImage): boolean {
   if (!entry) return false;
   if (entry.pbAny) {
     return Boolean((entry.variable ?? entry.id ?? "").trim().length);
@@ -864,18 +1404,17 @@ function buildCreatedImageReference(idRaw: string, assignedVar?: string): { imag
 }
 
 function toPbString(v: string): string {
-  const esc = (v ?? "").replace(/"/g, '""');
-  return `"${esc}"`;
+  return quotePbString(v ?? "");
 }
 
-function getMenuInsertLevel(menu: MenuModel, parentSourceLine?: number): number {
+function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
   if (typeof parentSourceLine !== "number") return 0;
   const parentEntry = (menu.entries ?? []).find(entry => entry.source?.line === parentSourceLine);
   if (!parentEntry) return 0;
   return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
 }
 
-function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
+function postInsertMenuEntry(menu: FormMenu, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
   const preferredIndex = Math.max(0, menu.entries?.length ?? 0);
   pendingMenuEntrySelection = {
     menuId: menu.id,
@@ -895,7 +1434,7 @@ function postInsertMenuEntry(menu: MenuModel, args: { kind: string; idRaw?: stri
   });
 }
 
-function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
+function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
   const preferredIndex = Math.max(0, toolBar.entries?.length ?? 0);
   pendingToolBarEntrySelection = {
     toolBarId: toolBar.id,
@@ -916,7 +1455,7 @@ function postInsertToolBarEntry(toolBar: ToolbarModel, args: { kind: string; idR
   });
 }
 
-function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
+function postInsertStatusBarField(statusBar: FormStatusBar, args: { widthRaw: string; textRaw?: string; imageRaw?: string; flagsRaw?: string; progressBar?: boolean; progressRaw?: string }): void {
   const preferredIndex = Math.max(0, statusBar.fields?.length ?? 0);
   pendingStatusBarFieldSelection = {
     statusBarId: statusBar.id,
@@ -940,6 +1479,449 @@ function postInsertStatusBarField(statusBar: StatusbarModel, args: { widthRaw: s
   });
 }
 
+function getPredictedInsertedGadgetId(kind: string): string | undefined {
+  if (!isInsertableGadgetKind(kind)) return undefined;
+  const pbAny = shouldInsertGadgetAsPbAny(model.gadgets, settings.newGadgetsUsePbAnyByDefault);
+  return buildInsertedGadgetIdentity(kind, model.gadgets, pbAny).id;
+}
+
+function getGadgetDeletePlan(gadget: Gadget | undefined) {
+  if (!gadget) return undefined;
+  return buildOriginalGadgetDeletePlan(model.gadgets, gadget.id);
+}
+
+function getGadgetDeleteBlockedReason(gadget: Gadget | undefined): string | undefined {
+  if (!gadget) return "The selected gadget could not be resolved.";
+  if (typeof gadget.source?.line !== "number") {
+    return "Only parsed gadgets with a source line can be deleted.";
+  }
+
+  const deletePlan = getGadgetDeletePlan(gadget);
+  if (!deletePlan) return "The selected gadget could not be resolved.";
+  if (!deletePlan.deletedIds.size) {
+    return "This gadget remains attached to a surviving SplitterGadget in the original delete logic. Delete the splitter instead.";
+  }
+
+  return undefined;
+}
+
+function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructiveAction | undefined {
+  const blockedReason = getGadgetDeleteBlockedReason(gadget);
+  if (!gadget || blockedReason) return undefined;
+
+  const deletePlan = getGadgetDeletePlan(gadget);
+  if (!deletePlan || !deletePlan.deletedIds.size) return undefined;
+
+  const rootDeleted = deletePlan.deletedIds.has(gadget.id);
+  const deletedChildCount = rootDeleted
+    ? Math.max(0, deletePlan.deletedIds.size - 1)
+    : deletePlan.deletedIds.size;
+
+  let message: string;
+  if (!rootDeleted) {
+    message = deletedChildCount === 1
+      ? `Delete 1 child gadget under '${gadget.id}'? The selected gadget itself remains attached to its SplitterGadget.`
+      : `Delete ${deletedChildCount} child gadgets under '${gadget.id}'? The selected gadget itself remains attached to its SplitterGadget.`;
+  }
+  else if (deletedChildCount > 0) {
+    message = `Delete gadget '${gadget.id}' and its ${deletedChildCount} child gadget${deletedChildCount === 1 ? "" : "s"}?`;
+  }
+  else {
+    message = `Delete gadget '${gadget.id}'?`;
+  }
+
+  return {
+    kind: "deleteGadget",
+    gadgetId: gadget.id,
+    message,
+    confirmLabel: rootDeleted ? "Delete Gadget" : "Delete Child Gadgets"
+  };
+}
+
+function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  const predictedId = getPredictedInsertedGadgetId(kind);
+  if (predictedId) {
+    pendingGadgetSelection = { id: predictedId };
+  }
+  post({
+    type: "insertGadget",
+    kind,
+    x,
+    y,
+    parentId,
+    parentItem,
+    gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
+    gadget2Id: pendingSplitterInsertConfig?.gadget2Id,
+  });
+}
+
+function setPendingInsertGadgetKind(kind: string | null): void {
+  pendingInsertGadgetKind = kind && isInsertableGadgetKind(kind) ? kind : null;
+  closeCanvasContextMenu();
+  if (!pendingInsertGadgetKind) {
+    pendingSplitterInsertConfig = null;
+    canvas.style.cursor = drag ? canvas.style.cursor : "default";
+  }
+  if (pendingInsertGadgetKind !== GADGET_KIND.SplitterGadget) {
+    pendingSplitterInsertConfig = null;
+  }
+  if (pendingInsertGadgetKind) {
+    errEl.textContent = "";
+  }
+  renderInsertGadgetControls();
+  renderInfoPanel();
+}
+
+function getSplitterInsertCandidateLabel(gadget: Gadget): string {
+  return gadget.id;
+}
+
+function openSplitterInsertDialog(): void {
+  closeSplitterInsertDialog();
+
+  const candidates = model.gadgets.filter(gadget => !gadget.splitterId);
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) closeSplitterInsertDialog();
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = "Create Splitter";
+  dialog.appendChild(title);
+
+  dialog.appendChild(mutedNote("Choose two existing gadgets that are not already owned by another splitter. Both gadgets must currently belong to the same parent or panel tab."));
+
+  const validationEl = document.createElement("div");
+  validationEl.className = "muted";
+  validationEl.style.color = "var(--vscode-errorForeground)";
+
+  const createSelect = () => {
+    const sel = document.createElement("select");
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Select gadget...";
+    sel.appendChild(empty);
+    for (const gadget of candidates) {
+      const option = document.createElement("option");
+      option.value = gadget.id;
+      option.textContent = getSplitterInsertCandidateLabel(gadget);
+      sel.appendChild(option);
+    }
+    return sel;
+  };
+
+  const firstSel = createSelect();
+  const secondSel = createSelect();
+
+  const selectedGadgetId = selection && selection.kind === "gadget" ? selection.id : undefined;
+  const selectedGadget = selectedGadgetId ? model.gadgets.find(gadget => gadget.id === selectedGadgetId && !gadget.splitterId) : undefined;
+  if (selectedGadget) {
+    firstSel.value = selectedGadget.id;
+  }
+
+  dialog.appendChild(row("First Gadget", firstSel));
+  dialog.appendChild(row("Second Gadget", secondSel));
+  dialog.appendChild(validationEl);
+
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeSplitterInsertDialog();
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "Continue";
+  okBtn.onclick = () => {
+    const gadget1 = model.gadgets.find(gadget => gadget.id === firstSel.value);
+    const gadget2 = model.gadgets.find(gadget => gadget.id === secondSel.value);
+    if (!gadget1 || !gadget2 || gadget1.id === gadget2.id) {
+      validationEl.textContent = "Select two different gadgets.";
+      return;
+    }
+    if (gadget1.splitterId || gadget2.splitterId) {
+      validationEl.textContent = "Only gadgets that are not already assigned to a splitter are currently allowed here.";
+      return;
+    }
+    if (gadget1.parentId !== gadget2.parentId || gadget1.parentItem !== gadget2.parentItem) {
+      validationEl.textContent = "Both gadgets must currently belong to the same parent and panel tab.";
+      return;
+    }
+    pendingSplitterInsertConfig = {
+      gadget1Id: gadget1.id,
+      gadget2Id: gadget2.id,
+    };
+    closeSplitterInsertDialog();
+    setPendingInsertGadgetKind(GADGET_KIND.SplitterGadget);
+  };
+  actions.appendChild(cancelBtn);
+  actions.appendChild(okBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  splitterInsertDialogBackdropEl = backdrop;
+};
+
+function closeSplitterInsertDialog(): void {
+  splitterInsertDialogBackdropEl?.remove();
+  splitterInsertDialogBackdropEl = null;
+}
+
+function closeSelectParentDialog(): void {
+  selectParentDialogBackdropEl?.remove();
+  selectParentDialogBackdropEl = null;
+}
+
+function openSelectParentDialog(gadget: Gadget): void {
+  if (!canOpenGadgetReparentDialog(gadget)) return;
+
+  closeSelectParentDialog();
+
+  const options = getGadgetReparentParentOptions(model.window, model.gadgets, gadget.id);
+  const backdrop = document.createElement("div");
+  backdrop.className = "destructiveDialogBackdrop";
+  backdrop.onclick = (event) => {
+    if (event.target === backdrop) closeSelectParentDialog();
+  };
+
+  const dialog = document.createElement("div");
+  dialog.className = "destructiveDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  backdrop.appendChild(dialog);
+
+  const title = document.createElement("div");
+  title.className = "destructiveDialogTitle";
+  title.textContent = `Change Parent — ${gadget.id}`;
+  dialog.appendChild(title);
+  dialog.appendChild(mutedNote(gadget.kind === GADGET_KIND.SplitterGadget
+    ? "This Select Parent flow follows the original splitter special case: gadget1 and gadget2 are moved together with the splitter into the selected parent block, and the splitter itself resets to X/Y = 0,0."
+    : "This Select Parent flow follows the original path for normal gadgets. The moved gadget is inserted into the selected parent block and its X/Y position resets to 0,0."));
+
+  const validationEl = document.createElement("div");
+  validationEl.className = "muted";
+  validationEl.style.color = "var(--vscode-errorForeground)";
+
+  const parentSelect = document.createElement("select");
+  const itemSelect = document.createElement("select");
+  const currentValue = gadget.parentId ? `gadget:${gadget.parentId}` : "window";
+
+  const renderItemOptions = () => {
+    const selectedOption = options.find(option => option.value === parentSelect.value) ?? options[0];
+    itemSelect.innerHTML = "";
+    const itemLabels = selectedOption?.itemLabels ?? [];
+
+    if (!itemLabels.length) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "(none)";
+      itemSelect.appendChild(empty);
+      itemSelect.disabled = true;
+      itemSelect.value = "";
+      return;
+    }
+
+    itemSelect.disabled = false;
+    for (let index = 0; index < itemLabels.length; index += 1) {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = itemLabels[index] || `Item ${index + 1}`;
+      itemSelect.appendChild(option);
+    }
+
+    const currentItem = selectedOption?.parentId === gadget.parentId && typeof gadget.parentItem === "number"
+      ? Math.max(0, Math.min(gadget.parentItem, itemLabels.length - 1))
+      : 0;
+    itemSelect.value = String(currentItem);
+  };
+
+  for (const optionInfo of options) {
+    const option = document.createElement("option");
+    option.value = optionInfo.value;
+    option.textContent = optionInfo.label;
+    parentSelect.appendChild(option);
+  }
+
+  parentSelect.value = options.some(option => option.value === currentValue) ? currentValue : "window";
+  parentSelect.onchange = () => {
+    validationEl.textContent = "";
+    renderItemOptions();
+  };
+  renderItemOptions();
+
+  dialog.appendChild(row("Parent", parentSelect));
+  dialog.appendChild(row("Parent Item", itemSelect));
+  dialog.appendChild(validationEl);
+
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => closeSelectParentDialog();
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "OK";
+  okBtn.onclick = () => {
+    const selectedOption = options.find(option => option.value === parentSelect.value);
+    if (!selectedOption) {
+      validationEl.textContent = "Select a valid parent.";
+      return;
+    }
+
+    const nextParentId = selectedOption.parentId;
+    const nextParentItem = selectedOption.itemLabels.length && !itemSelect.disabled
+      ? Number.parseInt(itemSelect.value || "0", 10)
+      : undefined;
+
+    post({
+      type: "reparentGadget",
+      id: gadget.id,
+      parentId: nextParentId,
+      parentItem: Number.isFinite(nextParentItem) ? nextParentItem : undefined,
+    });
+    closeSelectParentDialog();
+  };
+  actions.appendChild(cancelBtn);
+  actions.appendChild(okBtn);
+  dialog.appendChild(actions);
+
+  document.body.appendChild(backdrop);
+  selectParentDialogBackdropEl = backdrop;
+}
+
+function requestInsertGadgetPlacement(kind: string): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  if (kind === GADGET_KIND.SplitterGadget) {
+    openSplitterInsertDialog();
+    return;
+  }
+  setPendingInsertGadgetKind(kind);
+}
+
+function requestImmediateToolboxInsert(kind: string): void {
+  if (!isInsertableGadgetKind(kind)) return;
+  if (!canImmediateInsertFromToolbox(kind)) return;
+
+  const point = getImmediateToolboxInsertPosition();
+  if (pendingInsertGadgetKind) {
+    setPendingInsertGadgetKind(null);
+  }
+  postInsertGadget(kind, point.x, point.y);
+}
+
+function getSelectedToolboxKind(): InsertableGadgetKind {
+  if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+    return pendingInsertGadgetKind;
+  }
+
+  if (!isInsertableGadgetKind(selectedToolboxKind)) {
+    selectedToolboxKind = getDefaultToolboxPanelKind();
+  }
+
+  return selectedToolboxKind;
+}
+
+function renderTopPanelTabs(): void {
+  if (!toolboxTabButtonEl || !objectsTabButtonEl || !toolboxTabPanelEl || !objectsTabPanelEl) return;
+
+  const toolboxActive = activeTopPanelTab === "toolbox";
+  toolboxTabButtonEl.classList.toggle("active", toolboxActive);
+  toolboxTabButtonEl.setAttribute("aria-selected", toolboxActive ? "true" : "false");
+  objectsTabButtonEl.classList.toggle("active", !toolboxActive);
+  objectsTabButtonEl.setAttribute("aria-selected", toolboxActive ? "false" : "true");
+  toolboxTabPanelEl.hidden = !toolboxActive;
+  objectsTabPanelEl.hidden = toolboxActive;
+}
+
+function renderInsertGadgetControls(): void {
+  if (!toolboxListEl || !cancelInsertGadgetButtonEl) return;
+
+  const selectedKind = getSelectedToolboxKind();
+  toolboxListEl.innerHTML = "";
+
+  for (const category of getToolboxPanelCategories()) {
+    const categoryEl = document.createElement("div");
+    categoryEl.className = "toolboxCategory";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "toolboxCategoryTitle";
+    titleEl.textContent = category.title;
+    categoryEl.appendChild(titleEl);
+
+    for (const entry of category.items) {
+      const itemEl = document.createElement("div");
+      const isSelected = entry.kind === selectedKind;
+      itemEl.className = `toolboxItem${isSelected ? " selected" : ""}${entry.enabled ? "" : " disabled"}${pendingInsertGadgetKind && entry.kind === selectedKind ? " pending" : ""}`;
+      if (entry.enabled && entry.kind) {
+        itemEl.setAttribute("role", "button");
+        itemEl.tabIndex = 0;
+      }
+
+      const iconEl = document.createElement("div");
+      iconEl.className = "toolboxIcon";
+      const iconUri = entry.iconAsset ? TOOLBOX_ICON_URIS[entry.iconAsset] : undefined;
+      if (iconUri) {
+        const iconImgEl = document.createElement("img");
+        iconImgEl.src = iconUri;
+        iconImgEl.alt = "";
+        iconEl.appendChild(iconImgEl);
+      } else {
+        iconEl.textContent = entry.iconText;
+      }
+
+      const labelEl = document.createElement("div");
+      labelEl.textContent = entry.label;
+
+      itemEl.appendChild(iconEl);
+      itemEl.appendChild(labelEl);
+
+      const activate = () => {
+        if (!entry.enabled || !entry.kind) return;
+        selectedToolboxKind = entry.kind;
+        renderInsertGadgetControls();
+        requestInsertGadgetPlacement(entry.kind);
+      };
+
+      const immediateInsert = () => {
+        if (!entry.enabled || !entry.kind) return;
+        selectedToolboxKind = entry.kind;
+        renderInsertGadgetControls();
+        requestImmediateToolboxInsert(entry.kind);
+      };
+
+      if (entry.enabled && entry.kind) {
+        itemEl.title = entry.kind === GADGET_KIND.SplitterGadget
+          ? "Click to choose the two splitter gadgets, then place the splitter in the canvas."
+          : "Click to place this gadget in the canvas. Double-click inserts it immediately at the default position.";
+      }
+
+      itemEl.onclick = () => activate();
+      itemEl.ondblclick = event => {
+        event.preventDefault();
+        immediateInsert();
+      };
+      itemEl.onkeydown = event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        activate();
+      };
+
+      categoryEl.appendChild(itemEl);
+    }
+
+    toolboxListEl.appendChild(categoryEl);
+  }
+
+  cancelInsertGadgetButtonEl.style.display = pendingInsertGadgetKind ? "block" : "none";
+  cancelInsertGadgetButtonEl.onclick = () => setPendingInsertGadgetKind(null);
+}
+
 type Handle = ResizeHandle;
 
 const HANDLE_SIZE = 6;
@@ -952,25 +1934,27 @@ const MIN_GADGET_H = 8;
 const MIN_WIN_W = 40;
 const MIN_WIN_H = 40;
 
-const CONTAINER_KINDS = new Set(PBFD_SYMBOLS.containerGadgetKinds);
-
 type RectLike = { x: number; y: number; w: number; h: number };
 
 function renderListAndParentSelector() {
   renderList();
   renderParentSelector();
+  renderInsertGadgetControls();
+  renderTopPanelTabs();
 }
 
 function renderSelectionUiWithParentSelector() {
   render();
   renderList();
   renderParentSelector();
+  renderTopPanelTabs();
   renderProps();
 }
 
 function renderSelectionUiWithoutParentSelector() {
   render();
   renderList();
+  renderTopPanelTabs();
   renderProps();
 }
 
@@ -978,11 +1962,12 @@ function renderAfterInit() {
   render();
   renderParentSelector();
   renderList();
+  renderInsertGadgetControls();
+  renderTopPanelTabs();
   renderProps();
-  renderDiagnostics();
 }
 
-function menuEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
+function menuEntryMatchesPendingSelection(entry: FormMenuEntry | undefined, pending: PendingMenuEntrySelection): boolean {
   if (!entry) return false;
   return entry.kind === pending.kind
     && getMenuEntryLevel(entry) === pending.level
@@ -1012,7 +1997,7 @@ function resolvePendingMenuEntrySelection() {
   }
 }
 
-function toolBarEntryMatchesPendingSelection(entry: MenuEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
+function toolBarEntryMatchesPendingSelection(entry: FormToolBarEntry | undefined, pending: PendingToolBarEntrySelection): boolean {
   if (!entry) return false;
   return entry.kind === pending.kind
     && (entry.idRaw ?? "") === (pending.idRaw ?? "")
@@ -1041,7 +2026,7 @@ function resolvePendingToolBarEntrySelection() {
   }
 }
 
-function statusBarFieldMatchesPendingSelection(field: StatusbarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
+function statusBarFieldMatchesPendingSelection(field: FormStatusBarField | undefined, pending: PendingStatusBarFieldSelection): boolean {
   if (!field) return false;
   return (field.widthRaw ?? "") === (pending.widthRaw ?? "")
     && (field.textRaw ?? "") === (pending.textRaw ?? "")
@@ -1071,7 +2056,21 @@ function resolvePendingStatusBarFieldSelection() {
   }
 }
 
+function resolvePendingGadgetSelection() {
+  const pending = pendingGadgetSelection;
+  if (!pending) return;
+  pendingGadgetSelection = null;
+  const gadget = model.gadgets.find(entry => entry.id === pending.id);
+  if (gadget) {
+    selection = { kind: "gadget", id: gadget.id };
+  }
+}
+
 function sanitizeSelectionAfterModelUpdate() {
+  const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
+  panelActiveItems.clear();
+  retainedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
+
   const sel = selection;
   if (sel && sel.kind === "gadget") {
     const selId = sel.id;
@@ -1184,7 +2183,7 @@ function applyDropSnapRectInPlace(r: RectLike, minW: number, minH: number) {
 }
 
 type DragState =
-  | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number }
+  | { target: "gadget"; mode: "move"; id: string; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "menuEntry";
       menuId: string;
@@ -1218,7 +2217,7 @@ type DragState =
       startW: number;
       startH: number;
     }
-  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number }
+  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "window";
       mode: "resize";
@@ -1234,6 +2233,9 @@ type DragState =
 let drag: DragState | null = null;
 
 function applySettings(s: DesignerSettings) {
+  if (s.osSkin !== settings.osSkin) {
+    clearSystemColorCache();
+  }
   settings = s;
 
   const bg = (settings.canvasBackground ?? "").trim();
@@ -1262,6 +2264,34 @@ function resizeCanvas() {
   render();
 }
 
+window.addEventListener("mousedown", event => {
+  if (!canvasContextMenuEl) return;
+  if (canvasContextMenuIgnoreMouseDownTimeStamp === event.timeStamp) {
+    canvasContextMenuIgnoreMouseDownTimeStamp = null;
+    return;
+  }
+  const target = event.target;
+  if (target instanceof Node && canvasContextMenuEl.contains(target)) return;
+  closeCanvasContextMenu();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  if (pendingDestructiveDialogAction) {
+    closeDestructiveDialog();
+    return;
+  }
+  if (splitterInsertDialogBackdropEl) {
+    closeSplitterInsertDialog();
+    return;
+  }
+  if (pendingInsertGadgetKind) {
+    setPendingInsertGadgetKind(null);
+    return;
+  }
+  closeCanvasContextMenu();
+});
+
 window.addEventListener("resize", resizeCanvas);
 
 window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>) => {
@@ -1270,7 +2300,10 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "init") {
     errEl.textContent = "";
     model = msg.model;
+    windowParentAsRawExpressionOverrides.clear();
+    const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
+    retainedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
     scrollAreaOffsets.clear();
 
     if (msg.settings) {
@@ -1278,6 +2311,8 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
     }
     resolvePendingMenuEntrySelection();
     resolvePendingToolBarEntrySelection();
+    resolvePendingStatusBarFieldSelection();
+    resolvePendingGadgetSelection();
     // Validate selection after model refresh
     sanitizeSelectionAfterModelUpdate();
 
@@ -1292,6 +2327,21 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
 
   if (msg.type === "error") {
     errEl.textContent = msg.message;
+    renderInfoPanel();
+  }
+
+  if (msg.type === "windowsSystemColors") {
+    windowsRegistryColors = msg.colors;
+    render();
+  }
+
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.procedureNames) {
+    // Async procedure discovery completed: update names and re-render the
+    // inspector (procedure dropdowns) without disturbing any other UI state.
+    if (model) {
+      model.procedureNames = msg.names;
+      renderInfoPanel();
+    }
   }
 });
 
@@ -1329,6 +2379,110 @@ function renderDiagnostics() {
   diagEl.style.display = "block";
 }
 
+function getSelectionSummary(): string {
+  const sel = selection;
+  if (!sel) return "No selection";
+
+  if (sel.kind === "window") {
+    return `Window ${model.window?.id ?? ""}`.trim();
+  }
+
+  if (sel.kind === "gadget") {
+    const gadget = model.gadgets.find(it => it.id === sel.id);
+    return gadget ? `${gadget.kind} ${gadget.id}` : "No selection";
+  }
+
+  if (sel.kind === "menu") {
+    return `Menu ${sel.id}`;
+  }
+
+  if (sel.kind === "menuEntry") {
+    const menu = (model.menus ?? []).find(it => it.id === sel.menuId);
+    const entry = menu?.entries?.[sel.entryIndex];
+    if (!entry) return "No selection";
+    const label = entry.idRaw || entry.textRaw || entry.kind;
+    return `${entry.kind} ${label}`.trim();
+  }
+
+  if (sel.kind === "toolbar") {
+    return `ToolBar ${sel.id}`;
+  }
+
+  if (sel.kind === "toolBarEntry") {
+    const toolBar = (model.toolbars ?? []).find(it => it.id === sel.toolBarId);
+    const entry = toolBar?.entries?.[sel.entryIndex];
+    if (!entry) return "No selection";
+    const label = entry.idRaw || entry.textRaw || entry.kind;
+    return `${entry.kind} ${label}`.trim();
+  }
+
+  if (sel.kind === "statusbar") {
+    return `StatusBar ${sel.id}`;
+  }
+
+  if (sel.kind === "statusBarField") {
+    const statusBar = (model.statusbars ?? []).find(it => it.id === sel.statusBarId);
+    const field = statusBar?.fields?.[sel.fieldIndex];
+    if (!field) return "No selection";
+    const label = field.textRaw || field.widthRaw || `Field ${sel.fieldIndex + 1}`;
+    return `StatusBarField ${label}`.trim();
+  }
+
+  if (sel.kind === "images") {
+    return "Images";
+  }
+
+  if (sel.kind === "image") {
+    return `Image ${sel.id}`;
+  }
+
+  return "No selection";
+}
+
+function getContextualInfoHint(): string {
+  if (pendingInsertGadgetKind && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+    if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && pendingSplitterInsertConfig) {
+      return `Click in the canvas to place a new Splitter for ${pendingSplitterInsertConfig.gadget1Id} and ${pendingSplitterInsertConfig.gadget2Id}. Press Escape to cancel placement mode.`;
+    }
+    return `Click in the canvas to place a new ${getGadgetInsertLabel(pendingInsertGadgetKind)}. Press Escape to cancel placement mode.`;
+  }
+
+  const sel = selection;
+  if (!sel) {
+    return "Select a window, gadget or top-level entry to view and edit its properties.";
+  }
+
+  switch (sel.kind) {
+    case "window":
+      return "Edit window settings, size and position, event procedure, and window flags here.";
+    case "gadget":
+      return "Drag or resize gadgets in the canvas. Edit supported items and columns in the inspector.";
+    case "menu":
+    case "menuEntry":
+      return "Menu entries can be inserted, edited or deleted from the current selection.";
+    case "toolbar":
+    case "toolBarEntry":
+      return "Toolbar entries can be inserted, edited or deleted from the current selection.";
+    case "statusbar":
+    case "statusBarField":
+      return "StatusBar fields can be inserted, edited or deleted from the current selection.";
+    case "images":
+    case "image":
+      return "Image references can be added, updated or reassigned from the current selection.";
+    default:
+      return "Review the current selection and update its available properties.";
+  }
+}
+
+function renderInfoPanel() {
+  renderDiagnostics();
+  renderInsertGadgetControls();
+  infoHintEl.textContent = getContextualInfoHint();
+  infoSelectionEl.textContent = getSelectionSummary();
+  const message = (errEl.textContent ?? "").trim();
+  errEl.style.display = message ? "block" : "none";
+}
+
 function escapeHtml(s: string): string {
   return (s ?? "")
     .replace(/&/g, "&amp;")
@@ -1342,32 +2496,33 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const rect = canvas.getBoundingClientRect();
   if (!model.window) return null;
 
-  const x = asInt(model.window.x ?? 0);
-  const y = asInt(model.window.y ?? 0);
+  const storedX = asInt(model.window.x ?? 0);
+  const storedY = asInt(model.window.y ?? 0);
+  const origin = getWindowPreviewCanvasOrigin(storedX, storedY);
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
 
   return {
-    x,
-    y,
+    x: origin.x,
+    y: origin.y,
     w,
     h,
     title: model.window.title ?? "",
     id: model.window.id,
-    tbH: Math.max(0, asInt(settings.titleBarHeight))
+    tbH: getWindowPreviewTitleBarHeight(model.window.flagsExpr, asInt(settings.titleBarHeight))
   };
 }
 
 
-function getPrimaryMenu(): MenuModel | undefined {
+function getPrimaryMenu(): FormMenu | undefined {
   return model.menus?.[0];
 }
 
-function getPrimaryToolbar(): ToolbarModel | undefined {
+function getPrimaryToolbar(): FormToolBar | undefined {
   return model.toolbars?.[0];
 }
 
-function getPrimaryStatusbar(): StatusbarModel | undefined {
+function getPrimaryStatusbar(): FormStatusBar | undefined {
   return model.statusbars?.[0];
 }
 
@@ -1397,26 +2552,42 @@ function getWindowContentPreviewRect(metrics: PreviewChromeMetrics): PreviewRect
 }
 
 function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout {
+  const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     getWindowLocalRect(),
-    Math.max(0, asInt(settings.titleBarHeight)),
+    getWindowPreviewChromeTopPadding(
+      platformSkin,
+      model.window?.flagsExpr,
+      asInt(settings.titleBarHeight),
+      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+    ),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
-    metrics
+    metrics,
+    getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
   );
 }
 
 function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChromeLayout | null {
   const wr = getWinRect();
   if (!wr) return null;
+  const platformSkin = resolvePbFormSkinPlatform();
   return getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
-    wr.tbH,
+    getWindowPreviewChromeTopPadding(
+      platformSkin,
+      model.window?.flagsExpr,
+      asInt(settings.titleBarHeight),
+      asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+    ),
     hasParsedMenuChrome(),
     hasParsedToolbarChrome(),
     hasParsedStatusbarChrome(),
-    metrics
+    metrics,
+    getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
   );
 }
 
@@ -1453,7 +2624,7 @@ function hitTestGadget(mx: number, my: number): Gadget | null {
     if (!layout.visible) continue;
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
-    if (g.kind === "SplitterGadget") {
+    if (g.kind === GADGET_KIND.SplitterGadget) {
       const splitterBarRect = intersectRect(getSplitterBarRect(layout.rect, hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical"), metrics.splitterWidth, g.state), layout.clip);
       if (!isPointOnRectBorder(layout.rect, lx, ly) && !rectContainsPoint(splitterBarRect, lx, ly)) {
         continue;
@@ -1530,10 +2701,444 @@ function postWindowRect() {
   });
 }
 
-canvas.addEventListener("mousedown", (e) => {
+function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }): void {
+  post({ type: "setGadgetOpenArgs", id, ...args });
+}
+
+function postCustomGadgetCode(id: string, args: { customInitRaw?: string; customCreateRaw?: string }): void {
+  post({ type: "setCustomGadgetCode", id, ...args });
+}
+
+function postGadgetProperties(
+  id: string,
+  args: {
+    hiddenRaw?: string;
+    disabledRaw?: string;
+    tooltipRaw?: string;
+    frontColorRaw?: string;
+    backColorRaw?: string;
+    gadgetFontRaw?: string;
+  }
+): void {
+  post({ type: "setGadgetProperties", id, ...args });
+}
+function postGadgetResizeRaw(
+  id: string,
+  args: {
+    xRaw?: string;
+    yRaw?: string;
+    wRaw?: string;
+    hRaw?: string;
+    deleteResize?: boolean;
+  }
+): void {
+  post({ type: "setGadgetResizeRaw", id, ...args });
+}
+
+
+function applyLocalGadgetTextUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  if (isVariable && !ensureValidPbVariableReference(value)) {
+    renderProps();
+    return;
+  }
+
+  const textRaw = buildGadgetTextRaw(value, isVariable);
+  g.textRaw = textRaw;
+  g.textVariable = isVariable;
+  g.text = value;
+  postGadgetOpenArgs(g.id, { textRaw, textVariable: isVariable });
+  render();
+  renderProps();
+}
+
+function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boolean): void {
+  if (isVariable && !ensureValidPbVariableReference(value)) {
+    renderProps();
+    return;
+  }
+
+  const tooltipRaw = buildGadgetTooltipRaw(value, isVariable);
+  g.tooltipRaw = tooltipRaw;
+  g.tooltipVariable = isVariable && tooltipRaw !== undefined;
+  g.tooltip = tooltipRaw ? value : undefined;
+  postGadgetProperties(g.id, { tooltipRaw });
+  renderProps();
+}
+
+function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" {
+  return resolvePreviewPlatformFromOsSkin(settings.osSkin);
+}
+
+function getWindowResizeLockContext() {
+  if (!model.window) return undefined;
+  return {
+    w: model.window.w,
+    h: model.window.h,
+    menuCount: model.menus?.length ?? 0,
+    toolbarCount: model.toolbars?.length ?? 0,
+    statusBarCount: model.statusbars?.length ?? 0,
+    platformSkin: resolvePbFormSkinPlatform()
+  };
+}
+
+function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, nextLockRight: boolean): void {
+  const resizeCtx = getWindowResizeLockContext();
+  if (!resizeCtx) return;
+  const update = buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, nextLockLeft, nextLockRight);
+  if (!update) return;
+
+  g.lockLeft = nextLockLeft;
+  g.lockRight = nextLockRight;
+
+  if (update.deleteResize) {
+    g.resizeXRaw = undefined;
+    g.resizeYRaw = undefined;
+    g.resizeWRaw = undefined;
+    g.resizeHRaw = undefined;
+    g.resizeSource = undefined;
+    postGadgetResizeRaw(g.id, { deleteResize: true });
+  } else {
+    g.resizeXRaw = update.xRaw;
+    g.resizeYRaw = update.yRaw;
+    g.resizeWRaw = update.wRaw;
+    g.resizeHRaw = update.hRaw;
+    postGadgetResizeRaw(g.id, update);
+  }
+
+  render();
+  renderProps();
+}
+
+function closeCanvasContextMenu(): void {
+  pendingCanvasContextMenu = null;
+  canvasContextMenuIgnoreMouseDownTimeStamp = null;
+  canvasContextMenuEl?.remove();
+  canvasContextMenuEl = null;
+}
+
+function renderCanvasContextMenu(): void {
+  canvasContextMenuEl?.remove();
+  canvasContextMenuEl = null;
+
+  if (!pendingCanvasContextMenu) return;
+
+  const menuEl = document.createElement("div");
+  menuEl.className = "canvasContextMenu";
+  menuEl.setAttribute("role", "menu");
+
+  for (const action of pendingCanvasContextMenu.actions) {
+    const actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.className = "canvasContextMenuItem";
+    actionBtn.setAttribute("role", "menuitem");
+    actionBtn.textContent = action.label;
+    actionBtn.disabled = !action.enabled;
+    actionBtn.title = action.title;
+    actionBtn.onclick = event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const current = pendingCanvasContextMenu;
+      closeCanvasContextMenu();
+      if (!current || !action.enabled) return;
+
+      switch (action.kind) {
+        case "deleteGadget":
+          openDestructiveDialog({
+            kind: "deleteGadget",
+            gadgetId: action.gadgetId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteMenu":
+          openDestructiveDialog({
+            kind: "deleteMenu",
+            menuId: action.menuId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteMenuEntry":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
+            kind: "deleteMenuEntry",
+            menuId: action.menuId,
+            entryIndex: action.entryIndex,
+            sourceLine: action.sourceLine,
+            entryKind: action.entryKind,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteToolBar":
+          openDestructiveDialog({
+            kind: "deleteToolBar",
+            toolBarId: action.toolBarId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteToolBarEntry":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
+            kind: "deleteToolBarEntry",
+            toolBarId: action.toolBarId,
+            entryIndex: action.entryIndex,
+            sourceLine: action.sourceLine,
+            entryKind: action.entryKind,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteStatusBar":
+          openDestructiveDialog({
+            kind: "deleteStatusBar",
+            statusBarId: action.statusBarId,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "deleteStatusBarField":
+          if (typeof action.sourceLine !== "number") return;
+          openDestructiveDialog({
+            kind: "deleteStatusBarField",
+            statusBarId: action.statusBarId,
+            fieldIndex: action.fieldIndex,
+            sourceLine: action.sourceLine,
+            message: action.message,
+            confirmLabel: action.confirmLabel
+          }, current.selection);
+          return;
+        case "insertToolBarButton": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "button"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertToolBarToggleButton": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "toggle"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertToolBarSeparator": {
+          const toolBar = (model.toolbars ?? []).find(entry => entry.id === action.toolBarId);
+          if (!toolBar) return;
+          postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "separator"));
+          setSelectionAndRefresh({ kind: "toolbar", id: toolBar.id });
+          return;
+        }
+        case "insertStatusBarImage": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("image"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+        case "insertStatusBarLabel": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("label"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+        case "insertStatusBarProgressBar": {
+          const statusBar = (model.statusbars ?? []).find(entry => entry.id === action.statusBarId);
+          if (!statusBar) return;
+          postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("progress"));
+          setSelectionAndRefresh({ kind: "statusbar", id: statusBar.id });
+          return;
+        }
+      }
+    };
+    menuEl.appendChild(actionBtn);
+  }
+
+  canvasWrap.appendChild(menuEl);
+
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const left = Math.max(4, Math.min(pendingCanvasContextMenu.x + 4, Math.max(4, wrapRect.width - menuEl.offsetWidth - 4)));
+  const top = Math.max(4, Math.min(pendingCanvasContextMenu.y + 4, Math.max(4, wrapRect.height - menuEl.offsetHeight - 4)));
+  menuEl.style.left = `${left}px`;
+  menuEl.style.top = `${top}px`;
+
+  canvasContextMenuEl = menuEl;
+}
+
+function resolveCanvasContextMenuActions(
+  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string }
+): CanvasContextMenuAction[] | null {
+  if (target.kind === "gadget") {
+    const gadget = model.gadgets.find(entry => entry.id === target.id);
+    if (!gadget) return null;
+
+    const blockedReason = getGadgetDeleteBlockedReason(gadget);
+    const action = buildGadgetDeleteAction(gadget);
+    return [{
+      kind: "deleteGadget",
+      label: "Delete Gadget…",
+      title: blockedReason ?? "Delete the currently selected gadget.",
+      enabled: !blockedReason,
+      gadgetId: gadget.id,
+      confirmLabel: "Delete Gadget",
+      message: action?.message ?? `Delete gadget '${gadget.id}'?`
+    }];
+  }
+
+  return resolveTopLevelCanvasContextMenuActions({
+    selection: target,
+    menus: model.menus,
+    toolbars: model.toolbars,
+    statusbars: model.statusbars
+  });
+}
+
+function openCanvasContextMenu(
+  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string },
+  x: number,
+  y: number,
+  triggerMouseDownTimeStamp?: number
+): void {
+  const actions = resolveCanvasContextMenuActions(target);
+  if (!actions?.length) {
+    closeCanvasContextMenu();
+    return;
+  }
+
+  const selection: CanvasContextMenuSelection = target.kind === "toolBarAddButton"
+    ? { kind: "toolbar", id: target.toolBarId }
+    : target.kind === "statusBarAddButton"
+      ? { kind: "statusbar", id: target.statusBarId }
+      : target;
+
+  pendingCanvasContextMenu = { x, y, actions, selection };
+  canvasContextMenuIgnoreMouseDownTimeStamp = typeof triggerMouseDownTimeStamp === "number"
+    ? triggerMouseDownTimeStamp
+    : null;
+  renderCanvasContextMenu();
+}
+
+function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
+  const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(), nextLockTop, nextLockBottom);
+  if (!update) return;
+
+  g.lockTop = nextLockTop;
+  g.lockBottom = nextLockBottom;
+
+  if (update.deleteResize) {
+    g.resizeXRaw = undefined;
+    g.resizeYRaw = undefined;
+    g.resizeWRaw = undefined;
+    g.resizeHRaw = undefined;
+    g.resizeSource = undefined;
+    postGadgetResizeRaw(g.id, { deleteResize: true });
+  } else {
+    g.resizeXRaw = update.xRaw;
+    g.resizeYRaw = update.yRaw;
+    g.resizeWRaw = update.wRaw;
+    g.resizeHRaw = update.hRaw;
+    postGadgetResizeRaw(g.id, update);
+  }
+
+  render();
+  renderProps();
+}
+
+function parseOptionalIntegerLiteral(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (!/^[-+]?\d+$/.test(trimmed)) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value: string): void {
+  const trimmed = value.trim();
+  const labels = getGadgetCtorRangeFieldLabels(g.kind);
+  const fieldLabel = field === "min" ? labels?.minLabel ?? "Value" : labels?.maxLabel ?? "Value";
+  if (!trimmed.length) {
+    alert(`${fieldLabel} may not be empty.`);
+    renderProps();
+    return;
+  }
+  const parsed = parseOptionalIntegerLiteral(trimmed);
+  if (field === "min") {
+    g.minRaw = trimmed;
+    g.min = parsed;
+    postGadgetOpenArgs(g.id, { minRaw: trimmed });
+  } else {
+    g.maxRaw = trimmed;
+    g.max = parsed;
+    postGadgetOpenArgs(g.id, { maxRaw: trimmed });
+  }
+  render();
+  renderProps();
+}
+
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+  const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const topLevelChromeHit = resolveTopLevelChromeHit({
+    x: mx,
+    y: my,
+    windowHit: hitWindow(mx, my),
+    menuId: getPrimaryMenu()?.id,
+    menuRect: chromeLayout?.menuBarRect ?? null,
+    menuEntryRects: menuEntryPreviewRects,
+    toolBarId: getPrimaryToolbar()?.id,
+    toolBarRect: chromeLayout?.toolBarRect ?? null,
+    toolBarEntryRects: toolBarEntryPreviewRects,
+    statusBarId: getPrimaryStatusbar()?.id,
+    statusBarRect: chromeLayout?.statusBarRect ?? null,
+    statusBarFieldRects: statusBarFieldPreviewRects
+  });
+
+  if (topLevelChromeHit) {
+    selection = topLevelChromeHit.selection;
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    openCanvasContextMenu(topLevelChromeHit.selection, mx, my);
+    return;
+  }
+
+  const gadgetHit = hitTestGadget(mx, my);
+  if (gadgetHit) {
+    selection = { kind: "gadget", id: gadgetHit.id };
+    drag = null;
+    canvas.style.cursor = "default";
+    renderSelectionUiWithoutParentSelector();
+    openCanvasContextMenu({ kind: "gadget", id: gadgetHit.id }, mx, my);
+    return;
+  }
+
+  closeCanvasContextMenu();
+});
+
+canvas.addEventListener("mousedown", (e) => {
+  closeCanvasContextMenu();
+  if (e.button !== 0) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (pendingInsertGadgetKind) {
+    const placement = resolveGadgetInsertPlacement(mx, my);
+    if (placement && isInsertableGadgetKind(pendingInsertGadgetKind)) {
+      postInsertGadget(pendingInsertGadgetKind, placement.x, placement.y, placement.parentId, placement.parentItem);
+      setPendingInsertGadgetKind(null);
+    } else if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget) {
+      errEl.textContent = "Choose a valid placement position for the splitter inside the window or a container parent.";
+      renderInfoPanel();
+    }
+    return;
+  }
 
   const panelTabHit = hitTestPanelTab(mx, my, previewChromeMetrics);
   if (panelTabHit) {
@@ -1562,11 +3167,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (toolBarAddHit) {
     const toolBar = (model.toolbars ?? []).find(entry => entry.id === toolBarAddHit.toolBarId);
     if (toolBar) {
-      postInsertToolBarEntry(toolBar, getToolBarPreviewInsertArgs(toolBar, "button"));
       selection = { kind: "toolbar", id: toolBar.id };
       drag = null;
       canvas.style.cursor = "default";
       renderSelectionUiWithoutParentSelector();
+      openCanvasContextMenu({ kind: "toolBarAddButton", toolBarId: toolBar.id }, mx, my, e.timeStamp);
       return;
     }
   }
@@ -1575,11 +3180,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (statusBarAddHit) {
     const statusBar = (model.statusbars ?? []).find(entry => entry.id === statusBarAddHit.statusBarId);
     if (statusBar) {
-      postInsertStatusBarField(statusBar, getStatusBarPreviewInsertArgs("image"));
       selection = { kind: "statusbar", id: statusBar.id };
       drag = null;
       canvas.style.cursor = "default";
       renderSelectionUiWithoutParentSelector();
+      openCanvasContextMenu({ kind: "statusBarAddButton", statusBarId: statusBar.id }, mx, my, e.timeStamp);
       return;
     }
   }
@@ -1685,7 +3290,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     } else if (chromeHit.zone === "scrollAreaVBar" || chromeHit.zone === "scrollAreaHBar") {
@@ -1713,7 +3320,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     } else {
@@ -1752,7 +3361,9 @@ canvas.addEventListener("mousedown", (e) => {
         startMx: mx,
         startMy: my,
         startX: g.x,
-        startY: g.y
+        startY: g.y,
+        startW: g.w,
+        startH: g.h
       };
       canvas.style.cursor = "move";
     }
@@ -1774,8 +3385,8 @@ canvas.addEventListener("mousedown", (e) => {
         handle: wh,
         startMx: mx,
         startMy: my,
-        startX: wr.x,
-        startY: wr.y,
+        startX: asInt(model.window?.x ?? 0),
+        startY: asInt(model.window?.y ?? 0),
         startW: wr.w,
         startH: wr.h
       };
@@ -1786,8 +3397,10 @@ canvas.addEventListener("mousedown", (e) => {
         mode: "move",
         startMx: mx,
         startMy: my,
-        startX: wr.x,
-        startY: wr.y
+        startX: asInt(model.window?.x ?? 0),
+        startY: asInt(model.window?.y ?? 0),
+        startW: wr.w,
+        startH: wr.h
       };
       canvas.style.cursor = "move";
     } else {
@@ -1810,6 +3423,11 @@ window.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+
+  if (pendingInsertGadgetKind) {
+    canvas.style.cursor = resolveGadgetInsertPlacement(mx, my) ? "crosshair" : "not-allowed";
+    return;
+  }
 
   if (!drag) {
     // Window handles have priority
@@ -2039,13 +3657,21 @@ window.addEventListener("mouseup", () => {
   if (d.target === "gadget") {
     const g = model.gadgets.find(it => it.id === d.id);
     if (g) {
-      applyDropSnapRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
-      postGadgetRect(g);
+      const startRect = { x: d.startX, y: d.startY, w: d.startW, h: d.startH };
+      if (hasRectChanged(g, startRect)) {
+        applyDropSnapRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
+        if (hasRectChanged(g, startRect)) {
+          postGadgetRect(g);
+        }
+      }
     }
-  } else {
-    if (model.window) {
+  } else if (model.window) {
+    const startRect = { x: d.startX, y: d.startY, w: d.startW, h: d.startH };
+    if (hasRectChanged(model.window, startRect)) {
       applyDropSnapRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
-      postWindowRect();
+      if (hasRectChanged(model.window, startRect)) {
+        postWindowRect();
+      }
     }
   }
 
@@ -2162,14 +3788,14 @@ function getGadgetPreviewLayout(
       clip = intersectRect(parentLayout.clip, parentContentRect);
       let localX = g.x;
       let localY = g.y;
-      if (parent.kind === "ScrollAreaGadget") {
+      if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
         localX -= getScrollAreaOffsetX(parent, parentLayout.rect, metrics);
         localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
       }
       rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
       visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
 
-      if (parent.kind === "PanelGadget" && typeof g.parentItem === "number") {
+      if (parent.kind === GADGET_KIND.PanelGadget && typeof g.parentItem === "number") {
         visible = visible && g.parentItem === getPanelActiveItem(parent);
       }
     }
@@ -2198,7 +3824,7 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
     if (!rectContainsPoint(layout.rect, lx, ly)) continue;
     if (!rectContainsPoint(layout.clip, lx, ly)) continue;
 
-    if (g.kind === "SplitterGadget") {
+    if (g.kind === GADGET_KIND.SplitterGadget) {
       if (isPointOnRectBorder(layout.rect, lx, ly)) {
         return { gadget: g, zone: "containerBorder" };
       }
@@ -2209,7 +3835,7 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
       continue;
     }
 
-    if (g.kind === "PanelGadget") {
+    if (g.kind === GADGET_KIND.PanelGadget) {
       const panelHeight = Math.min(metrics.panelHeight, Math.max(18, layout.rect.h));
       const headerRect = intersectRect({ x: layout.rect.x, y: layout.rect.y, w: layout.rect.w, h: panelHeight }, layout.clip);
       if (rectContainsPoint(headerRect, lx, ly)) {
@@ -2217,13 +3843,13 @@ function hitTestPreviewChrome(mx: number, my: number, metrics: PreviewChromeMetr
       }
     }
 
-    if (g.kind === "ContainerGadget" || g.kind === "PanelGadget" || g.kind === "ScrollAreaGadget" || g.kind === "FrameGadget") {
+    if (g.kind === GADGET_KIND.ContainerGadget || g.kind === GADGET_KIND.PanelGadget || g.kind === GADGET_KIND.ScrollAreaGadget || g.kind === GADGET_KIND.FrameGadget) {
       if (isPointOnRectBorder(layout.rect, lx, ly)) {
         return { gadget: g, zone: "containerBorder" };
       }
     }
 
-    if (g.kind === "ScrollAreaGadget") {
+    if (g.kind === GADGET_KIND.ScrollAreaGadget) {
       const verticalBar = intersectRect(getScrollAreaVerticalBarRect(layout.rect, metrics), layout.clip);
       if (rectContainsPoint(verticalBar, lx, ly)) {
         return { gadget: g, zone: "scrollAreaVBar" };
@@ -2250,7 +3876,7 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
     const cache = new Map<string, GadgetPreviewLayout>();
     for (let i = model.gadgets.length - 1; i >= 0; i--) {
       const g = model.gadgets[i];
-      if (g.kind !== "PanelGadget") continue;
+      if (g.kind !== GADGET_KIND.PanelGadget) continue;
       const layout = getGadgetPreviewLayout(g, metrics, cache);
       if (!layout.visible) continue;
       const tabs = getPanelTabRects(ctx, g, layout.rect, metrics);
@@ -2267,23 +3893,1591 @@ function hitTestPanelTab(mx: number, my: number, metrics: PreviewChromeMetrics):
   return null;
 }
 
-function drawContainerChrome(
+function resolveGadgetInsertPlacement(mx: number, my: number): { x: number; y: number; parentId?: string; parentItem?: number } | null {
+  if (!pendingInsertGadgetKind || !isInsertableGadgetKind(pendingInsertGadgetKind)) return null;
+  if (pendingInsertGadgetKind === GADGET_KIND.SplitterGadget && !pendingSplitterInsertConfig) return null;
+  if (!hitWindow(mx, my)) return null;
+
+  const { lx, ly } = toLocal(mx, my);
+  const metrics = previewChromeMetrics;
+  const windowContentRect = getWindowContentPreviewRect(metrics);
+  const rawLocalX = lx - windowContentRect.x;
+  const rawLocalY = ly - windowContentRect.y;
+  const snappedLocalX = settings.snapToGrid ? snapValue(rawLocalX, settings.gridSize) : Math.trunc(rawLocalX);
+  const snappedLocalY = settings.snapToGrid ? snapValue(rawLocalY, settings.gridSize) : Math.trunc(rawLocalY);
+  const alignedX = windowContentRect.x + snappedLocalX;
+  const alignedY = windowContentRect.y + snappedLocalY;
+
+  if (!rectContainsPoint(windowContentRect, alignedX, alignedY)) {
+    return null;
+  }
+
+  const cache = new Map<string, GadgetPreviewLayout>();
+  for (let i = model.gadgets.length - 1; i >= 0; i--) {
+    const gadget = model.gadgets[i];
+    if (!canHostInsertedGadgets(gadget)) continue;
+
+    const layout = getGadgetPreviewLayout(gadget, metrics, cache);
+    if (!layout.visible) continue;
+    if (!rectContainsPoint(layout.rect, alignedX, alignedY)) continue;
+    if (!rectContainsPoint(layout.clip, alignedX, alignedY)) continue;
+
+    const contentRect = getGadgetContentRect(gadget.kind, layout.rect, metrics);
+    let x = alignedX - contentRect.x;
+    let y = alignedY - contentRect.y;
+    if (gadget.kind === GADGET_KIND.ScrollAreaGadget) {
+      x += getScrollAreaOffsetX(gadget, layout.rect, metrics);
+      y += getScrollAreaOffsetY(gadget, layout.rect, metrics);
+    }
+
+    return {
+      x,
+      y,
+      parentId: gadget.id,
+      parentItem: gadget.kind === GADGET_KIND.PanelGadget ? getPanelActiveItem(gadget) : undefined,
+    };
+  }
+
+  return { x: snappedLocalX, y: snappedLocalY };
+}
+
+function drawContainerGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
+
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+
+  if (hasPbFlag(g.flagsExpr, "#PB_Container_Single")) {
+    ctx.strokeStyle = "rgb(130, 130, 130)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Flat")) {
+    ctx.strokeStyle = "rgb(0, 0, 0)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Double")) {
+    ctx.strokeStyle = "rgb(130, 130, 130)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    if (w > 2 && h > 2) {
+      ctx.strokeStyle = "rgb(194, 194, 194)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    }
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Container_Raised")) {
+    ctx.strokeStyle = "rgb(194, 194, 194)";
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    if (w > 2 && h > 2) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    }
+  }
+
+  ctx.restore();
+}
+
+
+function getPreviewGadgetDefaultTextColor(windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  return windowsSkinColors?.windowText ?? "rgb(0, 0, 0)";
+}
+
+function getPreviewGadgetDefaultControlBg(osSkin: DesignerSettings["osSkin"], windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  switch (osSkin) {
+    case "windows7":
+    case "windows8":
+      return windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+    case "macos":
+      return "rgb(237, 237, 237)";
+    case "linux":
+      return "rgb(242, 241, 240)";
+    default:
+      return "rgb(240, 240, 240)";
+  }
+}
+
+function getPreviewGadgetDefaultClientBg(windowsSkinColors?: WindowsSkinSystemColors | null): string {
+  return windowsSkinColors?.window ?? "rgb(255, 255, 255)";
+}
+
+function mixCssRgb(colorA: string, colorB: string, ratio: number): string {
+  const rgbA = parseCssRgb(colorA);
+  const rgbB = parseCssRgb(colorB);
+  if (!rgbA || !rgbB) return colorA;
+
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const mixChannel = (a: number, b: number) => Math.round(a + ((b - a) * clampedRatio));
+  return `rgb(${mixChannel(rgbA[0], rgbB[0])}, ${mixChannel(rgbA[1], rgbB[1])}, ${mixChannel(rgbA[2], rgbB[2])})`;
+}
+
+function drawButtonGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.ButtonGadget;
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+  const buttonRadius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  switch (osSkin) {
+    case "windows7": {
+      const topFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.02);
+      const bottomFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.12);
+      const innerBorder = mixCssRgb(baseControlColor, "rgb(255, 255, 255)", 0.6);
+      const outerBorder = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(111, 111, 111)",
+        bottomFill,
+        "rgb(111, 111, 111)"
+      );
+      const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+      gradient.addColorStop(0, topFill);
+      gradient.addColorStop(0.45, topFill);
+      gradient.addColorStop(0.46, bottomFill);
+      gradient.addColorStop(1, bottomFill);
+
+      traceRoundedRect(ctx, x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2), buttonRadius);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.strokeStyle = innerBorder;
+      ctx.stroke();
+
+      traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
+      ctx.strokeStyle = outerBorder;
+      ctx.stroke();
+      break;
+    }
+
+    case "windows8": {
+      const topFill = baseControlColor;
+      const bottomFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.05);
+      const borderColor = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(172, 172, 172)",
+        baseControlColor,
+        "rgb(172, 172, 172)"
+      );
+      const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+      gradient.addColorStop(0, topFill);
+      gradient.addColorStop(1, bottomFill);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+      ctx.strokeStyle = borderColor;
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      break;
+    }
+
+    case "macos":
+    case "linux":
+    default: {
+      traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
+      ctx.strokeStyle = "rgb(220, 220, 220)";
+      ctx.stroke();
+
+      traceRoundedRect(ctx, x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3), buttonRadius);
+      ctx.fillStyle = "rgb(241, 241, 241)";
+      ctx.fill();
+      ctx.strokeStyle = "rgb(174, 174, 174)";
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgb(255, 255, 255)";
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y + 2.5);
+      ctx.lineTo(x + Math.max(4, w - 4), y + 2.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(250, 250, 250)";
+      ctx.beginPath();
+      ctx.moveTo(x + 3, y + 3.5);
+      ctx.lineTo(x + Math.max(3, w - 3), y + 3.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgb(246, 246, 246)";
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + 4.5);
+      ctx.lineTo(x + Math.max(2, w - 2), y + 4.5);
+      ctx.stroke();
+      break;
+    }
+  }
+
+  const textWidth = ctx.measureText(label).width;
+  const textX = x + Math.max(1, (w - textWidth) / 2);
+  const textY = y + Math.max(1, Math.trunc((h - 12) / 2));
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, textX, textY);
+  ctx.restore();
+}
+
+function drawComboDropArrow(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  color: string
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 4, centerY - 2);
+  ctx.lineTo(centerX + 4, centerY - 2);
+  ctx.lineTo(centerX, centerY + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+
+function drawCheckableGadgetFallbackMark(
+  ctx: CanvasRenderingContext2D,
+  kind: "checkbox" | "option",
+  checked: boolean,
+  x: number,
+  y: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+): void {
+  ctx.save();
+
+  if (kind === "checkbox") {
+    const size = 13;
+    const borderColor = osSkin === "windows8"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+        "rgb(255, 255, 255)",
+        "rgb(142, 142, 142)"
+      )
+      : "rgb(142, 142, 142)";
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    if (checked) {
+      ctx.strokeStyle = osSkin === "windows8" ? "rgb(49, 106, 197)" : "rgb(0, 0, 0)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 2.5, y + 6.5);
+      ctx.lineTo(x + 5.5, y + 9.5);
+      ctx.lineTo(x + 10.5, y + 3.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const size = 13;
+  ctx.strokeStyle = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+      "rgb(255, 255, 255)",
+      "rgb(142, 142, 142)"
+    )
+    : "rgb(142, 142, 142)";
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2 - 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (checked) {
+    ctx.fillStyle = osSkin === "windows8" ? "rgb(49, 106, 197)" : "rgb(0, 0, 0)";
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCheckableGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  kind: "checkbox" | "option",
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const checked = Boolean(g.state);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = g.text ?? "";
+  const image = getPreviewCheckableImage(kind, osSkin, checked);
+  const fallbackWidth = kind === "option" ? 16 : 14;
+  const fallbackHeight = kind === "option" ? 17 : 15;
+  const imageWidth = image && image.complete && image.naturalWidth > 0 ? image.naturalWidth : fallbackWidth;
+  const imageHeight = image && image.complete && image.naturalHeight > 0 ? image.naturalHeight : fallbackHeight;
+  const markX = x;
+  const markY = y + Math.trunc((h - imageHeight) / 2);
+  const textX = x + (kind === "option" ? 19 : 17);
+  const textY = y + Math.trunc((h - (kind === "option" ? 17 : 15)) / 2);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (!drawPreviewRasterIcon(ctx, image, markX, markY, imageWidth, imageHeight)) {
+    drawCheckableGadgetFallbackMark(ctx, kind, checked, markX, markY, osSkin, windowsSkinColors);
+  }
+
+  if (label.length > 0) {
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, textX, textY);
+  }
+
+  ctx.restore();
+}
+
+function drawDateGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = g.text ?? "";
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows7" || osSkin === "windows8") {
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(150, 150, 150)",
+      fillColor,
+      "rgb(150, 150, 150)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    drawComboDropArrow(ctx, x + w - 8, y + Math.trunc(h / 2), textColor);
+    if (label.length > 0) {
+      ctx.fillStyle = textColor;
+      ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+    }
+    ctx.restore();
+    return;
+  }
+
+  const iconImage = getPreviewDateIconImage();
+  const iconWidth = iconImage && iconImage.complete && iconImage.naturalWidth > 0 ? iconImage.naturalWidth : 21;
+  const iconHeight = iconImage && iconImage.complete && iconImage.naturalHeight > 0 ? iconImage.naturalHeight : 22;
+  const bodyWidth = Math.max(0, w - 27);
+
+  ctx.strokeStyle = "rgb(165, 165, 165)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 1), Math.max(0, h - 1));
+  ctx.strokeStyle = "rgb(227, 227, 227)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y + 1.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + 1.5);
+  ctx.stroke();
+  ctx.strokeStyle = "rgb(245, 245, 245)";
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y + 2.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + 2.5);
+  ctx.moveTo(x + 1.5, y + 2.5);
+  ctx.lineTo(x + 1.5, y + h - 1.5);
+  ctx.moveTo(x + bodyWidth - 1.5, y + 2.5);
+  ctx.lineTo(x + bodyWidth - 1.5, y + h - 1.5);
+  ctx.stroke();
+
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
+
+  if (label.length > 0) {
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+  }
+
+  if (!drawPreviewRasterIcon(ctx, iconImage, x + w - 21, y + Math.trunc((h - iconHeight) / 2), iconWidth, iconHeight)) {
+    const fallbackY = y + Math.trunc((h - 18) / 2);
+    ctx.strokeStyle = "rgb(128, 128, 128)";
+    ctx.strokeRect(x + w - 20.5, fallbackY + 0.5, 17, 17);
+    ctx.fillStyle = "rgb(222, 79, 79)";
+    ctx.fillRect(x + w - 20, fallbackY + 1, 16, 4);
+  }
+
+  ctx.restore();
+}
+
+function drawCalendarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  ctx.strokeStyle = "rgb(0, 0, 0)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = textColor;
+  ctx.fillText("Calendar Gadget", x + 3, y + 3);
+  ctx.restore();
+}
+
+function drawCanvasLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   w: number,
   h: number,
-  fg: string
+  label: string
 ) {
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgb(237, 237, 237)";
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  ctx.strokeStyle = "rgb(0, 0, 0)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = "rgb(0, 0, 0)";
+  ctx.fillText(label, x + 3, y + 3);
+  ctx.restore();
+}
+
+function drawWebLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  label: string
+) {
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = "rgb(194, 194, 194)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.fillStyle = "rgb(0, 0, 0)";
+  ctx.fillText(label, x + 3, y + 3);
+  ctx.restore();
+}
+
+function drawImageGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  ctx.save();
+  ctx.textBaseline = "top";
+  const imageEntry = findImageEntryById(g.imageId);
+  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+  if (!drawResolvedPreviewImage(ctx, previewImage, x, y, w, h)) {
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillText(GADGET_KIND.ImageGadget, x, y);
+  }
+  ctx.restore();
+}
+
+function drawButtonImageGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  ctx.save();
+  ctx.strokeStyle = "rgb(165, 165, 165)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + h - 1);
+  gradient.addColorStop(0, "rgb(250, 250, 250)");
+  gradient.addColorStop(1, "rgb(239, 239, 239)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+
+  const imageEntry = findImageEntryById(g.imageId);
+  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+  drawResolvedPreviewImage(ctx, previewImage, x, y, w, h);
+  ctx.restore();
+}
+
+function drawCustomGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
 
   ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = bg;
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "rgb(130, 130, 130)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.restore();
+}
+
+function drawComboLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isEditable = hasPbFlag(g.flagsExpr, "#PB_ComboBox_Editable");
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const itemLabel = (g.items ?? []).map(getPreviewGadgetItemLabel).find((label) => label.length > 0) ?? "Item 1";
+  const arrowColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? textColor,
+      windowsSkinColors?.buttonFace ?? fillColor,
+      "rgb(0, 0, 0)"
+    )
+    : textColor;
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (isEditable) {
+    const borderColor = osSkin === "windows8"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(150, 150, 150)",
+        fillColor,
+        "rgb(150, 150, 150)"
+      )
+      : (osSkin === "windows7"
+        ? ensurePreviewLineContrast(
+          windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(150, 150, 150)",
+          fillColor,
+          "rgb(150, 150, 150)"
+        )
+        : "rgb(150, 150, 150)");
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (osSkin === "windows7") {
+    const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+    const topFill = mixCssRgb(baseControlColor, "rgb(255, 255, 255)", 0.18);
+    const bottomFill = mixCssRgb(baseControlColor, "rgb(0, 0, 0)", 0.12);
+    const outerBorder = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(111, 111, 111)",
+      bottomFill,
+      "rgb(111, 111, 111)"
+    );
+    const innerBorder = mixCssRgb(baseControlColor, "rgb(255, 255, 255)", 0.65);
+    const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+    gradient.addColorStop(0, topFill);
+    gradient.addColorStop(0.45, topFill);
+    gradient.addColorStop(0.46, bottomFill);
+    gradient.addColorStop(1, bottomFill);
+    const radius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
+
+    traceRoundedRect(ctx, x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2), radius);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = innerBorder;
+    ctx.stroke();
+
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.strokeStyle = outerBorder;
+    ctx.stroke();
+  } else if (osSkin === "windows8") {
+    const topFill = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+    const bottomFill = mixCssRgb(topFill, "rgb(0, 0, 0)", 0.05);
+    const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+    gradient.addColorStop(0, topFill);
+    gradient.addColorStop(1, bottomFill);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(172, 172, 172)",
+      topFill,
+      "rgb(172, 172, 172)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else if (osSkin === "macos") {
+    const radius = 3;
+    const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 10);
+    gradient.addColorStop(0, "rgb(244, 244, 244)");
+    gradient.addColorStop(1, "rgb(255, 255, 255)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.min(10, Math.max(0, h - 2)));
+    ctx.fillStyle = "rgb(236, 236, 236)";
+    ctx.fillRect(x + 1, y + 11, Math.max(0, w - 2), Math.max(0, Math.min(9, h - 12)));
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.strokeStyle = "rgb(144, 144, 144)";
+    ctx.stroke();
+  } else {
+    const radius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
+    const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + Math.max(1, h - 2));
+    gradient.addColorStop(0, "rgb(235, 235, 235)");
+    gradient.addColorStop(0.45, "rgb(235, 235, 235)");
+    gradient.addColorStop(0.46, "rgb(211, 211, 211)");
+    gradient.addColorStop(1, "rgb(211, 211, 211)");
+
+    traceRoundedRect(ctx, x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2), radius);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = "rgb(250, 250, 250)";
+    ctx.stroke();
+
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.strokeStyle = "rgb(111, 111, 111)";
+    ctx.stroke();
+  }
+
+  drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(h / 2), arrowColor);
+  ctx.fillStyle = textColor;
+  ctx.fillText(itemLabel, x + (isEditable ? 3 : 4), y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.restore();
+}
+
+function drawSpinGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.SpinGadget;
+  const spinnerWidth = osSkin === "windows8" ? 18 : 20;
+  const bodyWidth = Math.max(0, w - spinnerWidth);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    const borderColor = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+      fillColor,
+      "rgb(171, 173, 179)"
+    );
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, bodyWidth - 2), Math.max(0, h - 2));
+
+    ctx.fillStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
+  } else {
+    const outerBorder = osSkin === "windows7"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
+        fillColor,
+        "rgb(165, 165, 165)"
+      )
+      : "rgb(165, 165, 165)";
+    ctx.strokeStyle = outerBorder;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 1.5);
+    ctx.lineTo(x + bodyWidth - 1.5, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(245, 245, 245)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + bodyWidth - 1.5, y + 2.5);
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + 1.5, y + h - 2.5);
+    ctx.moveTo(x + bodyWidth - 2.5, y + 2.5);
+    ctx.lineTo(x + bodyWidth - 2.5, y + h - 2.5);
+    ctx.stroke();
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
+
+    ctx.strokeStyle = outerBorder;
+    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
+    ctx.fillStyle = osSkin === "macos" ? "rgb(236, 236, 236)" : "rgb(240, 240, 240)";
+    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
+  }
+
+  const dividerX = x + bodyWidth;
+  ctx.strokeStyle = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+      fillColor,
+      "rgb(171, 173, 179)"
+    )
+    : "rgb(180, 180, 180)";
+  ctx.beginPath();
+  ctx.moveTo(dividerX + 0.5, y + 0.5);
+  ctx.lineTo(dividerX + 0.5, y + h - 0.5);
+  ctx.moveTo(dividerX + 0.5, y + Math.trunc(h / 2) + 0.5);
+  ctx.lineTo(x + w - 0.5, y + Math.trunc(h / 2) + 0.5);
+  ctx.stroke();
+
+  const arrowColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? textColor,
+      windowsSkinColors?.buttonFace ?? fillColor,
+      "rgb(0, 0, 0)"
+    )
+    : textColor;
+  ctx.fillStyle = arrowColor;
+  ctx.beginPath();
+  ctx.moveTo(x + bodyWidth + spinnerWidth / 2 - 4, y + Math.max(4, Math.trunc(h / 4)) + 2);
+  ctx.lineTo(x + bodyWidth + spinnerWidth / 2 + 4, y + Math.max(4, Math.trunc(h / 4)) + 2);
+  ctx.lineTo(x + bodyWidth + spinnerWidth / 2, y + Math.max(4, Math.trunc(h / 4)) - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(x + bodyWidth + spinnerWidth / 2 - 4, y + Math.trunc((3 * h) / 4) - 2);
+  ctx.lineTo(x + bodyWidth + spinnerWidth / 2 + 4, y + Math.trunc((3 * h) / 4) - 2);
+  ctx.lineTo(x + bodyWidth + spinnerWidth / 2, y + Math.trunc((3 * h) / 4) + 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.restore();
+}
+
+function drawProgressBarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const defaultTrackColor = osSkin === "windows8" ? "rgb(230, 230, 230)" : "rgb(220, 220, 220)";
+  const defaultFillColor = osSkin === "windows8" ? "rgb(6, 176, 37)" : "rgb(134, 206, 244)";
+  const trackColor = pbColorNumberToCssHex(g.backColor) ?? defaultTrackColor;
+  const fillColor = pbColorNumberToCssHex(g.frontColor) ?? defaultFillColor;
+  const isVertical = hasPbFlag(g.flagsExpr, "#PB_ProgressBar_Vertical");
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+    ctx.fillStyle = fillColor;
+    if (isVertical) {
+      ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, Math.trunc(h / 2) - 2));
+    } else {
+      ctx.fillRect(x + 1, y + 1, Math.max(0, Math.trunc(w / 2) - 2), Math.max(0, h - 2));
+    }
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(188, 188, 188)",
+      trackColor,
+      "rgb(188, 188, 188)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  } else {
+    const radius = Math.max(2, Math.min(3, Math.trunc(Math.min(w, h) / 6)));
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.fillStyle = trackColor;
+    ctx.fill();
+    ctx.strokeStyle = "rgb(152, 152, 152)";
+    ctx.stroke();
+
+    ctx.save();
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.clip();
+    ctx.fillStyle = fillColor;
+    if (isVertical) {
+      ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, Math.trunc(h / 2) - 2));
+    } else {
+      ctx.fillRect(x + 1, y + 1, Math.max(0, Math.trunc(w / 2) - 2), Math.max(0, h - 2));
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawFrameGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const caption = g.text ?? "";
+  const captionColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const captionBgColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+  const isSingle = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Single");
+  const isDouble = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Double");
+  const isFlat = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Flat");
+  const captionHeight = 12;
+  const lineY = y + 9.5;
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "macos") {
+    if (isSingle) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.restore();
+      return;
+    }
+
+    if (isDouble) {
+      ctx.strokeStyle = "rgb(130, 130, 130)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.strokeStyle = "rgb(194, 194, 194)";
+      ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+      ctx.restore();
+      return;
+    }
+
+    if (isFlat) {
+      ctx.strokeStyle = "rgb(0, 0, 0)";
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+      ctx.restore();
+      return;
+    }
+
+    if (caption.length > 0) {
+      ctx.fillStyle = captionColor;
+      ctx.fillText(caption, x + 10, y);
+    }
+
+    traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
+    ctx.strokeStyle = "rgb(222, 222, 222)";
+    ctx.stroke();
+    traceRoundedRect(ctx, x + 0.5, y + captionHeight + 1.5, Math.max(0, w - 1), Math.max(0, h - captionHeight - 1), 3);
+    ctx.strokeStyle = "rgb(200, 200, 200)";
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isSingle) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(160, 160, 160)",
+      captionBgColor,
+      "rgb(160, 160, 160)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y + h - 0.5);
+    ctx.lineTo(x + w + 0.5, y + h - 0.5);
+    ctx.moveTo(x + w - 0.5, y + 0.5);
+    ctx.lineTo(x + w - 0.5, y + h + 0.5);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isDouble) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(160, 160, 160)",
+      captionBgColor,
+      "rgb(160, 160, 160)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y + h - 0.5);
+    ctx.lineTo(x + w + 0.5, y + h - 0.5);
+    ctx.moveTo(x + w - 0.5, y + 0.5);
+    ctx.lineTo(x + w - 0.5, y + h + 0.5);
+    ctx.stroke();
+
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? "rgb(105, 105, 105)",
+      captionBgColor,
+      "rgb(105, 105, 105)"
+    );
+    ctx.strokeRect(x + 1.5, y + 1.5, Math.max(0, w - 3), Math.max(0, h - 3));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + h - 1.5);
+    ctx.lineTo(x + w - 1.5, y + h - 1.5);
+    ctx.moveTo(x + w - 1.5, y + 1.5);
+    ctx.lineTo(x + w - 1.5, y + h - 1.5);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (isFlat) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? "rgb(100, 100, 100)",
+      captionBgColor,
+      "rgb(100, 100, 100)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.restore();
+    return;
+  }
+
+  const lineColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(221, 221, 221)",
+    captionBgColor,
+    "rgb(221, 221, 221)"
+  );
+  const captionWidth = caption.length > 0 ? ctx.measureText(caption).width + 2 : 0;
+
+  ctx.strokeStyle = lineColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y + 9.5);
+  ctx.lineTo(x + 0.5, y + h - 0.5);
+  ctx.moveTo(x + w - 0.5, y + 9.5);
+  ctx.lineTo(x + w - 0.5, y + h - 0.5);
+  ctx.moveTo(x + 0.5, y + h - 0.5);
+  ctx.lineTo(x + w - 0.5, y + h - 0.5);
+  if (captionWidth > 0) {
+    ctx.moveTo(x + 0.5, lineY);
+    ctx.lineTo(x + 8.5, lineY);
+    ctx.moveTo(x + 10.5 + captionWidth, lineY);
+    ctx.lineTo(x + w - 0.5, lineY);
+  } else {
+    ctx.moveTo(x + 0.5, lineY);
+    ctx.lineTo(x + w - 0.5, lineY);
+  }
+  ctx.stroke();
+
+  if (captionWidth > 0) {
+    ctx.fillStyle = captionBgColor;
+    ctx.fillRect(x + 8, y, captionWidth + 4, captionHeight);
+    ctx.fillStyle = captionColor;
+    ctx.fillText(caption, x + 10, y);
+  }
+
+  ctx.restore();
+}
+
+function drawTrackBarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isVertical = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Vertical");
+  const showTicks = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Ticks");
+  const trackFill = osSkin === "windows8"
+    ? (windowsSkinColors?.buttonFace ?? "rgb(231, 231, 231)")
+    : "rgb(231, 231, 231)";
+  const trackBorder = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(176, 176, 176)",
+      trackFill,
+      "rgb(176, 176, 176)"
+    )
+    : "rgb(176, 176, 176)";
+  const tickColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(154, 154, 154)",
+      trackFill,
+      "rgb(154, 154, 154)"
+    )
+    : "rgb(154, 154, 154)";
+  const thumbFill = osSkin === "windows8"
+    ? mixCssRgb(windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)", "rgb(0, 0, 0)", 0.04)
+    : (osSkin === "macos" ? "rgb(237, 237, 237)" : "rgb(240, 240, 240)");
+  const thumbBorder = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(161, 161, 161)",
+      thumbFill,
+      "rgb(161, 161, 161)"
+    )
+    : "rgb(161, 161, 161)";
+
+  ctx.save();
+
+  if (isVertical) {
+    traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
+    ctx.fillStyle = trackFill;
+    ctx.fill();
+    ctx.strokeStyle = trackBorder;
+    ctx.stroke();
+
+    const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
+    const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbFill;
+      ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+      ctx.strokeStyle = thumbBorder;
+      ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+    } else {
+      traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
+      ctx.fillStyle = thumbFill;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorder;
+      ctx.stroke();
+    }
+
+    if (showTicks) {
+      for (let tickY = y + 9; tickY <= y + h - 9; tickY += 8) {
+        ctx.fillStyle = tickColor;
+        ctx.fillRect(x + 17, tickY, 4, 1);
+      }
+    }
+  } else {
+    traceRoundedRect(ctx, x + 0.5, y + 3.5, Math.max(0, w - 1), 5, 1);
+    ctx.fillStyle = trackFill;
+    ctx.fill();
+    ctx.strokeStyle = trackBorder;
+    ctx.stroke();
+
+    const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
+    const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbFill;
+      ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+      ctx.strokeStyle = thumbBorder;
+      ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+    } else {
+      traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
+      ctx.fillStyle = thumbFill;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorder;
+      ctx.stroke();
+    }
+
+    if (showTicks) {
+      for (let tickX = x + 9; tickX <= x + w - 9; tickX += 8) {
+        ctx.fillStyle = tickColor;
+        ctx.fillRect(tickX, y + 17, 1, 4);
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawScrollBarArrowGlyph(
+  ctx: CanvasRenderingContext2D,
+  direction: "up" | "down" | "left" | "right",
+  centerX: number,
+  centerY: number,
+  color: string
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  if (direction === "up") {
+    ctx.moveTo(centerX, centerY - 3);
+    ctx.lineTo(centerX - 4, centerY + 2);
+    ctx.lineTo(centerX + 4, centerY + 2);
+  } else if (direction === "down") {
+    ctx.moveTo(centerX, centerY + 3);
+    ctx.lineTo(centerX - 4, centerY - 2);
+    ctx.lineTo(centerX + 4, centerY - 2);
+  } else if (direction === "left") {
+    ctx.moveTo(centerX - 3, centerY);
+    ctx.lineTo(centerX + 2, centerY - 4);
+    ctx.lineTo(centerX + 2, centerY + 4);
+  } else {
+    ctx.moveTo(centerX + 3, centerY);
+    ctx.lineTo(centerX - 2, centerY - 4);
+    ctx.lineTo(centerX - 2, centerY + 4);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawScrollBarGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isVertical = hasPbFlag(g.flagsExpr, "#PB_ScrollBar_Vertical");
+  const trackColor = osSkin === "windows8"
+    ? (windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)")
+    : (osSkin === "macos" ? "rgb(250, 250, 250)" : "rgb(240, 240, 240)");
+  const borderColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(233, 233, 233)",
+      trackColor,
+      "rgb(233, 233, 233)"
+    )
+    : "rgb(233, 233, 233)";
+  const thumbColor = osSkin === "windows8"
+    ? mixCssRgb(trackColor, "rgb(0, 0, 0)", 0.15)
+    : (osSkin === "macos" ? "rgb(195, 195, 195)" : "rgb(202, 202, 202)");
+  const thumbHighlight = osSkin === "windows8" ? null : "rgb(236, 236, 236)";
+  const arrowColor = osSkin === "windows8"
+    ? ensurePreviewLineContrast(
+      windowsSkinColors?.buttonText ?? windowsSkinColors?.windowText ?? "rgb(0, 0, 0)",
+      trackColor,
+      "rgb(0, 0, 0)"
+    )
+    : "rgb(110, 110, 110)";
+
+  ctx.save();
+
+  if (osSkin === "macos") {
+    if (isVertical) {
+      const bandX = x + 4;
+      ctx.fillStyle = "rgb(228, 228, 228)";
+      ctx.fillRect(x, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(242, 242, 242)";
+      ctx.fillRect(x + 1, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(244, 244, 244)";
+      ctx.fillRect(x + 2, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(245, 245, 245)";
+      ctx.fillRect(x + 3, y, 1, Math.max(0, h));
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(bandX, y, 10, Math.max(0, h));
+      traceRoundedRect(ctx, bandX + 0.5, y + 1.5, 8, Math.max(0, Math.trunc(h / 3)), 3);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+    } else {
+      const bandY = y + 4;
+      ctx.fillStyle = "rgb(228, 228, 228)";
+      ctx.fillRect(x, y, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(242, 242, 242)";
+      ctx.fillRect(x, y + 1, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(244, 244, 244)";
+      ctx.fillRect(x, y + 2, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(245, 245, 245)";
+      ctx.fillRect(x, y + 3, Math.max(0, w), 1);
+      ctx.fillStyle = trackColor;
+      ctx.fillRect(x, bandY, Math.max(0, w), 10);
+      traceRoundedRect(ctx, x + 1.5, bandY + 0.5, Math.max(0, Math.trunc(w / 3)), 8, 3);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  if (osSkin === "windows8") {
+    ctx.strokeStyle = "rgb(255, 255, 255)";
+    if (isVertical) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, y);
+      ctx.lineTo(x + 0.5, y + h);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y + 0.5);
+      ctx.lineTo(x + w, y + 0.5);
+      ctx.stroke();
+    }
+  } else {
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  }
+
+  if (isVertical) {
+    drawScrollBarArrowGlyph(ctx, "up", x + Math.trunc(w / 2), y + 8, arrowColor);
+    drawScrollBarArrowGlyph(ctx, "down", x + Math.trunc(w / 2), y + h - 8, arrowColor);
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbColor;
+      ctx.fillRect(x + 1, y + 17, Math.max(0, w - 1), Math.max(0, Math.trunc((h - 34) / 3)));
+    } else {
+      traceRoundedRect(ctx, x + 1.5, y + 18.5, Math.max(0, w - 3), Math.max(0, Math.trunc((h - 34) / 3)), 1);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+      ctx.strokeStyle = "rgb(155, 155, 155)";
+      ctx.stroke();
+      if (thumbHighlight) {
+        ctx.fillStyle = thumbHighlight;
+        ctx.fillRect(x + 2, y + 19, Math.max(0, Math.trunc((w * 3) / 8) - 4), Math.max(0, Math.trunc((h - 34) / 3) - 2));
+      }
+    }
+  } else {
+    drawScrollBarArrowGlyph(ctx, "left", x + 8, y + Math.trunc(h / 2), arrowColor);
+    drawScrollBarArrowGlyph(ctx, "right", x + w - 8, y + Math.trunc(h / 2), arrowColor);
+    if (osSkin === "windows8") {
+      ctx.fillStyle = thumbColor;
+      ctx.fillRect(x + 17, y + 1, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 1));
+    } else {
+      traceRoundedRect(ctx, x + 18.5, y + 1.5, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 3), 1);
+      ctx.fillStyle = thumbColor;
+      ctx.fill();
+      ctx.strokeStyle = "rgb(155, 155, 155)";
+      ctx.stroke();
+      if (thumbHighlight) {
+        ctx.fillStyle = thumbHighlight;
+        ctx.fillRect(x + 19, y + 2, Math.max(0, Math.trunc((w - 34) / 3) - 2), Math.max(0, Math.trunc((h * 3) / 8) - 4));
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawStringLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = (g.text && g.text.length > 0)
+    ? g.text
+    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    const borderColor = ensurePreviewLineContrast(
+      (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)"),
+      fillColor,
+      "rgb(171, 173, 179)"
+    );
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  } else {
+    const borderColor = osSkin === "windows7"
+      ? ensurePreviewLineContrast(
+        (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)"),
+        fillColor,
+        "rgb(165, 165, 165)"
+      )
+      : "rgb(165, 165, 165)";
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 1.5);
+    ctx.lineTo(x + w - 1.5, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(245, 245, 245)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + w - 1.5, y + 2.5);
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + 1.5, y + h - 2.5);
+    ctx.moveTo(x + w - 2.5, y + 2.5);
+    ctx.lineTo(x + w - 2.5, y + h - 2.5);
+    ctx.stroke();
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 2, y + 3, Math.max(0, w - 4), Math.max(0, h - 4));
+  }
+
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.restore();
+}
+
+function drawTextLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const isTextGadget = g.kind === GADGET_KIND.TextGadget;
+  const label = (g.text && g.text.length > 0)
+    ? g.text
+    : (isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const bgColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (isTextGadget) {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
+  }
+
+  let textX = x + 1;
+  const textWidth = ctx.measureText(label).width;
+  if (hasPbFlag(g.flagsExpr, "#PB_Text_Right")) {
+    textX = x + Math.max(1, w - textWidth - 1);
+  } else if (hasPbFlag(g.flagsExpr, "#PB_Text_Center")) {
+    textX = x + Math.max(1, (w - textWidth) / 2);
+  }
+
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, textX, y + Math.max(0, Math.trunc((h - 12) / 2)));
+
+  if (isTextGadget && hasPbFlag(g.flagsExpr, "#PB_Text_Border")) {
+    ctx.strokeStyle = ensurePreviewLineContrast(
+      (windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)"),
+      bgColor,
+      "rgb(142, 142, 142)"
+    );
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  }
+
+  ctx.restore();
+}
+
+function getPreviewGadgetItemLabel(item: GadgetItem): string {
+  return item.text ?? unquotePbString(item.textRaw);
+}
+
+function drawListLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  variant: "tree" | "listview" | "editor" | "scintilla",
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const originalBorderColor = (variant === "editor" || variant === "scintilla")
+    ? "rgb(194, 194, 194)"
+    : "rgb(142, 142, 142)";
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? originalBorderColor,
+    fillColor,
+    originalBorderColor
+  );
+  const isTree = variant === "tree";
+  const fallbackLabel = variant === "tree"
+    ? GADGET_KIND.TreeGadget
+    : variant === "listview"
+      ? GADGET_KIND.ListViewGadget
+      : variant === "scintilla"
+        ? GADGET_KIND.ScintillaGadget
+        : GADGET_KIND.EditorGadget;
+  const itemX = x + (isTree ? 30 : 6);
+  const placeholderX = x + 30;
+  const rows = (g.items ?? []).map(getPreviewGadgetItemLabel);
+  let textY = y + 4;
+  const lineAdvance = isTree ? 18 : 16;
+  const lastTextY = y + Math.max(0, h - 14);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  ctx.fillStyle = textColor;
+
+  if (rows.length === 0) {
+    ctx.fillText(fallbackLabel, placeholderX, y + 4);
+    ctx.restore();
+    return;
+  }
+
+  for (const row of rows) {
+    if (textY > lastTextY) break;
+    ctx.fillText(row, itemX, textY);
+    textY += lineAdvance;
+  }
+
+  ctx.restore();
+}
+
+function parsePreviewInteger(raw?: string): number | null {
+  const trimmed = (raw ?? "").trim();
+  if (!/^[-+]?\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getPreviewGadgetColumnLabel(column: GadgetColumn): string {
+  return column.title ?? unquotePbString(column.titleRaw);
+}
+
+function drawListIconLikeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  variant: "listicon" | "explorerlist",
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+    fillColor,
+    "rgb(142, 142, 142)"
+  );
+  const headerTopColor = windowsSkinColors?.window ?? "rgb(255, 255, 255)";
+  const headerBottomColor = windowsSkinColors?.buttonFace ?? "rgb(244, 244, 244)";
+  const headerBandColor = windowsSkinColors?.buttonFace ?? "rgb(236, 236, 236)";
+  const headerHighlightColor = ensurePreviewLineContrast(
+    mixCssRgb(headerTopColor, headerBottomColor, 0.35),
+    headerBandColor,
+    "rgb(244, 244, 244)",
+    10
+  );
+  const headerShadowColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 182, 182)",
+    headerBandColor,
+    "rgb(182, 182, 182)",
+    12
+  );
+  const headerTextColor = windowsSkinColors?.buttonText ?? "rgb(0, 0, 0)";
+  const headerHeight = Math.min(Math.max(17, h), 17);
+  const contentStartY = y + 20;
+  const rows = variant === "explorerlist"
+    ? ["File 1", "File 2"]
+    : (g.items ?? []).map(getPreviewGadgetItemLabel);
+  const columns = variant === "explorerlist"
+    ? [{ label: "Files/Drawers", width: Math.max(0, w - 2) }]
+    : (() => {
+        const sourceCols = g.columns ?? [];
+        if (sourceCols.length === 0) return [] as { label: string; width: number }[];
+
+        const availableWidth = Math.max(0, w - 2);
+        const parsedWidths = sourceCols.map((column) => Math.max(0, parsePreviewInteger(column.widthRaw) ?? 0));
+        const explicitWidthSum = parsedWidths.reduce((sum, width) => sum + width, 0);
+        const unresolvedCount = parsedWidths.filter((width) => width <= 0).length;
+        const unresolvedWidth = unresolvedCount > 0
+          ? Math.max(24, Math.trunc(Math.max(0, availableWidth - explicitWidthSum) / unresolvedCount))
+          : 0;
+
+        return sourceCols.map((column, index) => ({
+          label: getPreviewGadgetColumnLabel(column),
+          width: parsedWidths[index] > 0 ? parsedWidths[index] : unresolvedWidth
+        }));
+      })();
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+
+  const headerGradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 9);
+  headerGradient.addColorStop(0, headerTopColor);
+  headerGradient.addColorStop(1, headerBottomColor);
+  ctx.fillStyle = headerGradient;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.min(8, Math.max(0, headerHeight - 1)));
+  ctx.fillStyle = headerBandColor;
+  ctx.fillRect(x + 1, y + 9, Math.max(0, w - 2), Math.max(0, Math.min(6, headerHeight - 8)));
+  ctx.strokeStyle = headerHighlightColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 15.5);
+  ctx.lineTo(x + Math.max(1, w - 1), y + 15.5);
+  ctx.stroke();
+  ctx.strokeStyle = headerShadowColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + 16.5);
+  ctx.lineTo(x + Math.max(1, w - 1), y + 16.5);
+  ctx.stroke();
+
+  ctx.fillStyle = headerTextColor;
+  ctx.font = '11px sans-serif';
+
+  if (columns.length > 0) {
+    let xCol = x + 2;
+    for (let index = 0; index < columns.length; index += 1) {
+      const column = columns[index];
+      const label = column.label ?? "";
+      ctx.fillText(label, xCol + 2, y + 2);
+      xCol += column.width;
+      if (index < columns.length - 1 && xCol < x + w - 1) {
+        ctx.strokeStyle = headerShadowColor;
+        ctx.beginPath();
+        ctx.moveTo(xCol + 0.5, y + 1);
+        ctx.lineTo(xCol + 0.5, y + 16);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = textColor;
+
+  let rowY = contentStartY;
+  const rowBottom = y + Math.max(0, h - 14);
+  for (const row of rows) {
+    if (rowY > rowBottom) break;
+
+    if (variant === "listicon" && row.includes("|") && columns.length > 0) {
+      const fields = row.split("|");
+      let xCol = x + 2;
+      for (let index = 0; index < fields.length && index < columns.length; index += 1) {
+        ctx.fillText(fields[index] ?? "", xCol, rowY);
+        xCol += columns[index].width;
+      }
+    } else {
+      ctx.fillText(row, x + 6, rowY);
+    }
+
+    rowY += 16;
+  }
+
+  ctx.restore();
+}
+
+function drawExplorerTreeGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const borderColor = ensurePreviewLineContrast(
+    windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(142, 142, 142)",
+    fillColor,
+    "rgb(142, 142, 142)"
+  );
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.strokeStyle = borderColor;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  ctx.fillStyle = textColor;
+  ctx.fillText("Explorer Tree", x + 3, y + 3);
   ctx.restore();
 }
 
@@ -2294,35 +5488,157 @@ function drawPanelChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
-  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, h));
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
-  const inactiveBg = getCssVar("--vscode-sideBar-background") || bg;
-  const activeBg = getCssVar("--vscode-input-background") || bg;
-  ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = bg;
-  ctx.fillRect(x + 1, y + panelHeight, Math.max(0, w - 2), Math.max(0, h - panelHeight - 1));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + panelHeight + 0.5, w, Math.max(0, h - panelHeight));
-  ctx.restore();
+  const labels = (g.items ?? []).map((item, index) => (item.text ?? unquotePbString(item.textRaw)) || `Tab ${index + 1}`);
+  const activeIndex = resolvePanelActiveItem(getPanelActiveItem(g), labels.length || 1);
 
-  for (const tab of getPanelTabRects(ctx, g, { x, y, w, h }, metrics)) {
-    ctx.save();
-    ctx.fillStyle = tab.active ? activeBg : inactiveBg;
-    ctx.globalAlpha = tab.active ? 1 : 0.92;
-    ctx.fillRect(tab.rect.x + 1, tab.rect.y + 1, Math.max(0, tab.rect.w - 2), Math.max(0, tab.rect.h - 1));
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = fg;
-    ctx.strokeRect(tab.rect.x + 0.5, tab.rect.y + 0.5, tab.rect.w, tab.rect.h);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = fg;
-    ctx.fillText(tab.label, tab.rect.x + 7, y + Math.min(panelHeight - 7, 15));
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "macos") {
+    const topOffset = 11;
+    ctx.fillStyle = "rgb(231, 231, 231)";
+    traceRoundedRect(ctx, x + 2, y + topOffset + 2, Math.max(0, w - 4), Math.max(0, h - topOffset - 4), 3);
+    ctx.fill();
+    ctx.strokeStyle = "rgb(222, 222, 222)";
+    traceRoundedRect(ctx, x + 1.5, y + topOffset + 1.5, Math.max(0, w - 3), Math.max(0, h - topOffset - 3), 3);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(200, 200, 200)";
+    traceRoundedRect(ctx, x + 0.5, y + topOffset + 0.5, Math.max(0, w - 1), Math.max(0, h - topOffset - 1), 3);
+    ctx.stroke();
+
+    if (labels.length > 0) {
+      const widths = labels.map((label) => Math.ceil(ctx.measureText(label).width) + 24);
+      const totalWidth = widths.reduce((sum, value) => sum + value, 0);
+      let tabX = x + Math.trunc((w - totalWidth) / 2);
+
+      const gradient = ctx.createLinearGradient(0, y + 1, 0, y + 10);
+      gradient.addColorStop(0, "rgb(255, 255, 255)");
+      gradient.addColorStop(1, "rgb(244, 244, 244)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(tabX + 1, y + 1, Math.max(0, totalWidth - 2), 10);
+      ctx.fillStyle = "rgb(236, 236, 236)";
+      ctx.fillRect(tabX + 1, y + 11, Math.max(0, totalWidth - 2), 9);
+      ctx.strokeStyle = "rgb(144, 144, 144)";
+      traceRoundedRect(ctx, tabX + 0.5, y + 0.5, Math.max(0, totalWidth - 1), 21, 3);
+      ctx.stroke();
+
+      for (let index = 0; index < labels.length; index += 1) {
+        const label = labels[index];
+        const tabWidth = widths[index];
+        const active = index === activeIndex;
+        const textWidth = Math.ceil(ctx.measureText(label).width);
+
+        if (active) {
+          ctx.fillStyle = "rgb(140, 140, 140)";
+          traceRoundedRect(ctx, tabX - 11.5, y + 0.5, tabWidth - 1, 21, 3);
+          ctx.fill();
+          if (index > 0) {
+            ctx.fillRect(tabX - 12, y, 3, 22);
+          }
+          if (index < labels.length - 1) {
+            ctx.fillRect(tabX + textWidth + 9, y, 3, 22);
+          }
+          ctx.fillStyle = "rgb(255, 255, 255)";
+        } else {
+          if (index < labels.length - 1) {
+            ctx.fillStyle = "rgb(189, 189, 189)";
+            ctx.fillRect(tabX + textWidth + 12, y + 3, 1, 16);
+          }
+          ctx.fillStyle = "rgb(0, 0, 0)";
+        }
+
+        ctx.fillText(label, tabX, y + 3);
+        tabX += tabWidth;
+      }
+    }
+
     ctx.restore();
+    return;
   }
+
+  if (osSkin === "linux") {
+    const bodyTop = y + 28;
+    ctx.strokeStyle = "rgb(184, 180, 176)";
+    traceRoundedRect(ctx, x + 0.5, bodyTop + 0.5, Math.max(0, w - 1), Math.max(0, h - 29), 3);
+    ctx.stroke();
+    ctx.fillStyle = "rgb(247, 246, 246)";
+    traceRoundedRect(ctx, x + 1.5, bodyTop + 1.5, Math.max(0, w - 3), Math.max(0, h - 31), 3);
+    ctx.fill();
+    ctx.fillRect(x + 1, bodyTop + 1, 3, 3);
+    ctx.fillStyle = "rgb(184, 180, 176)";
+    ctx.fillRect(x, bodyTop, 3, 1);
+
+    let tabX = x;
+    for (let index = 0; index < labels.length; index += 1) {
+      const label = labels[index];
+      const textWidth = Math.ceil(ctx.measureText(label).width);
+      const tabWidth = textWidth + 14;
+      const active = index === activeIndex;
+
+      if (active) {
+        ctx.strokeStyle = "rgb(184, 180, 176)";
+        traceRoundedRect(ctx, tabX + 0.5, y + 0.5, tabWidth - 1, 30, 3);
+        ctx.stroke();
+        ctx.fillStyle = "rgb(247, 246, 246)";
+        traceRoundedRect(ctx, tabX + 1.5, y + 1.5, tabWidth - 3, 33, 3);
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = "rgb(200, 197, 194)";
+        traceRoundedRect(ctx, tabX + 0.5, y + 2.5, tabWidth - 1, 28, 3);
+        ctx.stroke();
+        ctx.fillStyle = "rgb(232, 232, 232)";
+        traceRoundedRect(ctx, tabX + 1.5, y + 3.5, tabWidth - 3, 31, 3);
+        ctx.fill();
+        ctx.fillStyle = "rgb(247, 246, 246)";
+        ctx.fillRect(tabX, y + 29, tabWidth, 6);
+        ctx.fillStyle = "rgb(184, 180, 176)";
+        ctx.fillRect(tabX, y + 28, tabWidth, 1);
+      }
+
+      ctx.fillStyle = "rgb(0, 0, 0)";
+      ctx.fillText(label, tabX + 6, y + 6);
+      tabX += tabWidth + 8;
+    }
+
+    ctx.fillStyle = "rgb(184, 180, 176)";
+    ctx.fillRect(x, bodyTop, 1, 7);
+    ctx.restore();
+    return;
+  }
+
+  ctx.strokeStyle = "rgb(137, 140, 140)";
+  ctx.strokeRect(x + 0.5, y + 20.5, Math.max(0, w - 1), Math.max(0, h - 21));
+  ctx.fillStyle = "rgb(255, 255, 255)";
+  ctx.fillRect(x + 1, y + 21, Math.max(0, w - 2), Math.max(0, h - 22));
+
+  let tabX = x;
+  for (let index = 0; index < labels.length; index += 1) {
+    const label = labels[index];
+    const textWidth = Math.ceil(ctx.measureText(label).width);
+    const tabWidth = textWidth + 12;
+    const active = index === activeIndex;
+
+    if (active) {
+      ctx.strokeStyle = "rgb(137, 140, 140)";
+      ctx.strokeRect(tabX + 0.5, y + 0.5, tabWidth - 1, 20);
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(tabX + 1, y + 1, Math.max(0, tabWidth - 2), 20);
+    } else {
+      ctx.fillStyle = "rgb(137, 140, 140)";
+      ctx.fillRect(tabX, y + 2, tabWidth, 19);
+      ctx.fillStyle = "rgb(240, 240, 240)";
+      ctx.fillRect(tabX + 1, y + 3, Math.max(0, tabWidth - 2), 17);
+    }
+
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillText(label, tabX + 6, y + 3);
+    tabX += tabWidth;
+  }
+
+  ctx.restore();
 }
 
 function drawScrollAreaChrome(
@@ -2332,14 +5648,12 @@ function drawScrollAreaChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
   const rect = { x, y, w, h };
   const bar = getScrollAreaBarSize(rect, metrics);
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
-  const trackBg = getCssVar("--vscode-sideBar-background") || bg;
-  const thumbBg = getCssVar("--vscode-scrollbarSlider-background") || fg;
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? "rgb(237, 237, 237)";
   const viewportRect = getScrollAreaViewportRect(rect, metrics);
   const viewportW = viewportRect.w;
   const viewportH = viewportRect.h;
@@ -2347,41 +5661,125 @@ function drawScrollAreaChrome(
   const innerH = typeof g.max === "number" && g.max > 0 ? g.max : viewportH;
   const offsetX = getScrollAreaOffsetX(g, rect, metrics);
   const offsetY = getScrollAreaOffsetY(g, rect, metrics);
+  const maxScrollX = Math.max(0, innerW - viewportW);
+  const maxScrollY = Math.max(0, innerH - viewportH);
   const verticalTrack = getScrollAreaVerticalBarRect(rect, metrics);
   const horizontalTrack = getScrollAreaHorizontalBarRect(rect, metrics);
-  const verticalThumb = getScrollAreaVerticalThumbRect(rect, metrics, innerH, offsetY);
-  const horizontalThumb = getScrollAreaHorizontalThumbRect(rect, metrics, innerW, offsetX);
 
   ctx.save();
-  ctx.fillStyle = bg;
+  ctx.strokeStyle = "rgb(130, 130, 130)";
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-  ctx.restore();
 
-  ctx.save();
-  ctx.fillStyle = trackBg;
-  ctx.globalAlpha = 0.9;
-  ctx.fillRect(verticalTrack.x + 1, verticalTrack.y + 1, Math.max(0, verticalTrack.w - 1), Math.max(0, verticalTrack.h - 1));
-  ctx.fillRect(horizontalTrack.x + 1, horizontalTrack.y + 1, Math.max(0, horizontalTrack.w - 1), Math.max(0, horizontalTrack.h - 1));
-  ctx.restore();
+  if (osSkin === "macos") {
+    const verticalLength = Math.max(8, Math.trunc(verticalTrack.h / 3));
+    const verticalTravel = Math.max(0, verticalTrack.h - verticalLength);
+    const verticalStart = maxScrollY > 0 ? Math.trunc((offsetY / maxScrollY) * verticalTravel) : 0;
+    const horizontalLength = Math.max(8, Math.trunc(horizontalTrack.w / 3));
+    const horizontalTravel = Math.max(0, horizontalTrack.w - horizontalLength);
+    const horizontalStart = maxScrollX > 0 ? Math.trunc((offsetX / maxScrollX) * horizontalTravel) : 0;
 
-  if (innerH > viewportH && viewportH > 0) {
-    ctx.save();
-    ctx.fillStyle = thumbBg;
-    ctx.globalAlpha = 0.45;
-    ctx.fillRect(verticalThumb.x + 3, verticalThumb.y + 3, Math.max(3, verticalThumb.w - 6), Math.max(10, verticalThumb.h - 6));
+    ctx.fillStyle = "rgb(228, 228, 228)";
+    ctx.fillRect(verticalTrack.x, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(242, 242, 242)";
+    ctx.fillRect(verticalTrack.x + 1, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(244, 244, 244)";
+    ctx.fillRect(verticalTrack.x + 2, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(245, 245, 245)";
+    ctx.fillRect(verticalTrack.x + 3, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
+    ctx.fillStyle = "rgb(250, 250, 250)";
+    ctx.fillRect(verticalTrack.x + 4, verticalTrack.y, 10, Math.max(0, verticalTrack.h));
+    if (maxScrollY > 0) {
+      traceRoundedRect(ctx, verticalTrack.x + 4.5, verticalTrack.y + verticalStart + 0.5, 8, verticalLength, 3);
+      ctx.fillStyle = "rgb(195, 195, 195)";
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgb(228, 228, 228)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(242, 242, 242)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 1, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(244, 244, 244)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 2, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(245, 245, 245)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 3, Math.max(0, horizontalTrack.w), 1);
+    ctx.fillStyle = "rgb(250, 250, 250)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y + 4, Math.max(0, horizontalTrack.w), 10);
+    if (maxScrollX > 0) {
+      traceRoundedRect(ctx, horizontalTrack.x + horizontalStart + 0.5, horizontalTrack.y + 4.5, horizontalLength, 8, 3);
+      ctx.fillStyle = "rgb(195, 195, 195)";
+      ctx.fill();
+    }
+
     ctx.restore();
+    return;
   }
 
-  if (innerW > viewportW && viewportW > 0) {
-    ctx.save();
-    ctx.fillStyle = thumbBg;
-    ctx.globalAlpha = 0.45;
-    ctx.fillRect(horizontalThumb.x + 3, horizontalThumb.y + 3, Math.max(10, horizontalThumb.w - 6), Math.max(3, horizontalThumb.h - 6));
-    ctx.restore();
+  const isWindows8 = osSkin === "windows8";
+  const trackColor = isWindows8 ? "rgb(240, 240, 240)" : "rgb(233, 233, 233)";
+  const thumbTopColor = "rgb(236, 236, 236)";
+  const thumbBottomColor = "rgb(202, 202, 202)";
+  const thumbBorderColor = "rgb(155, 155, 155)";
+  const thumbFillColor = "rgb(205, 205, 205)";
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(verticalTrack.x, verticalTrack.y, Math.max(0, verticalTrack.w), Math.max(0, verticalTrack.h));
+  if (isWindows8) {
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(verticalTrack.x, verticalTrack.y, 1, Math.max(0, verticalTrack.h));
   }
+  drawScrollBarArrowGlyph(ctx, "up", verticalTrack.x + Math.trunc(verticalTrack.w / 2), verticalTrack.y + 8, "rgb(110, 110, 110)");
+  drawScrollBarArrowGlyph(ctx, "down", verticalTrack.x + Math.trunc(verticalTrack.w / 2), verticalTrack.y + verticalTrack.h - 8, "rgb(110, 110, 110)");
+  if (maxScrollY > 0 && verticalTrack.h > 34) {
+    const thumbLength = Math.max(8, Math.trunc((verticalTrack.h - 34) / 3));
+    const thumbTravel = Math.max(0, verticalTrack.h - 34 - thumbLength);
+    const thumbStart = Math.trunc((offsetY / maxScrollY) * thumbTravel);
+    if (isWindows8) {
+      ctx.fillStyle = thumbFillColor;
+      ctx.fillRect(verticalTrack.x + 1, verticalTrack.y + 17 + thumbStart, Math.max(0, verticalTrack.w - 1), thumbLength);
+    } else {
+      traceRoundedRect(ctx, verticalTrack.x + 1.5, verticalTrack.y + 18.5 + thumbStart, Math.max(0, verticalTrack.w - 3), thumbLength, 1);
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorderColor;
+      ctx.stroke();
+      ctx.fillStyle = thumbTopColor;
+      ctx.fillRect(verticalTrack.x + 2, verticalTrack.y + 19 + thumbStart, Math.max(0, Math.trunc((verticalTrack.w * 3) / 8) - 4), Math.max(0, thumbLength - 2));
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fillRect(verticalTrack.x + 2 + Math.trunc((verticalTrack.w * 3) / 8), verticalTrack.y + 19 + thumbStart, Math.max(0, Math.trunc((verticalTrack.w * 5) / 8) - 4), Math.max(0, thumbLength - 2));
+    }
+  }
+
+  ctx.fillStyle = trackColor;
+  ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), Math.max(0, horizontalTrack.h));
+  if (isWindows8) {
+    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.fillRect(horizontalTrack.x, horizontalTrack.y, Math.max(0, horizontalTrack.w), 1);
+  }
+  drawScrollBarArrowGlyph(ctx, "left", horizontalTrack.x + 8, horizontalTrack.y + Math.trunc(horizontalTrack.h / 2), "rgb(110, 110, 110)");
+  drawScrollBarArrowGlyph(ctx, "right", horizontalTrack.x + horizontalTrack.w - 8, horizontalTrack.y + Math.trunc(horizontalTrack.h / 2), "rgb(110, 110, 110)");
+  if (maxScrollX > 0 && horizontalTrack.w > 34) {
+    const thumbLength = Math.max(8, Math.trunc((horizontalTrack.w - 34) / 3));
+    const thumbTravel = Math.max(0, horizontalTrack.w - 34 - thumbLength);
+    const thumbStart = Math.trunc((offsetX / maxScrollX) * thumbTravel);
+    if (isWindows8) {
+      ctx.fillStyle = thumbFillColor;
+      ctx.fillRect(horizontalTrack.x + 17 + thumbStart, horizontalTrack.y + 1, thumbLength, Math.max(0, horizontalTrack.h - 1));
+    } else {
+      traceRoundedRect(ctx, horizontalTrack.x + 18.5 + thumbStart, horizontalTrack.y + 1.5, thumbLength, Math.max(0, horizontalTrack.h - 3), 1);
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fill();
+      ctx.strokeStyle = thumbBorderColor;
+      ctx.stroke();
+      ctx.fillStyle = thumbTopColor;
+      ctx.fillRect(horizontalTrack.x + 19 + thumbStart, horizontalTrack.y + 2, Math.max(0, thumbLength - 2), Math.max(0, Math.trunc((horizontalTrack.h * 3) / 8) - 4));
+      ctx.fillStyle = thumbBottomColor;
+      ctx.fillRect(horizontalTrack.x + 19 + thumbStart, horizontalTrack.y + 2 + Math.trunc((horizontalTrack.h * 3) / 8), Math.max(0, thumbLength - 2), Math.max(0, Math.trunc((horizontalTrack.h * 5) / 8) - 4));
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawSplitterChrome(
@@ -2391,7 +5789,7 @@ function drawSplitterChrome(
   y: number,
   w: number,
   h: number,
-  fg: string,
+  osSkin: DesignerSettings["osSkin"],
   metrics: PreviewChromeMetrics
 ) {
   const vertical = hasPbFlag(g.flagsExpr, "#PB_Splitter_Vertical");
@@ -2400,53 +5798,54 @@ function drawSplitterChrome(
   const range = Math.max(0, (vertical ? w : h) - bar);
   const rawPos = typeof g.state === "number" ? Math.trunc(g.state) : Math.trunc(range / 2);
   const pos = clamp(rawPos, 0, range);
-  const bg = getCssVar("--vscode-editor-background") || "transparent";
+  const fillColor = osSkin === "macos"
+    ? "rgb(237, 237, 237)"
+    : (osSkin === "linux" ? "rgb(242, 241, 240)" : "rgb(240, 240, 240)");
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-  ctx.restore();
+  ctx.fillStyle = fillColor;
 
-  ctx.save();
-  ctx.fillStyle = getCssVar("--vscode-sideBar-background") || bg;
-  ctx.globalAlpha = 0.95;
   if (vertical) {
-    ctx.fillRect(x + pos, y + 1, bar, Math.max(0, h - 2));
+    ctx.fillRect(x + pos, y, bar, Math.max(0, h));
   } else {
-    ctx.fillRect(x + 1, y + pos, Math.max(0, w - 2), bar);
+    ctx.fillRect(x, y + pos, Math.max(0, w), bar);
   }
-  ctx.restore();
 
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = fg;
-  if (separator) {
+  if (osSkin === "macos") {
+    ctx.fillStyle = "rgb(140, 140, 140)";
     if (vertical) {
       ctx.beginPath();
-      ctx.moveTo(x + pos + Math.trunc(bar / 2) + 0.5, y + 2);
-      ctx.lineTo(x + pos + Math.trunc(bar / 2) + 0.5, y + h - 2);
-      ctx.stroke();
+      ctx.arc(x + pos + (bar - 6), y + Math.trunc(h / 2), 2, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       ctx.beginPath();
-      ctx.moveTo(x + 2, y + pos + Math.trunc(bar / 2) + 0.5);
-      ctx.lineTo(x + w - 2, y + pos + Math.trunc(bar / 2) + 0.5);
-      ctx.stroke();
+      ctx.arc(x + Math.trunc(w / 2), y + pos + (bar - 6), 2, 0, Math.PI * 2);
+      ctx.fill();
     }
-  } else {
-    const dots = 3;
-    for (let i = 0; i < dots; i++) {
-      if (vertical) {
-        const cy = y + Math.trunc(h / 2) - 8 + i * 8;
-        ctx.strokeRect(x + pos + Math.trunc((bar - 4) / 2) + 0.5, cy + 0.5, 3, 3);
-      } else {
-        const cx = x + Math.trunc(w / 2) - 8 + i * 8;
-        ctx.strokeRect(cx + 0.5, y + pos + Math.trunc((bar - 4) / 2) + 0.5, 3, 3);
-      }
+    ctx.restore();
+    return;
+  }
+
+  if (separator) {
+    if (vertical) {
+      const lineX = x + pos + 3;
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(lineX, y, 1, Math.max(0, h));
+      ctx.fillRect(lineX + 1, y, 1, Math.max(0, h));
+      ctx.fillStyle = "rgb(140, 140, 140)";
+      ctx.fillRect(lineX + 2, y, 1, Math.max(0, h));
+      ctx.fillRect(lineX, y + h - 1, 3, 1);
+    } else {
+      const lineY = y + pos + 3;
+      ctx.fillStyle = "rgb(255, 255, 255)";
+      ctx.fillRect(x, lineY, Math.max(0, w), 1);
+      ctx.fillRect(x, lineY + 1, Math.max(0, w), 1);
+      ctx.fillStyle = "rgb(140, 140, 140)";
+      ctx.fillRect(x, lineY + 2, Math.max(0, w), 1);
+      ctx.fillRect(x + w - 1, lineY, 1, 3);
     }
   }
+
   ctx.restore();
 }
 
@@ -2576,7 +5975,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
   });
 }
 
-function openImageEditor(entry: ImageEntry) {
+function openImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
   pendingImageEditor = {
     sourceLine: entry.source.line,
@@ -2593,12 +5992,12 @@ function closeImageEditor(sourceLine?: number) {
   pendingImageEditor = null;
 }
 
-function isImageEditorOpen(entry: ImageEntry): boolean {
+function isImageEditorOpen(entry: FormImage): boolean {
   return typeof entry.source?.line === "number"
     && pendingImageEditor?.sourceLine === entry.source.line;
 }
 
-function getImageEditorDraft(entry: ImageEntry): PendingImageEditor {
+function getImageEditorDraft(entry: FormImage): PendingImageEditor {
   if (isImageEditorOpen(entry) && pendingImageEditor) {
     return pendingImageEditor;
   }
@@ -2618,7 +6017,7 @@ function updateImageEditorDraft(patch: Partial<PendingImageEditor>) {
   renderProps();
 }
 
-function saveImageEditor(entry: ImageEntry) {
+function saveImageEditor(entry: FormImage) {
   if (typeof entry.source?.line !== "number") return;
   const draft = getImageEditorDraft(entry);
   const idRaw = draft.idRaw.trim();
@@ -2629,7 +6028,7 @@ function saveImageEditor(entry: ImageEntry) {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -2700,7 +6099,7 @@ function saveImageInsertDraft() {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = pendingImageInsertDraft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -2745,13 +6144,32 @@ function isImageReferencePickerOpenFor(target: ImageAssignmentTarget): boolean {
 }
 
 function getDefaultPendingImageAssignmentDraft(target: ImageAssignmentTarget, mode: "create" | "chooseFile"): PendingImageAssignmentDraft {
+  // For new statusbar field / toolbar entry / menu entry images in create mode,
+  // and for gadget image assignment (chooseFile), respect the pbAny setting.
+  const usePbAny = (
+    (mode === "create" && (target.kind === "statusBarField" || target.kind === "toolBarEntry" || target.kind === "menuEntry"))
+    || (mode === "chooseFile" && target.kind === "gadget")
+  ) && settings.newGadgetsUsePbAnyByDefault;
+
+  let idRaw = "#ImgNew";
+  let assignedVar = "imgNew";
+  if (usePbAny) {
+    const nextIdRaw = buildNextGeneratedImageIdRaw(
+      model.images ?? [],
+      model.window?.variable,
+      model.window?.id
+    );
+    idRaw = PB_ANY;
+    assignedVar = nextIdRaw.replace(/^#/, "");
+  }
+
   return {
     target,
     mode,
     inline: false,
-    idRaw: "#ImgNew",
+    idRaw,
     imageRaw: '"image.png"',
-    assignedVar: "imgNew",
+    assignedVar,
     resizeToImage: false,
   };
 }
@@ -2825,11 +6243,7 @@ function saveImageReferencePicker() {
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
-        textRaw: "",
         imageRaw,
-        flagsRaw: field.flagsRaw ?? "",
-        progressBar: false,
-        progressRaw: ""
       });
       break;
     }
@@ -2860,7 +6274,7 @@ function saveImageAssignmentDraft() {
   if (idRaw.toLowerCase() === "#pb_any") {
     const trimmedAssigned = draft.assignedVar.trim();
     if (!trimmedAssigned.length) {
-      alert("#PB_Any requires an assigned variable name.");
+      alert(`${PB_ANY} requires an assigned variable name.`);
       return;
     }
     assignedVar = trimmedAssigned;
@@ -2871,7 +6285,7 @@ function saveImageAssignmentDraft() {
 
   const reference = buildCreatedImageReference(idRaw, assignedVar);
   if (!reference) {
-    alert("#PB_Any requires an assigned variable name.");
+    alert(`${PB_ANY} requires an assigned variable name.`);
     return;
   }
 
@@ -2930,6 +6344,8 @@ function saveImageAssignmentDraft() {
           newImageIdRaw: idRaw,
           newImageRaw: imageRaw,
           newAssignedVar: assignedVar,
+          oldImageId: entry.iconId,
+          oldImageSourceLine: entry.iconId ? findImageEntryById(entry.iconId)?.source?.line : undefined,
         });
       }
       else {
@@ -3009,7 +6425,7 @@ function saveImageAssignmentDraft() {
 
 
 function buildPendingMenuEntrySelection(
-  menu: MenuModel,
+  menu: FormMenu,
   sourceEntryIndex: number,
   targetSourceLine: number,
   placement: MenuEntryMovePlacement
@@ -3037,27 +6453,44 @@ function buildPendingMenuEntrySelection(
 
 function drawMenuFlyoutPanelPreview(
   ctx: CanvasRenderingContext2D,
-  menu: MenuModel,
+  menu: FormMenu,
   parentIndex: number,
   panelRect: PreviewRect,
-  fg: string,
-  border: string,
-  itemHover: string
+  fg: string
 ): void {
   const childIndices = getDirectMenuChildIndices(menu, parentIndex);
   if (panelRect.w <= 0 || panelRect.h <= 0) return;
 
-  const bg = getCssVar("--vscode-menu-background")
-    || getCssVar("--vscode-sideBar-background")
-    || getCssVar("--vscode-editor-background")
-    || "rgba(255,255,255,0.96)";
+  const flyoutDecoration = getWindowPreviewMenuFlyoutDecoration();
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const panelBg = windowsSkinColors
+    ? windowsSkinColors.menu
+    : (flyoutDecoration.backgroundStyle === "white" ? "rgb(255,255,255)" : "rgb(255,255,255)");
+  const panelBorder = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.scrollbar,
+      panelBg,
+      "rgb(200,200,200)"
+    )
+    : (flyoutDecoration.borderStyle === "light" ? "rgb(200,200,200)" : fg);
+  const separatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.scrollbar,
+      panelBg,
+      "rgb(200,200,200)"
+    )
+    : (flyoutDecoration.separatorStyle === "light" ? "rgb(200,200,200)" : panelBorder);
+  const menuTextColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (flyoutDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
+  const selectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (flyoutDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg);
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.96;
+  ctx.fillStyle = panelBg;
   ctx.fillRect(panelRect.x, panelRect.y, panelRect.w, panelRect.h);
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = border;
+  ctx.strokeStyle = panelBorder;
   ctx.strokeRect(panelRect.x + 0.5, panelRect.y + 0.5, panelRect.w - 1, panelRect.h - 1);
   ctx.restore();
 
@@ -3067,8 +6500,7 @@ function drawMenuFlyoutPanelPreview(
     if (entry.kind === "MenuBar") {
       menuEntryPreviewRects.push({ ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 12 });
       ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = border;
+      ctx.strokeStyle = separatorColor;
       ctx.beginPath();
       ctx.moveTo(panelRect.x + 0.5, posY + 6.5);
       ctx.lineTo(panelRect.x + panelRect.w - 0.5, posY + 6.5);
@@ -3081,43 +6513,52 @@ function drawMenuFlyoutPanelPreview(
     const entryRect: PreviewEntryRect = { ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
     menuEntryPreviewRects.push(entryRect);
 
-    ctx.save();
-    ctx.fillStyle = itemHover;
-    ctx.globalAlpha = 0.08;
-    ctx.fillRect(entryRect.x + 1, entryRect.y + 1, Math.max(0, entryRect.w - 2), Math.max(0, entryRect.h - 2));
-    ctx.restore();
+    const isSelectedEntry = selection?.kind === "menuEntry"
+      && selection.menuId === menu.id
+      && selection.entryIndex === childIndex;
 
-    if (entry.iconId || entry.iconRaw) {
+    if (flyoutDecoration.showEntryHoverFill) {
       ctx.save();
       ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(entryRect.x + 6, entryRect.y + 5, 10, 10);
+      ctx.globalAlpha = 0.08;
+      ctx.fillRect(entryRect.x + 1, entryRect.y + 1, Math.max(0, entryRect.w - 2), Math.max(0, entryRect.h - 2));
       ctx.restore();
     }
 
+    if (entry.iconId || entry.iconRaw) {
+      const iconX = entryRect.x + 3;
+      const iconY = entryRect.y + 2;
+      if (!drawPreviewTopLevelAssignedImage(ctx, entry.iconId, iconX, iconY, 16, 16)) {
+        drawPreviewFallbackImageIcon(ctx, iconX, iconY, 16);
+      }
+    }
+
     const label = getMenuPreviewLabel(entry);
-    ctx.fillStyle = fg;
+    ctx.fillStyle = menuTextColor;
     ctx.fillText(label, entryRect.x + 24, entryRect.y + 14);
 
     if (entry.shortcut) {
       const shortcutWidth = Math.ceil(ctx.measureText(entry.shortcut).width);
       ctx.save();
       ctx.globalAlpha = 0.72;
-      ctx.fillStyle = fg;
+      ctx.fillStyle = menuTextColor;
       ctx.fillText(entry.shortcut, entryRect.x + entryRect.w - 10 - shortcutWidth, entryRect.y + 14);
       ctx.restore();
     }
 
     if (getDirectMenuChildIndices(menu, childIndex).length) {
+      const submenuIconMetrics = getWindowPreviewMenuSubmenuIconMetrics();
+      drawPreviewSubmenuIndicatorIcon(
+        ctx,
+        entryRect.x + entryRect.w - submenuIconMetrics.offsetRight,
+        entryRect.y + submenuIconMetrics.offsetY,
+      );
+    }
+
+    if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
       ctx.save();
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = fg;
-      ctx.beginPath();
-      ctx.moveTo(entryRect.x + entryRect.w - 16, entryRect.y + 6);
-      ctx.lineTo(entryRect.x + entryRect.w - 10, entryRect.y + 10);
-      ctx.lineTo(entryRect.x + entryRect.w - 16, entryRect.y + 14);
-      ctx.closePath();
-      ctx.fill();
+      ctx.strokeStyle = selectedOutlineColor;
+      ctx.strokeRect(entryRect.x, entryRect.y, Math.max(0, entryRect.w), Math.max(0, entryRect.h));
       ctx.restore();
     }
 
@@ -3129,33 +6570,126 @@ function drawMenuFlyoutPanelPreview(
 
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = fg;
+  ctx.fillStyle = menuTextColor;
   ctx.fillText("Add Item...", footerRect.x + 5, footerRect.y + 14);
   ctx.restore();
 }
 
-function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const menu = getPrimaryMenu();
   menuEntryPreviewRects = [];
   menuFooterPreviewRects = [];
   menuAddPreviewRect = null;
   if (!menu || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-menubar-selectionBackground") || getCssVar("--vscode-titleBar-activeBackground") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
-  const itemHover = getCssVar("--vscode-toolbar-hoverBackground") || getCssVar("--vscode-list-hoverBackground") || "rgba(127,127,127,0.15)";
+  const menuBarDecoration = getWindowPreviewMenuBarDecoration(osSkin);
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const menuTextColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (menuBarDecoration.textColorStyle === "black" ? "rgb(0,0,0)" : fg);
+  const selectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.menuText
+    : (menuBarDecoration.outlineColorStyle === "black" ? "rgb(0,0,0)" : fg);
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.9;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  switch (menuBarDecoration.backgroundStyle) {
+    case "macos-gradient": {
+      const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + Math.max(rect.h, 22));
+      gradient.addColorStop(0, "rgb(251, 251, 251)");
+      gradient.addColorStop(1, "rgb(218, 218, 218)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(rect.x, rect.y + 1, rect.w, Math.max(0, rect.h - 1));
+      break;
+    }
+    case "windows7-layered": {
+      const topFillColor = windowsSkinColors?.buttonFace ?? "rgb(245, 245, 245)";
+      const bottomFillColor = windowsSkinColors?.menuBar ?? "rgb(218, 224, 241)";
+      ctx.fillStyle = topFillColor;
+      ctx.fillRect(rect.x, rect.y, rect.w, Math.min(rect.h, 7));
+      if (rect.h > 7) {
+        ctx.fillStyle = bottomFillColor;
+        ctx.fillRect(rect.x, rect.y + 7, rect.w, Math.max(0, rect.h - 7));
+      }
+      break;
+    }
+    case "windows8-light":
+      ctx.fillStyle = windowsSkinColors?.menuBar ?? "rgb(245, 246, 247)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      break;
+    case "linux-light":
+      ctx.fillStyle = "rgb(245, 246, 247)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      break;
+  }
   ctx.restore();
 
-  let x = rect.x + 7;
-  const baseline = rect.y + Math.min(rect.h - 6, 15);
+  if (menuBarDecoration.showTopSeparator) {
+    ctx.save();
+    ctx.strokeStyle = menuBarDecoration.topSeparatorStyle === "macos-dark" ? "rgb(85, 85, 85)" : border;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  switch (menuBarDecoration.bottomSeparatorStyle) {
+    case "macos-dark":
+      ctx.strokeStyle = "rgb(118, 118, 118)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+    case "windows7-triple":
+      ctx.strokeStyle = windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
+      ctx.stroke();
+      ctx.strokeStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 1.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 1.5);
+      ctx.stroke();
+      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(160, 160, 160)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+    case "windows8-light":
+      ctx.strokeStyle = windowsSkinColors
+        ? ensurePreviewLineContrast(
+          windowsSkinColors.scrollbar ?? "rgb(232, 233, 234)",
+          windowsSkinColors.menuBar ?? "rgb(245, 246, 247)",
+          "rgb(232, 233, 234)"
+        )
+        : "rgb(232, 233, 234)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+    case "linux-light":
+      ctx.strokeStyle = "rgb(232, 233, 234)";
+      ctx.beginPath();
+      ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+      ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+      ctx.stroke();
+      break;
+  }
+  ctx.restore();
+
+  const selectedRootEntryIndex = selection && selection.kind === "menuEntry" && selection.menuId === menu.id
+    ? getMenuAncestorChain(menu, selection.entryIndex)[0] ?? null
+    : null;
+
+  let x = rect.x + menuBarDecoration.itemInsetX;
+  const textY = rect.y + menuBarDecoration.itemInsetY;
+  const baseline = textY + Math.min(Math.max(12, rect.h - 8), 13);
   for (const [entryIndex, entry] of menu.entries.entries()) {
     if (getMenuEntryLevel(entry) !== 0) continue;
     if (entry.kind === "MenuBar") {
@@ -3173,47 +6707,43 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const label = getMenuPreviewLabel(entry);
     if (!label.length) continue;
-    const itemW = Math.max(24, Math.ceil(ctx.measureText(label).width) + 14);
-    menuEntryPreviewRects.push({ ownerId: menu.id, index: entryIndex, x, y: rect.y + 2, w: itemW, h: Math.max(0, rect.h - 4) });
+    const metrics = ctx.measureText(label);
+    const textWidth = Math.ceil(metrics.width);
+    const itemW = Math.max(24, textWidth + 6);
+    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h);
 
-    ctx.save();
-    ctx.fillStyle = itemHover;
-    ctx.globalAlpha = 0.22;
-    ctx.fillRect(x, rect.y + 2, itemW, Math.max(0, rect.h - 4));
-    ctx.restore();
+    menuEntryPreviewRects.push({
+      ownerId: menu.id, index: entryIndex,
+      x: entryRect.x, y: entryRect.y,
+      w: entryRect.w,  
+      h: entryRect.h
+    });
 
-    ctx.fillStyle = fg;
-    ctx.fillText(label, x + 7, baseline);
-    x += itemW + 3;
+    ctx.fillStyle = menuTextColor;
+    ctx.fillText(label, x, baseline);
+
+    if (menuBarDecoration.useSelectedOutline && selectedRootEntryIndex === entryIndex) {
+      ctx.save();
+      ctx.strokeStyle = selectedOutlineColor;
+      ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, Math.max(0, entryRect.w - 1), Math.max(0, entryRect.h - 1));
+      ctx.restore();
+    }
+
+    x += itemW + menuBarDecoration.itemSpacing;
     if (x >= rect.x + rect.w - 20) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
   const addRect: PreviewMenuAddRect = {
     menuId: menu.id,
     x: addRectX,
-    y: rect.y + Math.max(2, Math.trunc((rect.h - 16) / 2)),
-    w: 16,
-    h: 16
+    y: rect.y + menuBarDecoration.itemInsetY,
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   menuAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 
   if (!selection || selection.kind !== "menuEntry" || selection.menuId !== menu.id) {
     return;
@@ -3233,168 +6763,307 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
     const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;
-    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg, border, itemHover);
+    drawMenuFlyoutPanelPreview(ctx, menu, parentIndex, panelRect, fg);
     previousPanelRect = panelRect;
   }
 }
 
-function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const toolbar = getPrimaryToolbar();
   toolBarEntryPreviewRects = [];
   toolBarAddPreviewRect = null;
   if (!toolbar || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
-  const buttonBg = getCssVar("--vscode-button-secondaryBackground") || getCssVar("--vscode-toolbar-hoverBackground") || "rgba(127,127,127,0.15)";
+  const toolBarDecoration = getWindowPreviewToolBarDecoration(osSkin);
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const toolbarBg = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+  const toolbarSeparatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+      toolbarBg,
+      "rgb(132,132,132)"
+    )
+    : (toolBarDecoration.separatorColorStyle === "toolbar-dark"
+      ? "rgb(132,132,132)"
+      : border);
+  const toolbarSelectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.buttonText
+    : (toolBarDecoration.selectedOutlineColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
 
   ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.92;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  if (toolBarDecoration.backgroundStyle === "macos-gradient") {
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + Math.max(rect.h, 90));
+    gradient.addColorStop(0, "rgb(228, 228, 228)");
+    gradient.addColorStop(1, "rgb(175, 175, 175)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  } else {
+    ctx.fillStyle = windowsSkinColors
+      ? toolbarBg
+      : (toolBarDecoration.backgroundStyle === "linux-light"
+        ? "rgb(242, 241, 240)"
+        : "rgb(240, 240, 240)");
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+
+  if (toolBarDecoration.showFrameBorder) {
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = border;
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  }
   ctx.restore();
 
-  let x = rect.x + 6;
-  const y = rect.y + Math.max(3, Math.trunc((rect.h - 16) / 2));
+  if (toolBarDecoration.showBottomSeparator) {
+    ctx.save();
+    const toolbarBottomSeparatorColor = windowsSkinColors
+      ? ensurePreviewLineContrast(
+        windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+        toolbarBg,
+        "rgb(160, 160, 160)"
+      )
+      : (toolBarDecoration.useDarkBottomSeparator ? "rgb(160, 160, 160)" : border);
+    ctx.strokeStyle = toolbarBottomSeparatorColor;
+    ctx.globalAlpha = windowsSkinColors ? 1 : (toolBarDecoration.useDarkBottomSeparator ? 1 : 0.28);
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  let x = rect.x + toolBarDecoration.itemInsetX;
+  const y = rect.y + toolBarDecoration.itemInsetY;
   for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
       toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 6, h: 16 });
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.strokeStyle = border;
-      ctx.beginPath();
-      ctx.moveTo(x + 2.5, y);
-      ctx.lineTo(x + 2.5, y + 16);
-      ctx.stroke();
-      ctx.restore();
+      if (toolBarDecoration.separatorColorStyle !== "none") {
+        ctx.save();
+        ctx.strokeStyle = toolbarSeparatorColor;
+        ctx.beginPath();
+        ctx.moveTo(x + 2.5, y + 1);
+        ctx.lineTo(x + 2.5, y + 15);
+        ctx.stroke();
+        ctx.restore();
+      }
       x += 10;
       continue;
     }
 
-    toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 });
+    const entryRect = { ownerId: toolbar.id, index: entryIndex, x, y, w: 16, h: 16 };
+    toolBarEntryPreviewRects.push(entryRect);
+    const isSelectedEntry = selection?.kind === "toolBarEntry"
+      && selection.toolBarId === toolbar.id
+      && selection.entryIndex === entryIndex;
 
-    ctx.save();
-    ctx.fillStyle = buttonBg;
-    ctx.globalAlpha = 0.28;
-    ctx.fillRect(x, y, 16, 16);
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = border;
-    ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
-    ctx.restore();
+    const hasAssignedImage = hasToolBarPreviewAssignedImage(entry);
+    const showUnselectedEntryFrame = toolBarDecoration.showUnselectedEntryFrame
+      || shouldShowToolBarPreviewUnselectedFrame(entry, isSelectedEntry);
 
-    if (entry.iconId || entry.iconRaw) {
+    if (showUnselectedEntryFrame) {
       ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(x + 4, y + 4, 8, 8);
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = border;
+      ctx.strokeRect(x + 0.5, y + 0.5, 15, 15);
       ctx.restore();
+    }
+
+    if (hasAssignedImage) {
+      if (!drawPreviewTopLevelAssignedImage(ctx, entry.iconId, x, y, 16, 16)) {
+        drawPreviewFallbackImageIcon(ctx, x, y, 16);
+      }
+    } else if (entry.kind === "ToolBarImageButton") {
+      drawPreviewFallbackImageIcon(ctx, x, y, 16);
     } else {
       const label = ((entry.text ?? entry.idRaw ?? entry.kind).replace(/^#/, "").trim().slice(0, 1) || "•").toUpperCase();
       ctx.fillStyle = fg;
       ctx.fillText(label, x + 4, y + 12);
     }
 
+    if (isSelectedEntry) {
+      ctx.save();
+      ctx.strokeStyle = toolbarSelectedOutlineColor;
+      ctx.strokeRect(entryRect.x - 0.5, entryRect.y - 0.5, 18, 18);
+      ctx.restore();
+    }
+
     x += 22;
     if (x >= rect.x + rect.w - 18) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
   const addRect: PreviewToolBarAddRect = {
     toolBarId: toolbar.id,
     x: addRectX,
     y,
-    w: 16,
-    h: 16
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   toolBarAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 }
 
 
-function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string) {
+function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg: string, osSkin: DesignerSettings["osSkin"]) {
   const statusbar = getPrimaryStatusbar();
   statusBarFieldPreviewRects = [];
   statusBarAddPreviewRect = null;
   if (!statusbar || rect.h <= 0 || rect.w <= 0) return;
 
-  const bg = getCssVar("--vscode-statusBar-background") || getCssVar("--vscode-sideBar-background") || getCssVar("--vscode-editor-background") || "transparent";
   const border = getCssVar("--vscode-panel-border") || fg;
-  const accent = getCssVar("--vscode-progressBar-background") || fg;
+  const statusBarDecoration = getWindowPreviewStatusBarDecoration(osSkin);
+  const windowsSkinColors = resolveWindowsSkinColors();
+  const statusBarBg = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+  const statusBarTopSeparatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.buttonShadow ?? windowsSkinColors.threeDShadow,
+      statusBarBg,
+      "rgb(145, 145, 145)"
+    )
+    : "rgb(145, 145, 145)";
+  const statusBarFieldSeparatorColor = windowsSkinColors
+    ? ensurePreviewLineContrast(
+      windowsSkinColors.threeDLightShadow ?? windowsSkinColors.scrollbar,
+      statusBarBg,
+      "rgb(215, 215, 215)"
+    )
+    : "rgb(215, 215, 215)";
+  const statusBarTextColor = windowsSkinColors
+    ? windowsSkinColors.windowText
+    : (statusBarDecoration.textColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
+  const statusBarSelectedOutlineColor = windowsSkinColors
+    ? windowsSkinColors.windowText
+    : (statusBarDecoration.selectedOutlineColorStyle === "black"
+      ? "rgb(0,0,0)"
+      : fg);
 
-  ctx.save();
-  ctx.fillStyle = bg;
-  ctx.globalAlpha = 0.92;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.globalAlpha = 0.28;
-  ctx.strokeStyle = border;
-  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
-  ctx.restore();
+  if (statusBarDecoration.backgroundStyle === "macos-gradient") {
+    ctx.save();
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + 23);
+    gradient.addColorStop(0, "rgb(211, 211, 211)");
+    gradient.addColorStop(1, "rgb(171, 171, 171)");
+    ctx.fillStyle = gradient;
+    if (statusBarDecoration.showRoundedBackground && typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 3);
+      ctx.fill();
+    } else {
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.restore();
+  }
 
-  const fieldWidths = getStatusBarFieldWidths(statusbar, rect.w);
+  if (statusBarDecoration.showTopSeparator) {
+    ctx.save();
+    ctx.strokeStyle = statusBarDecoration.topSeparatorStyle === "macos-dark"
+      ? "rgb(118, 118, 118)"
+      : statusBarTopSeparatorColor;
+    ctx.beginPath();
+    ctx.moveTo(rect.x, rect.y + 0.5);
+    ctx.lineTo(rect.x + rect.w, rect.y + 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  let x = rect.x;
-  const progressY = rect.y + 5;
-  const progressH = Math.max(4, rect.h - 10);
-  const imageY = rect.y + 4;
+  const fieldWidths = getStatusBarFieldWidths(statusbar, Math.max(0, rect.w - statusBarDecoration.widthAdjustment));
+
+  let x = rect.x + statusBarDecoration.fieldInsetX;
+  const imageY = rect.y + statusBarDecoration.fieldInsetY;
   for (let i = 0; i < statusbar.fields.length; i++) {
     const field = statusbar.fields[i];
     const fieldW = fieldWidths[i] ?? 18;
-    statusBarFieldPreviewRects.push({ ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) });
+    const fieldRect = { ownerId: statusbar.id, index: i, x, y: rect.y + 1, w: Math.max(0, fieldW), h: Math.max(0, rect.h - 2) };
+    statusBarFieldPreviewRects.push(fieldRect);
+    const isSelectedField = selection?.kind === "statusBarField"
+      && selection.statusBarId === statusbar.id
+      && selection.fieldIndex === i;
 
-    if (i > 0) {
+    if (statusBarDecoration.showFieldSeparators && i > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = border;
+      ctx.strokeStyle = statusBarFieldSeparatorColor;
       ctx.beginPath();
       ctx.moveTo(x + 0.5, rect.y + 1);
-      ctx.lineTo(x + 0.5, rect.y + rect.h - 2);
+      ctx.lineTo(x + 0.5, rect.y + rect.h - 1);
       ctx.stroke();
       ctx.restore();
     }
 
     const textLabel = (field.text ?? unquotePbString(field.textRaw)).trim();
     if (textLabel.length) {
-      ctx.fillStyle = fg;
+      ctx.fillStyle = statusBarTextColor;
       const textWidth = Math.ceil(ctx.measureText(textLabel).width);
       const textX = getStatusBarAlignedX(x, fieldW, textWidth, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      ctx.fillText(textLabel, textX, rect.y + Math.min(rect.h - 6, 15));
+      ctx.fillText(textLabel, textX, rect.y + 15);
     } else if (field.progressBar) {
-      const progress = clamp(asInt(field.progressRaw ?? 0), 0, 100);
+      const progressDecoration = getWindowPreviewStatusBarProgressDecoration(osSkin);
+      const progressMetrics = getStatusBarProgressPreviewMetrics(fieldW, rect.h, field.progressRaw ?? "0");
+      const trackX = x + progressDecoration.trackInsetX;
+      const trackY = rect.y + progressDecoration.trackInsetY;
+      const trackColor = progressDecoration.trackColorStyle === "windows8"
+        ? "rgb(230, 230, 230)"
+        : "rgb(220, 220, 220)";
+      const fillColor = progressDecoration.fillColorStyle === "windows8"
+        ? "rgb(6, 176, 37)"
+        : "rgb(134, 206, 244)";
+      const borderColor = progressDecoration.borderColorStyle === "windows8"
+        ? "rgb(188, 188, 188)"
+        : "rgb(152, 152, 152)";
+
       ctx.save();
-      ctx.globalAlpha = 0.22;
-      ctx.strokeStyle = border;
-      ctx.strokeRect(x + 0.5, progressY + 0.5, Math.max(8, fieldW - 1), progressH - 1);
-      ctx.fillStyle = accent;
-      ctx.globalAlpha = 0.45;
-      ctx.fillRect(x + 1, progressY + 1, Math.max(0, Math.round((Math.max(8, fieldW - 3) * progress) / 100)), Math.max(2, progressH - 2));
+      ctx.fillStyle = trackColor;
+      if (progressDecoration.trackShape === "rounded") {
+        traceRoundedRect(ctx, trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight, progressDecoration.trackRadius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(trackX, trackY, progressMetrics.trackWidth, progressMetrics.trackHeight);
+      }
+
+      if (progressMetrics.fillWidth > 0) {
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(trackX + 1, trackY + 1, progressMetrics.fillWidth, Math.max(2, progressMetrics.trackHeight - 2));
+      }
+
+      ctx.strokeStyle = borderColor;
+      if (progressDecoration.trackShape === "rounded") {
+        traceRoundedRect(ctx, trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1, progressDecoration.trackRadius);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(trackX + 0.5, trackY + 0.5, progressMetrics.trackWidth - 1, progressMetrics.trackHeight - 1);
+      }
       ctx.restore();
     } else {
+      const fallbackSize = 16;
+      const previewImage = hasStatusBarPreviewAssignedImage(field)
+        ? getPreviewTopLevelAssignedImage(field.imageId)
+        : null;
+      const previewWidth = previewImage && previewImage.complete && previewImage.naturalWidth > 0
+        ? previewImage.naturalWidth
+        : fallbackSize;
+      const previewHeight = previewImage && previewImage.complete && previewImage.naturalHeight > 0
+        ? previewImage.naturalHeight
+        : fallbackSize;
+      const imageX = getStatusBarAlignedX(
+        x,
+        fieldW,
+        previewWidth,
+        hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"),
+        hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right")
+      );
+      if (!drawPreviewRasterIcon(ctx, previewImage, imageX, imageY, previewWidth, previewHeight)) {
+        drawPreviewFallbackImageIcon(ctx, imageX, imageY, fallbackSize);
+      }
+    }
+
+    if (isSelectedField) {
       ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
-      const size = Math.max(10, Math.min(16, rect.h - 8));
-      const imageX = getStatusBarAlignedX(x, fieldW, size, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      ctx.fillRect(imageX, imageY, size, size);
+      ctx.strokeStyle = statusBarSelectedOutlineColor;
+      ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, Math.max(0, fieldRect.w - 1), Math.max(0, fieldRect.h - 1));
       ctx.restore();
     }
 
@@ -3402,31 +7071,16 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
     if (x >= rect.x + rect.w) break;
   }
 
+  const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRect: PreviewStatusBarAddRect = {
     statusBarId: statusbar.id,
     x,
-    y: rect.y + Math.max(0, Math.trunc((rect.h - 16) / 2)),
-    w: 16,
-    h: 16
+    y: rect.y + 4,
+    w: addIconMetrics.width,
+    h: addIconMetrics.height
   };
   statusBarAddPreviewRect = addRect;
-
-  ctx.save();
-  ctx.strokeStyle = border;
-  ctx.globalAlpha = 0.55;
-  ctx.strokeRect(addRect.x + 0.5, addRect.y + 0.5, addRect.w - 1, addRect.h - 1);
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle = fg;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.moveTo(addRect.x + 4.5, addRect.y + 8.5);
-  ctx.lineTo(addRect.x + 11.5, addRect.y + 8.5);
-  ctx.moveTo(addRect.x + 8.5, addRect.y + 4.5);
-  ctx.lineTo(addRect.x + 8.5, addRect.y + 11.5);
-  ctx.stroke();
-  ctx.restore();
+  drawPreviewPlusIcon(ctx, addRect.x, addRect.y);
 }
 
 function render() {
@@ -3467,21 +7121,73 @@ function render() {
     ctx.restore();
   }
 
+  const bodyDecoration = getWindowPreviewBodyDecoration(settings.osSkin, tbH > 0);
+  const platformSkin = resolvePbFormSkinPlatform();
+  const windowsChromeColors = platformSkin === "windows" ? resolveWindowsSkinColors() : null;
+
   // Window fill (so the window area is visually separated)
   if (settings.windowFillOpacity > 0) {
     ctx.save();
     ctx.globalAlpha = clamp(settings.windowFillOpacity, 0, 1);
-    ctx.fillStyle = fg;
-    ctx.fillRect(winX, winY, winW, winH);
+    if (bodyDecoration.backgroundStyle === "linux-light") {
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(242, 241, 240)";
+      if (bodyDecoration.useRoundedTopFill) {
+        traceRoundedTopRect(ctx, winX - 1, winY - 1, winW + 2, winH + 1, bodyDecoration.roundedTopRadius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(winX - 1, winY - 1, winW + 2, winH + 1);
+      }
+    } else if (bodyDecoration.backgroundStyle === "macos-light") {
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color) ?? "rgb(237, 237, 237)";
+      traceRoundedRect(ctx, winX - 1, winY - 1, winW + 2, winH + 2, bodyDecoration.roundedTopRadius);
+      ctx.fill();
+    } else if (bodyDecoration.backgroundStyle === "windows7-frame") {
+      const gradient = ctx.createLinearGradient(winX, winY, winX + winW, winY);
+      gradient.addColorStop(0, windowsChromeColors?.activeTitle ?? "rgb(210, 232, 232)");
+      gradient.addColorStop(0.5, windowsChromeColors?.gradientActiveTitle ?? "rgb(184, 220, 250)");
+      gradient.addColorStop(1, windowsChromeColors?.activeTitle ?? "rgb(210, 232, 232)");
+      ctx.fillStyle = gradient;
+      traceRoundedRect(ctx, winX, winY - 1, winW, winH + 1, bodyDecoration.roundedTopRadius);
+      ctx.fill();
+    } else if (bodyDecoration.backgroundStyle === "windows8-frame") {
+      ctx.fillStyle = windowsChromeColors?.activeTitle ?? "rgb(107, 173, 246)";
+      ctx.fillRect(winX, winY - 1, winW, winH + 1);
+    } else {
+      ctx.fillStyle = fg;
+      ctx.fillRect(winX, winY, winW, winH);
+    }
     ctx.restore();
   } else {
     // Ensure window area is not dimmed by outside fill
-    ctx.clearRect(winX, winY, winW, winH);
+    if (bodyDecoration.backgroundStyle === "linux-light" || bodyDecoration.backgroundStyle === "macos-light") {
+      ctx.clearRect(winX - 1, winY - 1, winW + 2, winH + 2);
+    } else if (bodyDecoration.backgroundStyle === "windows7-frame" || bodyDecoration.backgroundStyle === "windows8-frame") {
+      ctx.clearRect(winX, winY - 1, winW, winH + 1);
+    } else {
+      ctx.clearRect(winX, winY, winW, winH);
+    }
+  }
+
+  if (bodyDecoration.showBodyOutline) {
+    ctx.save();
+    ctx.strokeStyle = bodyDecoration.bodyOutlineStyle === "macos-light" ? "rgb(184, 184, 184)" : focus;
+    traceRoundedRect(ctx, winX - 1.5, winY - 1.5, winW + 3, winH + 3, bodyDecoration.roundedTopRadius);
+    ctx.stroke();
+    ctx.restore();
   }
 
   const chromeMetrics = previewChromeMetrics;
+  const chromeTopPadding = getWindowPreviewChromeTopPadding(
+    platformSkin,
+    model.window?.flagsExpr,
+    asInt(settings.titleBarHeight),
+    asInt(settings.windowPreviewWindowsCaptionlessTopPadding)
+  );
+  const windowClientSidePadding = getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding));
+  const windowClientBottomPadding = getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding));
   const localChromeLayout = getWindowLocalChromeLayout(chromeMetrics);
   const globalChromeLayout = getWindowGlobalChromeLayout(chromeMetrics);
+  const windowClientSurface = getWindowClientSurfaceRects({ x: winX, y: winY, w: winW, h: winH }, chromeTopPadding, windowClientSidePadding, windowClientBottomPadding);
   const windowContentRect = localChromeLayout.contentRect;
   const menuBarRect = globalChromeLayout?.menuBarRect ?? null;
   const toolBarRect = globalChromeLayout?.toolBarRect ?? null;
@@ -3502,26 +7208,638 @@ function render() {
     );
   }
 
+  if (bodyDecoration.showClientBorder) {
+    const hasOriginalWindowsBody = bodyDecoration.clientBorderStyle === "windows7-inner" || bodyDecoration.clientBorderStyle === "windows8-inner";
+    const clientBorderY = winY + chromeTopPadding;
+    const clientBorderH = Math.max(0, winH - chromeTopPadding);
+    if (!hasOriginalWindowsBody && clientBorderH > 0) {
+      ctx.save();
+      ctx.strokeStyle = bodyDecoration.clientBorderStyle === "linux-dark" ? "rgb(70, 70, 70)" : focus;
+      ctx.strokeRect(winX + 0.5, clientBorderY + 0.5, Math.max(0, winW - 1), Math.max(0, clientBorderH - 1));
+      ctx.restore();
+    }
+  }
+
+  if (platformSkin === "windows" && windowClientSidePadding > 0 && windowClientSurface.fillRect.w > 0 && windowClientSurface.fillRect.h > 0) {
+    const hasOriginalWindowsBody = bodyDecoration.clientBorderStyle === "windows7-inner" || bodyDecoration.clientBorderStyle === "windows8-inner";
+
+    if (hasOriginalWindowsBody) {
+      ctx.save();
+      ctx.fillStyle = pbColorNumberToCssHex(model.window?.color)
+        ?? windowsChromeColors?.buttonFace
+        ?? "rgb(240, 240, 240)";
+      ctx.fillRect(
+        windowClientSurface.fillRect.x,
+        windowClientSurface.fillRect.y,
+        windowClientSurface.fillRect.w,
+        windowClientSurface.fillRect.h
+      );
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = bodyDecoration.clientBorderStyle === "windows7-inner"
+        ? (windowsChromeColors?.threeDShadow ?? "rgb(93, 108, 122)")
+        : (windowsChromeColors?.gradientActiveTitle ?? windowsChromeColors?.activeTitle ?? "rgb(91, 147, 209)");
+      ctx.strokeRect(
+        windowClientSurface.borderRect.x + 0.5,
+        windowClientSurface.borderRect.y + 0.5,
+        Math.max(0, windowClientSurface.borderRect.w - 1),
+        Math.max(0, windowClientSurface.borderRect.h - 1)
+      );
+      ctx.restore();
+    } else {
+      const leftFrameW = Math.max(0, windowClientSurface.fillRect.x - winX);
+      const rightFrameX = windowClientSurface.fillRect.x + windowClientSurface.fillRect.w;
+      const rightFrameW = Math.max(0, winX + winW - rightFrameX);
+
+      if (leftFrameW > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(winX, windowClientSurface.fillRect.y, leftFrameW, windowClientSurface.fillRect.h);
+        ctx.restore();
+      }
+
+      if (rightFrameW > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(rightFrameX, windowClientSurface.fillRect.y, rightFrameW, windowClientSurface.fillRect.h);
+        ctx.restore();
+      }
+
+      const bottomFrameY = windowClientSurface.fillRect.y + windowClientSurface.fillRect.h;
+      const bottomFrameH = Math.max(0, winY + winH - bottomFrameY);
+      if (bottomFrameH > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = focus;
+        ctx.fillRect(winX, bottomFrameY, winW, bottomFrameH);
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = focus;
+      ctx.strokeRect(
+        windowClientSurface.borderRect.x + 0.5,
+        windowClientSurface.borderRect.y + 0.5,
+        Math.max(0, windowClientSurface.borderRect.w - 1),
+        Math.max(0, windowClientSurface.borderRect.h - 1)
+      );
+      ctx.restore();
+    }
+  }
+
   // Optional title bar
   if (tbH > 0) {
-    ctx.save();
-    ctx.globalAlpha = 0.10;
-    ctx.fillStyle = focus;
-    ctx.fillRect(winX, winY, winW, tbH);
-    ctx.restore();
+    const titleButtonLayout = getWindowPreviewTitleButtonLayout(settings.osSkin, model.window?.flagsExpr);
+    const titleButtonSlots = titleButtonLayout.slots;
+    const titleBarDecoration = getWindowPreviewTitleBarDecoration(settings.osSkin, Boolean(toolBarRect));
+    const titleBarMetrics = getWindowPreviewTitleBarMetrics(settings.osSkin);
+    const isWindowsTitleBar = titleBarDecoration.backgroundStyle === "default" && Boolean(windowsChromeColors);
+    const titleFg = isWindowsTitleBar
+      ? (windowsChromeColors!.titleText ?? windowsChromeColors!.menuText ?? windowsChromeColors!.buttonText ?? "rgb(0, 0, 0)")
+      : (titleBarDecoration.useLightForeground ? "rgb(255, 255, 255)" : fg);
+    const buttonStrokeColor = titleFg;
+    const fallbackButtonSize = Math.max(12, Math.min(18, tbH - 8));
+    const fallbackButtonDims = { width: fallbackButtonSize, height: fallbackButtonSize };
+    const titleButtonSizes = titleButtonSlots.map(slot => getWindowPreviewTitleButtonSize(settings.osSkin, slot.kind, fallbackButtonDims));
+    const buttonGap = titleBarMetrics.buttonGap;
+    const buttonAreaW = titleButtonSizes.length > 0
+      ? titleButtonSizes.reduce((sum, size) => sum + size.width, 0) + Math.max(0, titleButtonSizes.length - 1) * buttonGap
+      : 0;
+    const showWindowsIcon = hasWindowPreviewTitleIcon(platformSkin, model.window?.flagsExpr);
+    const iconSize = showWindowsIcon
+      ? getWindowPreviewTitleIconSize(settings.osSkin, { width: 16, height: 16 })
+      : { width: 0, height: 0 };
+    const iconX = winX + titleBarMetrics.iconInsetX;
+    const iconY = winY + titleBarMetrics.iconOffsetY;
+    const leftButtonBandEnd = titleButtonLayout.buttonSide === "left"
+      ? winX + titleBarMetrics.buttonInsetX + buttonAreaW
+      : winX + titleBarMetrics.buttonInsetX;
+    const rightButtonBandStart = titleButtonLayout.buttonSide === "right"
+      ? winX + winW - titleBarMetrics.buttonInsetX - buttonAreaW
+      : winX + winW - titleBarMetrics.buttonInsetX;
+    const windowsTitleTextStart = showWindowsIcon
+      ? (settings.osSkin === "windows8"
+        ? iconX + iconSize.width
+        : iconX + iconSize.width + 5)
+      : winX + titleBarMetrics.buttonInsetX;
+    const titleLeft = Math.max(windowsTitleTextStart, leftButtonBandEnd);
+    const titleRight = Math.min(winX + winW - titleBarMetrics.buttonInsetX, rightButtonBandStart);
+    const titleTop = winY + titleBarMetrics.titleOffsetY;
+
+    if (titleBarDecoration.backgroundStyle === "default") {
+      if (!isWindowsTitleBar) {
+        ctx.save();
+        ctx.globalAlpha = 0.10;
+        ctx.fillStyle = focus;
+        ctx.fillRect(winX, winY, winW, tbH);
+        ctx.restore();
+      }
+    } else if (titleBarDecoration.backgroundStyle === "linux-dark") {
+      ctx.save();
+      traceRoundedTopRect(ctx, winX - 1, winY - 1, winW + 2, tbH + 1, 6);
+      ctx.fillStyle = "rgb(70, 70, 70)";
+      ctx.fill();
+      ctx.restore();
+    } else {
+      const gradient = ctx.createLinearGradient(winX, winY, winX, winY + tbH);
+      if (titleBarDecoration.backgroundStyle === "macos-toolbar") {
+        gradient.addColorStop(0, "rgba(228, 228, 228, 0.96)");
+        gradient.addColorStop(1, "rgba(175, 175, 175, 0.96)");
+      } else {
+        gradient.addColorStop(0, "rgba(228, 228, 228, 0.96)");
+        gradient.addColorStop(1, "rgba(183, 183, 183, 0.96)");
+      }
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.fillRect(winX, winY, winW, tbH);
+      ctx.restore();
+    }
+
+    if (titleBarDecoration.showFrameBorder && !isWindowsTitleBar) {
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = focus;
+      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
+      ctx.restore();
+    }
+
+    if (titleBarDecoration.showBottomSeparator) {
+      ctx.save();
+      if (isWindowsTitleBar) {
+        ctx.strokeStyle = windowsChromeColors!.threeDShadow;
+      } else {
+        ctx.strokeStyle = titleBarDecoration.backgroundStyle === "default" ? focus : "rgb(184, 184, 184)";
+        ctx.globalAlpha = titleBarDecoration.backgroundStyle === "default" ? 0.2 : 1;
+      }
+      ctx.beginPath();
+      ctx.moveTo(winX + 0.5, winY + tbH - 0.5);
+      ctx.lineTo(winX + winW - 0.5, winY + tbH - 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (titleBarDecoration.showExtraBottomSeparator) {
+      ctx.save();
+      ctx.strokeStyle = "rgb(105, 105, 105)";
+      ctx.beginPath();
+      ctx.moveTo(winX + 0.5, winY + tbH - 0.5);
+      ctx.lineTo(winX + winW - 0.5, winY + tbH - 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (showWindowsIcon) {
+      const windowsTitleIconImage = isWindowsTitleBar ? getPreviewWindowsTitleIconImage() : null;
+      const drewWindowsTitleIcon = isWindowsTitleBar
+        ? drawPreviewRasterIcon(ctx, windowsTitleIconImage, iconX, iconY, iconSize.width, iconSize.height)
+        : false;
+
+      if (!drewWindowsTitleIcon) {
+        ctx.save();
+        if (isWindowsTitleBar) {
+          ctx.fillStyle = windowsChromeColors!.inactiveTitle;
+          ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+          ctx.strokeStyle = titleFg;
+        } else {
+          ctx.globalAlpha = 0.20;
+          ctx.fillStyle = focus;
+          ctx.fillRect(iconX, iconY, iconSize.width, iconSize.height);
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = fg;
+        }
+        ctx.strokeRect(iconX + 0.5, iconY + 0.5, Math.max(0, iconSize.width - 1), Math.max(0, iconSize.height - 1));
+        ctx.restore();
+
+        ctx.save();
+        if (!isWindowsTitleBar) {
+          ctx.globalAlpha = 0.85;
+        }
+        ctx.fillStyle = titleFg;
+        ctx.fillRect(iconX + 3, iconY + 3, Math.max(4, iconSize.width - 6), Math.max(4, iconSize.height - 6));
+        ctx.restore();
+      }
+    }
+
+    if (titleRight > titleLeft) {
+      const titleWidth = ctx.measureText(winTitle).width;
+      const titleX = titleButtonLayout.titleAlignment === "center"
+        ? titleLeft + Math.max(0, (titleRight - titleLeft - titleWidth) / 2)
+        : titleLeft;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
+      ctx.clip();
+      ctx.textBaseline = "top";
+      if (titleBarDecoration.drawShadowedTitle) {
+        ctx.fillStyle = "rgb(255, 255, 255)";
+        ctx.fillText(winTitle, titleX, titleTop + 1);
+        ctx.fillStyle = "rgb(54, 54, 54)";
+        ctx.fillText(winTitle, titleX, titleTop);
+      } else {
+        ctx.fillStyle = titleFg;
+        ctx.fillText(winTitle, titleX, titleTop);
+      }
+      ctx.restore();
+    }
+
+    if (titleButtonSlots.length > 0) {
+      let buttonX = titleButtonLayout.buttonSide === "left"
+        ? winX + titleBarMetrics.buttonInsetX
+        : rightButtonBandStart;
+      const isMacPreview = titleBarDecoration.buttonStyle === "macos-circles";
+      const isLinuxPreview = titleBarDecoration.buttonStyle === "linux-glyphs";
+      const isWindowsPreview = isWindowsTitleBar;
+      for (let index = 0; index < titleButtonSlots.length; index += 1) {
+        const slot = titleButtonSlots[index];
+        const size = titleButtonSizes[index] ?? fallbackButtonDims;
+        const buttonY = winY + titleBarMetrics.buttonOffsetY;
+        const buttonW = size.width;
+        const buttonH = size.height;
+        const kind = slot.kind;
+        const isEnabled = slot.enabled;
+        let drewWindowsTitleButton = false;
+        if (isWindowsPreview && (settings.osSkin === "windows7" || settings.osSkin === "windows8")) {
+          drewWindowsTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewWindowsTitleButtonImage(settings.osSkin, kind, isEnabled),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
+        }
+
+        if (!drewWindowsTitleButton) {
+          if (isMacPreview) {
+            const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
+            const cx = buttonX + Math.trunc(buttonW / 2);
+            const cy = buttonY + Math.trunc(buttonH / 2);
+            ctx.save();
+            ctx.globalAlpha = isEnabled ? 0.24 : 0.12;
+            ctx.fillStyle = focus;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = isEnabled ? 0.35 : 0.18;
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(0, radius - 0.5), 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          } else if (!isLinuxPreview && !isWindowsPreview) {
+            ctx.save();
+            ctx.globalAlpha = isEnabled
+              ? (kind === "close" ? 0.28 : 0.18)
+              : 0.08;
+            ctx.fillStyle = focus;
+            ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
+            ctx.globalAlpha = isEnabled ? 0.45 : 0.16;
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.strokeRect(buttonX + 0.5, buttonY + 0.5, Math.max(0, buttonW - 1), Math.max(0, buttonH - 1));
+            ctx.restore();
+          }
+
+          if (isEnabled || !isMacPreview) {
+            ctx.save();
+            ctx.strokeStyle = buttonStrokeColor;
+            ctx.globalAlpha = isLinuxPreview || isWindowsPreview ? 1 : (isEnabled ? 0.85 : 0.22);
+            const glyphBoxWidth = isLinuxPreview ? Math.max(8, buttonW - 9) : Math.min(10, Math.max(6, buttonW - 8));
+            const glyphBoxHeight = isLinuxPreview ? Math.max(8, buttonH - 9) : Math.min(8, Math.max(6, buttonH - 8));
+            const glyphLeft = buttonX + Math.max(4, Math.trunc((buttonW - glyphBoxWidth) / 2));
+            const glyphTop = buttonY + Math.max(4, Math.trunc((buttonH - glyphBoxHeight) / 2));
+            const glyphRight = glyphLeft + glyphBoxWidth;
+            const glyphBottom = glyphTop + glyphBoxHeight;
+            ctx.beginPath();
+            if (kind === "close") {
+              ctx.moveTo(glyphLeft + 0.5, glyphTop + 0.5);
+              ctx.lineTo(glyphRight - 0.5, glyphBottom - 0.5);
+              ctx.moveTo(glyphRight - 0.5, glyphTop + 0.5);
+              ctx.lineTo(glyphLeft + 0.5, glyphBottom - 0.5);
+            } else if (kind === "maximize") {
+              ctx.strokeRect(glyphLeft + 0.5, glyphTop + 0.5, Math.max(4, glyphBoxWidth - 1), Math.max(4, glyphBoxHeight - 1));
+            } else {
+              const lineY = glyphBottom - 0.5;
+              ctx.moveTo(glyphLeft + 0.5, lineY);
+              ctx.lineTo(glyphRight - 0.5, lineY);
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        buttonX += buttonW + buttonGap;
+      }
+    }
+  }
+
+  if (toolBarRect) {
+    drawToolBarPreview(ctx, toolBarRect, fg, settings.osSkin);
+    if (selection?.kind === "toolbar" && selection.id === getPrimaryToolbar()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(toolBarRect.x + 0.5, toolBarRect.y + 0.5, toolBarRect.w - 1, toolBarRect.h - 1);
+      ctx.restore();
+    }
+    if (selection?.kind === "toolBarEntry") {
+      const sel = selection;
+      const entryRect = toolBarEntryPreviewRects.find(entry => entry.ownerId === sel.toolBarId && entry.index === sel.entryIndex);
+      if (entryRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
+        ctx.restore();
+      }
+    }
+  }
+
+  if (statusBarRect) {
+    drawStatusBarPreview(ctx, statusBarRect, fg, settings.osSkin);
+    if (selection?.kind === "statusbar" && selection.id === getPrimaryStatusbar()?.id) {
+      ctx.save();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(statusBarRect.x + 0.5, statusBarRect.y + 0.5, statusBarRect.w - 1, statusBarRect.h - 1);
+      ctx.restore();
+    }
+    if (selection?.kind === "statusBarField") {
+      const sel = selection;
+      const fieldRect = statusBarFieldPreviewRects.find(entry => entry.ownerId === sel.statusBarId && entry.index === sel.fieldIndex);
+      if (fieldRect) {
+        ctx.save();
+        ctx.strokeStyle = focus;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, fieldRect.w - 1, fieldRect.h - 1);
+        ctx.restore();
+      }
+    }
+  }
+
+  // Window border
+  const frameDecoration = getWindowPreviewFrameDecoration(settings.osSkin);
+  drawWindowPreviewFrame(ctx, { x: winX, y: winY, w: winW, h: winH }, frameDecoration, focus, windowsChromeColors);
+
+  // Window resize grip
+  if (hasWindowPreviewResizeGrip(platformSkin)) {
+    const gripInset = 4;
+    const gripSize = Math.max(8, Math.min(12, Math.trunc(Math.min(winW, winH) / 8)));
+    const gripRight = winX + winW - gripInset;
+    const gripBottom = winY + winH - gripInset;
 
     ctx.save();
-    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = fg;
+    ctx.globalAlpha = 0.45;
+    for (let offset = 0; offset < 3; offset++) {
+      const startX = gripRight - gripSize + offset * 4;
+      const startY = gripBottom;
+      const endX = gripRight;
+      const endY = gripBottom - gripSize + offset * 4;
+      ctx.beginPath();
+      ctx.moveTo(startX + 0.5, startY + 0.5);
+      ctx.lineTo(endX + 0.5, endY + 0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Window selection overlay
+  if (selection?.kind === "window") {
+    ctx.save();
     ctx.strokeStyle = focus;
-    ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, tbH - 1);
+    ctx.lineWidth = 2;
+    if (frameDecoration.borderStyle === "macos-rounded" || frameDecoration.borderStyle === "windows7-rounded") {
+      traceRoundedRect(ctx, winX + 0.5, winY + 0.5, winW - 1, winH - 1, frameDecoration.borderRadius);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
+    }
     ctx.restore();
 
+    drawHandles(ctx, winX, winY, winW, winH, focus);
+  }
+
+  const layoutCache = new Map<string, GadgetPreviewLayout>();
+
+  // Gadgets (offset by window origin)
+  for (const g of model.gadgets) {
+    const layout = getGadgetPreviewLayout(g, chromeMetrics, layoutCache);
+    if (!layout.visible) continue;
+
+    const gx = winX + layout.rect.x;
+    const gy = winY + layout.rect.y;
+    const gw = layout.rect.w;
+    const gh = layout.rect.h;
+    const clipX = winX + layout.clip.x;
+    const clipY = winY + layout.clip.y;
+
+    ctx.strokeStyle = fg;
     ctx.fillStyle = fg;
-    ctx.fillText(winTitle, winX + 8, winY + Math.min(tbH - 8, 18));
+    ctx.lineWidth = 1;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+    ctx.clip();
+
+    let labelY = gy + 14;
+    let drawDefaultLabel = true;
+
+    switch (g.kind) {
+      case GADGET_KIND.ContainerGadget:
+        drawContainerGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.PanelGadget:
+        drawPanelChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ScrollAreaGadget:
+        drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.SplitterGadget:
+        drawSplitterChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, chromeMetrics);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.FrameGadget:
+        drawFrameGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TrackBarGadget:
+        drawTrackBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ScrollBarGadget:
+        drawScrollBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ButtonGadget:
+        drawButtonGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CheckBoxGadget:
+        drawCheckableGadgetChrome(ctx, g, gx, gy, gw, gh, "checkbox", settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.OptionGadget:
+        drawCheckableGadgetChrome(ctx, g, gx, gy, gw, gh, "option", settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ComboBoxGadget:
+      case GADGET_KIND.ExplorerComboGadget:
+        drawComboLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.SpinGadget:
+        drawSpinGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ProgressBarGadget:
+        drawProgressBarGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.DateGadget:
+        drawDateGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CalendarGadget:
+        drawCalendarGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ImageGadget:
+        drawImageGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ButtonImageGadget:
+        drawButtonImageGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CustomGadget:
+        drawCustomGadgetChrome(ctx, g, gx, gy, gw, gh);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.CanvasGadget:
+        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "Canvas Gadget");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.OpenGLGadget:
+        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "OpenGL Gadget");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.WebGadget:
+        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "Web");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.WebViewGadget:
+        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "WebView");
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.StringGadget:
+      case GADGET_KIND.IPAddressGadget:
+        drawStringLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TextGadget:
+      case GADGET_KIND.HyperLinkGadget:
+        drawTextLikeGadgetChrome(ctx, g, gx, gy, gw, gh, settings.osSkin, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.TreeGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "tree", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ListViewGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "listview", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.EditorGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "editor", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ScintillaGadget:
+        drawListLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "scintilla", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ListIconGadget:
+        drawListIconLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "listicon", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ExplorerTreeGadget:
+        drawExplorerTreeGadgetChrome(ctx, g, gx, gy, gw, gh, windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      case GADGET_KIND.ExplorerListGadget:
+        drawListIconLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "explorerlist", windowsChromeColors);
+        drawDefaultLabel = false;
+        break;
+
+      default:
+        ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
+        break;
+    }
+
+    if (drawDefaultLabel) {
+      ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
+    }
+    ctx.restore();
+
+    const sel = selection;
+    if (sel && sel.kind === "gadget" && g.id === sel.id) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+      ctx.clip();
+      ctx.strokeStyle = focus;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
+      ctx.restore();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
+      ctx.clip();
+      drawHandles(ctx, gx, gy, gw, gh, focus);
+      ctx.restore();
+    }
   }
 
   if (menuBarRect) {
-    drawMenuBarPreview(ctx, menuBarRect, fg);
+    drawMenuBarPreview(ctx, menuBarRect, fg, settings.osSkin);
     if (selection?.kind === "menu" && selection.id === getPrimaryMenu()?.id) {
       ctx.save();
       ctx.strokeStyle = focus;
@@ -3560,139 +7878,6 @@ function render() {
         ctx.lineTo(indicator.x + indicator.w, y + 0.5);
         ctx.stroke();
       }
-      ctx.restore();
-    }
-  }
-
-  if (toolBarRect) {
-    drawToolBarPreview(ctx, toolBarRect, fg);
-    if (selection?.kind === "toolbar" && selection.id === getPrimaryToolbar()?.id) {
-      ctx.save();
-      ctx.strokeStyle = focus;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(toolBarRect.x + 0.5, toolBarRect.y + 0.5, toolBarRect.w - 1, toolBarRect.h - 1);
-      ctx.restore();
-    }
-    if (selection?.kind === "toolBarEntry") {
-      const sel = selection;
-      const entryRect = toolBarEntryPreviewRects.find(entry => entry.ownerId === sel.toolBarId && entry.index === sel.entryIndex);
-      if (entryRect) {
-        ctx.save();
-        ctx.strokeStyle = focus;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(entryRect.x + 0.5, entryRect.y + 0.5, entryRect.w - 1, entryRect.h - 1);
-        ctx.restore();
-      }
-    }
-  }
-
-  if (statusBarRect) {
-    drawStatusBarPreview(ctx, statusBarRect, fg);
-    if (selection?.kind === "statusbar" && selection.id === getPrimaryStatusbar()?.id) {
-      ctx.save();
-      ctx.strokeStyle = focus;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(statusBarRect.x + 0.5, statusBarRect.y + 0.5, statusBarRect.w - 1, statusBarRect.h - 1);
-      ctx.restore();
-    }
-    if (selection?.kind === "statusBarField") {
-      const sel = selection;
-      const fieldRect = statusBarFieldPreviewRects.find(entry => entry.ownerId === sel.statusBarId && entry.index === sel.fieldIndex);
-      if (fieldRect) {
-        ctx.save();
-        ctx.strokeStyle = focus;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(fieldRect.x + 0.5, fieldRect.y + 0.5, fieldRect.w - 1, fieldRect.h - 1);
-        ctx.restore();
-      }
-    }
-  }
-
-  // Window border
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = focus;
-  ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
-  ctx.restore();
-
-  // Window selection overlay
-  if (selection?.kind === "window") {
-    ctx.save();
-    ctx.strokeStyle = focus;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
-    ctx.restore();
-
-    drawHandles(ctx, winX, winY, winW, winH, focus);
-  }
-
-  const layoutCache = new Map<string, GadgetPreviewLayout>();
-
-  // Gadgets (offset by window origin)
-  for (const g of model.gadgets) {
-    const layout = getGadgetPreviewLayout(g, chromeMetrics, layoutCache);
-    if (!layout.visible) continue;
-
-    const gx = winX + layout.rect.x;
-    const gy = winY + layout.rect.y;
-    const gw = layout.rect.w;
-    const gh = layout.rect.h;
-    const clipX = winX + layout.clip.x;
-    const clipY = winY + layout.clip.y;
-
-    ctx.strokeStyle = fg;
-    ctx.fillStyle = fg;
-    ctx.lineWidth = 1;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
-    ctx.clip();
-
-    let labelY = gy + 14;
-
-    switch (g.kind) {
-      case "ContainerGadget":
-        drawContainerChrome(ctx, gx, gy, gw, gh, fg);
-        break;
-
-      case "PanelGadget":
-        drawPanelChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
-        labelY = gy + Math.min(gh - 8, chromeMetrics.panelHeight + 14);
-        break;
-
-      case "ScrollAreaGadget":
-        drawScrollAreaChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
-        break;
-
-      case "SplitterGadget":
-        drawSplitterChrome(ctx, g, gx, gy, gw, gh, fg, chromeMetrics);
-        break;
-
-      default:
-        ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
-        break;
-    }
-
-    ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
-    ctx.restore();
-
-    const sel = selection;
-    if (sel && sel.kind === "gadget" && g.id === sel.id) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
-      ctx.clip();
-      ctx.strokeStyle = focus;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(gx + 0.5, gy + 0.5, gw, gh);
-      ctx.restore();
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(clipX, clipY, layout.clip.w, layout.clip.h);
-      ctx.clip();
-      drawHandles(ctx, gx, gy, gw, gh, focus);
       ctx.restore();
     }
   }
@@ -3773,6 +7958,65 @@ function drawHandles(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
     const ry = Math.round(py - hs) + 0.5;
     ctx.fillRect(rx, ry, s, s);
     ctx.strokeRect(rx, ry, s, s);
+  }
+
+  ctx.restore();
+}
+
+function traceRoundedTopRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
+  const clampedRadius = Math.max(0, Math.min(Math.trunc(radius), Math.trunc(w / 2), Math.trunc(h)));
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + clampedRadius);
+  ctx.quadraticCurveTo(x, y, x + clampedRadius, y);
+  ctx.lineTo(x + w - clampedRadius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + clampedRadius);
+  ctx.lineTo(x + w, y + h);
+  ctx.closePath();
+}
+
+function traceRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
+  const clampedRadius = Math.max(0, Math.min(Math.trunc(radius), Math.trunc(w / 2), Math.trunc(h / 2)));
+  ctx.beginPath();
+  ctx.moveTo(x + clampedRadius, y);
+  ctx.lineTo(x + w - clampedRadius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + clampedRadius);
+  ctx.lineTo(x + w, y + h - clampedRadius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - clampedRadius, y + h);
+  ctx.lineTo(x + clampedRadius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - clampedRadius);
+  ctx.lineTo(x, y + clampedRadius);
+  ctx.quadraticCurveTo(x, y, x + clampedRadius, y);
+  ctx.closePath();
+}
+
+function drawWindowPreviewFrame(
+  ctx: CanvasRenderingContext2D,
+  rect: PreviewRect,
+  decoration: ReturnType<typeof getWindowPreviewFrameDecoration>,
+  focus: string,
+  windowsChromeColors?: ReturnType<typeof resolveWindowsSkinColors>
+) {
+  ctx.save();
+  ctx.globalAlpha = decoration.strokeAlpha;
+  ctx.strokeStyle = decoration.strokeColorStyle === "macos-dark"
+    ? "rgb(118, 118, 118)"
+    : decoration.strokeColorStyle === "windows7-dark"
+      ? (windowsChromeColors?.buttonText ?? windowsChromeColors?.menuText ?? "rgb(37, 37, 37)")
+      : decoration.strokeColorStyle === "windows8-blue"
+        ? (windowsChromeColors?.activeTitle ?? windowsChromeColors?.hotTrackingColor ?? "rgb(82, 132, 188)")
+        : focus;
+
+  if (decoration.borderStyle === "none") {
+    ctx.restore();
+    return;
+  }
+
+  if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
+    traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
   }
 
   ctx.restore();
@@ -3936,7 +8180,7 @@ function renderList() {
         || n.kind === "menu"
         || n.kind === "toolbar"
         || n.kind === "statusbar"
-        || (n.kind === "gadget" && CONTAINER_KINDS.has(gadgetMap.get(n.id)?.kind ?? ""));
+        || (n.kind === "gadget" && canHostInsertedGadgets(gadgetMap.get(n.id)));
       expanded.set(k, defaultExpanded);
     }
     return expanded.get(k)!;
@@ -3970,7 +8214,12 @@ function renderList() {
     div.onclick = () => {
       if (!n.selectable) return;
       if (n.kind === "window") selection = { kind: "window" };
-      else if (n.kind === "gadget") selection = { kind: "gadget", id: n.id };
+      else if (n.kind === "gadget") {
+        selection = { kind: "gadget", id: n.id };
+        const syncedPanelItems = syncPanelActiveItemsForSelection(panelActiveItems, model.gadgets, n.id);
+        panelActiveItems.clear();
+        syncedPanelItems.forEach((item, panelId) => panelActiveItems.set(panelId, item));
+      }
       else if (n.kind === "menu") selection = { kind: "menu", id: n.id };
       else if (n.kind === "menuEntry") {
         const [menuId, entryIndexRaw] = n.id.split(":");
@@ -4031,7 +8280,7 @@ function renderParentSelector() {
   }
 
   const containers = model.gadgets
-    .filter(g => CONTAINER_KINDS.has(g.kind))
+    .filter(g => canHostInsertedGadgets(g))
     .sort((a, b) => depthOf(a.id) - depthOf(b.id));
 
   for (const g of containers) {
@@ -4093,17 +8342,7 @@ function getEditableSplitterState(g: Gadget): number {
 
 function renderProps() {
   propsEl.innerHTML = "";
-
-  const sel = selection;
-  if (!sel) {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
-    return;
-  }
-
-  const toPbString = (v: string): string => {
-    const esc = (v ?? "").replace(/"/g, '""');
-    return `"${esc}"`;
-  };
+  renderInfoPanel();
 
   const section = (title: string) => {
     const h = document.createElement("div");
@@ -4111,6 +8350,11 @@ function renderProps() {
     h.textContent = title;
     return h;
   };
+
+  const sel = selection;
+  if (!sel) {
+    return;
+  }
 
   const miniList = () => {
     const d = document.createElement("div");
@@ -4180,133 +8424,260 @@ function renderProps() {
       return;
     }
 
-    const variableName = (model.window.variable ?? model.window.firstParam.replace(/^#/, "")).trim() || "Window_0";
+    const win = model.window;
+    const variableName = (win.variable ?? win.firstParam.replace(/^#/, "")) || "Window_0";
     const enumSymbol = variableName ? `#${variableName.trim()}` : "#Window_0";
+    const knownFlags = new Set(win.knownFlags ?? []);
+    const customFlagsValue = (win.customFlags ?? []).join(" | ");
 
-    propsEl.appendChild(row("Key", readonlyInput(model.window.id)));
-    propsEl.appendChild(
-      row("#PB_Any", checkboxInput(model.window.pbAny, v => {
+    propsEl.appendChild(section("Properties"));
+    propsEl.appendChild(row(PB_ANY, checkboxInput(win.pbAny, v => {
+      vscode.postMessage({
+        type: "toggleWindowPbAny",
+        windowKey: win.id,
+        toPbAny: v,
+        variableName,
+        enumSymbol,
+        enumValueRaw: win.enumValueRaw
+      });
+    })));
+
+    const windowVariableInputValue = getWindowVariableInspectorValue(win.variable);
+    propsEl.appendChild(row("Variable", textInput(windowVariableInputValue, v => {
+      const parsed = parseWindowVariableNameInspectorInput(v, windowVariableInputValue);
+      if (!parsed.ok) {
+        clearInfoError();
+        renderProps();
+        return;
+      }
+      vscode.postMessage({
+        type: "setWindowVariableName",
+        windowKey: win.id,
+        variableName: parsed.value
+      });
+    })));
+
+    propsEl.appendChild(row(
+      "Caption is a variable?",
+      checkboxInput(Boolean(win.captionVariable), checked => {
         if (!model.window) return;
-        vscode.postMessage({
-          type: "toggleWindowPbAny",
-          windowKey: model.window.id,
-          toPbAny: v,
-          variableName,
-          enumSymbol,
-          enumValueRaw: model.window.enumValueRaw
-        });
-      }))
-    );
+        if (checked && !ensureValidPbVariableReference(win.title ?? "")) {
+          renderProps();
+          return;
+        }
+        clearInfoError();
+        win.captionVariable = checked;
+        const nextCaptionRaw = buildWindowCaptionRaw(win.title ?? "", checked);
+        win.captionRaw = nextCaptionRaw;
+        postWindowOpenArgs(win, { captionRaw: nextCaptionRaw });
+        renderProps();
+      })
+    ));
 
-    propsEl.appendChild(
-      row("Variable", textInput(variableName ?? "", v => {
+    propsEl.appendChild(row(
+      "Caption",
+      textInput(win.title ?? "", v => {
+        if (!model.window) return;
+        if (Boolean(win.captionVariable) && !ensureValidPbVariableReference(v)) {
+          renderProps();
+          return;
+        }
+        clearInfoError();
+        win.title = v;
+        const nextCaptionRaw = buildWindowCaptionRaw(v, Boolean(win.captionVariable));
+        win.captionRaw = nextCaptionRaw;
+        postWindowOpenArgs(win, { captionRaw: nextCaptionRaw });
+      })
+    ));
+
+    if (!win.pbAny) {
+      propsEl.appendChild(row("Enum Value", textInput(win.enumValueRaw ?? "", v => {
         vscode.postMessage({
-          type: "setWindowVariableName",
-          variableName: v.trim().length ? v.trim() : undefined
+          type: "setWindowEnumValue",
+          enumSymbol,
+          enumValueRaw: v.trim().length ? v.trim() : undefined
         });
-      }))
-    );
-    if (!model.window.pbAny) {
-      propsEl.appendChild(
-        row("Enum Value", textInput(model.window.enumValueRaw ?? "", v => {
-          vscode.postMessage({
-            type: "setWindowEnumValue",
-            enumSymbol,
-            enumValueRaw: v.trim().length ? v.trim() : undefined
-          });
-        }))
-      );
+      })));
     }
 
-    propsEl.appendChild(row("Title", readonlyInput(model.window.title ?? "")));
-    propsEl.appendChild(
-      row("Event File", textInput(model.window.eventFile ?? "", v => {
+    propsEl.appendChild(section("Layout"));
+    propsEl.appendChild(row("X", textInput(getWindowPositionInspectorValue(win.xRaw, win.x), v => {
+      if (!model.window) return;
+      postWindowPositionRaw(win, "x", v);
+    }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
+    propsEl.appendChild(row("Y", textInput(getWindowPositionInspectorValue(win.yRaw, win.y), v => {
+      if (!model.window) return;
+      postWindowPositionRaw(win, "y", v);
+    }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
+    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
+    propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
+      if (!model.window) return;
+      win.hidden = checked;
+      win.hiddenRaw = checked ? "1" : "";
+      postWindowProperties(win, { hiddenRaw: checked ? "1" : "" });
+      renderProps();
+    })));
+    propsEl.appendChild(row("Disabled", checkboxInput(getWindowBooleanInspectorState(win.disabledRaw, win.disabled), checked => {
+      if (!model.window) return;
+      win.disabled = checked;
+      win.disabledRaw = checked ? "1" : "";
+      postWindowProperties(win, { disabledRaw: checked ? "1" : "" });
+      renderProps();
+    })));
+    const parentAsRawExpression = getWindowParentAsRawExpressionWithOverride(
+      win.parentRaw,
+      win.parent,
+      windowParentAsRawExpressionOverrides.get(win.id)
+    );
+    const parentInput = textInput(getWindowParentInspectorValue(win.parentRaw, win.parent), v => {
+      if (!model.window) return;
+      const parsed = parseWindowParentInspectorInput(v, parentAsRawExpressionCheckbox.checked);
+      win.parentRaw = parsed.raw || undefined;
+      win.parent = parsed.storedValue
+        ? (parentAsRawExpressionCheckbox.checked ? `=${parsed.storedValue}` : parsed.storedValue)
+        : undefined;
+      postWindowOpenArgs(win, { parentRaw: parsed.raw });
+    });
+    parentInput.title = "Enter the parent window expression. Disable the checkbox to emit WindowID(...); enable it to write the expression raw.";
+    const parentAsRawExpressionCheckbox = checkboxInput(parentAsRawExpression, checked => {
+      if (!model.window) return;
+      windowParentAsRawExpressionOverrides.set(win.id, checked);
+      const parsed = parseWindowParentInspectorInput(parentInput.value, checked);
+      win.parentRaw = parsed.raw || undefined;
+      win.parent = parsed.storedValue
+        ? (checked ? `=${parsed.storedValue}` : parsed.storedValue)
+        : undefined;
+      if (parsed.raw.length > 0) {
+        postWindowOpenArgs(win, { parentRaw: parsed.raw });
+      }
+      renderProps();
+    });
+    parentAsRawExpressionCheckbox.title = "When enabled, the parent is written directly as the last OpenWindow(...) argument. When disabled, the editor emits WindowID(...), matching the original default path.";
+    propsEl.appendChild(row("Parent", parentInput));
+    propsEl.appendChild(row("Parent as raw expression", parentAsRawExpressionCheckbox));
+    const windowColorInput = readonlyInput(getWindowColorInspectorDisplay(win.colorRaw));
+    windowColorInput.title = "Use the color picker to choose a window color, or Remove to clear it.";
+    const windowColorPicker = document.createElement("input");
+    windowColorPicker.type = "color";
+    windowColorPicker.value = pbColorNumberToCssHex(win.color) ?? "#000000";
+    windowColorPicker.title = "Choose a window color. The value is saved as RGB(...).";
+    windowColorPicker.style.width = "40px";
+    windowColorPicker.style.minWidth = "40px";
+    windowColorPicker.style.padding = "0";
+    windowColorPicker.onchange = () => {
+      if (!model.window) return;
+      const nextColorRaw = cssHexToPbRgbRaw(windowColorPicker.value);
+      if (!nextColorRaw) return;
+      const parsedColor = parseWindowColorInspectorInput(nextColorRaw);
+      clearInfoError();
+      win.colorRaw = nextColorRaw;
+      if (parsedColor.ok) {
+        win.color = parsedColor.previewColor;
+      }
+      postWindowProperties(win, { colorRaw: nextColorRaw });
+      renderProps();
+    };
+    const clearWindowColorBtn = document.createElement("button");
+    clearWindowColorBtn.textContent = "Remove";
+    clearWindowColorBtn.disabled = !(win.colorRaw?.trim() || typeof win.color === "number");
+    clearWindowColorBtn.title = clearWindowColorBtn.disabled
+      ? "No window color is set."
+      : "Remove the current window color.";
+    clearWindowColorBtn.onclick = () => {
+      if (!model.window) return;
+      clearInfoError();
+      win.colorRaw = undefined;
+      win.color = undefined;
+      postWindowProperties(win, { colorRaw: "" });
+      renderProps();
+    };
+    propsEl.appendChild(row("Color", inputWithActions(windowColorInput, windowColorPicker, clearWindowColorBtn)));
+    propsEl.appendChild(mutedNote("Use the picker to set the window color. Remove clears the current color."));
+    propsEl.appendChild(row(
+      "Generate events procedure?",
+      checkboxInput(Boolean(win.generateEventLoop), v => {
+        if (!model.window) return;
+        win.generateEventLoop = v;
+        post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
+        renderProps();
+      })
+    ));
+    propsEl.appendChild(row(
+      "SelectProc",
+      editableComboInput(
+        win.eventProc ?? "",
+        getProcedureSuggestions(),
+        v => {
+          if (!model.window) return;
+          const parsed = parseWindowEventProcInspectorInput(v);
+          win.eventProc = parsed.storedValue;
+          post({ type: "setWindowEventProc", windowKey: win.id, eventProc: parsed.storedValue });
+          renderProps();
+        },
+        {
+          title: "Choose an existing procedure or type a procedure name.",
+          placeholder: "Type or pick a procedure"
+        }
+      )
+    ));
+    propsEl.appendChild(createSubSection("Event File"));
+    const eventFileInput = textInput(
+      win.eventFile ?? "",
+      v => {
         if (!model.window) return;
         const trimmed = v.trim();
-        model.window.eventFile = trimmed || undefined;
-        post({
-          type: "setWindowEventFile",
-          windowKey: model.window.id,
-          eventFile: trimmed.length ? toPbString(trimmed) : undefined
-        });
+        win.eventFile = trimmed || undefined;
+        post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
         renderProps();
-      }))
+      },
+      {
+        title: "Path to the event include file for this window.",
+        placeholder: "events/form-events.pbi"
+      }
     );
-    const hasEventGadgetBlock = Boolean(model.window.hasEventGadgetBlock);
-    const windowEventProcHint = hasEventGadgetBlock
-      ? ""
-      : EVENT_UI_HINT.eventGadgetMissing;
-    propsEl.appendChild(
-      row(
-        "Event Proc",
-        textInput(
-          model.window.eventProc ?? "",
-          v => {
-            if (!model.window || !hasEventGadgetBlock) return;
-            const trimmed = v.trim();
-            model.window.eventProc = trimmed || undefined;
-            post({
-              type: "setWindowEventProc",
-              windowKey: model.window.id,
-              eventProc: trimmed.length ? trimmed : undefined
-            });
-            renderProps();
-          },
-          { disabled: !hasEventGadgetBlock, title: windowEventProcHint }
-        )
-      )
-    );
-    if (!hasEventGadgetBlock) {
-      propsEl.appendChild(mutedNote(windowEventProcHint));
+    const removeEventFileBtn = document.createElement("button");
+    removeEventFileBtn.textContent = "Remove";
+    removeEventFileBtn.disabled = !Boolean(win.eventFile?.trim());
+    removeEventFileBtn.title = removeEventFileBtn.disabled
+      ? "No event file is set."
+      : "Remove the current event file include.";
+    removeEventFileBtn.onclick = () => {
+      if (!model.window || !win.eventFile?.trim()) return;
+      win.eventFile = undefined;
+      post({ type: "setWindowEventFile", windowKey: win.id, eventFile: undefined });
+      renderProps();
+    };
+    propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
+    propsEl.appendChild(mutedNote("Use this field to keep an event include file linked to the window. Remove clears it."));
+
+    propsEl.appendChild(section("Constants"));
+    for (const flag of PBFD_SYMBOLS.windowKnownFlags ?? []) {
+      propsEl.appendChild(row(
+        flag,
+        checkboxInput(knownFlags.has(flag), checked => {
+          if (!model.window) return;
+          const nextKnown = new Set(model.window.knownFlags ?? []);
+          if (checked) nextKnown.add(flag);
+          else nextKnown.delete(flag);
+          model.window.knownFlags = (PBFD_SYMBOLS.windowKnownFlags ?? []).filter(entry => nextKnown.has(entry));
+          const nextExpr = buildWindowFlagsExpr(model.window.knownFlags, (model.window.customFlags ?? []).join(" | "));
+          model.window.flagsExpr = nextExpr;
+          postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+          renderProps();
+        })
+      ));
     }
-    const hasEventMenuBlockForLoop = Boolean(model.window.hasEventMenuBlock);
-    const hasEventGadgetCasesForLoop = Boolean(model.window.hasEventGadgetCaseBranches);
-    const canDisableGenerateEventLoop = !hasEventMenuBlockForLoop && !hasEventGadgetCasesForLoop;
-    const generateEventLoopDisableHint = getGenerateEventLoopDisableHint(model.window);
-    propsEl.appendChild(
-      row(
-        "Generate Event Loop",
-        checkboxInput(
-          Boolean(model.window.generateEventLoop),
-          v => {
-            if (!model.window) return;
-            if (!v && Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) return;
-            model.window.generateEventLoop = v;
-            if (!v) {
-              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetBlock = false;
-              if (!model.window.hasEventMenuBlock) model.window.hasEventGadgetCaseBranches = false;
-            } else {
-              model.window.hasEventGadgetBlock = true;
-            }
-            post({
-              type: "setWindowGenerateEventLoop",
-              windowKey: model.window.id,
-              enabled: v
-            });
-            renderProps();
-          },
-          {
-            disabled: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop,
-            title: Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop ? generateEventLoopDisableHint : ""
-          }
-        )
-      )
-    );
-    if (Boolean(model.window.generateEventLoop) && !canDisableGenerateEventLoop) {
-      propsEl.appendChild(mutedNote(generateEventLoopDisableHint));
-    }
-    propsEl.appendChild(
-      row("X", numberInput(model.window.x, v => { if (!model.window) return; model.window.x = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("Y", numberInput(model.window.y, v => { if (!model.window) return; model.window.y = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("W", numberInput(model.window.w, v => { if (!model.window) return; model.window.w = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
-    propsEl.appendChild(
-      row("H", numberInput(model.window.h, v => { if (!model.window) return; model.window.h = asInt(v); postWindowRect(); render(); renderProps(); }))
-    );
+    propsEl.appendChild(row(
+      "Custom Flags",
+      textInput(customFlagsValue, v => {
+        if (!model.window) return;
+        model.window.customFlags = parseWindowCustomFlagsInput(v);
+        const nextExpr = buildWindowFlagsExpr(model.window.knownFlags ?? [], v);
+        model.window.flagsExpr = nextExpr;
+        postWindowOpenArgs(model.window, { flagsExpr: nextExpr ?? "" });
+      }, { placeholder: "#PB_Window_CustomFlagA | #PB_Window_CustomFlagB" })
+    ));
     return;
   }
 
@@ -4342,9 +8713,10 @@ function renderProps() {
       const selectedCanEditName = selectedCanPatch && (selectedEntry.kind === "MenuItem" || selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu");
       const selectedCanEditShortcut = selectedCanPatch && selectedEntry.kind === "MenuItem";
       const selectedCanEditImage = selectedCanPatch && selectedEntry.kind === "MenuItem";
-      const selectedCanEditEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock;
+      const selectedEventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "menu");
+      const selectedCanEditEvent = selectedEventEditState.canEdit;
       const selectedImage = findImageEntryById(selectedEntry.iconId);
-      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "menu");
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("menuEntry");
       const hasOwn = (obj: object, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
       const postSelectedMenuUpdate = (updates: { idRaw?: string; textRaw?: string; shortcut?: string; iconRaw?: string }) => {
         if (!selectedCanPatch || typeof selectedEntry.source?.line !== "number") return;
@@ -4379,57 +8751,17 @@ function renderProps() {
       };
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const selectedUseExistingBtn = document.createElement("button");
-      selectedUseExistingBtn.textContent = "Use Existing";
-      selectedUseExistingBtn.disabled = !selectedCanEditImage;
-      selectedUseExistingBtn.title = selectedCanEditImage
-        ? "Select an image from the form image list and assign it to this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedUseExistingBtn.onclick = () => {
-        if (!selectedCanEditImage) return;
-        openImageReferencePicker({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
-      };
-      selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
-      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       selectedChooseFileBtn.disabled = !selectedCanEditImage;
       selectedChooseFileBtn.title = selectedCanEditImage
-        ? "Select a file, create a new LoadImage entry and assign it to this menu entry."
+        ? selectedImageInspectorConfig.changeImageButtonTitle
         : "Only MenuItem supports a parsed image argument.";
       selectedChooseFileBtn.onclick = () => {
         if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
         openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
-      const selectedCreateNewBtn = document.createElement("button");
-      selectedCreateNewBtn.textContent = "Create New";
-      selectedCreateNewBtn.disabled = !selectedCanEditImage;
-      selectedCreateNewBtn.title = selectedCanEditImage
-        ? "Create a new form image entry and assign it to this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedCreateNewBtn.onclick = () => {
-        if (!selectedCanEditImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageAssignmentDraft({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }, "create");
-      };
-      selectedImageActions.appendChild(selectedCreateNewBtn);
-      const selectedClearBtn = document.createElement("button");
-      selectedClearBtn.textContent = "Clear";
-      selectedClearBtn.disabled = !selectedCanEditImage;
-      selectedClearBtn.title = selectedCanEditImage
-        ? "Remove the parsed image reference from this menu entry."
-        : "Only MenuItem supports a parsed image argument.";
-      selectedClearBtn.onclick = () => {
-        if (!selectedCanEditImage) return;
-        postSelectedMenuUpdate({ iconRaw: "" });
-      };
-      selectedImageActions.appendChild(selectedClearBtn);
-      if (selectedImage) {
-        const selectedJumpImageBtn = document.createElement("button");
-        selectedJumpImageBtn.textContent = "Image";
-        selectedJumpImageBtn.title = selectedImageTitle;
-        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
-        selectedImageActions.appendChild(selectedJumpImageBtn);
-      }
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -4438,12 +8770,13 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!selectedCanEditId) return;
-            postSelectedMenuUpdate({ idRaw: v.trim() });
+            const trimmed = v.trim();
+            postSelectedMenuUpdate({ idRaw: trimmed.length ? trimmed : (selectedEntry.idRaw ?? "") });
           },
           {
             disabled: !selectedCanEditId,
             title: selectedEntry.kind === "MenuItem"
-              ? "Patch the raw MenuItem id token for the selected entry."
+              ? "Edit the id used by the selected menu entry."
               : "Only MenuItem exposes an editable constant in the current parsed model."
           }
         )
@@ -4459,7 +8792,7 @@ function renderProps() {
           {
             disabled: !selectedCanEditName,
             title: selectedCanEditName
-              ? "Patch the menu caption/title for the selected entry."
+              ? "Edit the text shown for the selected menu entry."
               : "MenuBar and CloseSubMenu are structural entries without an editable name field."
           }
         )
@@ -4470,12 +8803,12 @@ function renderProps() {
           selectedEntry.shortcut ?? "",
           v => {
             if (!selectedCanEditShortcut) return;
-            postSelectedMenuUpdate({ shortcut: v.trim() || undefined });
+            postSelectedMenuUpdate({ shortcut: buildOptionalInspectorPlainValue(v) });
           },
           {
             disabled: !selectedCanEditShortcut,
             title: selectedEntry.kind === "MenuItem"
-              ? "Patch the optional MenuItem shortcut suffix."
+              ? "Edit the shortcut text shown for the selected menu entry."
               : "Only MenuItem supports the parsed shortcut field."
           }
         )
@@ -4490,8 +8823,34 @@ function renderProps() {
       ));
       propsEl.appendChild(row(
         "CurrentImage",
-        readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")
+        readonlyInput(
+          selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "",
+          selectedImageInspectorConfig.currentImageTitle
+        )
       ));
+      if (selectedImageInspectorConfig.currentImageHint) {
+        propsEl.appendChild(mutedNote(selectedImageInspectorConfig.currentImageHint));
+      }
+      if (selectedImage && typeof selectedImage.source?.line === "number") {
+        const canToggle = selectedCanEditImage && canToggleImagePbAny(selectedImage);
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
+          Boolean(selectedImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedImage!.source!.line,
+              toPbAny: !selectedImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: selectedImage.pbAny
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
+          }
+        )));
+      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
@@ -4503,8 +8862,9 @@ function renderProps() {
       }
       propsEl.appendChild(row(
         "SelectProc",
-        textInput(
+        editableComboInput(
           selectedEntry.event ?? "",
+          getProcedureSuggestions(),
           v => {
             if (!selectedEntry.idRaw) return;
             post({
@@ -4515,10 +8875,33 @@ function renderProps() {
           },
           {
             disabled: !selectedCanEditEvent,
-            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "menu")
+            title: selectedEventEditState.title
           }
         )
       ));
+
+      const selectedDeleteMenuEntryBtn = document.createElement("button");
+      selectedDeleteMenuEntryBtn.textContent = "Delete Entry";
+      selectedDeleteMenuEntryBtn.disabled = typeof selectedEntry.source?.line !== "number";
+      selectedDeleteMenuEntryBtn.title = selectedDeleteMenuEntryBtn.disabled
+        ? "Only parsed menu entries with a source line can be deleted."
+        : "Delete the currently selected menu entry.";
+      selectedDeleteMenuEntryBtn.onclick = () => {
+        if (typeof selectedEntry.source?.line !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteMenuEntry",
+            menuId: m.id,
+            entryIndex: selectedEntryIndex!,
+            sourceLine: selectedEntry.source.line,
+            entryKind: selectedEntry.kind,
+            message: `Delete the selected ${selectedEntry.kind} entry from menu '${m.id}'?`,
+            confirmLabel: "Delete Entry"
+          },
+          { kind: "menuEntry", menuId: m.id, entryIndex: selectedEntryIndex! }
+        );
+      };
+      propsEl.appendChild(row("Delete", selectedDeleteMenuEntryBtn));
     }
 
     const box = miniList();
@@ -4553,12 +8936,13 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
+      const eventEditState = getTopLevelSelectProcEditState(hasEventMenuBlock, e.idRaw, "menu");
+      const eventFn = eventEditState.canEdit
         ? () => {
             setSelectionAndRefresh({ kind: "menuEntry", menuId: m.id, entryIndex });
           }
         : undefined;
-      const menuEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "menu");
+      const menuEventTitle = eventEditState.title;
       const menuImage = findImageEntryById(e.iconId);
       const menuImageTitle = getImageReferenceHint(e.iconId, "menu");
 
@@ -4588,7 +8972,7 @@ function renderProps() {
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: menuEventTitle },
-        { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Patch the raw MenuItem image argument." : "Only MenuItem supports a parsed image argument." },
+        { label: "Set Image", onClick: menuSetImageFn, disabled: !menuSetImageFn, title: e.kind === "MenuItem" ? "Edit the image reference used by this menu entry." : "Only MenuItem supports a parsed image argument." },
         { label: "Use Existing", onClick: menuPickImageFn, disabled: !menuPickImageFn, title: e.kind === "MenuItem" ? "Select an image from the form image list." : "Only MenuItem supports a parsed image argument." },
         { label: "Choose File", onClick: menuChooseFileImageFn, disabled: !menuChooseFileImageFn, title: e.kind === "MenuItem" ? "Select a file, create a new LoadImage entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
         { label: "Create New", onClick: menuCreateImageFn, disabled: !menuCreateImageFn, title: e.kind === "MenuItem" ? "Create a new form image entry and assign it to this menu item." : "Only MenuItem supports a parsed image argument." },
@@ -4633,10 +9017,17 @@ function renderProps() {
         postInsertMenuEntry(m, { kind: "MenuBar" });
       };
 
+      const closeBalance = getOpenSubMenuBalance(m);
+      const canInsertRootClose = closeBalance > 0;
+
       const addCloseBtn = document.createElement("button");
       addCloseBtn.textContent = "Add Close";
-      addCloseBtn.title = "Insert a new CloseSubMenu entry.";
+      addCloseBtn.disabled = !canInsertRootClose;
+      addCloseBtn.title = canInsertRootClose
+        ? "Insert a new CloseSubMenu entry for the last still-open submenu."
+        : "Disabled because the parsed menu currently has no unmatched OpenSubMenu entry.";
       addCloseBtn.onclick = () => {
+        if (!canInsertRootClose) return;
         postInsertMenuEntry(m, { kind: "CloseSubMenu" });
       };
 
@@ -4705,73 +9096,32 @@ function renderProps() {
     if (selectedEntry) {
       const selectedCanPatch = typeof selectedEntry.source?.line === "number";
       const selectedImage = findImageEntryById(selectedEntry.iconId);
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("toolBarEntry");
+      const selectedFieldConfig = getSelectedToolBarInspectorFieldConfig();
       const canEditSelectedTooltip = selectedCanPatch && canEditToolBarTooltip(selectedEntry) && Boolean(selectedEntry.idRaw);
       const canEditSelectedToggle = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const canEditSelectedEvent = Boolean(selectedEntry.idRaw) && hasEventMenuBlock && selectedEntry.kind !== "ToolBarToolTip";
+      const selectedEventEditState = selectedEntry.kind === "ToolBarToolTip"
+        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
+        : getTopLevelSelectProcEditState(hasEventMenuBlock, selectedEntry.idRaw, "toolbar");
+      const canEditSelectedEvent = selectedEventEditState.canEdit;
 
       const canEditSelectedImage = selectedCanPatch && selectedEntry.kind === "ToolBarImageButton";
-      const selectedImageTitle = getImageReferenceHint(selectedEntry.iconId, "toolbar");
+      const selectedImagePath = selectedImage?.image ?? selectedImage?.imageRaw ?? ((selectedEntry.iconRaw ?? "") === "0" ? "" : (selectedEntry.iconRaw ?? ""));
+      const selectedImageUsageCount = selectedEntry.iconId ? countImageUsages(selectedEntry.iconId) : 0;
+      const selectedImageEditState = getStatusBarCurrentImageEditState(selectedImage, selectedImageUsageCount);
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const selectedUseExistingBtn = document.createElement("button");
-      selectedUseExistingBtn.textContent = "Use Existing";
-      selectedUseExistingBtn.disabled = !canEditSelectedImage;
-      selectedUseExistingBtn.title = canEditSelectedImage
-        ? "Select an image from the form image list and assign it to this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedUseExistingBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageReferencePicker({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, selectedEntry.iconId);
-      };
-      selectedImageActions.appendChild(selectedUseExistingBtn);
       const selectedChooseFileBtn = document.createElement("button");
-      selectedChooseFileBtn.textContent = "Choose File";
+      selectedChooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       selectedChooseFileBtn.disabled = !canEditSelectedImage;
       selectedChooseFileBtn.title = canEditSelectedImage
-        ? "Select a file, create a new LoadImage entry and assign it to this toolbar button."
+        ? selectedImageInspectorConfig.changeImageButtonTitle
         : "Only ToolBarImageButton supports a parsed image reference.";
       selectedChooseFileBtn.onclick = () => {
         if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
         openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "chooseFile");
       };
       selectedImageActions.appendChild(selectedChooseFileBtn);
-      const selectedCreateNewBtn = document.createElement("button");
-      selectedCreateNewBtn.textContent = "Create New";
-      selectedCreateNewBtn.disabled = !canEditSelectedImage;
-      selectedCreateNewBtn.title = canEditSelectedImage
-        ? "Create a new form image entry and assign it to this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedCreateNewBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        openImageAssignmentDraft({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }, "create");
-      };
-      selectedImageActions.appendChild(selectedCreateNewBtn);
-      const selectedClearBtn = document.createElement("button");
-      selectedClearBtn.textContent = "Clear";
-      selectedClearBtn.disabled = !canEditSelectedImage;
-      selectedClearBtn.title = canEditSelectedImage
-        ? "Remove the parsed image reference from this toolbar button."
-        : "Only ToolBarImageButton supports a parsed image reference.";
-      selectedClearBtn.onclick = () => {
-        if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
-        post({
-          type: "updateToolBarEntry",
-          toolBarId: t.id,
-          sourceLine: selectedEntry.source.line,
-          kind: selectedEntry.kind,
-          idRaw: selectedEntry.idRaw,
-          iconRaw: "",
-          toggle: selectedEntry.toggle,
-        });
-      };
-      selectedImageActions.appendChild(selectedClearBtn);
-      if (selectedImage) {
-        const selectedJumpImageBtn = document.createElement("button");
-        selectedJumpImageBtn.textContent = "Image";
-        selectedJumpImageBtn.title = selectedImageTitle;
-        selectedJumpImageBtn.onclick = () => selectImageById(selectedImage.id);
-        selectedImageActions.appendChild(selectedJumpImageBtn);
-      }
 
       const postSelectedToolBarEntryUpdate = (patch: {
         idRaw?: string;
@@ -4792,12 +9142,6 @@ function renderProps() {
         });
       };
       const canEditSelectedId = selectedCanPatch && selectedEntry.kind !== "ToolBarSeparator";
-      const canEditSelectedText = selectedCanPatch && (selectedEntry.kind === "ToolBarButton" || selectedEntry.kind === "ToolBarToolTip");
-      const canEditSelectedIconRaw = selectedCanPatch && (
-        selectedEntry.kind === "ToolBarStandardButton"
-        || selectedEntry.kind === "ToolBarButton"
-        || selectedEntry.kind === "ToolBarImageButton"
-      );
 
       propsEl.appendChild(section("Selected Entry"));
       propsEl.appendChild(row(
@@ -4806,50 +9150,47 @@ function renderProps() {
           selectedEntry.idRaw ?? "",
           v => {
             if (!canEditSelectedId) return;
-            postSelectedToolBarEntryUpdate({ idRaw: v.trim() });
+            const trimmed = v.trim();
+            postSelectedToolBarEntryUpdate({ idRaw: trimmed.length ? trimmed : (selectedEntry.idRaw ?? "") });
           },
           {
             disabled: !canEditSelectedId,
             title: canEditSelectedId
-              ? "Patch the raw toolbar button id without using a browser prompt."
+              ? "Edit the toolbar entry id."
               : "Toolbar separators do not expose an editable id field."
           }
         )
       ));
+      if (selectedFieldConfig.showTextField) {
+        propsEl.appendChild(row(
+          "Text",
+          textInput(
+            selectedEntry.text ?? "",
+            v => {
+              postSelectedToolBarEntryUpdate({ textRaw: buildOptionalInspectorLiteralRaw(v) });
+            },
+            {
+              title: "Edit the text shown for this toolbar entry."
+            }
+          )
+        ));
+      }
+      if (selectedFieldConfig.showIconRawField) {
+        propsEl.appendChild(row(
+          "IconRaw",
+          textInput(
+            selectedEntry.iconRaw ?? "",
+            v => {
+              postSelectedToolBarEntryUpdate({ iconRaw: v.trim() });
+            },
+            {
+              title: "Edit the image reference used by this toolbar entry."
+            }
+          )
+        ));
+      }
       propsEl.appendChild(row(
-        "Text",
-        textInput(
-          selectedEntry.text ?? "",
-          v => {
-            if (!canEditSelectedText) return;
-            postSelectedToolBarEntryUpdate({ textRaw: v.trim().length ? toPbString(v) : "" });
-          },
-          {
-            disabled: !canEditSelectedText,
-            title: canEditSelectedText
-              ? "Patch the raw toolbar caption/tooltip text without using a browser prompt."
-              : "Only ToolBarButton and ToolBarToolTip expose editable text in the original toolbar structure."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
-        "IconRaw",
-        textInput(
-          selectedEntry.iconRaw ?? "",
-          v => {
-            if (!canEditSelectedIconRaw) return;
-            postSelectedToolBarEntryUpdate({ iconRaw: v.trim() });
-          },
-          {
-            disabled: !canEditSelectedIconRaw,
-            title: canEditSelectedIconRaw
-              ? "Patch the raw toolbar icon argument without using a browser prompt."
-              : "Only toolbar button kinds with an icon argument expose this field."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
-        "Tooltip",
+        selectedFieldConfig.captionLabel,
         textInput(
           selectedEntry.tooltip ?? "",
           v => {
@@ -4859,18 +9200,127 @@ function renderProps() {
               toolBarId: t.id,
               sourceLine: selectedEntry.source.line,
               entryIdRaw: selectedEntry.idRaw,
-              textRaw: v.trim().length ? toPbString(v) : ""
+              textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {
             disabled: !canEditSelectedTooltip,
             title: canEditToolBarTooltip(selectedEntry)
-              ? "Patch the tooltip linked to this toolbar entry."
-              : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field."
+              ? "Edit the caption stored for this toolbar entry."
+              : "This entry type does not expose an editable caption field."
           }
         )
       ));
-      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImage?.image ?? selectedImage?.imageRaw ?? selectedEntry.iconRaw ?? "")));
+      const currentImageControl = textInput(
+        selectedImagePath,
+        value => {
+          if (!canEditSelectedImage || typeof selectedEntry.source?.line !== "number") return;
+
+          if (selectedImageEditState.canDirectEdit && selectedImage && typeof selectedImage.source?.line === "number") {
+            clearInfoError();
+            post({
+              type: "updateImage",
+              sourceLine: selectedImage.source.line,
+              inline: false,
+              idRaw: selectedImage.firstParam,
+              imageRaw: toPbString(value),
+              assignedVar: selectedImage.pbAny ? selectedImage.variable : undefined
+            });
+            return;
+          }
+
+          const rebind = resolveStatusBarCurrentImageRebind(model.images ?? [], value, selectedEntry.iconId);
+          if (rebind.matchedImage) {
+            if (rebind.matchedImage.id === selectedEntry.iconId) {
+              clearInfoError();
+              renderProps();
+              return;
+            }
+
+            clearInfoError();
+            post({
+              type: "rebindToolBarEntryImage",
+              toolBarId: t.id,
+              sourceLine: selectedEntry.source.line,
+              kind: selectedEntry.kind,
+              idRaw: selectedEntry.idRaw,
+              toggle: selectedEntry.toggle,
+              iconRaw: `ImageID(${rebind.matchedImage.id})`,
+              oldImageId: selectedEntry.iconId,
+              oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+                selectedEntry.iconId,
+                selectedImageUsageCount,
+                selectedImage?.source?.line,
+                rebind.matchedImage.id
+              ) ? selectedImage?.source?.line : undefined
+            });
+            return;
+          }
+
+          const createResolution = resolveStatusBarCurrentImageCreate(
+            model.images ?? [],
+            value,
+            model.window?.id,
+            model.window?.variable
+          );
+          if (!createResolution.imageIdRaw || !createResolution.imageRaw) {
+            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "This image reference cannot be edited directly here."));
+            renderProps();
+            return;
+          }
+
+          clearInfoError();
+          post({
+            type: "createAndAssignToolBarEntryImage",
+            toolBarId: t.id,
+            sourceLine: selectedEntry.source.line,
+            kind: selectedEntry.kind,
+            idRaw: selectedEntry.idRaw,
+            toggle: selectedEntry.toggle,
+            newInline: false,
+            newImageIdRaw: createResolution.imageIdRaw,
+            newImageRaw: createResolution.imageRaw,
+            oldImageId: selectedEntry.iconId,
+            oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+              selectedEntry.iconId,
+              selectedImageUsageCount,
+              selectedImage?.source?.line,
+              createResolution.imageIdRaw
+            ) ? selectedImage?.source?.line : undefined
+          });
+        },
+        {
+          disabled: !canEditSelectedImage,
+          title: selectedImageEditState.canDirectEdit
+            ? selectedImageEditState.reason
+            : "Enter an existing parsed image path to rebind this toolbar entry, or a quoted/path-like file string to auto-create a new LoadImage entry.",
+          placeholder: selectedImage?.inline ? "ImgInlineLabel" : "image.png"
+        }
+      );
+      currentImageControl.title = selectedImageEditState.canDirectEdit
+        ? (selectedImageEditState.reason ?? "")
+        : "Enter an existing parsed image path to rebind this toolbar entry, or a quoted/path-like file string to auto-create a new LoadImage entry.";
+      propsEl.appendChild(row("CurrentImage", currentImageControl));
+      if (selectedImage && typeof selectedImage.source?.line === "number") {
+        const canToggle = canEditSelectedImage && canToggleImagePbAny(selectedImage);
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
+          Boolean(selectedImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedImage!.source!.line,
+              toPbAny: !selectedImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: selectedImage.pbAny
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
+          }
+        )));
+      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
@@ -4909,13 +9359,14 @@ function renderProps() {
         checkboxInput(
           selectedEntry.kind === "ToolBarSeparator",
           () => {},
-          { disabled: true, title: "Toolbar separators are structural entries in the original designer." }
+          { disabled: true, title: "Separators are structural entries and cannot be edited here." }
         )
       ));
       propsEl.appendChild(row(
         "SelectProc",
-        textInput(
+        editableComboInput(
           selectedEntry.event ?? "",
+          getProcedureSuggestions(),
           v => {
             if (!selectedEntry.idRaw) return;
             post({
@@ -4926,10 +9377,33 @@ function renderProps() {
           },
           {
             disabled: !canEditSelectedEvent,
-            title: getEventMenuEntryHint(hasEventMenuBlock, selectedEntry.idRaw, "toolbar")
+            title: selectedEventEditState.title
           }
         )
       ));
+
+      const selectedDeleteToolBarEntryBtn = document.createElement("button");
+      selectedDeleteToolBarEntryBtn.textContent = "Delete Entry";
+      selectedDeleteToolBarEntryBtn.disabled = typeof selectedEntry.source?.line !== "number";
+      selectedDeleteToolBarEntryBtn.title = selectedDeleteToolBarEntryBtn.disabled
+        ? "Only parsed toolbar entries with a source line can be deleted."
+        : "Delete the currently selected toolbar entry.";
+      selectedDeleteToolBarEntryBtn.onclick = () => {
+        if (typeof selectedEntry.source?.line !== "number") return;
+        openDestructiveAction(
+          {
+            kind: "deleteToolBarEntry",
+            toolBarId: t.id,
+            entryIndex: selectedEntryIndex!,
+            sourceLine: selectedEntry.source.line,
+            entryKind: selectedEntry.kind,
+            message: `Delete the selected ${selectedEntry.kind} entry from toolbar '${t.id}'?`,
+            confirmLabel: "Delete Entry"
+          },
+          { kind: "toolBarEntry", toolBarId: t.id, entryIndex: selectedEntryIndex! }
+        );
+      };
+      propsEl.appendChild(row("Delete", selectedDeleteToolBarEntryBtn));
     }
 
     const box = miniList();
@@ -4966,7 +9440,10 @@ function renderProps() {
           }
         : undefined;
 
-      const eventFn = e.idRaw && hasEventMenuBlock && e.kind !== "ToolBarToolTip"
+      const eventEditState = e.kind === "ToolBarToolTip"
+        ? { canEdit: false, title: "This entry type does not participate in Select EventMenu() cases." }
+        : getTopLevelSelectProcEditState(hasEventMenuBlock, e.idRaw, "toolbar");
+      const eventFn = eventEditState.canEdit
         ? () => {
             setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
@@ -4976,7 +9453,7 @@ function renderProps() {
             setSelectionAndRefresh({ kind: "toolBarEntry", toolBarId: t.id, entryIndex });
           }
         : undefined;
-      const toolBarEventTitle = getEventMenuEntryHint(hasEventMenuBlock, e.idRaw, "toolbar");
+      const toolBarEventTitle = eventEditState.title;
       const toolBarImage = findImageEntryById(e.iconId);
       const toolBarImageTitle = getImageReferenceHint(e.iconId, "toolbar");
 
@@ -5006,8 +9483,8 @@ function renderProps() {
         editFn,
         delFn,
         { label: "Event", onClick: eventFn, disabled: !eventFn, title: toolBarEventTitle },
-        { label: "Tooltip", onClick: toolBarTooltipFn, disabled: !toolBarTooltipFn, title: canEditToolBarTooltip(e) ? "Patch the tooltip linked to this toolbar entry." : "Separators and standalone ToolBarToolTip rows do not expose the original toolbar caption field." },
-        { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Patch the raw ToolBarImageButton image argument." : "Only ToolBarImageButton supports a parsed image reference." },
+        { label: "Tooltip", onClick: toolBarTooltipFn, disabled: !toolBarTooltipFn, title: canEditToolBarTooltip(e) ? "Edit the tooltip shown for this toolbar entry." : "This entry type does not have a separate tooltip field." },
+        { label: "Set Image", onClick: toolBarSetImageFn, disabled: !toolBarSetImageFn, title: e.kind === "ToolBarImageButton" ? "Edit the image reference used by this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Use Existing", onClick: toolBarPickImageFn, disabled: !toolBarPickImageFn, title: e.kind === "ToolBarImageButton" ? "Select an image from the form image list." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Choose File", onClick: toolBarChooseFileImageFn, disabled: !toolBarChooseFileImageFn, title: e.kind === "ToolBarImageButton" ? "Select a file, create a new LoadImage entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
         { label: "Create New", onClick: toolBarCreateImageFn, disabled: !toolBarCreateImageFn, title: e.kind === "ToolBarImageButton" ? "Create a new form image entry and assign it to this toolbar button." : "Only ToolBarImageButton supports a parsed image reference." },
@@ -5088,7 +9565,7 @@ function renderProps() {
       return;
     }
 
-    const getStatusBarFieldUi = (field: StatusbarField) => {
+    const getStatusBarFieldUi = (field: FormStatusBarField) => {
       const fieldIndex = (sb.fields ?? []).findIndex(candidate => candidate === field);
       const canPatch = typeof field.source?.line === "number";
       const statusImage = findImageEntryById(field.imageId);
@@ -5102,6 +9579,7 @@ function renderProps() {
         progressRaw?: string;
       }) => {
         if (!canPatch) return;
+        const nextProgressBar = patch.progressBar ?? Boolean(field.progressBar);
         post({
           type: "updateStatusBarField",
           statusBarId: sb.id,
@@ -5110,8 +9588,8 @@ function renderProps() {
           textRaw: patch.textRaw ?? field.textRaw ?? "",
           imageRaw: patch.imageRaw ?? field.imageRaw ?? "",
           flagsRaw: patch.flagsRaw ?? field.flagsRaw ?? "",
-          progressBar: patch.progressBar ?? Boolean(field.progressBar),
-          progressRaw: patch.progressRaw ?? field.progressRaw ?? ""
+          progressBar: nextProgressBar,
+          progressRaw: normalizeStatusBarProgressRaw(nextProgressBar, patch.progressRaw ?? field.progressRaw ?? "")
         });
       };
 
@@ -5221,7 +9699,11 @@ function renderProps() {
       : undefined;
     if (selectedField) {
       const selectedUi = getStatusBarFieldUi(selectedField);
+      const selectedImageInspectorConfig = getTopLevelSelectedImageInspectorConfig("statusBarField");
+      const selectedFieldConfig = getSelectedStatusBarInspectorFieldConfig();
       const selectedImagePath = selectedUi.statusImage?.image ?? selectedUi.statusImage?.imageRaw ?? selectedField.imageRaw ?? "";
+      const selectedImageUsageCount = selectedField.imageId ? countImageUsages(selectedField.imageId) : 0;
+      const selectedImageEditState = getStatusBarCurrentImageEditState(selectedUi.statusImage, selectedImageUsageCount);
 
       propsEl.appendChild(section("Selected Field"));
       propsEl.appendChild(row(
@@ -5234,7 +9716,7 @@ function renderProps() {
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Patch the raw AddStatusBarField width for the selected field."
+            title: "Width of the selected status bar field. Use #PB_Ignore to let the size adjust automatically."
           }
         )
       ));
@@ -5245,104 +9727,137 @@ function renderProps() {
           v => {
             if (!selectedUi.canPatch) return;
             selectedUi.postFieldUpdate({
-              textRaw: v.trim().length ? toPbString(v) : "",
-              imageRaw: "",
-              progressBar: false,
-              progressRaw: ""
+              textRaw: buildOptionalInspectorLiteralRaw(v)
             });
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Match the original statusbar text field for the current selection."
+            title: "Text shown in the selected status bar field."
           }
         )
       ));
-      propsEl.appendChild(row(
-        "ImageRaw",
-        textInput(
-          selectedField.imageRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({
-              textRaw: "",
-              imageRaw: v.trim(),
-              progressBar: false,
-              progressRaw: ""
+      if (selectedFieldConfig.showProgressValueField) {
+        propsEl.appendChild(row(
+          "ProgressValue",
+          readonlyInput(getStatusBarProgressInspectorValue(selectedField.progressBar, selectedField.progressRaw))
+        ));
+      }
+      const currentImageControl = textInput(
+        selectedImagePath,
+        value => {
+          if (selectedImageEditState.canDirectEdit && selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
+            clearInfoError();
+            post({
+              type: "updateImage",
+              sourceLine: selectedUi.statusImage.source.line,
+              inline: false,
+              idRaw: selectedUi.statusImage.firstParam,
+              imageRaw: toPbString(value),
+              assignedVar: selectedUi.statusImage.pbAny
+                ? selectedUi.statusImage.variable
+                : undefined,
+            });
+            return;
+          }
+
+          const rebind = resolveStatusBarCurrentImageRebind(model.images ?? [], value, selectedField.imageId);
+          if (rebind.matchedImage) {
+            if (rebind.matchedImage.id === selectedField.imageId) {
+              clearInfoError();
+              renderProps();
+              return;
+            }
+
+            clearInfoError();
+            post({
+              type: "rebindStatusBarFieldImage",
+              statusBarId: sb.id,
+              sourceLine: selectedField.source!.line,
+              widthRaw: selectedField.widthRaw,
+              imageRaw: `ImageID(${rebind.matchedImage.id})`,
+              oldImageId: selectedField.imageId,
+              oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+                selectedField.imageId,
+                selectedImageUsageCount,
+                selectedUi.statusImage?.source?.line,
+                rebind.matchedImage.id
+              ) ? selectedUi.statusImage?.source?.line : undefined
+            });
+            return;
+          }
+
+          const createResolution = resolveStatusBarCurrentImageCreate(
+            model.images ?? [],
+            value,
+            model.window?.id,
+            model.window?.variable
+          );
+          if (!createResolution.imageIdRaw || !createResolution.imageRaw) {
+            setInfoError(createResolution.reason ?? rebind.reason ?? (selectedImageEditState.reason ?? "This image reference cannot be edited directly here."));
+            renderProps();
+            return;
+          }
+
+          clearInfoError();
+          post({
+            type: "createAndAssignStatusBarFieldImage",
+            statusBarId: sb.id,
+            sourceLine: selectedField.source!.line,
+            widthRaw: selectedField.widthRaw,
+            newInline: false,
+            newImageIdRaw: createResolution.imageIdRaw,
+            newImageRaw: createResolution.imageRaw,
+            oldImageId: selectedField.imageId,
+            oldImageSourceLine: shouldCleanupStatusBarReboundImage(
+              selectedField.imageId,
+              selectedImageUsageCount,
+              selectedUi.statusImage?.source?.line,
+              createResolution.imageIdRaw
+            ) ? selectedUi.statusImage?.source?.line : undefined
+          });
+        },
+        {
+          title: selectedImageEditState.canDirectEdit
+            ? selectedImageEditState.reason
+            : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.",
+          placeholder: selectedUi.statusImage?.inline ? "ImgInlineLabel" : "image.png"
+        }
+      );
+      currentImageControl.title = selectedImageEditState.canDirectEdit
+        ? (selectedImageEditState.reason ?? "")
+        : "Enter an existing parsed image path or data label to rebind this field, or a quoted/path-like file string to auto-create a new LoadImage entry. Use Create New for inline labels or custom image ids.";
+      propsEl.appendChild(row("CurrentImage", currentImageControl));
+      if (!selectedImageEditState.canDirectEdit) {
+        propsEl.appendChild(mutedNote("For shared or CatchImage references, you can rebind to an existing image here. For file paths, a new LoadImage entry can be created automatically. Use Create New for inline labels or custom image ids."));
+      }
+      if (selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
+        const canToggle = selectedUi.canPatch && canToggleImagePbAny(selectedUi.statusImage);
+        propsEl.appendChild(row(PB_ANY, checkboxInput(
+          Boolean(selectedUi.statusImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: selectedUi.statusImage!.source!.line,
+              toPbAny: !selectedUi.statusImage!.pbAny,
             });
           },
           {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw StatusBarImage reference for the selected field."
+            disabled: !canToggle,
+            title: selectedUi.statusImage.pbAny
+              ? `Switch this image entry from ${PB_ANY} to a regular enum id and update all references.`
+              : `Switch this image entry to ${PB_ANY} variable mode and update all references.`
           }
-        )
-      ));
-      propsEl.appendChild(row(
-        "ProgressRaw",
-        textInput(
-          selectedField.progressRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({
-              textRaw: "",
-              imageRaw: "",
-              progressBar: true,
-              progressRaw: v.trim() || "0"
-            });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw StatusBarProgress value for the selected field."
-          }
-        )
-      ));
-      propsEl.appendChild(row(
-        "FlagsRaw",
-        textInput(
-          selectedField.flagsRaw ?? "",
-          v => {
-            if (!selectedUi.canPatch) return;
-            selectedUi.postFieldUpdate({ flagsRaw: v.trim() });
-          },
-          {
-            disabled: !selectedUi.canPatch,
-            title: "Patch the raw AddStatusBarField flags for the selected field."
-          }
-        )
-      ));
-      propsEl.appendChild(row("CurrentImage", readonlyInput(selectedImagePath)));
+        )));
+      }
       const selectedImageActions = document.createElement("div");
       selectedImageActions.className = "row-actions";
-      const useExistingBtn = document.createElement("button");
-      useExistingBtn.textContent = "Use Existing";
-      useExistingBtn.disabled = !selectedUi.statusPickImageFn;
-      useExistingBtn.title = "Select an image from the form image list and assign it to this statusbar field.";
-      useExistingBtn.onclick = () => selectedUi.statusPickImageFn?.();
-      selectedImageActions.appendChild(useExistingBtn);
       const chooseFileBtn = document.createElement("button");
-      chooseFileBtn.textContent = "Choose File";
+      chooseFileBtn.textContent = selectedImageInspectorConfig.changeImageButtonLabel;
       chooseFileBtn.disabled = !selectedUi.statusChooseFileImageFn;
-      chooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this statusbar field.";
+      chooseFileBtn.title = selectedImageInspectorConfig.changeImageButtonTitle;
       chooseFileBtn.onclick = () => selectedUi.statusChooseFileImageFn?.();
       selectedImageActions.appendChild(chooseFileBtn);
-      const createNewBtn = document.createElement("button");
-      createNewBtn.textContent = "Create New";
-      createNewBtn.disabled = !selectedUi.statusCreateImageFn;
-      createNewBtn.title = "Create a new form image entry and assign it to this statusbar field.";
-      createNewBtn.onclick = () => selectedUi.statusCreateImageFn?.();
-      selectedImageActions.appendChild(createNewBtn);
-      const clearImageBtn = document.createElement("button");
-      clearImageBtn.textContent = "Clear";
-      clearImageBtn.disabled = !selectedUi.statusClearFn;
-      clearImageBtn.title = "Remove text/image/progress decoration from this field.";
-      clearImageBtn.onclick = () => selectedUi.statusClearFn?.();
-      selectedImageActions.appendChild(clearImageBtn);
-      if (selectedUi.statusImage) {
-        const jumpImageBtn = document.createElement("button");
-        jumpImageBtn.textContent = "Image";
-        jumpImageBtn.title = selectedUi.statusImageTitle;
-        jumpImageBtn.onclick = () => selectImageById(selectedUi.statusImage!.id);
-        selectedImageActions.appendChild(jumpImageBtn);
-      }
       propsEl.appendChild(row("ChangeImage", selectedImageActions));
       if (isImageReferencePickerOpenFor({ kind: "statusBarField", statusBarId: sb.id, fieldIndex: selectedFieldIndex! })) {
         const pendingEl = createPendingImageReferencePickerEl();
@@ -5359,15 +9874,13 @@ function renderProps() {
           checked => {
             if (!selectedUi.canPatch) return;
             selectedUi.postFieldUpdate({
-              textRaw: checked ? "" : selectedField.textRaw ?? "",
-              imageRaw: checked ? "" : selectedField.imageRaw ?? "",
               progressBar: checked,
               progressRaw: checked ? (selectedField.progressRaw?.trim() || "0") : ""
             });
           },
           {
             disabled: !selectedUi.canPatch,
-            title: "Match the original ProgressBar checkbox for the selected statusbar field."
+            title: "Show this field as a progress bar. The preview value stays at 0 here."
           }
         )
       ));
@@ -5391,6 +9904,15 @@ function renderProps() {
         statusBarFlagActions.appendChild(wrap);
       }
       propsEl.appendChild(row("Flags", statusBarFlagActions));
+
+      const selectedDeleteStatusFieldBtn = document.createElement("button");
+      selectedDeleteStatusFieldBtn.textContent = "Delete Field";
+      selectedDeleteStatusFieldBtn.disabled = !selectedUi.delFn;
+      selectedDeleteStatusFieldBtn.title = selectedDeleteStatusFieldBtn.disabled
+        ? "Only parsed statusbar fields with a source line can be deleted."
+        : "Delete the currently selected statusbar field.";
+      selectedDeleteStatusFieldBtn.onclick = () => selectedUi.delFn?.();
+      propsEl.appendChild(row("Delete", selectedDeleteStatusFieldBtn));
     }
 
     const box = miniList();
@@ -5402,10 +9924,10 @@ function renderProps() {
         label,
         fieldUi.editFn,
         fieldUi.delFn,
-        { label: "Label", onClick: fieldUi.statusTextFn, disabled: !fieldUi.statusTextFn, title: "Switch this field to a StatusBarText decoration." },
-        { label: "Progress", onClick: fieldUi.statusProgressFn, disabled: !fieldUi.statusProgressFn, title: "Switch this field to a StatusBarProgress decoration." },
+        { label: "Label", onClick: fieldUi.statusTextFn, disabled: !fieldUi.statusTextFn, title: "Edit the stored StatusBarText value for this field without clearing the other statusbar cells." },
+        { label: "Progress", onClick: fieldUi.statusProgressFn, disabled: !fieldUi.statusProgressFn, title: "Toggle the stored StatusBarProgress state for this field without clearing the other statusbar cells." },
         { label: "Clear", onClick: fieldUi.statusClearFn, disabled: !fieldUi.statusClearFn, title: "Remove text/image/progress decoration from this field." },
-        { label: "Set Image", onClick: fieldUi.statusSetImageFn, disabled: !fieldUi.statusSetImageFn, title: "Switch this field to a StatusBarImage decoration while preserving the field width." },
+        { label: "Set Image", onClick: fieldUi.statusSetImageFn, disabled: !fieldUi.statusSetImageFn, title: "Assign or update the stored StatusBarImage reference while preserving the other statusbar cells." },
         { label: "Use Existing", onClick: fieldUi.statusPickImageFn, disabled: !fieldUi.statusPickImageFn, title: "Select an image from the form image list and assign it to this field." },
         { label: "Choose File", onClick: fieldUi.statusChooseFileImageFn, disabled: !fieldUi.statusChooseFileImageFn, title: "Select a file, create a new LoadImage entry and assign it to this statusbar field." },
         { label: "Create New", onClick: fieldUi.statusCreateImageFn, disabled: !fieldUi.statusCreateImageFn, title: "Create a new form image entry and assign it to this statusbar field." },
@@ -5497,7 +10019,7 @@ function renderProps() {
       "First Param",
       imageEditorOpen
         ? textInput(imageDraft.idRaw, v => updateImageEditorDraft({ idRaw: v }), {
-            title: "Patch the first image argument (#ImgName or #PB_Any) without using a browser prompt."
+            title: `Edit the first image argument (#ImgName or ${PB_ANY}).`
           })
         : readonlyInput(img.firstParam)
     ));
@@ -5505,7 +10027,7 @@ function renderProps() {
       propsEl.appendChild(row(
         "Assigned Var",
         textInput(imageDraft.assignedVar, v => updateImageEditorDraft({ assignedVar: v }), {
-          title: "Provide the assigned variable name for #PB_Any image entries."
+          title: `Provide the assigned variable name for ${PB_ANY} image entries.`
         })
       ));
     }
@@ -5513,7 +10035,7 @@ function renderProps() {
       "Image Raw",
       imageEditorOpen
         ? textInput(imageDraft.imageRaw, v => updateImageEditorDraft({ imageRaw: v }), {
-            title: "Patch the raw LoadImage/CatchImage argument without using a browser prompt."
+            title: "Edit the image source used by this entry."
           })
         : readonlyInput(img.imageRaw)
     ));
@@ -5600,8 +10122,8 @@ function renderProps() {
     togglePbAnyBtn.textContent = img.pbAny ? "Use Enum Id" : "Use PB_Any";
     togglePbAnyBtn.disabled = imageEditorOpen || !(canPatch && canToggleImagePbAny(img));
     togglePbAnyBtn.title = img.pbAny
-      ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
-      : "Switch this image entry to #PB_Any assignment and update parsed references.";
+      ? `Switch this image entry from ${PB_ANY} assignment to a regular image id and update parsed references.`
+      : `Switch this image entry to ${PB_ANY} assignment and update parsed references.`;
     togglePbAnyBtn.onclick = () => {
       if (!(canPatch && canToggleImagePbAny(img))) return;
       post({
@@ -5737,8 +10259,8 @@ function renderProps() {
               : undefined,
             disabled: !(canPatch && canToggleImagePbAny(img)),
             title: img.pbAny
-              ? "Switch this image entry from #PB_Any assignment to a regular image id and update parsed references."
-              : "Switch this image entry to #PB_Any assignment and update parsed references."
+              ? `Switch this image entry from ${PB_ANY} assignment to a regular image id and update parsed references.`
+              : `Switch this image entry to ${PB_ANY} assignment and update parsed references.`
           },
           {
             label: "Relative",
@@ -5787,127 +10309,486 @@ function renderProps() {
   }
 
   if (sel.kind !== "gadget") {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
+    propsEl.innerHTML = "";
     return;
   }
 
   const selId = sel.id;
-  const g = model.gadgets.find(it => it.id === selId);
+  const g: Gadget | undefined = model.gadgets.find(it => it.id === selId);
   if (!g) {
-    propsEl.innerHTML = "<div class='muted'>No selection</div>";
+    propsEl.innerHTML = "";
     return;
   }
 
+  propsEl.appendChild(section("Details"));
   propsEl.appendChild(row("Id", readonlyInput(g.id)));
   propsEl.appendChild(row("Kind", readonlyInput(g.kind)));
-  propsEl.appendChild(row("Parent", readonlyInput((g.parentId ?? "").toString())));
-  propsEl.appendChild(row("Tab", readonlyInput(typeof g.parentItem === "number" ? String(g.parentItem) : "")));
-  propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
-  propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  if (shouldShowGadgetParentDetail(g)) {
+    propsEl.appendChild(row("Parent", readonlyInput(g.parentId!.toString())));
+  }
+  if (shouldShowGadgetTabDetail(g)) {
+    propsEl.appendChild(row("Tab", readonlyInput(String(g.parentItem))));
+  }
+  const showsItemsInspector = canInspectGadgetItems(g.kind) || Boolean(g.items?.length);
+  const showsColumnsInspector = canInspectGadgetColumns(g.kind) || Boolean(g.columns?.length);
+  if (showsItemsInspector) {
+    propsEl.appendChild(row("Items", readonlyInput(String(g.items?.length ?? 0))));
+  }
+  if (showsColumnsInspector) {
+    propsEl.appendChild(row("Columns", readonlyInput(String(g.columns?.length ?? 0))));
+  }
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
-  const gadgetImageRawInput = isImageCapableGadget
-    ? textInput(
-        g.imageRaw ?? "",
-        v => {
-          if (!isImageCapableGadget) return;
-          const normalized = normalizeImageReference(v);
-          if (!normalized.imageRaw) return;
-          g.imageRaw = normalized.imageRaw;
-          g.imageId = normalized.imageId;
-          post({
-            type: "setGadgetImageRaw",
-            id: g.id,
-            imageRaw: normalized.imageRaw
-          });
-          renderProps();
-        },
-        { title: "Use a raw image argument such as ImageID(#ImgOpen) or 0." }
-      )
-    : readonlyInput(g.imageRaw ?? "");
-  propsEl.appendChild(row("Image Raw", gadgetImageRawInput));
-  propsEl.appendChild(row("Image Id", readonlyInput(g.imageId ?? "")));
   const gadgetImage = findImageEntryById(g.imageId);
-  const gadgetImageHint = getImageReferenceHint(g.imageId, "gadget");
+  if (isImageCapableGadget) {
+    propsEl.appendChild(
+      row(
+        "CurrentImage",
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+      )
+    );
+    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
+      const canToggle = canToggleImagePbAny(gadgetImage);
+      propsEl.appendChild(row(
+        `Image ${PB_ANY}`,
+        checkboxInput(
+          Boolean(gadgetImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: gadgetImage!.source!.line,
+              toPbAny: !gadgetImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: gadgetImage.pbAny
+              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+          }
+        )
+      ));
+    }
+  }
   const gadgetImageActions = document.createElement("div");
   gadgetImageActions.className = "row-actions";
 
   if (isImageCapableGadget) {
-    const gadgetPickImageBtn = document.createElement("button");
-    gadgetPickImageBtn.textContent = "Use Existing Image";
-    gadgetPickImageBtn.disabled = !(model.images?.length);
-    gadgetPickImageBtn.title = model.images?.length ? "Select an image from the form image list." : "No image entries are defined in this form.";
-    gadgetPickImageBtn.onclick = () => {
-      openImageReferencePicker({ kind: "gadget", gadgetId: g.id }, g.imageId);
-    };
-    gadgetImageActions.appendChild(gadgetPickImageBtn);
-
-    const gadgetCreateImageBtn = document.createElement("button");
-    gadgetCreateImageBtn.textContent = "Create New Image";
-    gadgetCreateImageBtn.title = "Create a new form image entry and assign it to this gadget.";
-    gadgetCreateImageBtn.onclick = () => {
-      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "create");
-    };
-    gadgetImageActions.appendChild(gadgetCreateImageBtn);
-
     const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Choose File";
-    gadgetChooseFileBtn.title = "Select a file, create a new LoadImage entry and assign it to this gadget. Optionally resize the gadget to the image size.";
+    gadgetChooseFileBtn.textContent = "Select";
+    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
     gadgetChooseFileBtn.onclick = () => {
       openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
     };
     gadgetImageActions.appendChild(gadgetChooseFileBtn);
+    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
   }
 
-  const gadgetImageBtn = document.createElement("button");
-  gadgetImageBtn.textContent = "Select Image";
-  gadgetImageBtn.disabled = !gadgetImage;
-  gadgetImageBtn.title = gadgetImage ? "" : gadgetImageHint;
-  gadgetImageBtn.onclick = () => {
-    if (!gadgetImage) return;
-    selectImageById(gadgetImage.id);
-  };
-  gadgetImageActions.appendChild(gadgetImageBtn);
-  propsEl.appendChild(row("", gadgetImageActions));
-  if (isImageReferencePickerOpenFor({ kind: "gadget", gadgetId: g.id })) {
-    const pendingEl = createPendingImageReferencePickerEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
-  }
   if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
     const pendingEl = createPendingImageAssignmentDraftEl();
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
-  if (gadgetImageHint) {
-    propsEl.appendChild(mutedNote(gadgetImageHint));
-  }
-  if (isImageCapableGadget) {
-    propsEl.appendChild(mutedNote("Image-capable gadgets accept raw image expressions such as ImageID(#ImgOpen) or 0."));
-  }
-  const hasEventGadgetBlock = Boolean(model.window?.hasEventGadgetBlock);
-  const gadgetEventProcHint = hasEventGadgetBlock
-    ? ""
-    : EVENT_UI_HINT.eventGadgetMissing;
+
+  propsEl.appendChild(section("Properties"));
+
+  const gadgetVariableName = getGadgetVariableInspectorValue(g) || "Gadget_0";
+  const gadgetEnumSymbol = `#${gadgetVariableName.trim()}`;
+
   propsEl.appendChild(
     row(
-      "Event Proc",
-      textInput(
-        g.eventProc ?? "",
-        v => {
-          if (!hasEventGadgetBlock) return;
-          const trimmed = v.trim();
-          g.eventProc = trimmed || undefined;
-          post({
-            type: "setGadgetEventProc",
-            id: g.id,
-            eventProc: trimmed.length ? trimmed : undefined
-          });
+      PB_ANY,
+      checkboxInput(Boolean(g.pbAny), v => {
+        // Pre-update selection to the new id so sanitizeSelectionAfterModelUpdate
+        // can still find this gadget after the stable key changes.
+        const newId = v ? gadgetVariableName : gadgetEnumSymbol;
+        selection = { kind: "gadget", id: newId };
+        vscode.postMessage({
+          type: "toggleGadgetPbAny",
+          gadgetId: g.id,
+          toPbAny: v,
+          variableName: gadgetVariableName,
+          enumSymbol: gadgetEnumSymbol,
+          enumValueRaw: g.enumValueRaw
+        });
+      })
+    )
+  );
+
+  const gadgetVariableInputValue = getGadgetVariableInspectorValue(g);
+  propsEl.appendChild(
+    row(
+      "Variable",
+      textInput(gadgetVariableInputValue, v => {
+        const parsed = parseWindowVariableNameInspectorInput(v, gadgetVariableInputValue);
+        if (!parsed.ok) {
+          clearInfoError();
           renderProps();
+          return;
+        }
+        // Pre-update selection to the new id so sanitizeSelectionAfterModelUpdate
+        // can still find this gadget after the stable key changes.
+        const newId = g.pbAny ? parsed.value : `#${parsed.value}`;
+        selection = { kind: "gadget", id: newId };
+        vscode.postMessage({
+          type: "setGadgetVariableName",
+          gadgetId: g.id,
+          variableName: parsed.value
+        });
+      })
+    )
+  );
+
+  if (!g.pbAny) {
+    propsEl.appendChild(row("Enum Value", textInput(g.enumValueRaw ?? "", v => {
+      vscode.postMessage({
+        type: "setGadgetEnumValue",
+        enumSymbol: gadgetEnumSymbol,
+        enumValueRaw: v.trim().length ? v.trim() : undefined
+      });
+    })));
+  }
+
+  const captionField = getGadgetCaptionFieldConfig(g.kind);
+  const canEditColors = canEditGadgetColors(g.kind);
+  const canEditChecked = canEditGadgetCheckedState(g.kind);
+  const hasExpressionVisibility = (Boolean(g.hiddenRaw) && g.hidden === undefined) || (Boolean(g.disabledRaw) && g.disabled === undefined);
+  const hasExpressionChecked = canEditChecked && Boolean(g.stateRaw) && g.state === undefined;
+
+  if (captionField) {
+    propsEl.appendChild(
+      row(
+        "Caption Is Variable",
+        checkboxInput(Boolean(g.textVariable), v => {
+          applyLocalGadgetTextUpdate(g, getGadgetTextInspectorValue(g), v);
+        }, {
+          disabled: !captionField.variableToggleEditable,
+          title: captionField.variableToggleEditable
+            ? "Treat this value as a variable or expression instead of a string literal."
+            : "This gadget keeps the original callback field behavior and does not expose a variable toggle here."
+        })
+      )
+    );
+    propsEl.appendChild(
+      row(
+        captionField.label,
+        textInput(
+          getGadgetTextInspectorValue(g),
+          v => {
+            applyLocalGadgetTextUpdate(g, v, Boolean(g.textVariable));
+          },
+          {
+            disabled: !captionField.textEditable,
+            title: captionField.label === "Mask"
+              ? "Mask text passed to this DateGadget."
+              : captionField.label === "Callback"
+                ? "Callback procedure passed to this Scintilla gadget."
+                : captionField.textEditable
+                  ? "Text shown for this gadget. Enable 'Caption Is Variable' if this value is a variable name or expression."
+                  : "This gadget keeps the original readonly caption field behavior."
+          }
+        )
+      )
+    );
+  }
+
+  propsEl.appendChild(
+    row(
+      "Tooltip Is Variable",
+      checkboxInput(Boolean(g.tooltipVariable), v => {
+        applyLocalGadgetTooltipUpdate(g, getGadgetTooltipInspectorValue(g), v);
+      })
+    )
+  );
+  propsEl.appendChild(
+    row(
+      "Tooltip",
+      textInput(
+        getGadgetTooltipInspectorValue(g),
+        v => {
+          applyLocalGadgetTooltipUpdate(g, v, Boolean(g.tooltipVariable));
         },
-        { disabled: !hasEventGadgetBlock, title: gadgetEventProcHint }
+        { title: "Tooltip shown for this gadget. Enable 'Tooltip Is Variable' if this value is a variable name or expression." }
       )
     )
   );
-  if (!hasEventGadgetBlock) {
-    propsEl.appendChild(mutedNote(gadgetEventProcHint));
+
+  propsEl.appendChild(
+    row(
+      "Hidden",
+      checkboxInput(Boolean(g.hidden), v => {
+        g.hidden = v;
+        g.hiddenRaw = v ? "1" : "0";
+        postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
+        render();
+        renderProps();
+      }, {
+        title: g.hiddenRaw && g.hidden === undefined ? "This gadget currently uses a custom hide expression. Changing it here replaces it with 1 or 0." : "Show or hide this gadget."
+      })
+    )
+  );
+  propsEl.appendChild(
+    row(
+      "Disabled",
+      checkboxInput(Boolean(g.disabled), v => {
+        g.disabled = v;
+        g.disabledRaw = v ? "1" : "0";
+        postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
+        render();
+        renderProps();
+      }, {
+        title: g.disabledRaw && g.disabled === undefined ? "This gadget currently uses a custom disable expression. Changing it here replaces it with 1 or 0." : "Enable or disable this gadget."
+      })
+    )
+  );
+  const resizeCtx = getWindowResizeLockContext();
+  const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, resizeCtx);
+  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockTop), Boolean(g.lockBottom));
+  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, Boolean(g.lockTop), !Boolean(g.lockBottom));
+  propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
+    applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
+  }, {
+    disabled: !canEditHorizontalLocks,
+    title: canEditHorizontalLocks
+      ? "Keep the gadget anchored to the left when the window is resized."
+      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+  })));
+  propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
+    applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
+  }, {
+    disabled: !canEditHorizontalLocks,
+    title: canEditHorizontalLocks
+      ? "Keep the gadget anchored to the right when the window is resized."
+      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+  })));
+  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
+    applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
+  }, {
+    disabled: !verticalLockTopToggle,
+    title: verticalLockTopToggle
+      ? "Keep the gadget anchored to the top when the window is resized."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+  })));
+  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), v => {
+    applyLocalGadgetVerticalLockUpdate(g, Boolean(g.lockTop), v);
+  }, {
+    disabled: !verticalLockBottomToggle,
+    title: verticalLockBottomToggle
+      ? "Keep the gadget anchored to the bottom when the window is resized."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+  })));
+  propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
+    ? "These lock options update an existing ResizeGadget(...) line for this gadget."
+    : "Lock editing is available only when the existing ResizeGadget(...) setup can be updated safely."
+  ));
+  if (hasExpressionVisibility) {
+    propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
+  }
+
+  propsEl.appendChild(
+    row(
+      "Font Raw",
+      textInput(
+        g.gadgetFontRaw ?? "",
+        v => {
+          const trimmed = v.trim();
+          g.gadgetFontRaw = trimmed || undefined;
+          postGadgetProperties(g.id, { gadgetFontRaw: trimmed || undefined });
+          renderProps();
+        },
+        { title: "Edit the font expression used for this gadget." }
+      )
+    )
+  );
+  const gadgetFontSummary = getGadgetFontDisplaySummary(g);
+  if (gadgetFontSummary) {
+    propsEl.appendChild(mutedNote(`Current font: ${gadgetFontSummary}`));
+  }
+
+  if (canEditColors) {
+    propsEl.appendChild(
+      row(
+        "FrontColor Raw",
+        textInput(
+          g.frontColorRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.frontColorRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { frontColorRaw: trimmed || undefined });
+            renderProps();
+          },
+          { title: "Edit the front color expression used for this gadget." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "BackColor Raw",
+        textInput(
+          g.backColorRaw ?? "",
+          v => {
+            const trimmed = v.trim();
+            g.backColorRaw = trimmed || undefined;
+            postGadgetProperties(g.id, { backColorRaw: trimmed || undefined });
+            renderProps();
+          },
+          { title: "Edit the background color expression used for this gadget." }
+        )
+      )
+    );
+  }
+
+  const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);
+  if (gadgetCtorRangeLabels) {
+    propsEl.appendChild(
+      row(
+        gadgetCtorRangeLabels.minLabel,
+        textInput(
+          getGadgetCtorRangeInspectorValue(g.minRaw, g.min),
+          v => {
+            applyLocalGadgetCtorRangeUpdate(g, "min", v);
+          },
+          { title: gadgetCtorRangeLabels.title }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        gadgetCtorRangeLabels.maxLabel,
+        textInput(
+          getGadgetCtorRangeInspectorValue(g.maxRaw, g.max),
+          v => {
+            applyLocalGadgetCtorRangeUpdate(g, "max", v);
+          },
+          { title: gadgetCtorRangeLabels.title }
+        )
+      )
+    );
+  }
+
+  if (canEditChecked) {
+    propsEl.appendChild(
+      row(
+        "Checked",
+        checkboxInput(Boolean(g.state), v => {
+          g.state = v ? 1 : 0;
+          g.stateRaw = buildGadgetCheckedStateRaw(g.kind, v);
+          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: g.stateRaw });
+          render();
+          renderProps();
+        }, {
+          title: hasExpressionChecked
+            ? "This gadget currently uses a custom checked expression. Changing it here replaces it with a simple checked/unchecked value."
+            : "Set whether this gadget starts checked."
+        })
+      )
+    );
+    if (hasExpressionChecked) {
+      propsEl.appendChild(mutedNote("Custom checked expressions stay unchanged until you edit them here. Editing replaces them with a simple checked/unchecked value or removes the line."));
+    }
+  }
+
+  if (g.kind === GADGET_KIND.CustomGadget) {
+    propsEl.appendChild(
+      row(
+        "SelectGadget",
+        editableComboInput(
+          g.customSelectName ?? "",
+          [],
+          v => {
+            g.customSelectName = v.length ? v : undefined;
+            renderProps();
+          },
+          {
+            title: "Shows the original CustomGadget combobox row. In the current PureBasic source, changing this row does not rewrite InitCode or CreateCode automatically."
+          }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "InitCode",
+        textInput(
+          g.customInitRaw ?? "",
+          v => {
+            g.customInitRaw = v.length ? v : undefined;
+            postCustomGadgetCode(g.id, { customInitRaw: v });
+            renderProps();
+          },
+          { title: "Initialization code written before the custom gadget is created." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "CreateCode",
+        textInput(
+          g.customCreateRaw ?? "",
+          v => {
+            if (!v.length) {
+              renderProps();
+              return;
+            }
+            g.customCreateRaw = v;
+            postCustomGadgetCode(g.id, { customCreateRaw: v });
+            renderProps();
+          },
+          { title: "Creation code used to build this custom gadget." }
+        )
+      )
+    );
+    propsEl.appendChild(
+      row(
+        "Help",
+        textInput(
+          getCustomGadgetHelpDisplay(),
+          () => {},
+          {
+            disabled: true,
+            title: "Reference placeholders that can be used in custom gadget code."
+          }
+        )
+      )
+    );
+    propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
+  }
+
+  propsEl.appendChild(
+    row(
+      "SelectProc",
+      editableComboInput(
+        g.eventProc ?? "",
+        getProcedureSuggestions(),
+        v => {
+          g.eventProc = v.length ? v : undefined;
+          post({
+            type: "setGadgetEventProc",
+            id: g.id,
+            eventProc: v.length ? v : undefined
+          });
+          renderProps();
+        },
+        {
+          title: "Choose an existing procedure or type a procedure name.",
+          placeholder: "Type or pick a procedure"
+        }
+      )
+    )
+  );
+
+  const deleteGadgetBtn = document.createElement("button");
+  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
+  deleteGadgetBtn.textContent = "Delete Gadget";
+  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
+  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
+  deleteGadgetBtn.onclick = () => {
+    const action = buildGadgetDeleteAction(g);
+    if (!action) return;
+    openDestructiveAction(action);
+  };
+  propsEl.appendChild(row("Delete", deleteGadgetBtn));
+  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
   if (g.parentId) {
@@ -5922,12 +10803,25 @@ function renderProps() {
     propsEl.appendChild(row("", btn));
   }
 
+  const changeParentBtn = document.createElement("button");
+  const canChangeParent = canOpenGadgetReparentDialog(g);
+  changeParentBtn.textContent = "Change Parent";
+  changeParentBtn.disabled = !canChangeParent;
+  changeParentBtn.title = canChangeParent
+    ? "Open the original-style Select Parent dialog for this gadget."
+    : "This first reparenting cut currently supports normal gadgets, but not SplitterGadget or CustomGadget.";
+  changeParentBtn.onclick = () => {
+    if (!canChangeParent) return;
+    openSelectParentDialog(g);
+  };
+  propsEl.appendChild(row("", changeParentBtn));
+
   propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
   propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
 
-  if (g.kind === "SplitterGadget") {
+  if (g.kind === GADGET_KIND.SplitterGadget) {
     propsEl.appendChild(
       row(
         "Splitter Position",
@@ -5948,36 +10842,37 @@ function renderProps() {
         })
       )
     );
-    propsEl.appendChild(mutedNote("Matches the original SplitterPosition property and writes SetGadgetState(...)."));
+    propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
   }
 
   // Items editor (minimal UI)
-  propsEl.appendChild(section("Items"));
-  const itemDraft = getGadgetItemDraft(g);
-  const itemEditorOpen = isGadgetItemEditorOpen(g);
+  if (showsItemsInspector) {
+    propsEl.appendChild(section("Items"));
+    const itemDraft = getGadgetItemDraft(g);
+    const itemEditorOpen = isGadgetItemEditorOpen(g);
   if (itemDraft && itemEditorOpen) {
     propsEl.appendChild(row(
       "Item Text",
       textInput(itemDraft.text, v => updateGadgetItemEditorDraft({ text: v }), {
-        title: "Patch the gadget item text without using a browser prompt."
+        title: "Edit the text for this item."
       })
     ));
     propsEl.appendChild(row(
       "Position",
       textInput(itemDraft.posRaw, v => updateGadgetItemEditorDraft({ posRaw: v }), {
-        title: "Patch the raw gadget item position without using a browser prompt."
+        title: "Edit the position used for this item."
       })
     ));
     propsEl.appendChild(row(
       "Image Raw",
       textInput(itemDraft.imageRaw, v => updateGadgetItemEditorDraft({ imageRaw: v }), {
-        title: "Patch the optional gadget item image reference without using a browser prompt."
+        title: "Edit the optional image reference for this item."
       })
     ));
     propsEl.appendChild(row(
       "Flags Raw",
       textInput(itemDraft.flagsRaw, v => updateGadgetItemEditorDraft({ flagsRaw: v }), {
-        title: "Patch the optional gadget item flags without using a browser prompt."
+        title: "Edit the optional flags for this item."
       })
     ));
 
@@ -5999,7 +10894,9 @@ function renderProps() {
 
   const itemsBox = miniList();
   (g.items ?? []).forEach((it, idx) => {
-    const label = `${idx}  ${it.text ?? it.textRaw ?? ""}`;
+    const label = g.kind === GADGET_KIND.PanelGadget
+      ? getPanelInspectorItemLabel(it, idx)
+      : `${idx}  ${it.text ?? it.textRaw ?? ""}`;
     const canPatch = typeof it.source?.line === "number";
 
     const itemImage = findImageEntryById(it.imageId);
@@ -6048,32 +10945,34 @@ function renderProps() {
 
   propsEl.appendChild(itemsBox);
   propsEl.appendChild(itemActions);
-  if (pendingDestructiveAction?.kind === "deleteGadgetItem" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
+    if (pendingDestructiveAction?.kind === "deleteGadgetItem" && pendingDestructiveAction.gadgetId === g.id) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
   }
 
   // Columns editor (minimal UI)
-  propsEl.appendChild(section("Columns"));
-  const columnDraft = getGadgetColumnDraft(g);
-  const columnEditorOpen = isGadgetColumnEditorOpen(g);
+  if (showsColumnsInspector) {
+    propsEl.appendChild(section("Columns"));
+    const columnDraft = getGadgetColumnDraft(g);
+    const columnEditorOpen = isGadgetColumnEditorOpen(g);
   if (columnDraft && columnEditorOpen) {
     propsEl.appendChild(row(
       "Column Title",
       textInput(columnDraft.title, v => updateGadgetColumnEditorDraft({ title: v }), {
-        title: "Patch the column title without using a browser prompt."
+        title: "Edit the column title."
       })
     ));
     propsEl.appendChild(row(
       "Column Index",
       textInput(columnDraft.colRaw, v => updateGadgetColumnEditorDraft({ colRaw: v }), {
-        title: "Patch the raw column index without using a browser prompt."
+        title: "Edit the column index."
       })
     ));
     propsEl.appendChild(row(
       "Width",
       textInput(columnDraft.widthRaw, v => updateGadgetColumnEditorDraft({ widthRaw: v }), {
-        title: "Patch the raw column width without using a browser prompt."
+        title: "Edit the column width."
       })
     ));
 
@@ -6135,9 +11034,10 @@ function renderProps() {
 
   propsEl.appendChild(colsBox);
   propsEl.appendChild(colActions);
-  if (pendingDestructiveAction?.kind === "deleteGadgetColumn" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
+    if (pendingDestructiveAction?.kind === "deleteGadgetColumn" && pendingDestructiveAction.gadgetId === g.id) {
+      const pendingEl = createPendingDestructiveActionEl();
+      if (pendingEl) propsEl.appendChild(pendingEl);
+    }
   }
 }
 
@@ -6175,7 +11075,14 @@ function createPendingImageReferencePickerEl() {
 function createPendingImageAssignmentDraftEl() {
   if (!pendingImageAssignmentDraft) return null;
   const wrap = document.createElement("div");
-  wrap.appendChild(createSubSection(pendingImageAssignmentDraft.mode === "create" ? "Create and Assign Image" : "Choose File and Assign Image"));
+  const isGadgetChooseFile = pendingImageAssignmentDraft.mode === "chooseFile" && pendingImageAssignmentDraft.target.kind === "gadget";
+  wrap.appendChild(createSubSection(
+    pendingImageAssignmentDraft.mode === "create"
+      ? "Create and Assign Image"
+      : isGadgetChooseFile
+        ? "Change Image"
+        : "Choose File and Assign Image"
+  ));
   if (pendingImageAssignmentDraft.mode === "create") {
     wrap.appendChild(row(
       "Kind",
@@ -6189,22 +11096,24 @@ function createPendingImageAssignmentDraftEl() {
       )
     ));
   }
-  else {
+  else if (!isGadgetChooseFile) {
     wrap.appendChild(row("Kind", readonlyInput("LoadImage")));
   }
-  wrap.appendChild(row(
-    "First Param",
-    textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
-      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
-    })
-  ));
-  if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+  if (!isGadgetChooseFile) {
     wrap.appendChild(row(
-      "Assigned Var",
-      textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
-        title: "Variable name receiving the #PB_Any image handle."
+      "First Param",
+      textInput(pendingImageAssignmentDraft.idRaw, value => updateImageAssignmentDraft({ idRaw: value }), {
+        title: `Use either a fixed image id like #ImgOpen or ${PB_ANY}.`
       })
     ));
+    if (pendingImageAssignmentDraft.idRaw.trim().toLowerCase() === "#pb_any") {
+      wrap.appendChild(row(
+        "Assigned Var",
+        textInput(pendingImageAssignmentDraft.assignedVar, value => updateImageAssignmentDraft({ assignedVar: value }), {
+          title: `Variable name receiving the ${PB_ANY} image handle.`
+        })
+      ));
+    }
   }
   if (pendingImageAssignmentDraft.mode === "create") {
     wrap.appendChild(row(
@@ -6227,7 +11136,7 @@ function createPendingImageAssignmentDraftEl() {
   const actions = document.createElement("div");
   actions.className = "miniActions";
   const saveBtn = document.createElement("button");
-  saveBtn.textContent = pendingImageAssignmentDraft.mode === "create" ? "Create" : "Continue";
+  saveBtn.textContent = pendingImageAssignmentDraft.mode === "create" ? "Create" : (isGadgetChooseFile ? "Choose File" : "Continue");
   saveBtn.onclick = () => saveImageAssignmentDraft();
   actions.appendChild(saveBtn);
   const cancelBtn = document.createElement("button");
@@ -6256,14 +11165,14 @@ function createPendingImageInsertDraftEl() {
   wrap.appendChild(row(
     "First Param",
     textInput(pendingImageInsertDraft.idRaw, value => updateImageInsertDraft({ idRaw: value }), {
-      title: "Use either a fixed image id like #ImgOpen or #PB_Any."
+      title: `Use either a fixed image id like #ImgOpen or ${PB_ANY}.`
     })
   ));
   if (pendingImageInsertDraft.idRaw.trim().toLowerCase() === "#pb_any") {
     wrap.appendChild(row(
       "Assigned Var",
       textInput(pendingImageInsertDraft.assignedVar, value => updateImageInsertDraft({ assignedVar: value }), {
-        title: "Variable name receiving the #PB_Any image handle."
+        title: `Variable name receiving the ${PB_ANY} image handle.`
       })
     ));
   }
@@ -6304,10 +11213,31 @@ function row(label: string, input: HTMLElement) {
   return wrap;
 }
 
-function readonlyInput(value: string) {
+function inputWithActions(input: HTMLElement, ...actions: HTMLElement[]) {
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.alignItems = "center";
+  wrap.style.gap = "6px";
+  wrap.style.width = "100%";
+  wrap.style.minWidth = "0";
+  input.style.flex = "1 1 0";
+  input.style.minWidth = "0";
+  input.style.width = "auto";
+  wrap.appendChild(input);
+  for (const action of actions) {
+    action.style.flex = "0 0 auto";
+    if (!action.style.width) action.style.width = "auto";           // ← Set to "auto" if not already set
+    if (!action.style.minWidth) action.style.minWidth = "fit-content"; // ← Set to "auto" if not already set
+    wrap.appendChild(action);
+  }
+  return wrap;
+}
+
+function readonlyInput(value: string, title = "") {
   const i = document.createElement("input");
   i.value = value;
   i.readOnly = true;
+  i.title = title;
   return i;
 }
 
@@ -6331,6 +11261,37 @@ function textInput(
   i.placeholder = options?.placeholder ?? "";
   i.onchange = () => onChange(i.value);
   return i;
+}
+
+function editableComboInput(
+  value: string,
+  suggestions: string[],
+  onChange: (v: string) => void,
+  options?: { disabled?: boolean; title?: string; placeholder?: string }
+) {
+  const wrap = document.createElement("div");
+  wrap.className = "comboInputWrap";
+
+  const input = document.createElement("input");
+  const listId = `pbfd-proc-list-${Math.random().toString(36).slice(2)}`;
+  input.value = value;
+  input.disabled = Boolean(options?.disabled);
+  input.title = options?.title ?? "";
+  input.placeholder = options?.placeholder ?? "";
+  input.setAttribute("list", listId);
+  input.onchange = () => onChange(input.value);
+
+  const datalist = document.createElement("datalist");
+  datalist.id = listId;
+  for (const suggestion of suggestions) {
+    const opt = document.createElement("option");
+    opt.value = suggestion;
+    datalist.appendChild(opt);
+  }
+
+  wrap.appendChild(input);
+  wrap.appendChild(datalist);
+  return wrap;
 }
 
 function selectInput(
@@ -6379,6 +11340,148 @@ function getCssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/**
+ * Resolves a CSS system color keyword (e.g. "ButtonFace", "Window") to an
+ * "rgb(r, g, b)" string using the browser's own color resolution.
+ * Results are cached in `systemColorCache`; call `clearSystemColorCache()`
+ * when the skin changes so the next draw picks up fresh values.
+ */
+function getSystemColor(keyword: string): string {
+  const cached = systemColorCache.get(keyword);
+  if (cached !== undefined) return cached;
+
+  const el = document.createElement("span");
+  el.style.cssText = `color:${keyword};display:none`;
+  document.body.appendChild(el);
+  const resolved = getComputedStyle(el).color; // always "rgb(r, g, b)"
+  document.body.removeChild(el);
+
+  const value = resolved || keyword;
+  systemColorCache.set(keyword, value);
+  return value;
+}
+
+function parseCssRgb(color: string): [number, number, number] | null {
+  const match = color.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (match) {
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  }
+
+  const hexMatch = color.match(/^#([\da-f]{6})$/i);
+  if (!hexMatch) return null;
+
+  const value = hexMatch[1];
+  return [
+    Number.parseInt(value.slice(0, 2), 16),
+    Number.parseInt(value.slice(2, 4), 16),
+    Number.parseInt(value.slice(4, 6), 16),
+  ];
+}
+
+function getRgbDistance(colorA: string, colorB: string): number | null {
+  const rgbA = parseCssRgb(colorA);
+  const rgbB = parseCssRgb(colorB);
+  if (!rgbA || !rgbB) return null;
+
+  const r = rgbA[0] - rgbB[0];
+  const g = rgbA[1] - rgbB[1];
+  const b = rgbA[2] - rgbB[2];
+  return Math.sqrt((r * r) + (g * g) + (b * b));
+}
+
+function ensurePreviewLineContrast(candidate: string, background: string, fallback: string, minDistance = 28): string {
+  const distance = getRgbDistance(candidate, background);
+  if (distance === null || distance >= minDistance) return candidate;
+  return fallback;
+}
+
+function clearSystemColorCache(): void {
+  systemColorCache.clear();
+}
+
+type WindowsSkinSystemColors = {
+  /** Control / button background (≈ rgb(240,240,240) on default Windows) */
+  buttonFace: string;
+  /** Text on controls */
+  buttonText: string;
+  /** Window client-area background (≈ white) */
+  window: string;
+  /** Text in window client area */
+  windowText: string;
+  /** Selection / accent background */
+  highlight: string;
+  /** Text on selected items */
+  highlightText: string;
+  /** Disabled control text */
+  grayText: string;
+  /** Border / 3-D shadow edge */
+  threeDShadow: string;
+  /** Medium control shadow, closer to classic separator lines */
+  buttonShadow: string;
+  /** Light 3-D edge, closer to pale separator lines */
+  threeDLightShadow: string;
+  // --- Registry colors (HKCU\Control Panel\Colors) ---
+  /** Menu popup background */
+  menu: string;
+  /** Menu bar background */
+  menuBar: string;
+  /** Menu text */
+  menuText: string;
+  /** Selected menu item background */
+  menuHilight: string;
+  /** Active title bar (solid) */
+  activeTitle: string;
+  /** Active title bar gradient end */
+  gradientActiveTitle: string;
+  /** Inactive title bar */
+  inactiveTitle: string;
+  /** Title bar text */
+  titleText: string;
+  /** Hover / hot-track color */
+  hotTrackingColor: string;
+  /** Scrollbar track background */
+  scrollbar: string;
+};
+
+/**
+ * Returns the real Windows system colors for the canvas preview.
+ * Combines CSS system colors (via getSystemColor) with registry colors
+ * received from the extension (windowsRegistryColors).
+ * Only meaningful when `osSkin` is "windows7" or "windows8".
+ * Returns `null` for non-Windows skins so callers can fall back gracefully.
+ */
+function resolveWindowsSkinColors(): WindowsSkinSystemColors | null {
+  const skin = settings.osSkin;
+  if (skin !== "windows7" && skin !== "windows8") return null;
+
+  const reg = windowsRegistryColors;
+
+  return {
+    // CSS system colors — always available on Windows Chromium
+    buttonFace:    getSystemColor("ButtonFace"),
+    buttonText:    getSystemColor("ButtonText"),
+    window:        getSystemColor("Window"),
+    windowText:    getSystemColor("WindowText"),
+    highlight:     getSystemColor("Highlight"),
+    highlightText: getSystemColor("HighlightText"),
+    grayText:      getSystemColor("GrayText"),
+    threeDShadow:      getSystemColor("ThreeDShadow"),
+    buttonShadow:      getSystemColor("ButtonShadow"),
+    threeDLightShadow: getSystemColor("ThreeDLightShadow"),
+    // Registry colors — only available after the extension sent them
+    menu:                reg?.menu                 ?? "rgb(240, 240, 240)",
+    menuBar:             reg?.menuBar              ?? "rgb(240, 240, 240)",
+    menuText:            reg?.menuText             ?? "rgb(0, 0, 0)",
+    menuHilight:         reg?.menuHilight          ?? "rgb(0, 120, 215)",
+    activeTitle:         reg?.activeTitle          ?? "rgb(0, 120, 215)",
+    gradientActiveTitle: reg?.gradientActiveTitle  ?? "rgb(16, 135, 228)",
+    inactiveTitle:       reg?.inactiveTitle        ?? "rgb(191, 205, 219)",
+    titleText:           reg?.titleText            ?? "rgb(255, 255, 255)",
+    hotTrackingColor:    reg?.hotTrackingColor     ?? "rgb(0, 102, 204)",
+    scrollbar:           reg?.scrollbar            ?? "rgb(200, 200, 200)",
+  };
+}
+
 function clampPos(v: number): number {
   if (!Number.isFinite(v)) return 1;
   return Math.max(1, Math.trunc(v));
@@ -6389,6 +11492,105 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+function setupPanelResize() {
+  const resizer = document.getElementById("panelResizer") as HTMLElement | null;
+  if (!resizer) return;
+  let dragging = false;
+  let activePointerId: number | null = null;
+  const applyWidth = (clientX: number) => {
+    const nextWidth = clamp(window.innerWidth - clientX - 3, 300, Math.max(300, Math.min(900, window.innerWidth - 220)));
+    document.documentElement.style.setProperty("--pbfd-panel-width", `${Math.trunc(nextWidth)}px`);
+  };
+  const onMove = (ev: PointerEvent) => {
+    if (!dragging) return;
+    applyWidth(ev.clientX);
+  };
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.style.cursor = "";
+    if (activePointerId !== null) {
+      resizer.releasePointerCapture?.(activePointerId);
+      activePointerId = null;
+    }
+  };
+  resizer.addEventListener("pointerdown", ev => {
+    ev.preventDefault();
+    dragging = true;
+    activePointerId = ev.pointerId;
+    resizer.classList.add("dragging");
+    document.body.style.cursor = "col-resize";
+    resizer.setPointerCapture?.(ev.pointerId);
+    applyWidth(ev.clientX);
+  });
+  resizer.addEventListener("pointermove", onMove);
+  resizer.addEventListener("pointerup", stop);
+  resizer.addEventListener("pointercancel", stop);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
+}
+
+function setupTopPanelResize(): void {
+  if (!panelEl || !panelTopSectionEl || !panelSectionResizerEl || !panelBodyEl) return;
+
+  let dragging = false;
+  let activePointerId: number | null = null;
+
+  const applyHeight = (clientY: number) => {
+    const resizerHeight = panelSectionResizerEl.getBoundingClientRect().height || 6;
+    const panelGap = Number.parseFloat(getComputedStyle(panelEl).gap || "0") || 0;
+    const maxHeight = Math.max(100, panelEl.clientHeight - resizerHeight - panelGap * 2 - 100);
+    const topStart = panelTopSectionEl.getBoundingClientRect().top;
+    const nextHeight = clamp(clientY - topStart, 100, maxHeight);
+    document.documentElement.style.setProperty("--pbfd-panel-top-height", `${Math.trunc(nextHeight)}px`);
+  };
+
+  const clampCurrentHeight = () => {
+    const currentHeight = panelTopSectionEl.getBoundingClientRect().height;
+    const resizerHeight = panelSectionResizerEl.getBoundingClientRect().height || 6;
+    const panelGap = Number.parseFloat(getComputedStyle(panelEl).gap || "0") || 0;
+    const maxHeight = Math.max(100, panelEl.clientHeight - resizerHeight - panelGap * 2 - 100);
+    const nextHeight = clamp(currentHeight, 100, maxHeight);
+    document.documentElement.style.setProperty("--pbfd-panel-top-height", `${Math.trunc(nextHeight)}px`);
+  };
+
+  const onMove = (ev: PointerEvent) => {
+    if (!dragging) return;
+    applyHeight(ev.clientY);
+  };
+
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    panelSectionResizerEl.classList.remove("dragging");
+    document.body.style.cursor = "";
+    if (activePointerId !== null) {
+      panelSectionResizerEl.releasePointerCapture?.(activePointerId);
+      activePointerId = null;
+    }
+  };
+
+  panelSectionResizerEl.addEventListener("pointerdown", ev => {
+    ev.preventDefault();
+    dragging = true;
+    activePointerId = ev.pointerId;
+    panelSectionResizerEl.classList.add("dragging");
+    document.body.style.cursor = "row-resize";
+    panelSectionResizerEl.setPointerCapture?.(ev.pointerId);
+    applyHeight(ev.clientY);
+  });
+  panelSectionResizerEl.addEventListener("pointermove", onMove);
+  panelSectionResizerEl.addEventListener("pointerup", stop);
+  panelSectionResizerEl.addEventListener("pointercancel", stop);
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
+  window.addEventListener("resize", clampCurrentHeight);
+  clampCurrentHeight();
+}
+
 function asInt(v: any): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -6396,4 +11598,8 @@ function asInt(v: any): number {
 }
 
 resizeCanvas();
+setupPanelResize();
+setupTopPanelResize();
+toolboxTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("toolbox"));
+objectsTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("objects"));
 vscode.postMessage({ type: "ready" });

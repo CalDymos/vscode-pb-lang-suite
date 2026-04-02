@@ -1,0 +1,569 @@
+import { GADGET_KIND } from "../model";
+
+export type PreviewRect = { x: number; y: number; w: number; h: number };
+export type PreviewOffset = { x: number; y: number };
+
+export type PreviewChromeMetrics = {
+  panelHeight: number;
+  scrollAreaWidth: number;
+  splitterWidth: number;
+  menuHeight: number;
+  toolBarHeight: number;
+  statusBarHeight: number;
+};
+
+export type WindowChromeLayout = {
+  contentRect: PreviewRect;
+  menuBarRect: PreviewRect | null;
+  toolBarRect: PreviewRect | null;
+  statusBarRect: PreviewRect | null;
+};
+
+export type WindowClientSurfaceRects = {
+  fillRect: PreviewRect;
+  borderRect: PreviewRect;
+};
+
+export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
+
+export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
+  const ua = userAgent.toLowerCase();
+
+  if (ua.includes("mac")) {
+    return {
+      panelHeight: 31,
+      scrollAreaWidth: 14,
+      splitterWidth: 12,
+      menuHeight: 23,
+      toolBarHeight: 36,
+      statusBarHeight: 24
+    };
+  }
+
+  if (ua.includes("linux")) {
+    return {
+      panelHeight: 29,
+      scrollAreaWidth: 20,
+      splitterWidth: 9,
+      menuHeight: 28,
+      toolBarHeight: 38,
+      statusBarHeight: 26
+    };
+  }
+
+  return {
+    panelHeight: 22,
+    scrollAreaWidth: 20,
+    splitterWidth: 9,
+    menuHeight: 22,
+    toolBarHeight: 24,
+    statusBarHeight: 23
+  };
+}
+
+export function clampRect(
+  rect: PreviewRect,
+  minW: number,
+  minH: number
+): PreviewRect {
+  const nx = Math.trunc(rect.x);
+  const ny = Math.trunc(rect.y);
+  let nw = Math.trunc(rect.w);
+  let nh = Math.trunc(rect.h);
+
+  if (nw < minW) nw = minW;
+  if (nh < minH) nh = minH;
+
+  return { x: nx, y: ny, w: nw, h: nh };
+}
+
+export function applyResize(
+  rect: PreviewRect,
+  delta: { dx: number; dy: number },
+  handle: ResizeHandle,
+  minW: number,
+  minH: number
+): PreviewRect {
+  let nx = rect.x;
+  let ny = rect.y;
+  let nw = rect.w;
+  let nh = rect.h;
+
+  const west = handle === "nw" || handle === "w" || handle === "sw";
+  const east = handle === "ne" || handle === "e" || handle === "se";
+  const north = handle === "nw" || handle === "n" || handle === "ne";
+  const south = handle === "sw" || handle === "s" || handle === "se";
+
+  if (east) nw = rect.w + delta.dx;
+  if (south) nh = rect.h + delta.dy;
+
+  if (west) {
+    nx = rect.x + delta.dx;
+    nw = rect.w - delta.dx;
+  }
+
+  if (north) {
+    ny = rect.y + delta.dy;
+    nh = rect.h - delta.dy;
+  }
+
+  if (nw < minW) {
+    if (west) nx = rect.x + (rect.w - minW);
+    nw = minW;
+  }
+
+  if (nh < minH) {
+    if (north) ny = rect.y + (rect.h - minH);
+    nh = minH;
+  }
+
+  return clampRect({ x: nx, y: ny, w: nw, h: nh }, minW, minH);
+}
+
+export type PanelTabLayout = {
+  index: number;
+  label: string;
+  rect: PreviewRect;
+  active: boolean;
+};
+
+export function resolvePanelActiveItem(storedIndex: number | undefined, tabCount: number): number {
+  if (typeof storedIndex === "number" && storedIndex >= 0 && storedIndex < Math.max(1, tabCount)) {
+    return storedIndex;
+  }
+  return 0;
+}
+
+export function getPanelTabLayouts(
+  labels: string[],
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  activeIndex: number,
+  measureText: (label: string) => number
+): PanelTabLayout[] {
+  const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+  const tabRects: PanelTabLayout[] = [];
+  let tabX = rect.x;
+
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i] || `Tab ${i}`;
+    const tabW = Math.max(46, Math.ceil(measureText(label)) + 14);
+    const active = i === activeIndex;
+    const tabH = Math.max(16, panelHeight - (active ? 1 : 4));
+    const tabY = rect.y + (active ? 0 : 2);
+    const nextRight = tabX + tabW;
+
+    if (tabX >= rect.x + rect.w - 12) break;
+
+    tabRects.push({
+      index: i,
+      label,
+      active,
+      rect: {
+        x: tabX,
+        y: tabY,
+        w: Math.max(0, Math.min(tabW, rect.x + rect.w - tabX)),
+        h: tabH
+      }
+    });
+
+    tabX = nextRight;
+  }
+
+  return tabRects;
+}
+
+
+export function intersectRect(a: PreviewRect, b: PreviewRect): PreviewRect {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.w, b.x + b.w);
+  const bottom = Math.min(a.y + a.h, b.y + b.h);
+  return {
+    x,
+    y,
+    w: Math.max(0, right - x),
+    h: Math.max(0, bottom - y)
+  };
+}
+
+export function rectContainsPoint(rect: PreviewRect, x: number, y: number): boolean {
+  return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
+export function isPointOnRectBorder(rect: PreviewRect, x: number, y: number, margin = 4): boolean {
+  if (!rectContainsPoint(rect, x, y)) return false;
+  return x <= rect.x + margin
+    || x >= rect.x + rect.w - margin
+    || y <= rect.y + margin
+    || y >= rect.y + rect.h - margin;
+}
+
+export function getScrollAreaBarSize(rect: PreviewRect, metrics: PreviewChromeMetrics): number {
+  return Math.min(metrics.scrollAreaWidth, Math.max(12, Math.min(rect.w, rect.h) - 4));
+}
+
+export function getScrollAreaVerticalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  return {
+    x: rect.x + rect.w - bar,
+    y: rect.y,
+    w: bar,
+    h: Math.max(0, rect.h - bar)
+  };
+}
+
+export function getScrollAreaHorizontalBarRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  return {
+    x: rect.x,
+    y: rect.y + rect.h - bar,
+    w: Math.max(0, rect.w - bar),
+    h: bar
+  };
+}
+
+export function getScrollAreaViewportRect(rect: PreviewRect, metrics: PreviewChromeMetrics): PreviewRect {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: Math.max(0, rect.w - bar),
+    h: Math.max(0, rect.h - bar)
+  };
+}
+
+export function clampScrollAreaOffset(
+  offset: PreviewOffset,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number,
+  innerHeight?: number
+): PreviewOffset {
+  return {
+    x: Math.max(0, Math.min(offset.x, getScrollAreaMaxOffsetX(rect, metrics, innerWidth))),
+    y: Math.max(0, Math.min(offset.y, getScrollAreaMaxOffsetY(rect, metrics, innerHeight)))
+  };
+}
+
+export function getScrollAreaMaxOffsetX(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number
+): number {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportWidth = Math.max(0, rect.w - bar);
+  const contentWidth = typeof innerWidth === "number" && innerWidth > 0 ? innerWidth : viewportWidth;
+  return Math.max(0, contentWidth - viewportWidth);
+}
+
+export function getScrollAreaMaxOffsetY(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerHeight?: number
+): number {
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportHeight = Math.max(0, rect.h - bar);
+  const contentHeight = typeof innerHeight === "number" && innerHeight > 0 ? innerHeight : viewportHeight;
+  return Math.max(0, contentHeight - viewportHeight);
+}
+
+export function getScrollAreaVerticalThumbRect(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerHeight?: number,
+  offsetY = 0
+): PreviewRect {
+  const track = getScrollAreaVerticalBarRect(rect, metrics);
+  const maxOffset = getScrollAreaMaxOffsetY(rect, metrics, innerHeight);
+  if (track.w <= 0 || track.h <= 0) return { x: track.x, y: track.y, w: 0, h: 0 };
+
+  if (maxOffset <= 0) {
+    return { x: track.x, y: track.y, w: track.w, h: track.h };
+  }
+
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportHeight = Math.max(0, rect.h - bar);
+  const contentHeight = typeof innerHeight === "number" && innerHeight > 0 ? innerHeight : viewportHeight;
+  const trackHeight = Math.max(1, track.h);
+  const thumbHeight = Math.max(14, Math.min(trackHeight, Math.round((viewportHeight / contentHeight) * trackHeight)));
+  const travel = Math.max(0, trackHeight - thumbHeight);
+  const clampedOffset = Math.max(0, Math.min(offsetY, maxOffset));
+  const thumbY = track.y + Math.round((clampedOffset / maxOffset) * travel);
+  return { x: track.x, y: thumbY, w: track.w, h: thumbHeight };
+}
+
+export function getScrollAreaHorizontalThumbRect(
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  innerWidth?: number,
+  offsetX = 0
+): PreviewRect {
+  const track = getScrollAreaHorizontalBarRect(rect, metrics);
+  const maxOffset = getScrollAreaMaxOffsetX(rect, metrics, innerWidth);
+  if (track.w <= 0 || track.h <= 0) return { x: track.x, y: track.y, w: 0, h: 0 };
+
+  if (maxOffset <= 0) {
+    return { x: track.x, y: track.y, w: track.w, h: track.h };
+  }
+
+  const bar = getScrollAreaBarSize(rect, metrics);
+  const viewportWidth = Math.max(0, rect.w - bar);
+  const contentWidth = typeof innerWidth === "number" && innerWidth > 0 ? innerWidth : viewportWidth;
+  const trackWidth = Math.max(1, track.w);
+  const thumbWidth = Math.max(14, Math.min(trackWidth, Math.round((viewportWidth / contentWidth) * trackWidth)));
+  const travel = Math.max(0, trackWidth - thumbWidth);
+  const clampedOffset = Math.max(0, Math.min(offsetX, maxOffset));
+  const thumbX = track.x + Math.round((clampedOffset / maxOffset) * travel);
+  return { x: thumbX, y: track.y, w: thumbWidth, h: track.h };
+}
+
+
+export function getGadgetContentRect(
+  kind: string,
+  rect: PreviewRect,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  switch (kind) {
+    case GADGET_KIND.PanelGadget: {
+      const panelHeight = Math.min(metrics.panelHeight, Math.max(18, rect.h));
+      return {
+        x: rect.x,
+        y: rect.y + panelHeight,
+        w: rect.w,
+        h: Math.max(0, rect.h - panelHeight)
+      };
+    }
+
+    case GADGET_KIND.ScrollAreaGadget: {
+      return getScrollAreaViewportRect(rect, metrics);
+    }
+
+    default:
+      return rect;
+  }
+}
+
+export function getSplitterPaneRect(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  splitterWidth: number,
+  state: number | undefined,
+  pane: "first" | "second"
+): PreviewRect {
+  const bar = splitterWidth;
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
+  const pos = Math.max(0, Math.min(rawPos, range));
+
+  if (pane === "first") {
+    return vertical
+      ? { x: splitterRect.x, y: splitterRect.y, w: pos, h: splitterRect.h }
+      : { x: splitterRect.x, y: splitterRect.y, w: splitterRect.w, h: pos };
+  }
+
+  return vertical
+    ? {
+      x: splitterRect.x + pos + bar,
+      y: splitterRect.y,
+      w: Math.max(0, splitterRect.w - pos - bar),
+      h: splitterRect.h
+    }
+    : {
+      x: splitterRect.x,
+      y: splitterRect.y + pos + bar,
+      w: splitterRect.w,
+      h: Math.max(0, splitterRect.h - pos - bar)
+    };
+}
+
+export function getSplitterBarRect(
+  splitterRect: PreviewRect,
+  vertical: boolean,
+  splitterWidth: number,
+  state?: number
+): PreviewRect {
+  const bar = splitterWidth;
+  const range = Math.max(0, (vertical ? splitterRect.w : splitterRect.h) - bar);
+  const rawPos = typeof state === "number" ? Math.trunc(state) : Math.trunc(range / 2);
+  const pos = Math.max(0, Math.min(rawPos, range));
+  return vertical
+    ? { x: splitterRect.x + pos, y: splitterRect.y, w: bar, h: splitterRect.h }
+    : { x: splitterRect.x, y: splitterRect.y + pos, w: splitterRect.w, h: bar };
+}
+
+export function getMenuBarRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
+): PreviewRect {
+  return {
+    x: windowRect.x + clientSidePadding,
+    y: windowRect.y + Math.max(0, titleBarHeight),
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
+    h: metrics.menuHeight
+  };
+}
+
+export function getToolBarRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0
+): PreviewRect {
+  return {
+    x: windowRect.x + clientSidePadding,
+    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
+    h: metrics.toolBarHeight
+  };
+}
+
+export function getStatusBarRect(
+  windowRect: PreviewRect,
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0,
+  clientBottomPadding = 0
+): PreviewRect {
+  return {
+    x: windowRect.x + clientSidePadding,
+    y: windowRect.y + Math.max(0, windowRect.h - clientBottomPadding - metrics.statusBarHeight),
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
+    h: Math.min(metrics.statusBarHeight, Math.max(0, windowRect.h - clientBottomPadding))
+  };
+}
+
+
+export function getWindowClientSurfaceRects(
+  windowRect: PreviewRect,
+  chromeTopPadding: number,
+  clientSidePadding = 0,
+  clientBottomPadding = 0
+): WindowClientSurfaceRects {
+  const insetX = Math.max(0, Math.trunc(clientSidePadding));
+  const insetY = Math.max(0, Math.trunc(chromeTopPadding));
+  const insetBottom = Math.max(0, Math.trunc(clientBottomPadding));
+  const fillRect: PreviewRect = {
+    x: windowRect.x + insetX,
+    y: windowRect.y + insetY,
+    w: Math.max(0, windowRect.w - insetX * 2),
+    h: Math.max(0, windowRect.h - insetY - insetBottom),
+  };
+
+  return {
+    fillRect,
+    borderRect: {
+      x: fillRect.x - 1,
+      y: fillRect.y - 1,
+      w: fillRect.w + 2,
+      h: fillRect.h + 2,
+    },
+  };
+}
+
+export function getStatusBarAlignedX(
+  fieldX: number,
+  fieldW: number,
+  contentW: number,
+  isCentered: boolean,
+  isRightAligned: boolean
+): number {
+  if (isCentered) {
+    return fieldX + Math.max(0, Math.trunc((fieldW - contentW) / 2));
+  }
+  if (isRightAligned) {
+    return fieldX + Math.max(0, fieldW - contentW);
+  }
+  return fieldX;
+}
+
+
+export function getRectHandlePoints(rect: PreviewRect): Array<[ResizeHandle, number, number]> {
+  const { x, y, w, h } = rect;
+  return [
+    ["nw", x, y],
+    ["n", x + w / 2, y],
+    ["ne", x + w, y],
+    ["w", x, y + h / 2],
+    ["e", x + w, y + h / 2],
+    ["sw", x, y + h],
+    ["s", x + w / 2, y + h],
+    ["se", x + w, y + h]
+  ];
+}
+
+export function hitHandlePoints(
+  points: Array<[ResizeHandle, number, number]>,
+  x: number,
+  y: number,
+  hitSize: number
+): ResizeHandle | null {
+  const half = hitSize / 2;
+  for (const [handle, px, py] of points) {
+    if (x >= px - half && x <= px + half && y >= py - half && y <= py + half) {
+      return handle;
+    }
+  }
+  return null;
+}
+
+
+
+export function isPointInWindowRect(windowRect: PreviewRect, x: number, y: number): boolean {
+  return rectContainsPoint(windowRect, x, y);
+}
+
+export function toWindowLocalPoint(windowRect: PreviewRect, x: number, y: number): PreviewOffset {
+  return { x: x - windowRect.x, y: y - windowRect.y };
+}
+
+export function toWindowGlobalPoint(windowRect: PreviewRect, x: number, y: number): PreviewOffset {
+  return { x: x + windowRect.x, y: y + windowRect.y };
+}
+
+export function isPointInTitleBar(windowRect: PreviewRect, titleBarHeight: number, x: number, y: number): boolean {
+  if (titleBarHeight <= 0) return false;
+  return x >= windowRect.x && x <= windowRect.x + windowRect.w
+    && y >= windowRect.y && y <= windowRect.y + titleBarHeight;
+}
+export function getWindowContentRect(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  hasToolbar: boolean,
+  hasStatusbar: boolean,
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0,
+  clientBottomPadding = 0
+): PreviewRect {
+  const top = Math.max(0, titleBarHeight)
+    + (hasMenu ? metrics.menuHeight : 0)
+    + (hasToolbar ? metrics.toolBarHeight : 0);
+  const bottom = (hasStatusbar ? metrics.statusBarHeight : 0) + Math.max(0, clientBottomPadding);
+  return {
+    x: windowRect.x + clientSidePadding,
+    y: windowRect.y + top,
+    w: Math.max(0, windowRect.w - clientSidePadding * 2),
+    h: Math.max(0, windowRect.h - top - bottom)
+  };
+}
+
+export function getWindowChromeLayout(
+  windowRect: PreviewRect,
+  titleBarHeight: number,
+  hasMenu: boolean,
+  hasToolbar: boolean,
+  hasStatusbar: boolean,
+  metrics: PreviewChromeMetrics,
+  clientSidePadding = 0,
+  clientBottomPadding = 0
+): WindowChromeLayout {
+  return {
+    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics, clientSidePadding, clientBottomPadding),
+    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding) : null,
+    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding) : null,
+    statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics, clientSidePadding, clientBottomPadding) : null
+  };
+}

@@ -32,6 +32,8 @@ export const GADGET_KIND = {
   IPAddressGadget: "IPAddressGadget",
   ScrollBarGadget: "ScrollBarGadget",
   ScintillaGadget: "ScintillaGadget",
+  MDIGadget: "MDIGadget",
+  CustomGadget: "CustomGadget",
   Unknown: "Unknown",
 } as const;
 
@@ -50,6 +52,7 @@ export interface Gadget {
   kind: GadgetKind;
   pbAny: boolean;
   variable?: string;     // e.g. "Gadget_1" (used when pbAny is true)
+  enumValueRaw?: string; // e.g. "500" or undefined; only set when pbAny is false
   firstParam: string;    // raw first param token
   parentId?: string;     // parent gadget id (Container/Panel/ScrollArea/OpenGadgetList)
   parentItem?: number;   // for PanelGadget children: active tab index (best-effort)
@@ -57,6 +60,10 @@ export interface Gadget {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   textRaw?: string;      // raw caption/text expression from the gadget constructor
   text?: string;
   textVariable?: boolean;
@@ -77,6 +84,11 @@ export interface Gadget {
   tooltipVariable?: boolean;
   stateRaw?: string;     // raw state expression from SetGadgetState(...)
   state?: number;
+  customSelectName?: string;
+  customInitRaw?: string;
+  customCreateRaw?: string;
+  customInitSource?: SourceRange;
+  customCreateMarkerSource?: SourceRange;
   frontColorRaw?: string;
   frontColor?: number;
   backColorRaw?: string;
@@ -89,6 +101,15 @@ export interface Gadget {
   hidden?: boolean;
   disabledRaw?: string;
   disabled?: boolean;
+  lockLeft?: boolean;
+  lockRight?: boolean;
+  lockTop?: boolean;
+  lockBottom?: boolean;
+  resizeXRaw?: string;
+  resizeYRaw?: string;
+  resizeWRaw?: string;
+  resizeHRaw?: string;
+  resizeSource?: SourceRange;
   eventProc?: string;
   items?: GadgetItem[];
   columns?: GadgetColumn[];
@@ -125,6 +146,10 @@ export interface FormWindow {
   y: number;
   w: number;
   h: number;
+  xRaw?: string;
+  yRaw?: string;
+  wRaw?: string;
+  hRaw?: string;
   captionRaw?: string;       // raw caption expression from OpenWindow(...)
   caption?: string;          // canonical field matching original FormWindow\caption
   captionVariable?: boolean; // matches original FormWindow\captionvariable
@@ -204,6 +229,7 @@ export interface FormMenuEntry {
   iconId?: string;       // normalized image identifier for menu icons
   widthRaw?: string;     // for StatusBar fields (optional)
   event?: string;
+  toggle?: boolean;
   source?: SourceRange;
 }
 
@@ -286,6 +312,8 @@ export interface FormImage {
   source?: SourceRange;
 }
 
+export const PB_ANY = "#PB_Any" as const;
+
 export interface FormDocument {
   window?: FormWindow;
   fonts: FormFont[];
@@ -294,12 +322,16 @@ export interface FormDocument {
   menus: FormMenu[];
   toolbars: FormToolBar[];
   statusbars: FormStatusBar[];
+  procedureNames?: string[];
   meta: FormMeta;
 }
 
 export const ENUM_NAMES = {
-  windows: "FormWindow", 
-  gadgets: "FormGadget"
+  windows: "FormWindow",
+  gadgets: "FormGadget",
+  menus: "FormMenu",
+  images: "FormImage",
+  fonts: "FormFont"
 } as const;
 
 // PBFD_* constants: shared symbol sets from the PureBasic Form Designer.
@@ -309,11 +341,29 @@ export const ENUM_NAMES = {
 export const PBFD_MENU_ENTRY_KINDS = [MENU_ENTRY_KIND.MenuTitle, MENU_ENTRY_KIND.MenuItem, MENU_ENTRY_KIND.MenuBar, MENU_ENTRY_KIND.OpenSubMenu, MENU_ENTRY_KIND.CloseSubMenu] as const;
 export const PBFD_TOOLBAR_ENTRY_KINDS = [TOOLBAR_ENTRY_KIND.ToolBarButton, TOOLBAR_ENTRY_KIND.ToolBarImageButton, TOOLBAR_ENTRY_KIND.ToolBarStandardButton, TOOLBAR_ENTRY_KIND.ToolBarSeparator, TOOLBAR_ENTRY_KIND.ToolBarToolTip] as const;
 export const PBFD_CONTAINER_GADGET_KINDS = [GADGET_KIND.ContainerGadget, GADGET_KIND.PanelGadget, GADGET_KIND.ScrollAreaGadget] as const;
+export const PBFD_WINDOW_KNOWN_FLAGS = [
+  "#PB_Window_SystemMenu",
+  "#PB_Window_MinimizeGadget",
+  "#PB_Window_MaximizeGadget",
+  "#PB_Window_SizeGadget",
+  "#PB_Window_Invisible",
+  "#PB_Window_TitleBar",
+  "#PB_Window_Tool",
+  "#PB_Window_BorderLess",
+  "#PB_Window_ScreenCentered",
+  "#PB_Window_WindowCentered",
+  "#PB_Window_Maximize",
+  "#PB_Window_Minimize",
+  "#PB_Window_NoGadgets",
+  "#PB_Window_NoActivate",
+] as const;
 export const PBFD_ENUM_NAMES = ENUM_NAMES;
 
 export const PBFD_SYMBOLS = {
   menuEntryKinds: PBFD_MENU_ENTRY_KINDS,
   toolBarEntryKinds: PBFD_TOOLBAR_ENTRY_KINDS,
   containerGadgetKinds: PBFD_CONTAINER_GADGET_KINDS,
-  enumNames: PBFD_ENUM_NAMES
+  windowKnownFlags: PBFD_WINDOW_KNOWN_FLAGS,
+  enumNames: PBFD_ENUM_NAMES,
+  pbAny: PB_ANY
 } as const;

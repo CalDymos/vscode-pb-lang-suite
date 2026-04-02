@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { TextDocument } from "vscode";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
   applyImageDelete,
   applyImageInsert,
   applyImageUpdate,
   type ImageArgs,
-} from "../src/core/emitter/patchEmitter";
+} from "../src/core/emitter/patch-emitter";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
