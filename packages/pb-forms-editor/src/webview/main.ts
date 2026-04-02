@@ -845,6 +845,11 @@ function drawPreviewFallbackImageIcon(ctx: CanvasRenderingContext2D, x: number, 
   ctx.restore();
 }
 
+function getPreviewTopLevelAssignedImage(imageId?: string): HTMLImageElement | null {
+  const imageEntry = findImageEntryById(imageId);
+  return getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+}
+
 function drawPreviewTopLevelAssignedImage(
   ctx: CanvasRenderingContext2D,
   imageId: string | undefined,
@@ -853,9 +858,7 @@ function drawPreviewTopLevelAssignedImage(
   width: number,
   height: number
 ): boolean {
-  const imageEntry = findImageEntryById(imageId);
-  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
-  return drawPreviewRasterIcon(ctx, previewImage, x, y, width, height);
+  return drawPreviewRasterIcon(ctx, getPreviewTopLevelAssignedImage(imageId), x, y, width, height);
 }
 
 let settings: DesignerSettings = {
@@ -7025,16 +7028,25 @@ function drawStatusBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, 
       }
       ctx.restore();
     } else {
-      const size = Math.max(10, Math.min(16, rect.h - 8));
-      const imageX = getStatusBarAlignedX(x, fieldW, size, hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"), hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right"));
-      if (hasStatusBarPreviewAssignedImage(field)) {
-        ctx.save();
-        ctx.fillStyle = fg;
-        ctx.globalAlpha = 0.55;
-        ctx.fillRect(imageX, imageY, size, size);
-        ctx.restore();
-      } else {
-        drawPreviewFallbackImageIcon(ctx, imageX, imageY, size);
+      const fallbackSize = 16;
+      const previewImage = hasStatusBarPreviewAssignedImage(field)
+        ? getPreviewTopLevelAssignedImage(field.imageId)
+        : null;
+      const previewWidth = previewImage && previewImage.complete && previewImage.naturalWidth > 0
+        ? previewImage.naturalWidth
+        : fallbackSize;
+      const previewHeight = previewImage && previewImage.complete && previewImage.naturalHeight > 0
+        ? previewImage.naturalHeight
+        : fallbackSize;
+      const imageX = getStatusBarAlignedX(
+        x,
+        fieldW,
+        previewWidth,
+        hasPbFlag(field.flagsRaw, "#PB_StatusBar_Center"),
+        hasPbFlag(field.flagsRaw, "#PB_StatusBar_Right")
+      );
+      if (!drawPreviewRasterIcon(ctx, previewImage, imageX, imageY, previewWidth, previewHeight)) {
+        drawPreviewFallbackImageIcon(ctx, imageX, imageY, fallbackSize);
       }
     }
 
