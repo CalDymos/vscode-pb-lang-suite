@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
   applyCustomGadgetCodeUpdate,
   applyGadgetOpenArgsUpdate,
   applyMovePatch,
   applyRectPatch
-} from "../src/core/emitter/patchEmitter";
+} from "../src/core/emitter/patch-emitter";
 import { GADGET_KIND } from "../src/core/model";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";

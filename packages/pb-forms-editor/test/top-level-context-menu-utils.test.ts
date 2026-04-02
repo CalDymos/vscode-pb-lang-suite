@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveTopLevelCanvasContextMenuActions } from "../src/core/topLevelContextMenuUtils";
+import { resolveTopLevelCanvasContextMenuActions } from "../src/core/top-level-context-menu-utils";
 
 test("menu entry context action uses Delete MenuItem label and existing delete payload", () => {
   const actions = resolveTopLevelCanvasContextMenuActions({

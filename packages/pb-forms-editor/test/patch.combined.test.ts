@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import {
   applyGadgetOpenArgsUpdate,
   applyGadgetPropertyUpdate,
@@ -28,7 +28,7 @@ import {
   type MenuEntryArgs,
   type StatusBarFieldArgs,
   type ToolBarEntryArgs,
-} from "../src/core/emitter/patchEmitter";
+} from "../src/core/emitter/patch-emitter";
 import { MENU_ENTRY_KIND, TOOLBAR_ENTRY_KIND } from "../src/core/model";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";

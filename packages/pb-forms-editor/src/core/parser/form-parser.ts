@@ -27,9 +27,9 @@ import {
   PB_ANY
 } from "../model";
 
-import { canHostInsertedGadgets } from "../gadgetInsertUtils";
+import { canHostInsertedGadgets } from "../gadget-insert-utils";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
-import { PbCall, scanCalls } from "./callScanner";
+import { PbCall, scanCalls } from "./call-scanner";
 
 const KNOWN_WINDOW_FLAGS = new Set<string>(PBFD_WINDOW_KNOWN_FLAGS);
 

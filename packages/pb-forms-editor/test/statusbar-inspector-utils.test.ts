@@ -6,7 +6,7 @@ import {
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
-} from "../src/core/statusbarInspectorUtils";
+} from "../src/core/statusbar-inspector-utils";
 
 test("accepts statusbar width integers and #PB_Ignore like the original grid path", () => {
   assert.deepEqual(parseStatusBarWidthInspectorInput("120"), {

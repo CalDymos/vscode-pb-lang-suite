@@ -5,7 +5,7 @@ import {
   hasRectChanged,
   retainPanelActiveItems,
   syncPanelActiveItemsForSelection
-} from "../src/core/webviewStateUtils";
+} from "../src/core/webview-state-utils";
 
 test("detects rect changes only when position or size differs", () => {
   const start = { x: 10, y: 20, w: 100, h: 40 };

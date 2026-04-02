@@ -1,5 +1,5 @@
 import { GADGET_KIND, type FormWindow, type Gadget } from "./model";
-import { canHostInsertedGadgets } from "./gadgetInsertUtils";
+import { canHostInsertedGadgets } from "./gadget-insert-utils";
 
 type ReparentDialogWindowLike = Pick<FormWindow, "variable" | "id">;
 type ReparentDialogGadgetLike = {

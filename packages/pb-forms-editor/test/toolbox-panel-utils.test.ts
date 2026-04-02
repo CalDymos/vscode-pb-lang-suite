@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { canImmediateInsertFromToolbox, getDefaultToolboxPanelKind, getImmediateToolboxInsertPosition, getToolboxPanelCategories } from "../src/core/toolboxPanelUtils";
+import { canImmediateInsertFromToolbox, getDefaultToolboxPanelKind, getImmediateToolboxInsertPosition, getToolboxPanelCategories } from "../src/core/toolbox-panel-utils";
 
 test("toolbox panel categories follow the verified original group order", () => {
   const categories = getToolboxPanelCategories();

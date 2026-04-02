@@ -7,7 +7,7 @@ import {
   getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth,
   splitPbFlags
-} from "../src/core/statusbarPreviewUtils";
+} from "../src/core/statusbar-preview-utils";
 
 test("parses statusbar widths and ignores invalid or flexible values", () => {
   assert.equal(parseStatusBarWidth("120"), 120);

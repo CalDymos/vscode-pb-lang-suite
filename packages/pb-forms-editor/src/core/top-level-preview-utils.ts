@@ -1,5 +1,5 @@
 import { quotePbString, unquoteString } from "./parser/tokenizer";
-import { parseStatusBarWidth } from "./statusbarPreviewUtils";
+import { parseStatusBarWidth } from "./statusbar-preview-utils";
 
 export type SourceLineLike = {
   line: number;

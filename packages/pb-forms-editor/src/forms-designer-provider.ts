@@ -1,7 +1,7 @@
 import * as cp from "child_process";
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { parseFormDocument } from "./core/parser/formParser";
+import { parseFormDocument } from "./core/parser/form-parser";
 import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
@@ -54,36 +54,36 @@ import {
   buildImageIdReference,
   toPbAnyAssignedVar,
   toEnumImageId
-} from "./core/emitter/patchEmitter";
+} from "./core/emitter/patch-emitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
-import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadgetInsertUtils";
-import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/formSettingsRuntimeUtils";
-import { getToolboxPanelCategories } from "./core/toolboxPanelUtils";
-import { relativizeImagePath, toPbFilePathLiteral } from "./core/imagePathUtils";
-import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/imageAssignmentUtils";
-import { readImageDimensions } from "./core/imageDimensionUtils";
+import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadget-insert-utils";
+import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/form-settings-runtime-utils";
+import { getToolboxPanelCategories } from "./core/toolbox-panel-utils";
+import { relativizeImagePath, toPbFilePathLiteral } from "./core/image-path-utils";
+import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image-assignment-utils";
+import { readImageDimensions } from "./core/image-dimension-utils";
 import {
   discoverProcedureSourcePaths,
   extractProcedureNamesFromText,
   isProcedureSourceFilePath,
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames
-} from "./core/procedureListUtils";
+} from "./core/procedure-list-utils";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference,
   requiresPbVariableValidation
-} from "./core/propertyValidationUtils";
+} from "./core/property-validation-utils";
 import {
   parseWindowColorInspectorInput,
   WINDOW_COLOR_LITERAL_ERROR_MESSAGE
-} from "./core/colorInspectorUtils";
+} from "./core/color-inspector-utils";
 import {
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
-} from "./core/statusbarInspectorUtils";
+} from "./core/statusbar-inspector-utils";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"

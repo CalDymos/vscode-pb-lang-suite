@@ -24,7 +24,7 @@ import {
   getGadgetTooltipInspectorValue,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
-} from "../src/core/gadgetInspectorUtils";
+} from "../src/core/gadget-inspector-utils";
 
 test("marks original text-capable gadget constructors as caption-editable", () => {
   assert.equal(canEditGadgetText("StringGadget"), true);

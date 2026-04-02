@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { PureBasicFormDesignerProvider } from "./formsDesignerProvider";
+import { PureBasicFormDesignerProvider } from "./forms-designer-provider";
 
 const CMD_OPEN_AS_TEXT = "purebasic.formDesigner.openAsText";
 const CMD_OPEN_IN_DESIGNER = "purebasic.formDesigner.openInDesigner";

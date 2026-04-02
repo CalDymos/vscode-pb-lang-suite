@@ -6,7 +6,7 @@ import {
   isPbStringLiteralRaw,
   isValidPbVariableReference,
   requiresPbVariableValidation
-} from "../src/core/propertyValidationUtils";
+} from "../src/core/property-validation-utils";
 
 test("accepts PureBasic variable-style identifiers and empty values like FD_CheckVariable", () => {
   assert.equal(isValidPbVariableReference(""), true);

@@ -35,7 +35,7 @@ import {
   toWindowLocalPoint,
   type PreviewChromeMetrics,
   type PreviewRect
-} from "../src/core/previewChromeUtils";
+} from "../src/core/preview/chrome";
 
 const METRICS: PreviewChromeMetrics = {
   panelHeight: 22,

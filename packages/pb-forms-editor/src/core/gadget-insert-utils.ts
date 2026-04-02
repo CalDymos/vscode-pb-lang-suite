@@ -1,4 +1,4 @@
-import { hasPbFlag } from "./topLevelPreviewUtils";
+import { hasPbFlag } from "./top-level-preview-utils";
 import { GADGET_KIND, PB_ANY, type Gadget, type GadgetKind } from "./model";
 
 export const PBFD_INSERTABLE_GADGET_KINDS = [

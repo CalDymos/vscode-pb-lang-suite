@@ -1,4 +1,4 @@
-import { GADGET_KIND } from "./model";
+import { GADGET_KIND } from "../model";
 
 export type PreviewRect = { x: number; y: number; w: number; h: number };
 export type PreviewOffset = { x: number; y: number };

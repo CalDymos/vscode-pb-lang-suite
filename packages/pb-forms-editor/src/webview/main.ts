@@ -33,20 +33,20 @@ import {
   isPointInWindowRect,
   toWindowGlobalPoint,
   toWindowLocalPoint
-} from "../core/previewChromeUtils";
+} from "../core/preview/chrome";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
   getStatusBarFieldDisplaySummary,
   getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth
-} from "../core/statusbarPreviewUtils";
+} from "../core/statusbar-preview-utils";
 import {
   getStatusBarProgressInspectorValue,
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
-} from "../core/statusbarInspectorUtils";
+} from "../core/statusbar-inspector-utils";
 import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
@@ -83,7 +83,7 @@ import {
   shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry,
   hasToolBarPreviewAssignedImage
-} from "../core/topLevelPreviewUtils";
+} from "../core/top-level-preview-utils";
 
 import {
   buildGadgetCheckedStateRaw,
@@ -107,13 +107,13 @@ import {
   getGadgetTooltipInspectorValue,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
-} from "../core/gadgetInspectorUtils";
+} from "../core/gadget-inspector-utils";
 
 import {
   hasRectChanged,
   retainPanelActiveItems,
   syncPanelActiveItemsForSelection
-} from "../core/webviewStateUtils";
+} from "../core/webview-state-utils";
 import {
   buildInsertedGadgetIdentity,
   canHostInsertedGadgets,
@@ -121,21 +121,21 @@ import {
   isInsertableGadgetKind,
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
-} from "../core/gadgetInsertUtils";
-import { resolvePreviewPlatformFromOsSkin } from "../core/formSettingsRuntimeUtils";
+} from "../core/gadget-insert-utils";
+import { resolvePreviewPlatformFromOsSkin } from "../core/form-settings-runtime-utils";
 import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
-} from "../core/gadgetReparentUtils";
-import { getPanelInspectorItemLabel } from "../core/gadgetItemLabelUtils";
+} from "../core/gadget-reparent-utils";
+import { getPanelInspectorItemLabel } from "../core/gadget-item-label-utils";
 import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
   getImmediateToolboxInsertPosition,
   getToolboxPanelCategories,
   type ToolboxPanelTabId
-} from "../core/toolboxPanelUtils";
-import { buildOriginalGadgetDeletePlan } from "../core/gadgetDeleteUtils";
+} from "../core/toolbox-panel-utils";
+import { buildOriginalGadgetDeletePlan } from "../core/gadget-delete-utils";
 import { quotePbString } from "../core/parser/tokenizer";
 import {
   GADGET_KIND,
@@ -187,26 +187,26 @@ import {
   parseWindowPositionInspectorInput,
   parseWindowVariableNameInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
-} from "../core/windowInspectorUtils";
+} from "../core/window-inspector-utils";
 import {
   cssHexToPbRgbRaw,
   getWindowColorInspectorDisplay,
   parseWindowColorInspectorInput,
   pbColorNumberToCssHex
-} from "../core/colorInspectorUtils";
+} from "../core/color-inspector-utils";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference
-} from "../core/propertyValidationUtils";
+} from "../core/property-validation-utils";
 import {
   buildNextGeneratedImageIdRaw,
   getStatusBarCurrentImageEditState,
   resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
-} from "../core/statusbarImageInspectorUtils";
-import { getTopLevelSelectedImageInspectorConfig } from "../core/topLevelImageInspectorUtils";
-import { resolveTopLevelCanvasContextMenuActions } from "../core/topLevelContextMenuUtils";
+} from "../core/statusbar-image-inspector-utils";
+import { getTopLevelSelectedImageInspectorConfig } from "../core/top-level-image-inspector-utils";
+import { resolveTopLevelCanvasContextMenuActions } from "../core/top-level-context-menu-utils";
 
 import {
   PREVIEW_PLUS_ICON_DATA_URI,
@@ -233,7 +233,7 @@ import {
   PREVIEW_WINDOWS8_OPTION_DATA_URI,
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
-} from "./previewAssets";
+} from "./preview-assets";
 
 
 type Model = {
