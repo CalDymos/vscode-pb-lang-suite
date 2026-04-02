@@ -845,6 +845,19 @@ function drawPreviewFallbackImageIcon(ctx: CanvasRenderingContext2D, x: number, 
   ctx.restore();
 }
 
+function drawPreviewTopLevelAssignedImage(
+  ctx: CanvasRenderingContext2D,
+  imageId: string | undefined,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): boolean {
+  const imageEntry = findImageEntryById(imageId);
+  const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
+  return drawPreviewRasterIcon(ctx, previewImage, x, y, width, height);
+}
+
 let settings: DesignerSettings = {
   showGrid: true,
   gridMode: "dots",
@@ -6500,11 +6513,11 @@ function drawMenuFlyoutPanelPreview(
     }
 
     if (entry.iconId || entry.iconRaw) {
-      ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(entryRect.x + 6, entryRect.y + 5, 10, 10);
-      ctx.restore();
+      const iconX = entryRect.x + 3;
+      const iconY = entryRect.y + 2;
+      if (!drawPreviewTopLevelAssignedImage(ctx, entry.iconId, iconX, iconY, 16, 16)) {
+        drawPreviewFallbackImageIcon(ctx, iconX, iconY, 16);
+      }
     }
 
     const label = getMenuPreviewLabel(entry);
@@ -6846,11 +6859,9 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     }
 
     if (hasAssignedImage) {
-      ctx.save();
-      ctx.fillStyle = fg;
-      ctx.globalAlpha = 0.55;
-      ctx.fillRect(x + 4, y + 4, 8, 8);
-      ctx.restore();
+      if (!drawPreviewTopLevelAssignedImage(ctx, entry.iconId, x, y, 16, 16)) {
+        drawPreviewFallbackImageIcon(ctx, x, y, 16);
+      }
     } else if (entry.kind === "ToolBarImageButton") {
       drawPreviewFallbackImageIcon(ctx, x, y, 16);
     } else {
