@@ -1,5 +1,82 @@
 # Changelog
 
+## 0.20.0
+
+### Added
+
+- **Gadget #PB_Any toggle in the inspector**: The gadget *Details* section now has an editable *#PB_Any* checkbox and *Variable* input.
+  - Switching from an enum constant to `#PB_Any` removes the enum entry from `Enumeration FormGadget`, inserts a `Global` declaration, rewrites the constructor call, and updates all usages of the variable in the procedure scope.
+  - Switching back from `#PB_Any` to an enum constant reverses all of the above.
+  - Renaming the variable or enum symbol propagates to the constructor, all in-procedure call sites, and the `FormGadget` enum block.
+- **#PB_Any toggle for assigned images**: Image assignments in the statusbar field, toolbar entry, menu entry, and gadget image inspector now offer a *#PB_Any* checkbox — switching converts the named enum ID to a `#PB_Any` variable (or back) and updates all `ImageID(...)` references in the form.
+
+### Fixed
+
+- Menu bar is now drawn on top of gadget previews instead of beneath them, so menu chrome no longer appears behind overlapping gadgets.
+
+### Internal
+
+- Core helper modules reorganized into feature-based subfolders (`gadget/`, `image/`, `statusbar/`, `toplevel/`, `window/`, `utils/`) with shorter, feature-local file names.
+- Message type constants centralized in `src/shared/messages.ts`; provider and webview now share a single source of truth for all message names.
+- Webview types deduplicated: local `Gadget`, `FormWindow`, `FormMenuEntry`, and related interfaces removed from `main.ts` in favour of the shared `model.ts` definitions; kind fields tightened from plain `string` to the respective union types.
+- `GADGET_KIND` enum constants replace raw string literals throughout the emitter, parser, provider, and webview utilities.
+- `PB_ANY`, `ENUM_NAMES`, and `PB_CALL` constants centralized and reused across all modules.
+- `quotePbString` and `unquoteString` consolidated into `tokenizer.ts`; all duplicate inline implementations removed.
+- Image reference helpers (`buildImageIdReference`, `toPbAnyAssignedVar`, `toEnumImageId`) moved into `patchEmitter.ts` for consistent `ImageID(...)` generation across all assignment paths.
+- Blank-line skipping helpers (`isBlankLine`, `skipBlankLines`) unified in the emitter.
+
+---
+
+## 0.19.0
+
+### Added
+
+- **Native preview chrome for all gadget kinds**: Every gadget in the canvas preview now renders with a platform-accurate, skin-specific appearance instead of a generic label box. Affected gadgets:
+  - *Text gadgets*: `StringGadget` and `IPAddressGadget` render with a native text-field border and background; `TextGadget` respects alignment and border flags; `HyperLinkGadget` shows underlined link styling.
+  - *Buttons*: `ButtonGadget` renders with a Windows 7 two-tone gradient, Windows 8 flat style, or macOS/Linux rounded chrome depending on the active skin.
+  - *Lists*: `TreeGadget`, `ListViewGadget`, `EditorGadget`, and `ScintillaGadget` render with a native client area and display actual gadget items from the parsed model.
+  - *Explorer gadgets*: `ListIconGadget` and `ExplorerListGadget` render with native column headers and item rows; `ExplorerTreeGadget` renders with a tree list chrome.
+  - *Input gadgets*: `ComboBoxGadget` and `ExplorerComboGadget` render with a native drop-down arrow; `SpinGadget` with up/down buttons; `ProgressBarGadget` with a filled track (including vertical orientation and Windows color variants).
+  - *Frame and bars*: `FrameGadget` renders with OS-specific single, double, flat, and captioned frame styles; `TrackBarGadget` with native thumb, track, and tick marks; `ScrollBarGadget` with arrow buttons, thumb, and OS-specific track styling.
+  - *Checkables*: `CheckBoxGadget` and `OptionGadget` render from raster assets with a fallback checkmark/dot; `DateGadget` and `CalendarGadget` render with OS-specific chrome and a date icon.
+  - *Canvas/Web gadgets*: `CanvasGadget` and `OpenGLGadget` render with a framed native surface; `WebGadget` and `WebViewGadget` with a browser-style white client area.
+  - *Container and image gadgets*: `ContainerGadget` and `CustomGadget` have dedicated chrome; `ImageGadget` and `ButtonImageGadget` render the resolved assigned image when available.
+  - *Panel, ScrollArea, and Splitter*: Reworked with original-style per-platform chrome (tabs, scrollbar arrows/thumbs, separator fill).
+- **Resolved images in top-level chrome previews**: Menu flyout entries, toolbar `ToolBarImageButton` entries, and statusbar image fields now display the resolved assigned image instead of a placeholder rectangle. A small fallback icon (frame / sky / sun / terrain) is shown when no image is assigned.
+
+### Fixed
+
+- Separator contrast is now checked against the background before rendering, preventing invisible separators on light or dark VS Code themes (toolbar, statusbar, menu bar, flyout borders).
+- Windows 8 menu bar separator now derives its color from the Windows skin system colors instead of a hardcoded value.
+
+---
+
+## 0.18.0
+
+### Added
+
+- **Platform-accurate window chrome**: The canvas preview now renders the window frame, title bar, menu bar, toolbar, statusbar, and menu flyouts with OS-specific styling for Windows 7, Windows 8, macOS, and Linux:
+  - *Title bar*: Per-skin button layout (macOS: circles on the left; Linux: glyphs on the right; Windows 7/8: min/max/close on the right with correct sizing). macOS renders a compact or toolbar-aware gradient with a white title shadow. Linux uses a dark rounded-top fill with light glyphs. Windows 7 renders a blue gradient frame and rounded outer border; Windows 8 a flat blue frame.
+  - *Window frame*: macOS uses a rounded grey border; Linux omits the frame; Windows 7/8 draw an accurate outer frame with skin-derived gradient and stroke colors.
+  - *Toolbar*: macOS uses a top-to-bottom gradient with a dark bottom separator; Linux a flat fill; Windows 7/8 a plain light fill with configurable item insets.
+  - *Statusbar*: Per-skin background, separator insets, and progress bar styling (rounded blue track for most skins; flat green track for Windows 8).
+  - *Menu bar*: Per-skin background and separator colors; macOS uses a layered gradient; Linux a flat fill; Windows 7/8 derive colors from skin constants.
+  - *Menu flyouts*: Background, border, separator, and entry text colors now use skin-derived values with solid (non-transparent) rendering.
+- **Windows system colors**: On Windows, the extension reads UI colors from the registry (`HKCU\Control Panel\Colors`) and combines them with CSS system color keywords to drive accurate Windows 7 / Windows 8 preview colors for gradients, borders, text, and selection outlines.
+- **Raster preview assets**: Title bar buttons (Windows 7 and Windows 8 styles), the window title icon, the `+` add-button icon, and the submenu arrow indicator are now rendered from embedded raster assets; vector fallbacks are used when assets are unavailable.
+- **Canvas page padding**: The window preview is now offset by a configurable padding (default 10 px) from the canvas edge so the window border is never clipped.
+- **Per-skin title bar metrics**: Button sizes, insets, gaps, and title baseline offsets are resolved per skin (macOS 12×14 px circles, Linux 18×19 px glyphs, Windows 7/8 dynamic sizing).
+- **Selection outlines use system text colors**: Toolbar, statusbar, menu bar, and flyout selection outlines now use the Windows button/menu/window text system color instead of the VS Code hot-tracking color.
+
+### Fixed
+
+- Title bar is now hidden for borderless or tool windows that have no `#PB_Window_SystemMenu` / `#PB_Window_TitleBar` flag (regression from 0.15.0).
+- Title text start position adjusted correctly when a title icon is present (Windows 8 extra gap removed).
+- Titlebar button band aligned to the Windows-specific start position on Windows skins.
+- Generic fallback title fill and captionless top chrome no longer paint over Windows-specific title bar rendering.
+
+---
+
 ## 0.17.0
 
 ### Added
