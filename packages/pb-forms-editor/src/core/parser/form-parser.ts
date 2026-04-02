@@ -113,7 +113,7 @@ export function parseFormDocument(text: string): FormDocument {
   };
 
   const lines = text.split(/\r?\n/);
-  const lineStarts = buildLineStartOffsets(lines);
+  const lineStarts = buildLineStartOffsets(text);
   const customGadgetInitByIndex = parseCustomGadgetInitMap(lines, lineStarts);
 
   const setMenuContext = (menu: FormMenu | undefined) => {
@@ -1443,15 +1443,13 @@ type CustomGadgetInitEntry = {
   codeSource?: SourceRange;
 };
 
-function buildLineStartOffsets(lines: string[]): number[] {
-  const offsets: number[] = [];
-  let offset = 0;
-  for (let i = 0; i < lines.length; i++) {
-    offsets.push(offset);
-    offset += lines[i]?.length ?? 0;
-    if (i < lines.length - 1) offset += 1;
+function buildLineStartOffsets(text: string): number[] {
+  const offsets: number[] = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n") {
+      offsets.push(i + 1);
+    }
   }
-  if (!offsets.length) offsets.push(0);
   return offsets;
 }
 
