@@ -2,16 +2,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 const PROCEDURE_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([".pb", ".pbi"]);
-const PROCEDURE_SOURCE_IGNORED_DIRS: ReadonlySet<string> = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  "coverage",
-  "dist",
-  "node_modules",
-  "out",
-  "out-test"
-]);
+
+/** Maximum file size read during async procedure discovery (512 KB). */
+export const MAX_PROCEDURE_FILE_BYTES = 512 * 1024;
 
 export function extractProcedureNamesFromText(text: string): string[] {
   const names: string[] = [];
@@ -75,7 +68,13 @@ export function resolveProcedureEventFilePath(documentPath: string, eventFile?: 
     : path.normalize(path.resolve(path.dirname(documentPath), trimmedEventFile));
 }
 
-export function discoverProcedureSourcePaths(documentPath: string, workspaceRoot?: string, eventFile?: string): string[] {
+/**
+ * Returns the fixed set of procedure source paths that are always relevant
+ * for a given form document: the document itself (if it's a .pb/.pbi file)
+ * and the optional event file. Workspace-wide discovery is handled separately
+ * via vscode.workspace.findFiles in the extension host.
+ */
+export function resolveFixedProcedureSourcePaths(documentPath: string, eventFile?: string): string[] {
   const resolved = new Set<string>();
   const addPath = (filePath: string | undefined) => {
     const trimmed = (filePath ?? "").trim();
@@ -86,31 +85,23 @@ export function discoverProcedureSourcePaths(documentPath: string, workspaceRoot
   if (isProcedureSourceFilePath(documentPath)) addPath(documentPath);
   addPath(resolveProcedureEventFilePath(documentPath, eventFile));
 
-  const trimmedWorkspaceRoot = (workspaceRoot ?? "").trim();
-  if (!trimmedWorkspaceRoot.length) return Array.from(resolved).sort();
+  return Array.from(resolved).sort();
+}
 
-  const visitDir = (dirPath: string) => {
-    let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
-    try {
-      entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      const entryPath = path.join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        if (PROCEDURE_SOURCE_IGNORED_DIRS.has(entry.name)) continue;
-        visitDir(entryPath);
-        continue;
-      }
-
-      if (!entry.isFile()) continue;
-      if (!isProcedureSourceFilePath(entryPath)) continue;
-      addPath(entryPath);
-    }
-  };
-
-  visitDir(path.normalize(trimmedWorkspaceRoot));
-  return Array.from(resolved).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+/**
+ * Reads a procedure source file asynchronously.
+ * Returns undefined when the file is unreadable or exceeds maxBytes.
+ */
+export async function readProcedureSourceTextAsync(
+  filePath: string,
+  maxBytes = MAX_PROCEDURE_FILE_BYTES
+): Promise<string | undefined> {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    if (stat.size > maxBytes) return undefined;
+    const buf = await fs.promises.readFile(filePath);
+    return buf.toString("utf8");
+  } catch {
+    return undefined;
+  }
 }

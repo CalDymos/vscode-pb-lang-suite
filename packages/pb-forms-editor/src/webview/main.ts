@@ -305,7 +305,8 @@ type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: Model; settings?: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.procedureNames; names: string[] };
 
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
@@ -2332,6 +2333,15 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   if (msg.type === "windowsSystemColors") {
     windowsRegistryColors = msg.colors;
     render();
+  }
+
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.procedureNames) {
+    // Async procedure discovery completed: update names and re-render the
+    // inspector (procedure dropdowns) without disturbing any other UI state.
+    if (model) {
+      model.procedureNames = msg.names;
+      renderInfoPanel();
+    }
   }
 });
 

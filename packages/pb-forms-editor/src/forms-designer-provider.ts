@@ -1,5 +1,4 @@
 import * as cp from "child_process";
-import * as fs from "fs";
 import * as vscode from "vscode";
 import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE } from "./shared/messages";
 import { parseFormDocument } from "./core/parser/form-parser";
@@ -65,7 +64,9 @@ import { relativizeImagePath, toPbFilePathLiteral } from "./core/image/path";
 import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image/assignment";
 import { readImageDimensions } from "./core/image/dimension";
 import {
-  discoverProcedureSourcePaths,
+  resolveFixedProcedureSourcePaths,
+  readProcedureSourceTextAsync,
+  MAX_PROCEDURE_FILE_BYTES,
   extractProcedureNamesFromText,
   isProcedureSourceFilePath,
   resolveProcedureEventFilePath,
@@ -133,18 +134,76 @@ function isSameFsPath(left: string | undefined, right: string | undefined): bool
   return normalizeFsPathForCompare(left) === normalizeFsPathForCompare(right);
 }
 
-function tryReadProcedureSourceTextSync(filePath: string | undefined): string | undefined {
-  if (!filePath) return undefined;
+/** Glob exclude pattern for vscode.workspace.findFiles during procedure discovery. */
+const PROCEDURE_FIND_EXCLUDE =
+  "{**/.git/**,**/.hg/**,**/.svn/**,**/coverage/**,**/dist/**,**/node_modules/**,**/out/**,**/out-test/**}";
 
-  const openDocument = vscode.workspace.textDocuments.find(doc => doc.uri.scheme === "file" && isSameFsPath(doc.uri.fsPath, filePath));
-  if (openDocument) return openDocument.getText();
+/** Safety cap: do not scan more than this many .pb/.pbi files per workspace. */
+const PROCEDURE_FIND_MAX_RESULTS = 5_000;
 
-  try {
-    const buffer = fs.readFileSync(filePath);
-    return Buffer.from(buffer).toString("utf8");
-  } catch {
-    return undefined;
+/**
+ * Asynchronously collects all procedure names visible from a form document.
+ * Uses vscode.workspace.findFiles for non-blocking workspace traversal and
+ * fs.promises for non-blocking file reads. Respects the cancellation token so
+ * that a superseded refresh can be aborted early.
+ */
+async function collectProcedureNamesAsync(
+  documentPath: string,
+  documentText: string,
+  eventFile: string | undefined,
+  workspaceRoot: string | undefined,
+  token: vscode.CancellationToken
+): Promise<string[]> {
+  const names: string[] = [];
+
+  // 1. Fixed paths: documentPath itself + the eventFile (always scanned first).
+  const fixedPaths = resolveFixedProcedureSourcePaths(documentPath, eventFile);
+  for (const filePath of fixedPaths) {
+    if (token.isCancellationRequested) return [];
+    let text: string | undefined;
+    if (isSameFsPath(filePath, documentPath)) {
+      text = documentText;
+    } else {
+      const openDoc = vscode.workspace.textDocuments.find(
+        d => d.uri.scheme === "file" && isSameFsPath(d.uri.fsPath, filePath)
+      );
+      text = openDoc ? openDoc.getText() : await readProcedureSourceTextAsync(filePath);
+    }
+    if (text) names.push(...extractProcedureNamesFromText(text));
   }
+
+  // 2. Workspace-wide scan via vscode.workspace.findFiles (non-blocking).
+  if (workspaceRoot) {
+    const uris = await vscode.workspace.findFiles(
+      "**/*.{pb,pbi}",
+      PROCEDURE_FIND_EXCLUDE,
+      PROCEDURE_FIND_MAX_RESULTS,
+      token
+    );
+    if (token.isCancellationRequested) return [];
+
+    for (const uri of uris) {
+      if (token.isCancellationRequested) return [];
+      const filePath = uri.fsPath;
+
+      // Skip paths already processed in the fixed-path pass above.
+      if (fixedPaths.some(p => isSameFsPath(p, filePath))) continue;
+
+      // Only include files that belong to the same workspace folder.
+      const fileWorkspace = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+      if (!fileWorkspace || !isSameFsPath(fileWorkspace, workspaceRoot)) continue;
+
+      const openDoc = vscode.workspace.textDocuments.find(
+        d => d.uri.scheme === "file" && isSameFsPath(d.uri.fsPath, filePath)
+      );
+      const text = openDoc
+        ? openDoc.getText()
+        : await readProcedureSourceTextAsync(filePath, MAX_PROCEDURE_FILE_BYTES);
+      if (text) names.push(...extractProcedureNamesFromText(text));
+    }
+  }
+
+  return sortUniqueProcedureNames(names);
 }
 
 function buildToolboxIconUriMap(webview: vscode.Webview, extensionUri: vscode.Uri): Record<string, string> {
@@ -164,30 +223,6 @@ function buildToolboxIconUriMap(webview: vscode.Webview, extensionUri: vscode.Ur
 
 function getWorkspaceRootForDocument(documentUri: vscode.Uri): string | undefined {
   return vscode.workspace.getWorkspaceFolder(documentUri)?.uri.fsPath;
-}
-
-function collectProcedureNames(documentPath: string, text: string, model: FormDocument, workspaceRoot?: string): string[] {
-  const names: string[] = [];
-  for (const sourcePath of discoverProcedureSourcePaths(documentPath, workspaceRoot, model.window?.eventFile)) {
-    const sourceText = isSameFsPath(sourcePath, documentPath) ? text : tryReadProcedureSourceTextSync(sourcePath);
-    if (!sourceText) continue;
-    names.push(...extractProcedureNamesFromText(sourceText));
-  }
-
-  return sortUniqueProcedureNames(names);
-}
-
-function shouldRefreshProcedureListFromDocumentChange(changedDocument: vscode.TextDocument, formDocumentUri: vscode.Uri, currentEventFilePath?: string): boolean {
-  if (changedDocument.uri.scheme !== "file") return false;
-  if (changedDocument.uri.toString() === formDocumentUri.toString()) return true;
-  if (isSameFsPath(changedDocument.uri.fsPath, currentEventFilePath)) return true;
-
-  const workspaceRoot = getWorkspaceRootForDocument(formDocumentUri);
-  if (!workspaceRoot) return false;
-  const changedWorkspace = vscode.workspace.getWorkspaceFolder(changedDocument.uri)?.uri.fsPath;
-  if (!changedWorkspace || !isSameFsPath(changedWorkspace, workspaceRoot)) return false;
-
-  return isProcedureSourceFilePath(changedDocument.uri.fsPath);
 }
 
 function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.Uri[], formDocumentUri: vscode.Uri, currentEventFilePath?: string): boolean {
@@ -289,7 +324,8 @@ type ExtensionToWebviewMessage =
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.init; model: any; settings: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.settings; settings: DesignerSettings }
   | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.error; message: string }
-  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors };
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors; colors: WindowsRegistryColors }
+  | { type: typeof EXT_TO_WEBVIEW_MSG_TYPE.procedureNames; names: string[] };
 
 /**
  * Reads Windows UI colors from HKCU\Control Panel\Colors via `reg query`.
@@ -372,6 +408,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     let lastModel: FormDocument | undefined;
     let initTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastProcedureNames: string[] = [];
+    let procedureRefreshCts: vscode.CancellationTokenSource | null = null;
+    let procedureRefreshTimer: ReturnType<typeof setTimeout> | undefined;
     const gadgetTextVariableSessionOverrides = new Map<string, boolean>();
 
     function createErrorModel(textLen: number, message: string): FormDocument {
@@ -403,6 +442,44 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       initTimer = setTimeout(() => sendInit(), 200);
     };
 
+    /**
+     * Cancels any in-flight async procedure refresh and starts a new one.
+     * On completion the webview receives a lightweight `procedureNames` message
+     * instead of a full `init`, so no UI state (scroll, selection) is disturbed.
+     */
+    const triggerProcedureRefresh = (documentText: string, eventFile: string | undefined) => {
+      procedureRefreshCts?.cancel();
+      procedureRefreshCts?.dispose();
+      procedureRefreshCts = new vscode.CancellationTokenSource();
+      const token = procedureRefreshCts.token;
+      const workspaceRoot = getWorkspaceRootForDocument(document.uri);
+
+      collectProcedureNamesAsync(
+        document.uri.fsPath,
+        documentText,
+        eventFile,
+        workspaceRoot,
+        token
+      ).then(names => {
+        if (token.isCancellationRequested) return;
+        lastProcedureNames = names;
+        if (lastModel) {
+          lastModel.procedureNames = names;
+          post({ type: EXT_TO_WEBVIEW_MSG_TYPE.procedureNames, names });
+        }
+      }).catch(() => {
+        // Procedure names are best-effort; silently ignore errors.
+      });
+    };
+
+    /** Debounced wrapper around triggerProcedureRefresh for file-system events. */
+    const scheduleProcedureRefresh = () => {
+      if (procedureRefreshTimer) clearTimeout(procedureRefreshTimer);
+      procedureRefreshTimer = setTimeout(() => {
+        triggerProcedureRefresh(document.getText(), lastModel?.window?.eventFile);
+      }, 200);
+    };
+
     const sendInit = () => {
       const text = document.getText();
 
@@ -432,8 +509,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           }
         }
 
-        const workspaceRoot = getWorkspaceRootForDocument(document.uri);
-        model.procedureNames = collectProcedureNames(document.uri.fsPath, text, model, workspaceRoot);
+        // Use the cached procedure names for an instant render; the async
+        // refresh below will push an update once discovery completes.
+        model.procedureNames = lastProcedureNames;
 
         const settings = readDesignerSettings();
         model.meta.issues = applyConfiguredFormVersionWarnings(model.meta.issues, model.meta.header, settings);
@@ -442,6 +520,10 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           gadgetTextVariableSessionOverrides.delete(id);
         }
         post({ type: "init", model, settings });
+
+        // Kick off non-blocking procedure discovery; the eventFile may have
+        // changed after re-parsing, so always pass the freshly parsed value.
+        triggerProcedureRefresh(text, model.window?.eventFile);
       } catch (e: any) {
         // Keep the webview alive with a minimal model and a structured error.
         const model = createErrorModel(text.length, e?.message ?? String(e));
@@ -465,23 +547,35 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     });
 
     const docSub = vscode.workspace.onDidChangeTextDocument((e: vscode.TextDocumentChangeEvent) => {
-      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
-      if (shouldRefreshProcedureListFromDocumentChange(e.document, document.uri, currentEventFilePath)) {
+      if (e.document.uri.scheme !== "file") return;
+
+      if (e.document.uri.toString() === document.uri.toString()) {
+        // The form document itself changed: re-parse and refresh everything.
         scheduleInit();
+        return;
+      }
+
+      const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
+      if (
+        isSameFsPath(e.document.uri.fsPath, currentEventFilePath) ||
+        isProcedureSourceFilePath(e.document.uri.fsPath)
+      ) {
+        // A procedure source file changed: only procedure names need updating.
+        scheduleProcedureRefresh();
       }
     });
 
     const createSub = vscode.workspace.onDidCreateFiles((e: vscode.FileCreateEvent) => {
       const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
       if (shouldRefreshProcedureListFromFileChanges(e.files, document.uri, currentEventFilePath)) {
-        scheduleInit();
+        scheduleProcedureRefresh();
       }
     });
 
     const deleteSub = vscode.workspace.onDidDeleteFiles((e: vscode.FileDeleteEvent) => {
       const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
       if (shouldRefreshProcedureListFromFileChanges(e.files, document.uri, currentEventFilePath)) {
-        scheduleInit();
+        scheduleProcedureRefresh();
       }
     });
 
@@ -489,7 +583,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       const currentEventFilePath = resolveProcedureEventFilePath(document.uri.fsPath, lastModel?.window?.eventFile);
       const renamedUris = e.files.flatMap(file => [file.oldUri, file.newUri]);
       if (shouldRefreshProcedureListFromFileChanges(renamedUris, document.uri, currentEventFilePath)) {
-        scheduleInit();
+        scheduleProcedureRefresh();
       }
     });
 
@@ -500,6 +594,9 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
       deleteSub.dispose();
       renameSub.dispose();
       if (initTimer) clearTimeout(initTimer);
+      if (procedureRefreshTimer) clearTimeout(procedureRefreshTimer);
+      procedureRefreshCts?.cancel();
+      procedureRefreshCts?.dispose();
     });
 
     webviewPanel.webview.onDidReceiveMessage(async (msg: WebviewToExtensionMessage) => {

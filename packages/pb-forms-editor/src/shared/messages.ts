@@ -2,7 +2,8 @@ export const EXT_TO_WEBVIEW_MSG_TYPE = {
   init: "init",
   settings: "settings",
   error: "error",
-  windowsSystemColors: "windowsSystemColors"
+  windowsSystemColors: "windowsSystemColors",
+  procedureNames: "procedureNames"
 } as const;
 
 export const WEBVIEW_TO_EXT_MSG_TYPE = {
