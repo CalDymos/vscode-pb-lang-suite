@@ -36,6 +36,10 @@ import {
   toWindowLocalPoint
 } from "../core/preview/chrome";
 import {
+  applyPreviewGadgetTextStyle,
+  drawPreviewTextDecorations,
+} from "../core/preview/gadget-font";
+import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
   getStatusBarFieldDisplaySummary,
@@ -4109,11 +4113,13 @@ function drawButtonGadgetChrome(
     }
   }
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textWidth = ctx.measureText(label).width;
   const textX = x + Math.max(1, (w - textWidth) / 2);
-  const textY = y + Math.max(1, Math.trunc((h - 12) / 2));
+  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
   ctx.fillText(label, textX, textY);
+  drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -4226,8 +4232,11 @@ function drawCheckableGadgetChrome(
   }
 
   if (label.length > 0) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+    const adjustedTextY = y + Math.trunc((h - textStyle.sizePx) / 2);
     ctx.fillStyle = textColor;
-    ctx.fillText(label, textX, textY);
+    ctx.fillText(label, textX, adjustedTextY);
+    drawPreviewTextDecorations(ctx, label, textX, adjustedTextY, textStyle, textColor);
   }
 
   ctx.restore();
@@ -4261,8 +4270,11 @@ function drawDateGadgetChrome(
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
     drawComboDropArrow(ctx, x + w - 8, y + Math.trunc(h / 2), textColor);
     if (label.length > 0) {
+      const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+      const textY = y + Math.trunc((h - textStyle.sizePx) / 2);
       ctx.fillStyle = textColor;
-      ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+      ctx.fillText(label, x + 3, textY);
+      drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
     }
     ctx.restore();
     return;
@@ -4294,8 +4306,11 @@ function drawDateGadgetChrome(
   ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
 
   if (label.length > 0) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+    const textY = y + Math.trunc((h - textStyle.sizePx) / 2);
     ctx.fillStyle = textColor;
-    ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+    ctx.fillText(label, x + 3, textY);
+    drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   }
 
   if (!drawPreviewRasterIcon(ctx, iconImage, x + w - 21, y + Math.trunc((h - iconHeight) / 2), iconWidth, iconHeight)) {
@@ -4547,8 +4562,12 @@ function drawComboLikeGadgetChrome(
   }
 
   drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(h / 2), arrowColor);
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textX = x + (isEditable ? 3 : 4);
+  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
-  ctx.fillText(itemLabel, x + (isEditable ? 3 : 4), y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(itemLabel, textX, textY);
+  drawPreviewTextDecorations(ctx, itemLabel, textX, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -4656,8 +4675,11 @@ function drawSpinGadgetChrome(
   ctx.closePath();
   ctx.fill();
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
-  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, x + 3, textY);
+  drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -4765,8 +4787,10 @@ function drawFrameGadgetChrome(
     }
 
     if (caption.length > 0) {
+      const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
       ctx.fillStyle = captionColor;
       ctx.fillText(caption, x + 10, y);
+      drawPreviewTextDecorations(ctx, caption, x + 10, y, textStyle, captionColor);
     }
 
     traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
@@ -4869,8 +4893,10 @@ function drawFrameGadgetChrome(
   if (captionWidth > 0) {
     ctx.fillStyle = captionBgColor;
     ctx.fillRect(x + 8, y, captionWidth + 4, captionHeight);
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
     ctx.fillStyle = captionColor;
     ctx.fillText(caption, x + 10, y);
+    drawPreviewTextDecorations(ctx, caption, x + 10, y, textStyle, captionColor);
   }
 
   ctx.restore();
@@ -5199,8 +5225,11 @@ function drawStringLikeGadgetChrome(
     ctx.fillRect(x + 2, y + 3, Math.max(0, w - 4), Math.max(0, h - 4));
   }
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
-  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, x + 3, textY);
+  drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -5229,6 +5258,7 @@ function drawTextLikeGadgetChrome(
     ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   }
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   let textX = x + 1;
   const textWidth = ctx.measureText(label).width;
   if (hasPbFlag(g.flagsExpr, "#PB_Text_Right")) {
@@ -5237,8 +5267,10 @@ function drawTextLikeGadgetChrome(
     textX = x + Math.max(1, (w - textWidth) / 2);
   }
 
+  const textY = y + Math.max(0, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
-  ctx.fillText(label, textX, y + Math.max(0, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, textX, textY);
+  drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
 
   if (isTextGadget && hasPbFlag(g.flagsExpr, "#PB_Text_Border")) {
     ctx.strokeStyle = ensurePreviewLineContrast(
@@ -5297,10 +5329,12 @@ function drawListLikeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
 
   if (rows.length === 0) {
     ctx.fillText(fallbackLabel, placeholderX, y + 4);
+    drawPreviewTextDecorations(ctx, fallbackLabel, placeholderX, y + 4, textStyle, textColor);
     ctx.restore();
     return;
   }
@@ -5308,6 +5342,7 @@ function drawListLikeGadgetChrome(
   for (const row of rows) {
     if (textY > lastTextY) break;
     ctx.fillText(row, itemX, textY);
+    drawPreviewTextDecorations(ctx, row, itemX, textY, textStyle, textColor);
     textY += lineAdvance;
   }
 
@@ -5428,7 +5463,7 @@ function drawListIconLikeGadgetChrome(
     }
   }
 
-  ctx.font = '12px sans-serif';
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
 
   let rowY = contentStartY;
@@ -5440,11 +5475,14 @@ function drawListIconLikeGadgetChrome(
       const fields = row.split("|");
       let xCol = x + 2;
       for (let index = 0; index < fields.length && index < columns.length; index += 1) {
-        ctx.fillText(fields[index] ?? "", xCol, rowY);
+        const fieldText = fields[index] ?? "";
+        ctx.fillText(fieldText, xCol, rowY);
+        drawPreviewTextDecorations(ctx, fieldText, xCol, rowY, textStyle, textColor);
         xCol += columns[index].width;
       }
     } else {
       ctx.fillText(row, x + 6, rowY);
+      drawPreviewTextDecorations(ctx, row, x + 6, rowY, textStyle, textColor);
     }
 
     rowY += 16;
@@ -5476,8 +5514,10 @@ function drawExplorerTreeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
   ctx.fillText("Explorer Tree", x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, "Explorer Tree", x + 3, y + 3, textStyle, textColor);
   ctx.restore();
 }
 
