@@ -105,41 +105,86 @@ function scanDocumentCalls(document: vscode.TextDocument, scanRange?: ScanRange)
   return scanCalls(document.getText(), scanRange);
 }
 
-function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.WorkspaceEdit | undefined): void {
-  if (!source) return;
+type WorkspaceEditOperation = {
+  kind: "replace" | "insert" | "delete";
+  uri: vscode.Uri;
+  range?: vscode.Range;
+  position?: vscode.Position;
+  newText?: string;
+};
+
+type WorkspaceTextEditLike = {
+  range?: vscode.Range;
+  newText?: string;
+};
+
+function buildWorkspaceEditOperations(source: vscode.WorkspaceEdit): WorkspaceEditOperation[] | undefined {
   const sourceWithOps = source as vscode.WorkspaceEdit & {
     entries?: () => Array<[unknown, unknown[]]>;
-    getOperations?: () => Array<{
-      kind: "replace" | "insert" | "delete";
-      uri: vscode.Uri;
-      range?: vscode.Range;
-      position?: vscode.Position;
-      newText?: string;
-    }>;
+    getOperations?: () => WorkspaceEditOperation[];
   };
 
-  if (typeof sourceWithOps.entries !== "function") {
-    const operations = sourceWithOps.getOperations?.() ?? [];
-    for (const operation of operations) {
-      if (operation.kind === "replace" && operation.range) {
-        target.replace(operation.uri, operation.range, operation.newText ?? "");
-      }
-      else if (operation.kind === "insert" && operation.position) {
-        target.insert(operation.uri, operation.position, operation.newText ?? "");
-      }
-      else if (operation.kind === "delete" && operation.range) {
-        target.delete(operation.uri, operation.range);
+  if (typeof sourceWithOps.getOperations === "function") {
+    return sourceWithOps.getOperations();
+  }
+
+  if (typeof sourceWithOps.entries === "function") {
+    const replayOperations: WorkspaceEditOperation[] = [];
+
+    for (const [uri, textEdits] of sourceWithOps.entries()) {
+      for (const textEdit of textEdits as WorkspaceTextEditLike[]) {
+        const range = textEdit?.range;
+        if (!range) continue;
+
+        const newText = textEdit.newText ?? "";
+        if (range.start.line === range.end.line && range.start.character === range.end.character) {
+          if (newText.length > 0) {
+            replayOperations.push({
+              kind: "insert",
+              uri: uri as vscode.Uri,
+              position: range.start,
+              newText,
+            });
+          }
+          continue;
+        }
+
+        replayOperations.push({
+          kind: newText.length > 0 ? "replace" : "delete",
+          uri: uri as vscode.Uri,
+          range,
+          newText,
+        });
       }
     }
+
+    return replayOperations;
+  }
+
+  return undefined;
+}
+
+function appendWorkspaceEdit(target: vscode.WorkspaceEdit, source: vscode.WorkspaceEdit | undefined): void {
+  if (!source) return;
+
+  const operations = buildWorkspaceEditOperations(source);
+  if (!operations) {
+    throw new Error("Unsupported WorkspaceEdit shape: no replayable operations or entries available.");
+  }
+  if (!operations.length) {
     return;
   }
 
-  if (typeof target.set !== "function" || typeof target.get !== "function") {
-    return;
-  }
-
-  for (const [uri, textEdits] of sourceWithOps.entries()) {
-    target.set(uri, [...target.get(uri), ...textEdits]);
+  for (const operation of operations) {
+    if (operation.kind === "replace" && operation.range) {
+      target.replace(operation.uri, operation.range, operation.newText ?? "");
+    }
+    else if (operation.kind === "insert" && operation.position) {
+      target.insert(operation.uri, operation.position, operation.newText ?? "");
+    }
+    else if (operation.kind === "delete" && operation.range) {
+      target.delete(operation.uri, operation.range);
+    }
   }
 }
 

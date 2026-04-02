@@ -10,6 +10,7 @@ import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 // NOTE: TextDocument is imported as a type only — it is used as the parameter
 // type of editFactory so that patch emitter functions (which expect vscode.TextDocument)
 // are accepted without additional casts at each call site.
+import { WorkspaceEdit } from "vscode";
 import type { TextDocument } from "vscode";
 
 // NOTE: editFactory receives a vscode.TextDocument, not a FakeTextDocument directly.
@@ -499,6 +500,59 @@ EndProcedure
   assert.doesNotMatch(patchedText, /ResizeGadget\(#BtnApply/);
   assert.doesNotMatch(patchedText, /Case #BtnApply/);
   assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply"), undefined);
+});
+
+test("merges secondary gadget delete edits when WorkspaceEdit only exposes entries()", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 90, 25, "Apply")
+  GadgetToolTip(#BtnApply, "Run")
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_Gadget
+      Select EventGadget()
+        Case #BtnApply
+          HandleApply(EventType())
+      EndSelect
+  EndSelect
+EndProcedure
+`;
+
+  const workspaceEditPrototype = WorkspaceEdit.prototype as WorkspaceEdit & {
+    getOperations?: () => Array<unknown>;
+  };
+  const originalGetOperations = workspaceEditPrototype.getOperations;
+
+  try {
+    delete workspaceEditPrototype.getOperations;
+
+    const document = new FakeTextDocument(text);
+    const edit = applyGadgetDelete(document.asTextDocument(), "#BtnApply");
+    assert.ok(edit, "Expected a WorkspaceEdit result.");
+
+    workspaceEditPrototype.getOperations = originalGetOperations;
+
+    const patchedText = applyWorkspaceEditToText(text, edit!);
+    const parsed = parseFormDocument(patchedText);
+
+    assert.doesNotMatch(patchedText, /ButtonGadget\(#BtnApply/);
+    assert.doesNotMatch(patchedText, /Case #BtnApply/);
+    assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply"), undefined);
+  }
+  finally {
+    workspaceEditPrototype.getOperations = originalGetOperations;
+  }
 });
 
 test("deletes a panel gadget recursively with all child gadgets and tab items", () => {

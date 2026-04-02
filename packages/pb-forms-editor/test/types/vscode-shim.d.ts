@@ -33,9 +33,13 @@ declare module "vscode" {
     replace(uri: unknown, range: Range, newText: string): void;
     insert(uri: unknown, position: Position, newText: string): void;
     delete(uri: unknown, range: Range): void;
+    entries?(): Array<[unknown, Array<{
+      range?: Range;
+      newText?: string;
+    }>] >;
     set?(uri: unknown, edits: unknown[]): void;
     get?(uri: unknown): unknown[];
-    getOperations(): Array<{
+    getOperations?(): Array<{
       kind: "replace" | "insert" | "delete";
       uri: unknown;
       range?: Range;

@@ -35,6 +35,26 @@ class WorkspaceEdit {
     this._ops.push({ kind: "delete", uri, range });
   }
 
+  entries() {
+    const grouped = new Map();
+
+    for (const op of this._ops) {
+      const edits = grouped.get(op.uri) ?? [];
+      if (op.kind === "insert") {
+        edits.push({ range: new Range(op.position, op.position), newText: op.newText ?? "" });
+      }
+      else if (op.kind === "replace") {
+        edits.push({ range: op.range, newText: op.newText ?? "" });
+      }
+      else if (op.kind === "delete") {
+        edits.push({ range: op.range, newText: "" });
+      }
+      grouped.set(op.uri, edits);
+    }
+
+    return Array.from(grouped.entries());
+  }
+
   getOperations() {
     return [...this._ops];
   }
