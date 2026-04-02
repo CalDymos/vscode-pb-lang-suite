@@ -19,6 +19,7 @@ import {
   getScrollAreaViewportRect,
   getStatusBarRect,
   getStatusBarAlignedX,
+  getWindowClientSurfaceRects,
   hitHandlePoints,
   getToolBarRect,
   getWindowContentRect,
@@ -34,7 +35,7 @@ import {
   toWindowLocalPoint,
   type PreviewChromeMetrics,
   type PreviewRect
-} from "../src/core/previewChromeUtils";
+} from "../src/core/preview/chrome";
 
 const METRICS: PreviewChromeMetrics = {
   panelHeight: 22,
@@ -131,6 +132,28 @@ test("computes combined window chrome layout from title and top-level bands", ()
     toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
     statusBarRect: { x: 40, y: 247, w: 320, h: 23 },
     contentRect: { x: 40, y: 122, w: 320, h: 125 }
+  });
+});
+
+test("computes combined window chrome layout with Windows client-side and bottom insets", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+  const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8, 8);
+
+  assert.deepEqual(layout, {
+    menuBarRect: { x: 48, y: 76, w: 304, h: 22 },
+    toolBarRect: { x: 48, y: 98, w: 304, h: 24 },
+    statusBarRect: { x: 48, y: 239, w: 304, h: 23 },
+    contentRect: { x: 48, y: 122, w: 304, h: 117 }
+  });
+});
+
+test("computes the Windows client surface fill and border rects from chrome and bottom padding", () => {
+  const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
+  const rects = getWindowClientSurfaceRects(windowRect, 26, 8, 8);
+
+  assert.deepEqual(rects, {
+    fillRect: { x: 48, y: 76, w: 304, h: 186 },
+    borderRect: { x: 47, y: 75, w: 306, h: 188 }
   });
 });
 

@@ -4,9 +4,10 @@ import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
   getStatusBarFieldDisplaySummary,
+  getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth,
   splitPbFlags
-} from "../src/core/statusbarPreviewUtils";
+} from "../src/core/statusbar/preview";
 
 test("parses statusbar widths and ignores invalid or flexible values", () => {
   assert.equal(parseStatusBarWidth("120"), 120);
@@ -42,4 +43,28 @@ test("builds display summaries for label, image, progress and empty fields", () 
   assert.equal(getStatusBarFieldDisplaySummary({ imageRaw: "#Img0", imageId: "#Img0" }), "Image #Img0");
   assert.equal(getStatusBarFieldDisplaySummary({ progressBar: true, progressRaw: "25" }), "Progress 25");
   assert.equal(getStatusBarFieldDisplaySummary({}), "Empty");
+});
+
+
+test("uses the fixed half-fill preview for statusbar progress bars with 2px side padding", () => {
+  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 23, "0"), {
+    progress: 0,
+    trackWidth: 86,
+    trackHeight: 13,
+    fillWidth: 41
+  });
+
+  assert.deepEqual(getStatusBarProgressPreviewMetrics(90, 23, "50"), {
+    progress: 50,
+    trackWidth: 86,
+    trackHeight: 13,
+    fillWidth: 41
+  });
+
+  assert.deepEqual(getStatusBarProgressPreviewMetrics(6, 8, "abc"), {
+    progress: 0,
+    trackWidth: 2,
+    trackHeight: 6,
+    fillWidth: 0
+  });
 });

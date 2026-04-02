@@ -2,14 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { TextDocument } from "vscode";
 
-import { parseFormDocument } from "../src/core/parser/formParser";
+import { parseFormDocument } from "../src/core/parser/form-parser";
 import { MENU_ENTRY_KIND } from "../src/core/model";
 import {
   applyMenuEntryDelete,
   applyMenuEntryInsert,
   applyMenuEntryUpdate,
   type MenuEntryArgs,
-} from "../src/core/emitter/patchEmitter";
+} from "../src/core/emitter/patch-emitter";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
 
@@ -220,5 +220,78 @@ EndProcedure
     patchedText,
     /Enumeration FormMenu\r?\n  #MenuSave\r?\nEndEnumeration\r?\n\r?\nEnumeration FormImage\r?\n  #ImgSave\r?\nEndEnumeration/
   );
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});
+
+
+test("inserts FormMenu before an existing FormFont block when no window or gadget enum is present", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+Enumeration FormFont
+  #FontMain
+EndEnumeration
+
+LoadFont(#FontMain, "Arial", 10)
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#PB_Any))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormMenu',
+    '  #MenuSave',
+    'EndEnumeration',
+    '',
+    'Enumeration FormFont',
+    '  #FontMain',
+    'EndEnumeration',
+  ].join("\n")));
+  assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
+});
+
+test("inserts FormMenu before image decoder lines when no enum anchor exists yet", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+
+UsePNGImageDecoder()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 200)
+  OpenWindow(#PB_Any, x, y, width, height, "Menu")
+  CreateMenu(0, WindowID(#PB_Any))
+  MenuTitle("File")
+EndProcedure
+`;
+
+  const args: MenuEntryArgs = {
+    kind: MENU_ENTRY_KIND.MenuItem,
+    idRaw: "#MenuSave",
+    textRaw: '"Save"',
+  };
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyMenuEntryInsert(document, "0", args)
+  );
+
+  const normalized = patchedText.replace(/\r\n/g, "\n");
+  assert.ok(normalized.includes([
+    'Enumeration FormMenu',
+    '  #MenuSave',
+    'EndEnumeration',
+    '',
+    'UsePNGImageDecoder()',
+  ].join("\n")));
   assert.ok(parsed.menus[0]?.entries.some((entry) => entry.idRaw === "#MenuSave"));
 });

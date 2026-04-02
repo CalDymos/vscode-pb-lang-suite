@@ -1,22 +1,18 @@
 #!/usr/bin/env node
 /**
- * Back-merge helper: merge main into devel via a dedicated backmerge branch.
+ * Back-merge helper: merge main into devel.
  *
  * Usage:
- *   node scripts/backmerge-main-into-devel.mjs
+ *  - CLI-Optionen:
+ *      --pr      → Backmerge over PR
+ *      --direct  → Direct merge in devel
+ *      --help    → Help anzeigen
  *
- * Notes:
- * - Assumes you are in the repo root.
- * - Creates/updates a local branch: backmerge/main-into-devel
- * - Pushes the branch and prints PR instructions.
- *
- * If merge conflicts occur, resolve them manually, then run:
- *   git add -A
- *   git commit
- *   git push
+ *  - If no option is specified → interactive query
  */
 
 import { execSync } from "node:child_process";
+import readline from "node:readline";
 
 const MAIN = "main";
 const DEVEL = "devel";
@@ -39,6 +35,39 @@ function branchExistsLocal(name) {
     return false;
   }
 }
+
+function ask(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise(resolve =>
+    rl.question(question, answer => {
+      rl.close();
+      resolve(answer.trim());
+    })
+  );
+}
+
+// get CLI arguments and determine mode
+const args = process.argv.slice(2);
+let mode = null;
+
+if (args.includes("--help")) {
+  console.log(`
+Backmerge Script Options:
+
+  --pr        Backmerge over Pull Request
+  --direct    Direct merge in the devel branch
+  --help      Show this help message
+
+If no option is specified → interactive query.
+`);
+  process.exit(0);
+}
+
+if (args.includes("--pr")) mode = "pr";
+if (args.includes("--direct")) mode = "direct";
 
 try {
   const startBranch = getCurrentBranch();
@@ -72,13 +101,46 @@ try {
     process.exit(1);
   }
 
-  // Push branch
-  run(`git push -u origin ${BACKMERGE}`);
+  // If no mode is specified → interactive query
+  if (!mode) {
+    const answer = await ask("\nBackmerge over PR ? (y/n): ");
+    mode = answer.toLowerCase() === "y" ? "pr" : "direct";
+  }
 
-  console.log("\nPR instructions:");
-  console.log(`- base:    ${DEVEL}`);
-  console.log(`- compare: ${BACKMERGE}`);
-  console.log("\nAfter merge, delete the backmerge branch in GitHub UI (optional).");
+  if (mode === "pr") {
+    // Push branch
+    run(`git push -u origin ${BACKMERGE}`);
+
+    console.log("\nPR instructions:");
+    console.log(`- base:    ${DEVEL}`);
+    console.log(`- compare: ${BACKMERGE}`);
+    console.log("\nAfter merge, delete the backmerge branch in GitHub UI (optional).");
+  }
+
+  if (mode === "direct") {
+    // direct merge
+    console.log("\nDirect merge will be executed ...");
+
+    // Back to DEVEL
+    run(`git checkout ${DEVEL}`);
+
+    // Merge BACKMERGE → DEVEL with message
+    try {
+      run(`git merge ${BACKMERGE} -m "Backmerge main to devel"`);
+    } catch (err) {
+      console.error("\nMerge conflicts occurred.");
+      console.error("Please resolve conflicts and then:");
+      console.error("  git add -A");
+      console.error('  git commit -m "Backmerge main to devel"');
+      console.error("  git push");
+      process.exit(1);
+    }
+
+    // Push
+    run("git push");
+
+    console.log("\nDirect merge completed successfully.");
+  }
 
   // Return to original branch (best effort)
   if (startBranch && startBranch !== BACKMERGE) {

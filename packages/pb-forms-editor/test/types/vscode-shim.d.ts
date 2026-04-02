@@ -1,4 +1,6 @@
 declare module "vscode" {
+  export type Uri = unknown;
+
   export class Position {
     line: number;
     character: number;
@@ -24,13 +26,20 @@ declare module "vscode" {
     getText(): string;
     lineAt(line: number): TextLine;
     positionAt(offset: number): Position;
+    offsetAt(position: Position): number;
   }
 
   export class WorkspaceEdit {
     replace(uri: unknown, range: Range, newText: string): void;
     insert(uri: unknown, position: Position, newText: string): void;
     delete(uri: unknown, range: Range): void;
-    getOperations(): Array<{
+    entries?(): Array<[unknown, Array<{
+      range?: Range;
+      newText?: string;
+    }>] >;
+    set?(uri: unknown, edits: unknown[]): void;
+    get?(uri: unknown): unknown[];
+    getOperations?(): Array<{
       kind: "replace" | "insert" | "delete";
       uri: unknown;
       range?: Range;

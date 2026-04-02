@@ -44,7 +44,11 @@ jobs:
 
       - name: Run tests (pb-project-files only)
         if: matrix.pkg == 'pb-project-files' && hashFiles('packages/pb-project-files/test/**/*.test.*', 'packages/pb-project-files/test/**/*.spec.*') != ''
-        run: npm -w packages/${{ matrix.pkg }} run test -- --passWithNoTests
+        run: npm -w packages/${{ matrix.pkg }} run test
+
+      - name: Run tests (pb-forms-editor only)
+        if: matrix.pkg == 'pb-forms-editor' && hashFiles('packages/pb-forms-editor/test/**/*.test.*', 'packages/pb-forms-editor/test/**/*.spec.*') != ''
+        run: npm -w packages/${{ matrix.pkg }} run test
 
       - name: Package VSIX (${{ matrix.pkg }})
         run: npx @vscode/vsce package --no-dependencies --out ${{ matrix.pkg }}.vsix

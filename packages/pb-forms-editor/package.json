@@ -2,7 +2,7 @@
   "name": "pb-forms-editor",
   "displayName": "PureBasic Forms Editor",
   "description": "Custom Editor for PureBasic .pbf forms with a webview designer.",
-  "version": "0.13.0",
+  "version": "0.18.0",
   "publisher": "CalDymos",
   "author": {
     "name": "CalDymos"
@@ -129,7 +129,7 @@
         },
         "purebasicFormsDesigner.gridSize": {
           "type": "number",
-          "default": 10,
+          "default": 5,
           "minimum": 2,
           "maximum": 100,
           "description": "%purebasicFormsDesigner.gridSize.description%"
@@ -186,10 +186,104 @@
           "maximum": 60,
           "description": "%purebasicFormsDesigner.titleBarHeight.description%"
         },
+        "purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsCaptionlessTopPadding.description%"
+        },
+        "purebasicFormsDesigner.windowPreviewWindowsClientSidePadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsClientSidePadding.description%"
+        },
+        "purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 60,
+          "description": "%purebasicFormsDesigner.windowPreviewWindowsClientBottomPadding.description%"
+        },
         "purebasicFormsDesigner.expectedPbVersion": {
           "type": "string",
           "default": "",
           "description": "%purebasicFormsDesigner.expectedPbVersion.description%"
+        },
+        "purebasicFormsDesigner.newGadgetsUsePbAnyByDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "%purebasicFormsDesigner.newGadgetsUsePbAnyByDefault.description%"
+        },
+        "purebasicFormsDesigner.newGadgetsUseVariableAsCaption": {
+          "type": "boolean",
+          "default": false,
+          "description": "%purebasicFormsDesigner.newGadgetsUseVariableAsCaption.description%"
+        },
+        "purebasicFormsDesigner.generateEventProcedure": {
+          "type": "boolean",
+          "default": true,
+          "description": "%purebasicFormsDesigner.generateEventProcedure.description%"
+        },
+        "purebasicFormsDesigner.osSkin": {
+          "type": "string",
+          "enum": [
+            "windows7",
+            "windows8",
+            "linux",
+            "macos"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.osSkin.windows7%",
+            "%purebasicFormsDesigner.osSkin.windows8%",
+            "%purebasicFormsDesigner.osSkin.linux%",
+            "%purebasicFormsDesigner.osSkin.macos%"
+          ],
+          "default": "windows7",
+          "description": "%purebasicFormsDesigner.osSkin.description%"
+        },
+        "purebasicFormsDesigner.warningUnrecognizedFile": {
+          "type": "string",
+          "enum": [
+            "never",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "always",
+          "description": "%purebasicFormsDesigner.warningUnrecognizedFile.description%"
+        },
+        "purebasicFormsDesigner.warningVersionUpgrade": {
+          "type": "string",
+          "enum": [
+            "never",
+            "ifBackwardCompatibilityIsAffected",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.ifBackwardCompatibilityIsAffected%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "ifBackwardCompatibilityIsAffected",
+          "description": "%purebasicFormsDesigner.warningVersionUpgrade.description%"
+        },
+        "purebasicFormsDesigner.warningVersionDowngrade": {
+          "type": "string",
+          "enum": [
+            "never",
+            "always"
+          ],
+          "enumDescriptions": [
+            "%purebasicFormsDesigner.warningMode.never%",
+            "%purebasicFormsDesigner.warningMode.always%"
+          ],
+          "default": "always",
+          "description": "%purebasicFormsDesigner.warningVersionDowngrade.description%"
         }
       }
     }
@@ -199,7 +293,7 @@
     "watch": "webpack --mode development --watch --config webpack.config.js",
     "webpack:prod": "webpack --mode production --config webpack.config.js",
     "vscode:prepublish": "npm run webpack:prod",
-    "compile:test": "tsc -p ./tsconfig.test.json && node ./test/scripts/copy-vscode-shim.js",
+    "compile:test": "node ./test/scripts/clean-test-outdir.js && tsc -p ./tsconfig.test.json && node ./test/scripts/copy-vscode-shim.js",
     "compile:webview": "tsc -p ./tsconfig.webview.json",
     "test": "npm run compile:test && node --test out-test/test/*.test.js",
     "test:watch": "npm run compile:test && node --test --watch out-test/test/parser.smoke.test.js out-test/test/patch.window-gadget.test.js out-test/test/patch.items-columns.test.js out-test/test/patch.combined.test.js"
