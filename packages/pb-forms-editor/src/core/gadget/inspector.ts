@@ -1,5 +1,5 @@
-import { GADGET_KIND } from "./model";
-import { quotePbString, unquoteString } from "./parser/tokenizer";
+import { GADGET_KIND } from "../model";
+import { quotePbString, unquoteString } from "../parser/tokenizer";
 
 export type GadgetTextLike = {
   textRaw?: string;

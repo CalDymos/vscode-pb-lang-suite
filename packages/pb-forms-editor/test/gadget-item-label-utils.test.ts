@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getPanelInspectorItemLabel } from "../src/core/gadget-item-label-utils";
+import { getPanelInspectorItemLabel } from "../src/core/gadget/item-label";
 
 test("formats panel inspector item labels with an explicit tab index prefix", () => {
   assert.equal(getPanelInspectorItemLabel({ text: "Tab 1" }, 0), "[0] Tab 1");

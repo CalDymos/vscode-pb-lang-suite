@@ -58,33 +58,33 @@ import {
 } from "./core/emitter/patch-emitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
-import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadget-insert-utils";
-import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/form-settings-runtime-utils";
-import { getToolboxPanelCategories } from "./core/toolbox-panel-utils";
-import { relativizeImagePath, toPbFilePathLiteral } from "./core/image-path-utils";
-import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image-assignment-utils";
-import { readImageDimensions } from "./core/image-dimension-utils";
+import { buildInsertedGadgetIdentity, insertedGadgetHasAmbiguousEmptyTextDefault, isInsertableGadgetKind, shouldInsertGadgetAsPbAny } from "./core/gadget/insert";
+import { applyConfiguredFormVersionWarnings, applyGadgetCaptionVariableSessionOverrides, isAmbiguousEmptyTextLiteral } from "./core/utils/form-settings-runtime";
+import { getToolboxPanelCategories } from "./core/toolbox/panel";
+import { relativizeImagePath, toPbFilePathLiteral } from "./core/image/path";
+import { buildImageReferenceFromEntry, resolveExistingLoadImageByFilePath } from "./core/image/assignment";
+import { readImageDimensions } from "./core/image/dimension";
 import {
   discoverProcedureSourcePaths,
   extractProcedureNamesFromText,
   isProcedureSourceFilePath,
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames
-} from "./core/procedure-list-utils";
+} from "./core/procedures/list";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference,
   requiresPbVariableValidation
-} from "./core/property-validation-utils";
+} from "./core/utils/property-validation";
 import {
   parseWindowColorInspectorInput,
   WINDOW_COLOR_LITERAL_ERROR_MESSAGE
-} from "./core/color-inspector-utils";
+} from "./core/window/color-inspector";
 import {
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
-} from "./core/statusbar-inspector-utils";
+} from "./core/statusbar/inspector";
 
 const CONFIG_KEYS = {
   expectedPbVersion: "expectedPbVersion"

@@ -1,4 +1,4 @@
-import { quotePbString, unquoteString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "../parser/tokenizer";
 
 // Matches plain "..." and PureBasic escaped ~"..." string literals.
 const PB_STRING_LITERAL_RE = /^~?"(?:[^"]|"")*"$/;

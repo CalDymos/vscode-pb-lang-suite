@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildImageReferenceFromEntry,
   resolveExistingLoadImageByFilePath
-} from "../src/core/image-assignment-utils";
+} from "../src/core/image/assignment";
 
 test("reuses an existing parsed LoadImage entry for the same selected file path", () => {
   const matched = resolveExistingLoadImageByFilePath([

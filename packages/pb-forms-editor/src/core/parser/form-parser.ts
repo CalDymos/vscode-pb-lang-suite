@@ -27,7 +27,7 @@ import {
   PB_ANY
 } from "../model";
 
-import { canHostInsertedGadgets } from "../gadget-insert-utils";
+import { canHostInsertedGadgets } from "../gadget/insert";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 

@@ -1,5 +1,5 @@
-import { GADGET_KIND } from "./model";
-import type { InsertableGadgetKind } from "./gadget-insert-utils";
+import { GADGET_KIND } from "../model";
+import type { InsertableGadgetKind } from "../gadget/insert";
 
 export type ToolboxPanelTabId = "toolbox" | "objects";
 

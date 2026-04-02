@@ -7,7 +7,7 @@ import {
   parseWindowColorInspectorInput,
   pbColorNumberToCssHex,
   WINDOW_COLOR_LITERAL_ERROR_MESSAGE
-} from '../src/core/color-inspector-utils';
+} from '../src/core/window/color-inspector';
 
 test('pbColorNumberToCssHex converts PB color integers to css hex', () => {
   assert.equal(pbColorNumberToCssHex(0x332211), '#112233');

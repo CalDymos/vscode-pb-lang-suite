@@ -1,5 +1,5 @@
-import { PB_ANY } from "./model";
-import { normalizePbPath, parsePbStringLiteral } from "./image-path-utils";
+import { PB_ANY } from "../model";
+import { normalizePbPath, parsePbStringLiteral } from "./path";
 
 export interface ParsedImageEntryLike {
   id?: string;

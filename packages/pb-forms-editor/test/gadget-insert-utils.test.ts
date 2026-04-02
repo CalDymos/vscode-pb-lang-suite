@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget-insert-utils';
+import { insertedGadgetHasAmbiguousEmptyTextDefault, shouldInsertGadgetAsPbAny } from '../src/core/gadget/insert';
 
 test('shouldInsertGadgetAsPbAny honours the configured default when provided', () => {
   const mixedIds = [

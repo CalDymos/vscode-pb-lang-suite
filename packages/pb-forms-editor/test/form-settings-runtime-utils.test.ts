@@ -7,7 +7,7 @@ import {
   applyGadgetCaptionVariableSessionOverrides,
   isAmbiguousEmptyTextLiteral,
   resolvePreviewPlatformFromOsSkin
-} from '../src/core/form-settings-runtime-utils';
+} from '../src/core/utils/form-settings-runtime';
 
 test('resolvePreviewPlatformFromOsSkin maps configured OS skins to preview platforms', () => {
   assert.equal(resolvePreviewPlatformFromOsSkin('windows7'), 'windows');

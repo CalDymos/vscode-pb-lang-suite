@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getTopLevelSelectedImageInspectorConfig } from "../src/core/top-level-image-inspector-utils";
+import { getTopLevelSelectedImageInspectorConfig } from "../src/core/toplevel/image-inspector";
 
 test("selected menu entry keeps direct CurrentImage editing with the single Select button path", () => {
   const config = getTopLevelSelectedImageInspectorConfig("menuEntry");

@@ -7,7 +7,7 @@ import {
   discoverProcedureSourcePaths,
   extractProcedureNamesFromText,
   sortUniqueProcedureNames
-} from '../src/core/procedure-list-utils';
+} from '../src/core/procedures/list';
 
 test('extractProcedureNamesFromText returns real procedures and skips macros/comments', () => {
   const names = extractProcedureNamesFromText(`

@@ -1,4 +1,4 @@
-import type { FormHeaderInfo, FormIssue } from "./model";
+import type { FormHeaderInfo, FormIssue } from "../model";
 
 export type PreviewPlatform = "windows" | "linux" | "macos";
 export type PreviewOsSkin = "windows7" | "windows8" | "linux" | "macos";

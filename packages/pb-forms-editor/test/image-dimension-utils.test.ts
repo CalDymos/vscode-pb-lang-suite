@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectImageDimensions } from "../src/core/image-dimension-utils";
+import { detectImageDimensions } from "../src/core/image/dimension";
 
 test("detectImageDimensions reads PNG size from IHDR", () => {
   const data = Uint8Array.from([

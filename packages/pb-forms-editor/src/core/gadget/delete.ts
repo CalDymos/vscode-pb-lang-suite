@@ -1,4 +1,4 @@
-import { GADGET_KIND } from "./model";
+import { GADGET_KIND } from "../model";
 
 export interface DeletePlanGadgetLike {
   id: string;

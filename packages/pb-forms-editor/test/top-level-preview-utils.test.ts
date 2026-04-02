@@ -37,7 +37,7 @@ import {
   isBoundToolBarTooltipEntry,
   shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry
-} from "../src/core/top-level-preview-utils";
+} from "../src/core/toplevel/preview";
 
 test("binds toolbar tooltips to the previous matching toolbar entry", () => {
   const toolBar = {

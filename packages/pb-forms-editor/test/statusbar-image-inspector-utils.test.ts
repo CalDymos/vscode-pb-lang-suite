@@ -6,7 +6,7 @@ import {
   resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
-} from "../src/core/statusbar-image-inspector-utils";
+} from "../src/core/statusbar/image-inspector";
 
 test("allows direct CurrentImage edit for unique parsed LoadImage entries", () => {
   const state = getStatusBarCurrentImageEditState({ inline: false, source: { line: 12 } }, 1);

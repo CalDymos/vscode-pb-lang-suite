@@ -1,5 +1,5 @@
-import { hasPbFlag } from "./top-level-preview-utils";
-import { GADGET_KIND, PB_ANY, type Gadget, type GadgetKind } from "./model";
+import { hasPbFlag } from "../toplevel/preview";
+import { GADGET_KIND, PB_ANY, type Gadget, type GadgetKind } from "../model";
 
 export const PBFD_INSERTABLE_GADGET_KINDS = [
   GADGET_KIND.ButtonGadget,

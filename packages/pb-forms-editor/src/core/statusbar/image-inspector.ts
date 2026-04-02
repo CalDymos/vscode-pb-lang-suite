@@ -1,4 +1,4 @@
-import { quotePbString, unquoteString } from "./parser/tokenizer";
+import { quotePbString, unquoteString } from "../parser/tokenizer";
 
 export interface StatusBarCurrentImageEditCandidate {
   id?: string;

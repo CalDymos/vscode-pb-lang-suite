@@ -41,13 +41,13 @@ import {
   getStatusBarFieldDisplaySummary,
   getStatusBarProgressPreviewMetrics,
   parseStatusBarWidth
-} from "../core/statusbar-preview-utils";
+} from "../core/statusbar/preview";
 import {
   getStatusBarProgressInspectorValue,
   normalizeStatusBarProgressRaw,
   parseStatusBarWidthInspectorInput,
   STATUSBAR_WIDTH_IGNORE_LITERAL
-} from "../core/statusbar-inspector-utils";
+} from "../core/statusbar/inspector";
 import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
@@ -84,7 +84,7 @@ import {
   shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry,
   hasToolBarPreviewAssignedImage
-} from "../core/top-level-preview-utils";
+} from "../core/toplevel/preview";
 
 import {
   buildGadgetCheckedStateRaw,
@@ -108,13 +108,13 @@ import {
   getGadgetTooltipInspectorValue,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
-} from "../core/gadget-inspector-utils";
+} from "../core/gadget/inspector";
 
 import {
   hasRectChanged,
   retainPanelActiveItems,
   syncPanelActiveItemsForSelection
-} from "../core/webview-state-utils";
+} from "../core/utils/webview-state";
 import {
   buildInsertedGadgetIdentity,
   canHostInsertedGadgets,
@@ -122,21 +122,21 @@ import {
   isInsertableGadgetKind,
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
-} from "../core/gadget-insert-utils";
-import { resolvePreviewPlatformFromOsSkin } from "../core/form-settings-runtime-utils";
+} from "../core/gadget/insert";
+import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
 import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
-} from "../core/gadget-reparent-utils";
-import { getPanelInspectorItemLabel } from "../core/gadget-item-label-utils";
+} from "../core/gadget/reparent";
+import { getPanelInspectorItemLabel } from "../core/gadget/item-label";
 import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
   getImmediateToolboxInsertPosition,
   getToolboxPanelCategories,
   type ToolboxPanelTabId
-} from "../core/toolbox-panel-utils";
-import { buildOriginalGadgetDeletePlan } from "../core/gadget-delete-utils";
+} from "../core/toolbox/panel";
+import { buildOriginalGadgetDeletePlan } from "../core/gadget/delete";
 import { quotePbString } from "../core/parser/tokenizer";
 import {
   GADGET_KIND,
@@ -188,26 +188,26 @@ import {
   parseWindowPositionInspectorInput,
   parseWindowVariableNameInspectorInput,
   WINDOW_POSITION_IGNORE_LITERAL
-} from "../core/window-inspector-utils";
+} from "../core/window/inspector";
 import {
   cssHexToPbRgbRaw,
   getWindowColorInspectorDisplay,
   parseWindowColorInspectorInput,
   pbColorNumberToCssHex
-} from "../core/color-inspector-utils";
+} from "../core/window/color-inspector";
 import {
   PB_WRONG_VARIABLE_NAME_MESSAGE,
   isValidPbVariableReference
-} from "../core/property-validation-utils";
+} from "../core/utils/property-validation";
 import {
   buildNextGeneratedImageIdRaw,
   getStatusBarCurrentImageEditState,
   resolveStatusBarCurrentImageCreate,
   resolveStatusBarCurrentImageRebind,
   shouldCleanupStatusBarReboundImage
-} from "../core/statusbar-image-inspector-utils";
-import { getTopLevelSelectedImageInspectorConfig } from "../core/top-level-image-inspector-utils";
-import { resolveTopLevelCanvasContextMenuActions } from "../core/top-level-context-menu-utils";
+} from "../core/statusbar/image-inspector";
+import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
+import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
 
 import {
   PREVIEW_PLUS_ICON_DATA_URI,
@@ -234,7 +234,7 @@ import {
   PREVIEW_WINDOWS8_OPTION_DATA_URI,
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
-} from "./preview-assets";
+} from "../core/preview/assets";
 
 
 type Model = {

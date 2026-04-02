@@ -1,4 +1,4 @@
-import { unquoteString } from "./parser/tokenizer";
+import { unquoteString } from "../parser/tokenizer";
 
 export const PB_VARIABLE_INVALID_CHARS = [" ", ".", "-", "/", "\\", "|", "?", "!", "@", "£", "$", "="] as const;
 
