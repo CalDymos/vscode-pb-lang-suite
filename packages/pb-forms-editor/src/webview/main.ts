@@ -39,6 +39,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
+import { getPreviewGadgetText } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4027,7 +4028,7 @@ function drawButtonGadgetChrome(
   osSkin: DesignerSettings["osSkin"],
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.ButtonGadget;
+  const label = getPreviewGadgetText(g, GADGET_KIND.ButtonGadget);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
   const buttonRadius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
@@ -4213,7 +4214,7 @@ function drawCheckableGadgetChrome(
 ) {
   const checked = Boolean(g.state);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = g.text ?? "";
+  const label = getPreviewGadgetText(g);
   const image = getPreviewCheckableImage(kind, osSkin, checked);
   const fallbackWidth = kind === "option" ? 16 : 14;
   const fallbackHeight = kind === "option" ? 17 : 15;
@@ -4254,7 +4255,7 @@ function drawDateGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = g.text ?? "";
+  const label = getPreviewGadgetText(g);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -4583,7 +4584,7 @@ function drawSpinGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.SpinGadget;
+  const label = getPreviewGadgetText(g, GADGET_KIND.SpinGadget);
   const spinnerWidth = osSkin === "windows8" ? 18 : 20;
   const bodyWidth = Math.max(0, w - spinnerWidth);
 
@@ -4750,7 +4751,7 @@ function drawFrameGadgetChrome(
   osSkin: DesignerSettings["osSkin"],
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const caption = g.text ?? "";
+  const caption = getPreviewGadgetText(g);
   const captionColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const captionBgColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
   const isSingle = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Single");
@@ -5180,9 +5181,7 @@ function drawStringLikeGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = (g.text && g.text.length > 0)
-    ? g.text
-    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
+  const label = getPreviewGadgetText(g, g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -5244,9 +5243,7 @@ function drawTextLikeGadgetChrome(
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
   const isTextGadget = g.kind === GADGET_KIND.TextGadget;
-  const label = (g.text && g.text.length > 0)
-    ? g.text
-    : (isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
+  const label = getPreviewGadgetText(g, isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const bgColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
 
