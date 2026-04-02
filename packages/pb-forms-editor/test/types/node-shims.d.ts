@@ -20,9 +20,15 @@ declare module "node:fs" {
     close(): Promise<void>;
   };
 
+  type Stats = {
+    size: number;
+  };
+
   const fs: {
     promises: {
       open(path: string, flags: string): Promise<OpenHandle>;
+      stat(path: string): Promise<Stats>;
+      readFile(path: string): Promise<Buffer>;
     };
     readdirSync(path: string, options?: unknown): Dirent[];
     existsSync(path: string): boolean;
@@ -61,6 +67,7 @@ declare class Buffer extends Uint8Array {
   static allocUnsafe(size: number): Buffer;
   static from(data: Uint8Array): Buffer;
   static concat(list: readonly Uint8Array[]): Buffer;
+  toString(encoding?: string): string;
 }
 
 declare const Buffer: typeof Buffer;
