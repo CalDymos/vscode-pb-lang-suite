@@ -13,6 +13,8 @@
 ### Fixed
 
 - Menu bar is now drawn on top of gadget previews instead of beneath them, so menu chrome no longer appears behind overlapping gadgets.
+- Windows registry color loading is now asynchronous — reading `HKCU\Control Panel\Colors` no longer blocks the extension host during editor startup; colors are sent to the webview after the initial render.
+- Procedure name discovery is now asynchronous — workspace-wide `.pb`/`.pbi` file scans no longer block the extension host; names are refreshed incrementally with debouncing and cancellation support, keeping the inspector state intact between refreshes.
 
 ### Internal
 
