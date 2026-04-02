@@ -686,6 +686,47 @@ EndProcedure
   assert.equal(splitter?.gadget1Id, "#LeftPane");
 });
 
+test("deletes splitter-owned child gadgets when deleting their parent container subtree", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #Container_0
+  #LeftPane
+  #InnerLeft
+  #RightPane
+  #SplitMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 340, height = 240)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ContainerGadget(#Container_0, 10, 30, 300, 150)
+  ContainerGadget(#LeftPane, 8, 8, 110, 110)
+  TextGadget(#InnerLeft, 6, 6, 80, 20, "Left")
+  CloseGadgetList()
+  ContainerGadget(#RightPane, 126, 8, 110, 110)
+  CloseGadgetList()
+  SplitterGadget(#SplitMain, 8, 8, 228, 110, #LeftPane, #RightPane)
+  SetGadgetState(#SplitMain, 114)
+  CloseGadgetList()
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetDelete(document, "#Container_0")
+  );
+
+  assert.doesNotMatch(patchedText, /#Container_0/);
+  assert.doesNotMatch(patchedText, /#LeftPane/);
+  assert.doesNotMatch(patchedText, /#InnerLeft/);
+  assert.doesNotMatch(patchedText, /#RightPane/);
+  assert.doesNotMatch(patchedText, /#SplitMain/);
+  assert.doesNotMatch(patchedText, /CloseGadgetList\(\)/);
+  assert.equal(parsed.gadgets.length, 0);
+});
+
 test("roundtrips normal gadget rect changes", () => {
   const text = loadFixture("fixtures/smoke/03-gadgets-basic.pbf");
 

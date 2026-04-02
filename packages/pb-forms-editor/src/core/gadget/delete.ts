@@ -46,14 +46,15 @@ export function buildOriginalGadgetDeletePlan<T extends DeletePlanGadgetLike>(ga
   }
 
   const orderedRequested = gadgets.filter(gadget => requestedIds.has(gadget.id));
+  const requestedSplitterIds = new Set(
+    orderedRequested
+      .filter(gadget => gadget.kind === GADGET_KIND.SplitterGadget)
+      .map(gadget => gadget.id)
+  );
 
   for (const gadget of orderedRequested) {
-    if (gadget.kind === GADGET_KIND.SplitterGadget) {
-      if (gadget.gadget1Id) splitterOwners.delete(gadget.gadget1Id);
-      if (gadget.gadget2Id) splitterOwners.delete(gadget.gadget2Id);
-    }
-
-    if (splitterOwners.has(gadget.id)) {
+    const ownerId = splitterOwners.get(gadget.id);
+    if (ownerId && !requestedSplitterIds.has(ownerId)) {
       skippedIds.add(gadget.id);
       continue;
     }
