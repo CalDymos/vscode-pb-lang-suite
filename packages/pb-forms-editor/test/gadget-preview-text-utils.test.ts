@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewGadgetText } from '../src/core/preview/gadget-text';
+import { getPreviewGadgetText, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -13,4 +13,23 @@ test('getPreviewGadgetText wraps variable captions in brackets like FD_DrawGadge
 test('getPreviewGadgetText preserves fallback labels for empty captions', () => {
   assert.equal(getPreviewGadgetText({ text: '', textVariable: false }, 'ButtonGadget'), 'ButtonGadget');
   assert.equal(getPreviewGadgetText(undefined, 'SpinGadget'), 'SpinGadget');
+});
+
+
+test('getPreviewTextLikeTextPosition keeps TextGadget and HyperLinkGadget captions top-aligned like FD_DrawGadget', () => {
+  assert.deepEqual(
+    getPreviewTextLikeTextPosition({ x: 20, y: 12, width: 120, textWidth: 36 }),
+    { x: 21, y: 12 }
+  );
+});
+
+test('getPreviewTextLikeTextPosition preserves original right and center alignment on the top baseline', () => {
+  assert.deepEqual(
+    getPreviewTextLikeTextPosition({ x: 20, y: 12, width: 120, textWidth: 36, flagsExpr: '#PB_Text_Right' }),
+    { x: 103, y: 12 }
+  );
+  assert.deepEqual(
+    getPreviewTextLikeTextPosition({ x: 20, y: 12, width: 120, textWidth: 36, flagsExpr: '#PB_Text_Center' }),
+    { x: 62, y: 12 }
+  );
 });

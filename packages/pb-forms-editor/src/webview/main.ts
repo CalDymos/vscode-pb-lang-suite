@@ -39,7 +39,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewGadgetText } from "../core/preview/gadget-text";
+import { getPreviewGadgetText, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -5256,18 +5256,17 @@ function drawTextLikeGadgetChrome(
   }
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-  let textX = x + 1;
   const textWidth = ctx.measureText(label).width;
-  if (hasPbFlag(g.flagsExpr, "#PB_Text_Right")) {
-    textX = x + Math.max(1, w - textWidth - 1);
-  } else if (hasPbFlag(g.flagsExpr, "#PB_Text_Center")) {
-    textX = x + Math.max(1, (w - textWidth) / 2);
-  }
-
-  const textY = y + Math.max(0, Math.trunc((h - textStyle.sizePx) / 2));
+  const textPos = getPreviewTextLikeTextPosition({
+    x,
+    y,
+    width: w,
+    textWidth,
+    flagsExpr: g.flagsExpr,
+  });
   ctx.fillStyle = textColor;
-  ctx.fillText(label, textX, textY);
-  drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
+  ctx.fillText(label, textPos.x, textPos.y);
+  drawPreviewTextDecorations(ctx, label, textPos.x, textPos.y, textStyle, textColor);
 
   if (isTextGadget && hasPbFlag(g.flagsExpr, "#PB_Text_Border")) {
     ctx.strokeStyle = ensurePreviewLineContrast(
