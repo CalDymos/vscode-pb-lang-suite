@@ -52,7 +52,8 @@
     "tag:forms": "node scripts/tag-and-push.mjs forms",
     "tag:lang": "node scripts/tag-and-push.mjs lang",
     "tag:pbp": "node scripts/tag-and-push.mjs pbp",
-    "backmerge": "node scripts/backmerge-main-into-devel.mjs"
+    "backmerge": "node scripts/backmerge-main-into-devel.mjs",
+    "strip:forms": "node scripts/strip-preview-assets-meta.mjs"
   },
   "devDependencies": {
     "rimraf": "^6.1.3"
