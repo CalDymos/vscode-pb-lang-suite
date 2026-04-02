@@ -1,6 +1,7 @@
 import * as cp from "child_process";
 import * as fs from "fs";
 import * as vscode from "vscode";
+import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE } from "./shared/messages";
 import { parseFormDocument } from "./core/parser/form-parser";
 import {
   applyGadgetColumnDelete,
@@ -203,87 +204,6 @@ function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.
     return isProcedureSourceFilePath(uri.fsPath);
   });
 }
-
-const EXT_TO_WEBVIEW_MSG_TYPE = {
-  init: "init",
-  settings: "settings",
-  error: "error",
-  windowsSystemColors: "windowsSystemColors"
-} as const;
-
-const WEBVIEW_TO_EXT_MSG_TYPE = {
-  ready: "ready",
-
-  moveGadget: "moveGadget",
-  setGadgetRect: "setGadgetRect",
-  setGadgetOpenArgs: "setGadgetOpenArgs",
-  setCustomGadgetCode: "setCustomGadgetCode",
-  setGadgetProperties: "setGadgetProperties",
-  setGadgetEventProc: "setGadgetEventProc",
-  setGadgetImageRaw: "setGadgetImageRaw",
-  setGadgetStateRaw: "setGadgetStateRaw",
-  setGadgetResizeRaw: "setGadgetResizeRaw",
-  toggleGadgetPbAny: "toggleGadgetPbAny",
-  setGadgetEnumValue: "setGadgetEnumValue",
-  setGadgetVariableName: "setGadgetVariableName",
-  setWindowRect: "setWindowRect",
-  setWindowOpenArgs: "setWindowOpenArgs",
-  setWindowProperties: "setWindowProperties",
-  toggleWindowPbAny: "toggleWindowPbAny",
-  setWindowEnumValue: "setWindowEnumValue",
-  setWindowVariableName: "setWindowVariableName",
-  setWindowEventFile: "setWindowEventFile",
-  setWindowEventProc: "setWindowEventProc",
-  setWindowGenerateEventLoop: "setWindowGenerateEventLoop",
-
-  insertGadget: "insertGadget",
-  reparentGadget: "reparentGadget",
-  deleteGadget: "deleteGadget",
-  insertGadgetItem: "insertGadgetItem",
-  updateGadgetItem: "updateGadgetItem",
-  deleteGadgetItem: "deleteGadgetItem",
-
-  insertGadgetColumn: "insertGadgetColumn",
-  updateGadgetColumn: "updateGadgetColumn",
-  deleteGadgetColumn: "deleteGadgetColumn",
-
-  insertMenuEntry: "insertMenuEntry",
-  moveMenuEntry: "moveMenuEntry",
-  updateMenuEntry: "updateMenuEntry",
-  deleteMenuEntry: "deleteMenuEntry",
-  deleteMenu: "deleteMenu",
-  setMenuEntryEvent: "setMenuEntryEvent",
-
-  insertToolBarEntry: "insertToolBarEntry",
-  updateToolBarEntry: "updateToolBarEntry",
-  deleteToolBarEntry: "deleteToolBarEntry",
-  deleteToolBar: "deleteToolBar",
-  setToolBarEntryEvent: "setToolBarEntryEvent",
-  setToolBarEntryTooltip: "setToolBarEntryTooltip",
-
-  insertStatusBarField: "insertStatusBarField",
-  updateStatusBarField: "updateStatusBarField",
-  deleteStatusBarField: "deleteStatusBarField",
-  deleteStatusBar: "deleteStatusBar",
-
-  insertImage: "insertImage",
-  updateImage: "updateImage",
-  deleteImage: "deleteImage",
-  relativizeImagePath: "relativizeImagePath",
-  chooseImageFileForEntry: "chooseImageFileForEntry",
-  toggleImagePbAny: "toggleImagePbAny",
-
-  createAndAssignGadgetImage: "createAndAssignGadgetImage",
-  chooseFileAndAssignGadgetImage: "chooseFileAndAssignGadgetImage",
-  createAndAssignMenuEntryImage: "createAndAssignMenuEntryImage",
-  createAndAssignToolBarEntryImage: "createAndAssignToolBarEntryImage",
-  createAndAssignStatusBarFieldImage: "createAndAssignStatusBarFieldImage",
-  chooseFileAndAssignMenuEntryImage: "chooseFileAndAssignMenuEntryImage",
-  chooseFileAndAssignToolBarEntryImage: "chooseFileAndAssignToolBarEntryImage",
-  chooseFileAndAssignStatusBarFieldImage: "chooseFileAndAssignStatusBarFieldImage",
-  rebindToolBarEntryImage: "rebindToolBarEntryImage",
-  rebindStatusBarFieldImage: "rebindStatusBarFieldImage"
-} as const;
 
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
