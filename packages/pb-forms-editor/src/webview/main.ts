@@ -4409,8 +4409,10 @@ function drawImageGadgetChrome(
   const imageEntry = findImageEntryById(g.imageId);
   const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
   if (!drawResolvedPreviewImage(ctx, previewImage, x, y, w, h)) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillText(GADGET_KIND.ImageGadget, x, y);
+    drawPreviewTextDecorations(ctx, GADGET_KIND.ImageGadget, x, y, textStyle, "rgb(0, 0, 0)");
   }
   ctx.restore();
 }
