@@ -43,3 +43,10 @@ export function getPreviewListRowAdvance(
   const safeTextHeight = Math.max(1, Math.trunc(textHeight));
   return safeTextHeight + (variant === "tree" ? 6 : 4);
 }
+
+export function getPreviewListHeaderTextY(
+  variant: "listicon" | "explorerlist",
+  y: number
+): number {
+  return y + (variant === "explorerlist" ? 2 : 0);
+}

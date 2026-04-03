@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewGadgetText, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -40,4 +40,10 @@ test('getPreviewListRowAdvance follows FD_DrawGadget item spacing for tree and l
   assert.equal(getPreviewListRowAdvance('listview', 12), 16);
   assert.equal(getPreviewListRowAdvance('listicon', 15), 19);
   assert.equal(getPreviewListRowAdvance('explorerlist', 10), 14);
+});
+
+
+test('getPreviewListHeaderTextY follows the original header baseline split for ListIcon and ExplorerList', () => {
+  assert.equal(getPreviewListHeaderTextY('listicon', 40), 40);
+  assert.equal(getPreviewListHeaderTextY('explorerlist', 40), 42);
 });

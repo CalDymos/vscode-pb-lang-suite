@@ -40,7 +40,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewGadgetText, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -5447,12 +5447,13 @@ function drawListIconLikeGadgetChrome(
   ctx.fillStyle = headerTextColor;
 
   if (columns.length > 0) {
+    const headerTextY = getPreviewListHeaderTextY(variant, y);
     let xCol = x + 2;
     for (let index = 0; index < columns.length; index += 1) {
       const column = columns[index];
       const label = column.label ?? "";
-      ctx.fillText(label, xCol + 2, y + 2);
-      drawPreviewTextDecorations(ctx, label, xCol + 2, y + 2, headerTextStyle, headerTextColor);
+      ctx.fillText(label, xCol + 2, headerTextY);
+      drawPreviewTextDecorations(ctx, label, xCol + 2, headerTextY, headerTextStyle, headerTextColor);
       xCol += column.width;
       if (index < columns.length - 1 && xCol < x + w - 1) {
         ctx.strokeStyle = headerShadowColor;
