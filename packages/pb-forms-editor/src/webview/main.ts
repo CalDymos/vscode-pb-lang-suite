@@ -5440,9 +5440,10 @@ function drawListIconLikeGadgetChrome(
   ctx.lineTo(x + Math.max(1, w - 1), y + 16.5);
   ctx.stroke();
 
-  const headerTextStyle = variant === "explorerlist"
-    ? applyPreviewColumnHeaderTextStyle(ctx, 11)
-    : applyPreviewGadgetTextStyle(ctx, g, 11);
+/*   const headerTextStyle = variant === "explorerlist"
+  ? applyPreviewColumnHeaderTextStyle(ctx, 11)
+  : applyPreviewGadgetTextStyle(ctx, g, 11); */ // /* The original PureBasic form editor uses a fixed font with 11px for explorerlist
+  const headerTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = headerTextColor;
 
   if (columns.length > 0) {
