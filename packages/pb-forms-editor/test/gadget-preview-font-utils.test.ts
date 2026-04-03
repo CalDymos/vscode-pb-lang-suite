@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPreviewGadgetTextStyle } from '../src/core/preview/gadget-font';
+import { buildPreviewColumnHeaderTextStyle, buildPreviewGadgetTextStyle } from '../src/core/preview/gadget-font';
 
 test('buildPreviewGadgetTextStyle falls back to a normal sans-serif preview font', () => {
   assert.deepEqual(
@@ -52,6 +52,22 @@ test('buildPreviewGadgetTextStyle clamps non-positive sizes and keeps simple fam
       isStrikeOut: false,
       sizePx: 1,
       family: 'Tahoma'
+    }
+  );
+});
+
+
+test('buildPreviewColumnHeaderTextStyle ignores gadget font metadata and keeps a fixed header preview font', () => {
+  assert.deepEqual(
+    buildPreviewColumnHeaderTextStyle(12),
+    {
+      font: 'normal normal 12px sans-serif',
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      isStrikeOut: false,
+      sizePx: 12,
+      family: 'sans-serif'
     }
   );
 });

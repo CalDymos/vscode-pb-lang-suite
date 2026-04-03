@@ -36,6 +36,7 @@ import {
   toWindowLocalPoint
 } from "../core/preview/chrome";
 import {
+  applyPreviewColumnHeaderTextStyle,
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
@@ -4762,6 +4763,7 @@ function drawFrameGadgetChrome(
 
   ctx.save();
   ctx.textBaseline = "top";
+  const captionTextStyle = applyPreviewColumnHeaderTextStyle(ctx, 12);
 
   if (osSkin === "macos") {
     if (isSingle) {
@@ -4788,10 +4790,9 @@ function drawFrameGadgetChrome(
     }
 
     if (caption.length > 0) {
-      const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
       ctx.fillStyle = captionColor;
       ctx.fillText(caption, x + 10, y);
-      drawPreviewTextDecorations(ctx, caption, x + 10, y, textStyle, captionColor);
+      drawPreviewTextDecorations(ctx, caption, x + 10, y, captionTextStyle, captionColor);
     }
 
     traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
@@ -4894,10 +4895,9 @@ function drawFrameGadgetChrome(
   if (captionWidth > 0) {
     ctx.fillStyle = captionBgColor;
     ctx.fillRect(x + 8, y, captionWidth + 4, captionHeight);
-    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
     ctx.fillStyle = captionColor;
     ctx.fillText(caption, x + 10, y);
-    drawPreviewTextDecorations(ctx, caption, x + 10, y, textStyle, captionColor);
+    drawPreviewTextDecorations(ctx, caption, x + 10, y, captionTextStyle, captionColor);
   }
 
   ctx.restore();

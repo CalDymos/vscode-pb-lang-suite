@@ -85,6 +85,34 @@ export function applyPreviewGadgetTextStyle(
   return style;
 }
 
+export function buildPreviewColumnHeaderTextStyle(
+  fallbackSizePx: number,
+  fallbackFamily = "sans-serif"
+): PreviewGadgetTextStyle {
+  const sizePx = Math.max(1, Math.trunc(fallbackSizePx));
+  const family = quoteCssFontFamily(fallbackFamily);
+
+  return {
+    font: `normal normal ${sizePx}px ${family}`,
+    isBold: false,
+    isItalic: false,
+    isUnderline: false,
+    isStrikeOut: false,
+    sizePx,
+    family,
+  };
+}
+
+export function applyPreviewColumnHeaderTextStyle(
+  ctx: PreviewGadgetTextDrawingContext,
+  fallbackSizePx: number,
+  fallbackFamily = "sans-serif"
+): PreviewGadgetTextStyle {
+  const style = buildPreviewColumnHeaderTextStyle(fallbackSizePx, fallbackFamily);
+  ctx.font = style.font;
+  return style;
+}
+
 export function drawPreviewTextDecorations(
   ctx: PreviewGadgetTextDrawingContext,
   text: string,
