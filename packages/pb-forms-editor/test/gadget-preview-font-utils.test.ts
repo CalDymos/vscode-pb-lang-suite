@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildPreviewGadgetTextStyle } from '../src/core/preview/gadget-font';
+import { buildPreviewColumnHeaderTextStyle, buildPreviewGadgetTextStyle } from '../src/core/preview/gadget-font';
 
 test('buildPreviewGadgetTextStyle falls back to a normal sans-serif preview font', () => {
   assert.deepEqual(
@@ -56,3 +56,19 @@ test('buildPreviewGadgetTextStyle clamps non-positive sizes and keeps simple fam
   );
 });
 
+
+
+test('buildPreviewColumnHeaderTextStyle returns the fixed column-header preview font', () => {
+  assert.deepEqual(
+    buildPreviewColumnHeaderTextStyle(11),
+    {
+      font: 'normal normal 11px sans-serif',
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      isStrikeOut: false,
+      sizePx: 11,
+      family: 'sans-serif'
+    }
+  );
+});

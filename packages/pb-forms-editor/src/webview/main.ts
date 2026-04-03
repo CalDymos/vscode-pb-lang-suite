@@ -5440,8 +5440,10 @@ function drawListIconLikeGadgetChrome(
   ctx.lineTo(x + Math.max(1, w - 1), y + 16.5);
   ctx.stroke();
 
+  const headerTextStyle = variant === "explorerlist"
+    ? applyPreviewColumnHeaderTextStyle(ctx, 11)
+    : applyPreviewGadgetTextStyle(ctx, g, 11);
   ctx.fillStyle = headerTextColor;
-  ctx.font = '11px sans-serif';
 
   if (columns.length > 0) {
     let xCol = x + 2;
@@ -5449,6 +5451,7 @@ function drawListIconLikeGadgetChrome(
       const column = columns[index];
       const label = column.label ?? "";
       ctx.fillText(label, xCol + 2, y + 2);
+      drawPreviewTextDecorations(ctx, label, xCol + 2, y + 2, headerTextStyle, headerTextColor);
       xCol += column.width;
       if (index < columns.length - 1 && xCol < x + w - 1) {
         ctx.strokeStyle = headerShadowColor;
