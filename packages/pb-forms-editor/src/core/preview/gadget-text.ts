@@ -35,3 +35,11 @@ export function getPreviewTextLikeTextPosition(args: {
 
   return { x: textX, y };
 }
+
+export function getPreviewListRowAdvance(
+  variant: "tree" | "listview" | "listicon" | "explorerlist",
+  textHeight: number
+): number {
+  const safeTextHeight = Math.max(1, Math.trunc(textHeight));
+  return safeTextHeight + (variant === "tree" ? 6 : 4);
+}

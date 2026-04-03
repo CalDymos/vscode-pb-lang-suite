@@ -40,7 +40,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewGadgetText, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewGadgetText, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -5317,7 +5317,6 @@ function drawListLikeGadgetChrome(
   const placeholderX = x + 30;
   const rows = (g.items ?? []).map(getPreviewGadgetItemLabel);
   let textY = y + 4;
-  const lineAdvance = isTree ? 18 : 16;
   const lastTextY = y + Math.max(0, h - 14);
 
   ctx.save();
@@ -5327,6 +5326,7 @@ function drawListLikeGadgetChrome(
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const lineAdvance = getPreviewListRowAdvance(isTree ? "tree" : "listview", textStyle.sizePx);
   ctx.fillStyle = textColor;
 
   if (rows.length === 0) {
@@ -5464,6 +5464,7 @@ function drawListIconLikeGadgetChrome(
   }
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const rowAdvance = getPreviewListRowAdvance(variant, textStyle.sizePx);
   ctx.fillStyle = textColor;
 
   let rowY = contentStartY;
@@ -5485,7 +5486,7 @@ function drawListIconLikeGadgetChrome(
       drawPreviewTextDecorations(ctx, row, x + 6, rowY, textStyle, textColor);
     }
 
-    rowY += 16;
+    rowY += rowAdvance;
   }
 
   ctx.restore();
