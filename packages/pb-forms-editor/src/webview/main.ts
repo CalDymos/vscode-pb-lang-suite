@@ -4763,7 +4763,8 @@ function drawFrameGadgetChrome(
 
   ctx.save();
   ctx.textBaseline = "top";
-  const captionTextStyle = applyPreviewColumnHeaderTextStyle(ctx, 12);
+  // const captionTextStyle = applyPreviewColumnHeaderTextStyle(ctx, 12); // The original PureBasic form editor uses a fixed font for the column headers 
+  const captionTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
 
   if (osSkin === "macos") {
     if (isSingle) {
