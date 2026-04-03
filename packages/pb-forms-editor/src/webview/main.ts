@@ -4337,6 +4337,7 @@ function drawCalendarGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = "Calendar Gadget";
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -4344,8 +4345,10 @@ function drawCalendarGadgetChrome(
   ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   ctx.strokeStyle = "rgb(0, 0, 0)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
-  ctx.fillText("Calendar Gadget", x + 3, y + 3);
+  ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, textColor);
   ctx.restore();
 }
 
