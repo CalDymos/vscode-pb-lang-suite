@@ -40,7 +40,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewComboTextX, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4576,7 +4576,7 @@ function drawComboLikeGadgetChrome(
 
   drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(h / 2), arrowColor);
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-  const textX = x + (isEditable ? 3 : 4);
+  const textX = getPreviewComboTextX({ x, isEditable, osSkin });
   const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
   ctx.fillStyle = textColor;
   ctx.fillText(itemLabel, textX, textY);

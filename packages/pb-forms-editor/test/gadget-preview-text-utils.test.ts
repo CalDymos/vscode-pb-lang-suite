@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewComboTextX, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -46,4 +46,12 @@ test('getPreviewListRowAdvance follows FD_DrawGadget item spacing for tree and l
 test('getPreviewListHeaderTextY follows the original header baseline split for ListIcon and ExplorerList', () => {
   assert.equal(getPreviewListHeaderTextY('listicon', 40), 40);
   assert.equal(getPreviewListHeaderTextY('explorerlist', 40), 42);
+});
+
+
+test('getPreviewComboTextX follows the original editable/non-editable combo text inset split', () => {
+  assert.equal(getPreviewComboTextX({ x: 20, isEditable: true, osSkin: 'windows7' }), 23);
+  assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'windows7' }), 24);
+  assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'linux' }), 24);
+  assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'macos' }), 26);
 });

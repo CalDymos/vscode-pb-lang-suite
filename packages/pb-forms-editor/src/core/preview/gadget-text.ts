@@ -44,6 +44,18 @@ export function getPreviewListRowAdvance(
   return safeTextHeight + (variant === "tree" ? 6 : 4);
 }
 
+export function getPreviewComboTextX(
+  args: {
+    x: number;
+    isEditable: boolean;
+    osSkin: "windows7" | "windows8" | "macos" | "linux";
+  }
+): number {
+  const { x, isEditable, osSkin } = args;
+  if (isEditable) return x + 3;
+  return x + (osSkin === "macos" ? 6 : 4);
+}
+
 export function getPreviewListHeaderTextY(
   variant: "listicon" | "explorerlist",
   y: number
