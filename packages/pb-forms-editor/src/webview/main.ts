@@ -4351,6 +4351,7 @@ function drawCalendarGadgetChrome(
 
 function drawCanvasLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
+  g: Gadget,
   x: number,
   y: number,
   w: number,
@@ -4363,13 +4364,16 @@ function drawCanvasLikeGadgetChrome(
   ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   ctx.strokeStyle = "rgb(0, 0, 0)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = "rgb(0, 0, 0)";
   ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, "rgb(0, 0, 0)");
   ctx.restore();
 }
 
 function drawWebLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
+  g: Gadget,
   x: number,
   y: number,
   w: number,
@@ -4382,8 +4386,10 @@ function drawWebLikeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = "rgb(255, 255, 255)";
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = "rgb(0, 0, 0)";
   ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, "rgb(0, 0, 0)");
   ctx.restore();
 }
 
@@ -7789,22 +7795,22 @@ function render() {
         break;
 
       case GADGET_KIND.CanvasGadget:
-        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "Canvas Gadget");
+        drawCanvasLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "Canvas Gadget");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.OpenGLGadget:
-        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "OpenGL Gadget");
+        drawCanvasLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "OpenGL Gadget");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.WebGadget:
-        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "Web");
+        drawWebLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "Web");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.WebViewGadget:
-        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "WebView");
+        drawWebLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "WebView");
         drawDefaultLabel = false;
         break;
 
