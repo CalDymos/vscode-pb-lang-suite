@@ -5539,6 +5539,7 @@ function drawPanelChrome(
 
   ctx.save();
   ctx.textBaseline = "top";
+  const panelTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
 
   if (osSkin === "macos") {
     const topOffset = 11;
@@ -5594,6 +5595,7 @@ function drawPanelChrome(
         }
 
         ctx.fillText(label, tabX, y + 3);
+        drawPreviewTextDecorations(ctx, label, tabX, y + 3, panelTextStyle, active ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)");
         tabX += tabWidth;
       }
     }
@@ -5643,6 +5645,7 @@ function drawPanelChrome(
 
       ctx.fillStyle = "rgb(0, 0, 0)";
       ctx.fillText(label, tabX + 6, y + 6);
+      drawPreviewTextDecorations(ctx, label, tabX + 6, y + 6, panelTextStyle, "rgb(0, 0, 0)");
       tabX += tabWidth + 8;
     }
 
@@ -5678,6 +5681,7 @@ function drawPanelChrome(
 
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillText(label, tabX + 6, y + 3);
+    drawPreviewTextDecorations(ctx, label, tabX + 6, y + 3, panelTextStyle, "rgb(0, 0, 0)");
     tabX += tabWidth;
   }
 
