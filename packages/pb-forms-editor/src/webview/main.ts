@@ -27,6 +27,7 @@ import {
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
+  getPreviewComboChromeHeight,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -4504,6 +4505,8 @@ function drawComboLikeGadgetChrome(
   ctx.save();
   ctx.textBaseline = "top";
 
+  const comboChromeHeight = getPreviewComboChromeHeight(osSkin, h, isEditable);
+
   if (isEditable) {
     const borderColor = osSkin === "windows8"
       ? ensurePreviewLineContrast(
@@ -4564,14 +4567,15 @@ function drawComboLikeGadgetChrome(
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   } else if (osSkin === "macos") {
     const radius = 3;
+    const chromeHeight = Math.max(0, comboChromeHeight);
     const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 10);
     gradient.addColorStop(0, "rgb(244, 244, 244)");
     gradient.addColorStop(1, "rgb(255, 255, 255)");
     ctx.fillStyle = gradient;
-    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.min(10, Math.max(0, h - 2)));
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, Math.min(10, chromeHeight - 2)));
     ctx.fillStyle = "rgb(236, 236, 236)";
-    ctx.fillRect(x + 1, y + 11, Math.max(0, w - 2), Math.max(0, Math.min(9, h - 12)));
-    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.fillRect(x + 1, y + 11, Math.max(0, w - 2), Math.max(0, Math.min(9, chromeHeight - 12)));
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, chromeHeight - 1), radius);
     ctx.strokeStyle = "rgb(144, 144, 144)";
     ctx.stroke();
   } else {
@@ -4593,7 +4597,7 @@ function drawComboLikeGadgetChrome(
     ctx.stroke();
   }
 
-  drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(h / 2), arrowColor);
+  drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(comboChromeHeight / 2), arrowColor);
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textX = getPreviewComboTextX({ x, isEditable, osSkin });
   const textY = getPreviewComboTextY({ y, height: h, textHeight: textStyle.sizePx, isEditable, osSkin });

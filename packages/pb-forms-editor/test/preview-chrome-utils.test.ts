@@ -34,6 +34,7 @@ import {
   toWindowGlobalPoint,
   toWindowLocalPoint,
   usesOriginalMacRoundedButtonChrome,
+  getPreviewComboChromeHeight,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/preview/chrome";
@@ -270,4 +271,11 @@ test("uses the original rounded macOS button chrome only for 25px button heights
   assert.equal(usesOriginalMacRoundedButtonChrome("macos", 25), true);
   assert.equal(usesOriginalMacRoundedButtonChrome("macos", 24), false);
   assert.equal(usesOriginalMacRoundedButtonChrome("linux", 25), false);
+});
+
+
+test("uses the original fixed 22px macOS combo chrome only for non-editable combos", () => {
+  assert.equal(getPreviewComboChromeHeight("macos", 25, false), 22);
+  assert.equal(getPreviewComboChromeHeight("macos", 25, true), 25);
+  assert.equal(getPreviewComboChromeHeight("windows7", 25, false), 25);
 });

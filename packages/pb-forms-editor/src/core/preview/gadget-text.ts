@@ -1,3 +1,4 @@
+import { getPreviewComboChromeHeight } from "./chrome";
 import type { Gadget } from "../model";
 
 function hasFlag(flagsExpr: string | undefined, flag: string): boolean {
@@ -66,7 +67,7 @@ export function getPreviewComboTextY(
   }
 ): number {
   const { y, height, textHeight, isEditable, osSkin } = args;
-  const comboHeight = !isEditable && osSkin === "macos" ? 22 : height;
+  const comboHeight = getPreviewComboChromeHeight(osSkin, height, isEditable);
   return y + Math.max(1, Math.trunc((comboHeight - textHeight) / 2));
 }
 

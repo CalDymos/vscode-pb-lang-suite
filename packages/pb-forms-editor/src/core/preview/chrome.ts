@@ -31,6 +31,14 @@ export function usesOriginalMacRoundedButtonChrome(osSkin: "windows7" | "windows
   return osSkin === "macos" && Math.trunc(height) === 25;
 }
 
+export function getPreviewComboChromeHeight(
+  osSkin: "windows7" | "windows8" | "macos" | "linux",
+  height: number,
+  isEditable: boolean
+): number {
+  return !isEditable && osSkin === "macos" ? 22 : height;
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 
