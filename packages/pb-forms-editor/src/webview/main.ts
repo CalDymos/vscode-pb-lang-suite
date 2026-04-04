@@ -29,6 +29,7 @@ import {
   usesOriginalMacRoundedButtonChrome,
   getPreviewComboArrowLayout,
   getPreviewComboChromeHeight,
+  getPreviewSpinButtonLayout,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -244,6 +245,8 @@ import {
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
   PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
+  PREVIEW_MAC_SPIN_DATA_URI,
+  PREVIEW_WINDOWS8_SPIN_DATA_URI,
 } from "../core/preview/assets";
 
 
@@ -610,6 +613,8 @@ const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | n
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
 let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
+let previewMacSpinImage: HTMLImageElement | null = null;
+let previewWindows8SpinImage: HTMLImageElement | null = null;
 const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
 
 
@@ -756,6 +761,21 @@ function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
   }
 
   return previewMacComboDoubleArrowsImage;
+}
+
+function getPreviewSpinImage(osSkin: DesignerSettings["osSkin"]): HTMLImageElement | null {
+  if (osSkin === "windows8") {
+    if (!previewWindows8SpinImage) {
+      previewWindows8SpinImage = createPreviewRasterIcon(PREVIEW_WINDOWS8_SPIN_DATA_URI);
+    }
+    return previewWindows8SpinImage;
+  }
+
+  if (!previewMacSpinImage) {
+    previewMacSpinImage = createPreviewRasterIcon(PREVIEW_MAC_SPIN_DATA_URI);
+  }
+
+  return previewMacSpinImage;
 }
 
 function createResolvedPreviewImage(src: string): HTMLImageElement | null {
@@ -4657,73 +4677,19 @@ function drawComboLikeGadgetChrome(
   ctx.restore();
 }
 
-function drawSpinGadgetChrome(
+function drawSpinSpinnerFallback(
   ctx: CanvasRenderingContext2D,
-  g: Gadget,
   x: number,
   y: number,
   w: number,
   h: number,
   osSkin: DesignerSettings["osSkin"],
+  textColor: string,
+  fillColor: string,
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
-  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = getPreviewGadgetText(g, GADGET_KIND.SpinGadget);
   const spinnerWidth = osSkin === "windows8" ? 18 : 20;
   const bodyWidth = Math.max(0, w - spinnerWidth);
-
-  ctx.save();
-  ctx.textBaseline = "top";
-
-  if (osSkin === "windows8") {
-    const borderColor = ensurePreviewLineContrast(
-      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
-      fillColor,
-      "rgb(171, 173, 179)"
-    );
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(x + 1, y + 1, Math.max(0, bodyWidth - 2), Math.max(0, h - 2));
-
-    ctx.fillStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
-    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
-  } else {
-    const outerBorder = osSkin === "windows7"
-      ? ensurePreviewLineContrast(
-        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
-        fillColor,
-        "rgb(165, 165, 165)"
-      )
-      : "rgb(165, 165, 165)";
-    ctx.strokeStyle = outerBorder;
-    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
-    ctx.strokeStyle = "rgb(227, 227, 227)";
-    ctx.beginPath();
-    ctx.moveTo(x + 1.5, y + 1.5);
-    ctx.lineTo(x + bodyWidth - 1.5, y + 1.5);
-    ctx.stroke();
-    ctx.strokeStyle = "rgb(245, 245, 245)";
-    ctx.beginPath();
-    ctx.moveTo(x + 1.5, y + 2.5);
-    ctx.lineTo(x + bodyWidth - 1.5, y + 2.5);
-    ctx.moveTo(x + 1.5, y + 2.5);
-    ctx.lineTo(x + 1.5, y + h - 2.5);
-    ctx.moveTo(x + bodyWidth - 2.5, y + 2.5);
-    ctx.lineTo(x + bodyWidth - 2.5, y + h - 2.5);
-    ctx.stroke();
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
-
-    ctx.strokeStyle = outerBorder;
-    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
-    ctx.fillStyle = osSkin === "macos" ? "rgb(236, 236, 236)" : "rgb(240, 240, 240)";
-    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
-  }
-
   const dividerX = x + bodyWidth;
   ctx.strokeStyle = osSkin === "windows8"
     ? ensurePreviewLineContrast(
@@ -4760,6 +4726,91 @@ function drawSpinGadgetChrome(
   ctx.lineTo(x + bodyWidth + spinnerWidth / 2, y + Math.trunc((3 * h) / 4) + 2);
   ctx.closePath();
   ctx.fill();
+}
+
+function drawSpinGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = getPreviewGadgetText(g, GADGET_KIND.SpinGadget);
+  const layout = getPreviewSpinButtonLayout({ x, y, width: w, height: h, osSkin });
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    const borderColor = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+      fillColor,
+      "rgb(171, 173, 179)"
+    );
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, layout.bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, layout.bodyWidth - 2), Math.max(0, h - 2));
+  } else {
+    const outerBorder = osSkin === "windows7"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
+        fillColor,
+        "rgb(165, 165, 165)"
+      )
+      : "rgb(165, 165, 165)";
+    ctx.strokeStyle = outerBorder;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, layout.bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 1.5);
+    ctx.lineTo(x + layout.bodyWidth - 1.5, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(245, 245, 245)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + layout.bodyWidth - 1.5, y + 2.5);
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + 1.5, y + h - 2.5);
+    ctx.moveTo(x + layout.bodyWidth - 2.5, y + 2.5);
+    ctx.lineTo(x + layout.bodyWidth - 2.5, y + h - 2.5);
+    ctx.stroke();
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 2, y + 3, Math.max(0, layout.bodyWidth - 4), Math.max(0, h - 4));
+  }
+
+  const spinImage = getPreviewSpinImage(osSkin);
+  const spinDrawn = drawPreviewRasterIcon(ctx, spinImage, layout.imageX, layout.imageY, layout.imageWidth, layout.imageHeight);
+  if (!spinDrawn) {
+    if (osSkin === "windows8") {
+      const borderColor = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+        fillColor,
+        "rgb(171, 173, 179)"
+      );
+      ctx.fillStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+      ctx.fillRect(layout.imageX, layout.imageY, Math.max(0, layout.imageWidth), Math.max(0, layout.imageHeight));
+      ctx.strokeStyle = borderColor;
+      ctx.strokeRect(layout.imageX + 0.5, layout.imageY + 0.5, Math.max(0, layout.imageWidth - 1), Math.max(0, layout.imageHeight - 1));
+    } else {
+      ctx.strokeStyle = osSkin === "windows7"
+        ? ensurePreviewLineContrast(
+          windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
+          fillColor,
+          "rgb(165, 165, 165)"
+        )
+        : "rgb(165, 165, 165)";
+      ctx.strokeRect(x + layout.bodyWidth + 0.5, y + 0.5, Math.max(0, w - layout.bodyWidth - 1), Math.max(0, h - 1));
+      ctx.fillStyle = osSkin === "macos" ? "rgb(236, 236, 236)" : "rgb(240, 240, 240)";
+      ctx.fillRect(x + layout.bodyWidth + 1, y + 1, Math.max(0, w - layout.bodyWidth - 2), Math.max(0, h - 2));
+    }
+    drawSpinSpinnerFallback(ctx, x, y, w, h, osSkin, textColor, fillColor, windowsSkinColors);
+  }
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));

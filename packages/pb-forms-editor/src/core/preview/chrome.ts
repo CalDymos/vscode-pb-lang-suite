@@ -80,6 +80,48 @@ export function getPreviewComboArrowLayout(args: {
   };
 }
 
+export type PreviewSpinButtonLayout = {
+  bodyWidth: number;
+  imageX: number;
+  imageY: number;
+  imageWidth: number;
+  imageHeight: number;
+};
+
+export function getPreviewSpinButtonLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+}): PreviewSpinButtonLayout {
+  const { x, y, width, height, osSkin } = args;
+
+  if (osSkin === "windows8") {
+    const imageWidth = 8;
+    const imageHeight = 18;
+    const bodyWidth = Math.max(0, width - imageWidth - 1);
+    return {
+      bodyWidth,
+      imageX: x + bodyWidth + 1,
+      imageY: y + Math.trunc((height - imageHeight) / 2),
+      imageWidth,
+      imageHeight
+    };
+  }
+
+  const imageWidth = 13;
+  const imageHeight = 23;
+  const bodyWidth = Math.max(0, width - 20);
+  return {
+    bodyWidth,
+    imageX: x + bodyWidth + 7,
+    imageY: y + Math.trunc((height - imageHeight) / 2),
+    imageWidth,
+    imageHeight
+  };
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 
