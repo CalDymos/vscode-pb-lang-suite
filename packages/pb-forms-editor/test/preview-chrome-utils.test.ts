@@ -34,6 +34,7 @@ import {
   toWindowGlobalPoint,
   toWindowLocalPoint,
   usesOriginalMacRoundedButtonChrome,
+  getPreviewComboArrowLayout,
   getPreviewComboChromeHeight,
   type PreviewChromeMetrics,
   type PreviewRect
@@ -278,4 +279,22 @@ test("uses the original fixed 22px macOS combo chrome only for non-editable comb
   assert.equal(getPreviewComboChromeHeight("macos", 25, false), 22);
   assert.equal(getPreviewComboChromeHeight("macos", 25, true), 25);
   assert.equal(getPreviewComboChromeHeight("windows7", 25, false), 25);
+});
+
+
+test("uses the original macOS combo double-arrows asset placement only for non-editable combos", () => {
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isEditable: false }),
+    { kind: "macDoubleArrows", x: 118, y: 25, width: 5, height: 11 }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isEditable: true }),
+    { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isEditable: false }),
+    { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
 });

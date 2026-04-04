@@ -27,6 +27,7 @@ import {
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
+  getPreviewComboArrowLayout,
   getPreviewComboChromeHeight,
   getRectHandlePoints,
   hitHandlePoints,
@@ -242,6 +243,7 @@ import {
   PREVIEW_WINDOWS8_OPTION_DATA_URI,
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
+  PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
 } from "../core/preview/assets";
 
 
@@ -607,6 +609,7 @@ let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
+let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
 const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
 
 
@@ -745,6 +748,14 @@ function getPreviewDateIconImage(): HTMLImageElement | null {
   }
 
   return previewDateIconImage;
+}
+
+function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
+  if (!previewMacComboDoubleArrowsImage) {
+    previewMacComboDoubleArrowsImage = createPreviewRasterIcon(PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI);
+  }
+
+  return previewMacComboDoubleArrowsImage;
 }
 
 function createResolvedPreviewImage(src: string): HTMLImageElement | null {
@@ -4162,6 +4173,31 @@ function drawComboDropArrow(
   ctx.restore();
 }
 
+function drawMacComboDoubleArrows(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + 4);
+  ctx.lineTo(x + 2.5, y);
+  ctx.lineTo(x + 5, y + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + 7);
+  ctx.lineTo(x + 2.5, y + 11);
+  ctx.lineTo(x + 5, y + 7);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
 
 function drawCheckableGadgetFallbackMark(
   ctx: CanvasRenderingContext2D,
@@ -4597,7 +4633,21 @@ function drawComboLikeGadgetChrome(
     ctx.stroke();
   }
 
-  drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(comboChromeHeight / 2), arrowColor);
+  const comboArrowLayout = getPreviewComboArrowLayout({ x, y, width: w, height: h, osSkin, isEditable });
+  if (comboArrowLayout.kind === "macDoubleArrows") {
+    if (!drawPreviewRasterIcon(
+      ctx,
+      getPreviewMacComboDoubleArrowsImage(),
+      comboArrowLayout.x,
+      comboArrowLayout.y,
+      comboArrowLayout.width,
+      comboArrowLayout.height
+    )) {
+      drawMacComboDoubleArrows(ctx, comboArrowLayout.x, comboArrowLayout.y, arrowColor);
+    }
+  } else {
+    drawComboDropArrow(ctx, comboArrowLayout.centerX, comboArrowLayout.centerY, arrowColor);
+  }
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textX = getPreviewComboTextX({ x, isEditable, osSkin });
   const textY = getPreviewComboTextY({ y, height: h, textHeight: textStyle.sizePx, isEditable, osSkin });

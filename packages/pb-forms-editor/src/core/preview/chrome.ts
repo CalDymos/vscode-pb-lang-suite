@@ -39,6 +39,47 @@ export function getPreviewComboChromeHeight(
   return !isEditable && osSkin === "macos" ? 22 : height;
 }
 
+export type PreviewComboArrowLayout =
+  | {
+    kind: "macDoubleArrows";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+  | {
+    kind: "singleDown";
+    centerX: number;
+    centerY: number;
+  };
+
+export function getPreviewComboArrowLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isEditable: boolean;
+}): PreviewComboArrowLayout {
+  const { x, y, width, height, osSkin, isEditable } = args;
+
+  if (!isEditable && osSkin === "macos") {
+    return {
+      kind: "macDoubleArrows",
+      x: x + width - 12,
+      y: y + 5,
+      width: 5,
+      height: 11
+    };
+  }
+
+  return {
+    kind: "singleDown",
+    centerX: x + width - 12,
+    centerY: y + Math.trunc(getPreviewComboChromeHeight(osSkin, height, isEditable) / 2)
+  };
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 
