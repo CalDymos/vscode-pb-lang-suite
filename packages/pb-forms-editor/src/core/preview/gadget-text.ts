@@ -56,6 +56,20 @@ export function getPreviewComboTextX(
   return x + (osSkin === "macos" ? 6 : 4);
 }
 
+export function getPreviewComboTextY(
+  args: {
+    y: number;
+    height: number;
+    textHeight: number;
+    isEditable: boolean;
+    osSkin: "windows7" | "windows8" | "macos" | "linux";
+  }
+): number {
+  const { y, height, textHeight, isEditable, osSkin } = args;
+  const comboHeight = !isEditable && osSkin === "macos" ? 22 : height;
+  return y + Math.max(1, Math.trunc((comboHeight - textHeight) / 2));
+}
+
 export function getPreviewListHeaderTextY(
   variant: "listicon" | "explorerlist",
   y: number

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewComboTextX, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -54,4 +54,11 @@ test('getPreviewComboTextX follows the original editable/non-editable combo text
   assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'windows7' }), 24);
   assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'linux' }), 24);
   assert.equal(getPreviewComboTextX({ x: 20, isEditable: false, osSkin: 'macos' }), 26);
+});
+
+
+test('getPreviewComboTextY follows the original fixed 22px macOS combo baseline', () => {
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'macos' }), 15);
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: true, osSkin: 'macos' }), 16);
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'windows7' }), 16);
 });
