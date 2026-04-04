@@ -26,6 +26,11 @@ export type WindowClientSurfaceRects = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
+
+export function usesOriginalMacRoundedButtonChrome(osSkin: "windows7" | "windows8" | "macos" | "linux", height: number): boolean {
+  return osSkin === "macos" && Math.trunc(height) === 25;
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 

@@ -26,6 +26,7 @@ import {
   getWindowChromeLayout,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
+  usesOriginalMacRoundedButtonChrome,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -4086,6 +4087,24 @@ function drawButtonGadgetChrome(
     case "macos":
     case "linux":
     default: {
+      if (usesOriginalMacRoundedButtonChrome(osSkin, h)) {
+        const topBandHeight = Math.max(0, Math.min(10, h - 2));
+        const bottomBandY = y + 11;
+        const bottomBandHeight = Math.max(0, Math.min(10, (y + h - 1) - bottomBandY));
+        const outlineHeight = Math.max(0, Math.min(22, h - 1));
+        const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 10);
+        gradient.addColorStop(0, "rgb(244, 244, 244)");
+        gradient.addColorStop(1, "rgb(255, 255, 255)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), topBandHeight);
+        ctx.fillStyle = "rgb(236, 236, 236)";
+        ctx.fillRect(x + 1, bottomBandY, Math.max(0, w - 2), bottomBandHeight);
+        traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), outlineHeight, 3);
+        ctx.strokeStyle = "rgb(144, 144, 144)";
+        ctx.stroke();
+        break;
+      }
+
       traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
       ctx.strokeStyle = "rgb(220, 220, 220)";
       ctx.stroke();

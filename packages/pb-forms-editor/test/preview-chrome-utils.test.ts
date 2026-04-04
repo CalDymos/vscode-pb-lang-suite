@@ -33,6 +33,7 @@ import {
   resolvePreviewChromeMetrics,
   toWindowGlobalPoint,
   toWindowLocalPoint,
+  usesOriginalMacRoundedButtonChrome,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/preview/chrome";
@@ -262,4 +263,11 @@ test("resolves default preview chrome metrics from user-agent hints", () => {
     statusBarHeight: 26
   });
   assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), METRICS);
+});
+
+
+test("uses the original rounded macOS button chrome only for 25px button heights", () => {
+  assert.equal(usesOriginalMacRoundedButtonChrome("macos", 25), true);
+  assert.equal(usesOriginalMacRoundedButtonChrome("macos", 24), false);
+  assert.equal(usesOriginalMacRoundedButtonChrome("linux", 25), false);
 });
