@@ -50,7 +50,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4475,7 +4475,7 @@ function drawCheckableGadgetChrome(
   const markX = x;
   const markY = y + Math.trunc((h - imageHeight) / 2);
   const textX = x + (kind === "option" ? 19 : 17);
-  const textY = y + Math.trunc((h - (kind === "option" ? 17 : 15)) / 2);
+  const textY = getPreviewCheckableTextY(kind, y, h);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -4486,10 +4486,9 @@ function drawCheckableGadgetChrome(
 
   if (label.length > 0) {
     const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-    const adjustedTextY = y + Math.trunc((h - textStyle.sizePx) / 2);
     ctx.fillStyle = textColor;
-    ctx.fillText(label, textX, adjustedTextY);
-    drawPreviewTextDecorations(ctx, label, textX, adjustedTextY, textStyle, textColor);
+    ctx.fillText(label, textX, textY);
+    drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
   }
 
   ctx.restore();
