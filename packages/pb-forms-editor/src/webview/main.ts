@@ -180,6 +180,7 @@ import {
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewCanvasOrigin,
+  getWindowPreviewTitleButtonAssetKind,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewTitleBarMetrics,
@@ -237,6 +238,10 @@ import {
   PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI,
   PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI,
   PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_MAC_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_DISABLED_BUTTON_DATA_URI,
   PREVIEW_MAC_CHECKBOX_DATA_URI,
   PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI,
   PREVIEW_WINDOWS7_CHECKBOX_DATA_URI,
@@ -630,6 +635,7 @@ let previewPlusIconImage: HTMLImageElement | null = null;
 let previewSubmenuIconImage: HTMLImageElement | null = null;
 let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewMacTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
 const previewComboArrowImageCache = new Map<string, HTMLImageElement | null>();
@@ -723,6 +729,38 @@ function getPreviewWindowsTitleButtonImage(
 
   const image = createPreviewRasterIcon(getPreviewWindowsTitleButtonDataUri(osSkin, kind, enabled));
   previewWindowsTitleButtonImageCache.set(cacheKey, image);
+  return image;
+}
+
+
+function getPreviewMacTitleButtonDataUri(kind: "close" | "minimize" | "maximize", enabled: boolean): string {
+  const assetKind = getWindowPreviewTitleButtonAssetKind("macos", kind, enabled);
+  switch (assetKind) {
+    case "macClose":
+      return PREVIEW_MAC_CLOSE_BUTTON_DATA_URI;
+    case "macMinimize":
+      return PREVIEW_MAC_MINIMIZE_BUTTON_DATA_URI;
+    case "macMaximize":
+      return PREVIEW_MAC_MAXIMIZE_BUTTON_DATA_URI;
+    case "macDisabled":
+      return PREVIEW_MAC_DISABLED_BUTTON_DATA_URI;
+    default:
+      return PREVIEW_MAC_DISABLED_BUTTON_DATA_URI;
+  }
+}
+
+function getPreviewMacTitleButtonImage(
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${kind}:${enabled ? "enabled" : "disabled"}`;
+  const cached = previewMacTitleButtonImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewMacTitleButtonDataUri(kind, enabled));
+  previewMacTitleButtonImageCache.set(cacheKey, image);
   return image;
 }
 
@@ -7878,9 +7916,9 @@ function render() {
         const buttonH = size.height;
         const kind = slot.kind;
         const isEnabled = slot.enabled;
-        let drewWindowsTitleButton = false;
+        let drewRasterTitleButton = false;
         if (isWindowsPreview && (settings.osSkin === "windows7" || settings.osSkin === "windows8")) {
-          drewWindowsTitleButton = drawPreviewRasterIcon(
+          drewRasterTitleButton = drawPreviewRasterIcon(
             ctx,
             getPreviewWindowsTitleButtonImage(settings.osSkin, kind, isEnabled),
             buttonX,
@@ -7888,9 +7926,18 @@ function render() {
             buttonW,
             buttonH
           );
+        } else if (isMacPreview) {
+          drewRasterTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewMacTitleButtonImage(kind, isEnabled),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
         }
 
-        if (!drewWindowsTitleButton) {
+        if (!drewRasterTitleButton) {
           if (isMacPreview) {
             const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
             const cx = buttonX + Math.trunc(buttonW / 2);
