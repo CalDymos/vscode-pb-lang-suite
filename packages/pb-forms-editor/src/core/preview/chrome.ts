@@ -39,6 +39,8 @@ export function getPreviewComboChromeHeight(
   return !isEditable && osSkin === "macos" ? 22 : height;
 }
 
+export type PreviewComboArrowAssetKind = "windowsComboDown" | "windows8ComboDown";
+
 export type PreviewComboArrowLayout =
   | {
     kind: "macDoubleArrows";
@@ -46,6 +48,16 @@ export type PreviewComboArrowLayout =
     y: number;
     width: number;
     height: number;
+  }
+  | {
+    kind: "rasterDown";
+    assetKind: PreviewComboArrowAssetKind;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fallbackCenterX: number;
+    fallbackCenterY: number;
   }
   | {
     kind: "singleDown";
@@ -62,6 +74,8 @@ export function getPreviewComboArrowLayout(args: {
   isEditable: boolean;
 }): PreviewComboArrowLayout {
   const { x, y, width, height, osSkin, isEditable } = args;
+  const centerX = x + width - 12;
+  const centerY = y + Math.trunc(getPreviewComboChromeHeight(osSkin, height, isEditable) / 2);
 
   if (!isEditable && osSkin === "macos") {
     return {
@@ -73,10 +87,36 @@ export function getPreviewComboArrowLayout(args: {
     };
   }
 
+  if (osSkin === "windows8") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((getPreviewComboChromeHeight(osSkin, height, isEditable) - 6) / 2),
+      width: 7,
+      height: 6,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  if (osSkin === "windows7" || osSkin === "linux") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((getPreviewComboChromeHeight(osSkin, height, isEditable) - 4) / 2),
+      width: 7,
+      height: 4,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
   return {
     kind: "singleDown",
-    centerX: x + width - 12,
-    centerY: y + Math.trunc(getPreviewComboChromeHeight(osSkin, height, isEditable) / 2)
+    centerX,
+    centerY
   };
 }
 

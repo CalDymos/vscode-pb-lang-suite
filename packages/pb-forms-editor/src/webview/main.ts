@@ -249,6 +249,8 @@ import {
   PREVIEW_WINDOWS8_OPTION_DATA_URI,
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
+  PREVIEW_WINDOWS_COMBO_ARROW_DOWN_DATA_URI,
+  PREVIEW_WINDOWS8_COMBO_ARROW_DOWN_DATA_URI,
   PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
   PREVIEW_WINDOWS_SCROLL_UP_DATA_URI,
   PREVIEW_WINDOWS_SCROLL_DOWN_DATA_URI,
@@ -629,6 +631,7 @@ let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
+const previewComboArrowImageCache = new Map<string, HTMLImageElement | null>();
 let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
 const previewScrollBarArrowImageCache = new Map<string, HTMLImageElement | null>();
 let previewMacTrackBarImage: HTMLImageElement | null = null;
@@ -783,6 +786,20 @@ function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
   }
 
   return previewMacComboDoubleArrowsImage;
+}
+
+function getPreviewComboArrowImage(assetKind: "windowsComboDown" | "windows8ComboDown"): HTMLImageElement | null {
+  const cached = previewComboArrowImageCache.get(assetKind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const dataUri = assetKind === "windows8ComboDown"
+    ? PREVIEW_WINDOWS8_COMBO_ARROW_DOWN_DATA_URI
+    : PREVIEW_WINDOWS_COMBO_ARROW_DOWN_DATA_URI;
+  const image = createPreviewRasterIcon(dataUri);
+  previewComboArrowImageCache.set(assetKind, image);
+  return image;
 }
 
 function getPreviewScrollBarArrowImage(
@@ -4754,6 +4771,17 @@ function drawComboLikeGadgetChrome(
       comboArrowLayout.height
     )) {
       drawMacComboDoubleArrows(ctx, comboArrowLayout.x, comboArrowLayout.y, arrowColor);
+    }
+  } else if (comboArrowLayout.kind === "rasterDown") {
+    if (!drawPreviewRasterIcon(
+      ctx,
+      getPreviewComboArrowImage(comboArrowLayout.assetKind),
+      comboArrowLayout.x,
+      comboArrowLayout.y,
+      comboArrowLayout.width,
+      comboArrowLayout.height
+    )) {
+      drawComboDropArrow(ctx, comboArrowLayout.fallbackCenterX, comboArrowLayout.fallbackCenterY, arrowColor);
     }
   } else {
     drawComboDropArrow(ctx, comboArrowLayout.centerX, comboArrowLayout.centerY, arrowColor);

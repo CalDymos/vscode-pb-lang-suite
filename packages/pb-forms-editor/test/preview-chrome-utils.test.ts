@@ -301,7 +301,44 @@ test("uses the original macOS combo double-arrows asset placement only for non-e
 
   assert.deepEqual(
     getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isEditable: false }),
-    { kind: "singleDown", centerX: 118, centerY: 32 }
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows8", isEditable: false }),
+    {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: 118,
+      y: 29,
+      width: 7,
+      height: 6,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "linux", isEditable: true }),
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
   );
 });
 
