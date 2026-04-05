@@ -11,6 +11,8 @@ import {
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
+  getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterTextPosition,
   getMenuEntrySourceLine,
   getMenuEntryMoveTarget,
   getMenuEntryRect,
@@ -134,6 +136,20 @@ test("resolves direct menu children and ancestor chains from entry levels", () =
   assert.deepEqual(getMenuAncestorChain(menu, 3), [0, 1, 3]);
   assert.equal(getMenuEntrySourceLine(menu, 5), 15);
   assert.equal(getMenuEntrySourceLine(menu, 99), undefined);
+});
+
+test("uses the original top-aligned text positions for menu flyout entries and footer", () => {
+  assert.deepEqual(getMenuFlyoutEntryTextLayout({ x: 120, y: 48, w: 160, h: 20 }, 37.2), {
+    labelX: 144,
+    labelY: 48,
+    shortcutX: 232,
+    shortcutY: 48,
+  });
+
+  assert.deepEqual(getMenuFlyoutFooterTextPosition({ x: 120, y: 108, w: 160, h: 20 }), {
+    x: 125,
+    y: 108,
+  });
 });
 
 test("predicts menu block end indices and move targets for subtree moves", () => {

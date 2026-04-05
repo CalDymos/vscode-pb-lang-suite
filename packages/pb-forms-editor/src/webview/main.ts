@@ -78,6 +78,8 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterTextPosition,
   getMenuFooterRect,
   getMenuPreviewLabel,
   getMenuVisibleEntries,
@@ -6985,6 +6987,8 @@ function drawMenuFlyoutPanelPreview(
   ctx.restore();
 
   let posY = panelRect.y;
+  ctx.save();
+  ctx.textBaseline = "top";
   for (const childIndex of childIndices) {
     const entry = menu.entries[childIndex];
     if (entry.kind === "MenuBar") {
@@ -7024,15 +7028,15 @@ function drawMenuFlyoutPanelPreview(
     }
 
     const label = getMenuPreviewLabel(entry);
+    const textLayout = getMenuFlyoutEntryTextLayout(entryRect, entry.shortcut ? ctx.measureText(entry.shortcut).width : 0);
     ctx.fillStyle = menuTextColor;
-    ctx.fillText(label, entryRect.x + 24, entryRect.y + 14);
+    ctx.fillText(label, textLayout.labelX, textLayout.labelY);
 
     if (entry.shortcut) {
-      const shortcutWidth = Math.ceil(ctx.measureText(entry.shortcut).width);
       ctx.save();
       ctx.globalAlpha = 0.72;
       ctx.fillStyle = menuTextColor;
-      ctx.fillText(entry.shortcut, entryRect.x + entryRect.w - 10 - shortcutWidth, entryRect.y + 14);
+      ctx.fillText(entry.shortcut, textLayout.shortcutX, textLayout.shortcutY);
       ctx.restore();
     }
 
@@ -7057,11 +7061,14 @@ function drawMenuFlyoutPanelPreview(
 
   const footerRect: PreviewMenuFooterRect = { menuId: menu.id, parentIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
   menuFooterPreviewRects.push(footerRect);
+  const footerTextPosition = getMenuFlyoutFooterTextPosition(footerRect);
 
   ctx.save();
   ctx.globalAlpha = 0.92;
   ctx.fillStyle = menuTextColor;
-  ctx.fillText("Add Item...", footerRect.x + 5, footerRect.y + 14);
+  ctx.textBaseline = "top";
+  ctx.fillText("Add Item...", footerTextPosition.x, footerTextPosition.y);
+  ctx.restore();
   ctx.restore();
 }
 

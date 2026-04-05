@@ -466,6 +466,32 @@ export function getMenuFlyoutPanelRect(
   };
 }
 
+export function getMenuFlyoutEntryTextLayout(
+  entryRect: PreviewRectLike,
+  shortcutWidth = 0
+): {
+  labelX: number;
+  labelY: number;
+  shortcutX: number;
+  shortcutY: number;
+} {
+  return {
+    labelX: entryRect.x + 24,
+    labelY: entryRect.y,
+    shortcutX: entryRect.x + entryRect.w - 10 - Math.max(0, Math.ceil(shortcutWidth)),
+    shortcutY: entryRect.y,
+  };
+}
+
+export function getMenuFlyoutFooterTextPosition(
+  footerRect: PreviewRectLike
+): { x: number; y: number } {
+  return {
+    x: footerRect.x + 5,
+    y: footerRect.y,
+  };
+}
+
 
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
