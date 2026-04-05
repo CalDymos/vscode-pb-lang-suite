@@ -122,6 +122,122 @@ export function getPreviewSpinButtonLayout(args: {
   };
 }
 
+export type PreviewScrollBarArrowAssetKind =
+  | "windowsUp"
+  | "windowsDown"
+  | "windowsLeft"
+  | "windowsRight"
+  | "windows8Up"
+  | "windows8Down"
+  | "windows8Left"
+  | "windows8Right";
+
+export type PreviewScrollBarArrowAssetLayout = {
+  direction: "up" | "down" | "left" | "right";
+  assetKind: PreviewScrollBarArrowAssetKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export function getPreviewScrollBarArrowAssetLayouts(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewScrollBarArrowAssetLayout[] {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin === "macos") {
+    return [];
+  }
+
+  if (osSkin === "windows8") {
+    if (isVertical) {
+      return [
+        {
+          direction: "up",
+          assetKind: "windows8Up",
+          x: x + Math.trunc((width - 7) / 2),
+          y: y + 5,
+          width: 7,
+          height: 6
+        },
+        {
+          direction: "down",
+          assetKind: "windows8Down",
+          x: x + Math.trunc((width - 7) / 2),
+          y: y + height - 11,
+          width: 7,
+          height: 6
+        }
+      ];
+    }
+
+    return [
+      {
+        direction: "left",
+        assetKind: "windows8Left",
+        x: x + 5,
+        y: y + Math.trunc((height - 7) / 2),
+        width: 6,
+        height: 7
+      },
+      {
+        direction: "right",
+        assetKind: "windows8Right",
+        x: x + width - 11,
+        y: y + Math.trunc((height - 7) / 2),
+        width: 6,
+        height: 7
+      }
+    ];
+  }
+
+  if (isVertical) {
+    return [
+      {
+        direction: "up",
+        assetKind: "windowsUp",
+        x: x + Math.trunc((width - 6) / 2),
+        y: y + 6,
+        width: 7,
+        height: 4
+      },
+      {
+        direction: "down",
+        assetKind: "windowsDown",
+        x: x + Math.trunc((width - 6) / 2),
+        y: y + height - 10,
+        width: 7,
+        height: 4
+      }
+    ];
+  }
+
+  return [
+    {
+      direction: "left",
+      assetKind: "windowsLeft",
+      x: x + 6,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 4,
+      height: 7
+    },
+    {
+      direction: "right",
+      assetKind: "windowsRight",
+      x: x + width - 10,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 4,
+      height: 7
+    }
+  ];
+}
+
 export type PreviewTrackBarThumbAssetLayout = {
   assetKind: "macHorizontal" | "macVertical" | "windowsHorizontal" | "windowsVertical";
   x: number;

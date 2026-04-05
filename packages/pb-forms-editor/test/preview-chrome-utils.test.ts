@@ -38,6 +38,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewScrollBarArrowAssetLayouts,
   getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   type PreviewChromeMetrics,
@@ -300,6 +301,37 @@ test("uses the original macOS combo double-arrows asset placement only for non-e
   assert.deepEqual(
     getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isEditable: false }),
     { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
+});
+
+test("uses the original scrollbar arrow assets for Windows, Windows 8 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows7", isVertical: true }),
+    [
+      { direction: "up", assetKind: "windowsUp", x: 16, y: 26, width: 7, height: 4 },
+      { direction: "down", assetKind: "windowsDown", x: 16, y: 130, width: 7, height: 4 }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 120, height: 18, osSkin: "linux", isVertical: false }),
+    [
+      { direction: "left", assetKind: "windowsLeft", x: 16, y: 26, width: 4, height: 7 },
+      { direction: "right", assetKind: "windowsRight", x: 120, y: 26, width: 4, height: 7 }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows8", isVertical: true }),
+    [
+      { direction: "up", assetKind: "windows8Up", x: 15, y: 25, width: 7, height: 6 },
+      { direction: "down", assetKind: "windows8Down", x: 15, y: 129, width: 7, height: 6 }
+    ]
+  );
+
+  assert.equal(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 120, height: 18, osSkin: "macos", isVertical: false }).length,
+    0
   );
 });
 

@@ -31,6 +31,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewScrollBarArrowAssetLayouts,
   getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   getRectHandlePoints,
@@ -248,6 +249,14 @@ import {
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
   PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_UP_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_DOWN_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_LEFT_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_RIGHT_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_UP_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_DOWN_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_LEFT_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_RIGHT_DATA_URI,
   PREVIEW_MAC_TRACKBAR_DATA_URI,
   PREVIEW_MAC_TRACKBAR_VERTICAL_DATA_URI,
   PREVIEW_MAC_SPIN_DATA_URI,
@@ -620,6 +629,7 @@ const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | n
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
 let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
+const previewScrollBarArrowImageCache = new Map<string, HTMLImageElement | null>();
 let previewMacTrackBarImage: HTMLImageElement | null = null;
 let previewMacTrackBarVerticalImage: HTMLImageElement | null = null;
 let previewWindows7TrackBarImage: HTMLImageElement | null = null;
@@ -772,6 +782,47 @@ function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
   }
 
   return previewMacComboDoubleArrowsImage;
+}
+
+function getPreviewScrollBarArrowImage(
+  assetKind: "windowsUp" | "windowsDown" | "windowsLeft" | "windowsRight" | "windows8Up" | "windows8Down" | "windows8Left" | "windows8Right"
+): HTMLImageElement | null {
+  const cached = previewScrollBarArrowImageCache.get(assetKind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  let dataUri: string;
+  switch (assetKind) {
+    case "windowsUp":
+      dataUri = PREVIEW_WINDOWS_SCROLL_UP_DATA_URI;
+      break;
+    case "windowsDown":
+      dataUri = PREVIEW_WINDOWS_SCROLL_DOWN_DATA_URI;
+      break;
+    case "windowsLeft":
+      dataUri = PREVIEW_WINDOWS_SCROLL_LEFT_DATA_URI;
+      break;
+    case "windowsRight":
+      dataUri = PREVIEW_WINDOWS_SCROLL_RIGHT_DATA_URI;
+      break;
+    case "windows8Up":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_UP_DATA_URI;
+      break;
+    case "windows8Down":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_DOWN_DATA_URI;
+      break;
+    case "windows8Left":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_LEFT_DATA_URI;
+      break;
+    case "windows8Right":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_RIGHT_DATA_URI;
+      break;
+  }
+
+  const image = createPreviewRasterIcon(dataUri);
+  previewScrollBarArrowImageCache.set(assetKind, image);
+  return image;
 }
 
 function getPreviewTrackBarThumbImage(
@@ -5363,9 +5414,22 @@ function drawScrollBarGadgetChrome(
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   }
 
+  const arrowLayouts = getPreviewScrollBarArrowAssetLayouts({ x, y, width: w, height: h, osSkin, isVertical });
+
   if (isVertical) {
-    drawScrollBarArrowGlyph(ctx, "up", x + Math.trunc(w / 2), y + 8, arrowColor);
-    drawScrollBarArrowGlyph(ctx, "down", x + Math.trunc(w / 2), y + h - 8, arrowColor);
+    for (const arrow of arrowLayouts) {
+      const drawn = drawPreviewRasterIcon(
+        ctx,
+        getPreviewScrollBarArrowImage(arrow.assetKind),
+        arrow.x,
+        arrow.y,
+        arrow.width,
+        arrow.height
+      );
+      if (!drawn) {
+        drawScrollBarArrowGlyph(ctx, arrow.direction, x + Math.trunc(w / 2), arrow.direction === "up" ? y + 8 : y + h - 8, arrowColor);
+      }
+    }
     if (osSkin === "windows8") {
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 1, y + 17, Math.max(0, w - 1), Math.max(0, Math.trunc((h - 34) / 3)));
@@ -5381,8 +5445,19 @@ function drawScrollBarGadgetChrome(
       }
     }
   } else {
-    drawScrollBarArrowGlyph(ctx, "left", x + 8, y + Math.trunc(h / 2), arrowColor);
-    drawScrollBarArrowGlyph(ctx, "right", x + w - 8, y + Math.trunc(h / 2), arrowColor);
+    for (const arrow of arrowLayouts) {
+      const drawn = drawPreviewRasterIcon(
+        ctx,
+        getPreviewScrollBarArrowImage(arrow.assetKind),
+        arrow.x,
+        arrow.y,
+        arrow.width,
+        arrow.height
+      );
+      if (!drawn) {
+        drawScrollBarArrowGlyph(ctx, arrow.direction, arrow.direction === "left" ? x + 8 : x + w - 8, y + Math.trunc(h / 2), arrowColor);
+      }
+    }
     if (osSkin === "windows8") {
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 17, y + 1, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 1));
