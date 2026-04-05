@@ -50,7 +50,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4343,8 +4343,9 @@ function drawButtonGadgetChrome(
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textWidth = ctx.measureText(label).width;
+  const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
   const textX = x + Math.max(1, (w - textWidth) / 2);
-  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
+  const textY = getPreviewButtonTextY(y, h, textHeight);
   ctx.fillStyle = textColor;
   ctx.fillText(label, textX, textY);
   drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
