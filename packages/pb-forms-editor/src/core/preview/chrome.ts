@@ -130,6 +130,26 @@ export type PreviewTrackBarThumbAssetLayout = {
   height: number;
 };
 
+
+export function getPreviewTrackBarNoTicksFillRect(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewRect | null {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin !== "macos") {
+    return null;
+  }
+
+  return isVertical
+    ? { x: x + 17, y: y + 9, w: 4, h: Math.max(0, height - 18) }
+    : { x: x + 9, y: y + 17, w: Math.max(0, width - 18), h: 4 };
+}
+
 export function getPreviewTrackBarThumbAssetLayout(args: {
   x: number;
   y: number;

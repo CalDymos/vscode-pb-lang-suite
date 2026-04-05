@@ -38,6 +38,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewTrackBarNoTicksFillRect,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/preview/chrome";
@@ -339,5 +340,23 @@ test("uses the original spin button image layout from FD_DrawGadget for each pre
   assert.deepEqual(
     getPreviewSpinButtonLayout({ x: 20, y: 30, width: 120, height: 40, osSkin: "windows8" }),
     { bodyWidth: 111, imageX: 132, imageY: 41, imageWidth: 8, imageHeight: 18 }
+  );
+});
+
+
+test("uses the original macOS no-ticks guide fill rect only for trackbars without ticks", () => {
+  assert.deepEqual(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isVertical: false }),
+    { x: 19, y: 37, w: 102, h: 4 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 25, height: 120, osSkin: "macos", isVertical: true }),
+    { x: 27, y: 29, w: 4, h: 102 }
+  );
+
+  assert.equal(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isVertical: false }),
+    null
   );
 });

@@ -31,6 +31,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewTrackBarNoTicksFillRect,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -5124,6 +5125,9 @@ function drawTrackBarGadgetChrome(
 
   ctx.save();
   const thumbAssetLayout = getPreviewTrackBarThumbAssetLayout({ x, y, osSkin, isVertical });
+  const noTicksFillRect = !showTicks
+    ? getPreviewTrackBarNoTicksFillRect({ x, y, width: w, height: h, osSkin, isVertical })
+    : null;
 
   if (isVertical) {
     traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
@@ -5165,6 +5169,9 @@ function drawTrackBarGadgetChrome(
         ctx.fillStyle = tickColor;
         ctx.fillRect(x + 17, tickY, 4, 1);
       }
+    } else if (noTicksFillRect) {
+      ctx.fillStyle = "rgb(114, 114, 114)";
+      ctx.fillRect(noTicksFillRect.x, noTicksFillRect.y, noTicksFillRect.w, noTicksFillRect.h);
     }
   } else {
     traceRoundedRect(ctx, x + 0.5, y + 3.5, Math.max(0, w - 1), 5, 1);
@@ -5206,6 +5213,9 @@ function drawTrackBarGadgetChrome(
         ctx.fillStyle = tickColor;
         ctx.fillRect(tickX, y + 17, 1, 4);
       }
+    } else if (noTicksFillRect) {
+      ctx.fillStyle = "rgb(114, 114, 114)";
+      ctx.fillRect(noTicksFillRect.x, noTicksFillRect.y, noTicksFillRect.w, noTicksFillRect.h);
     }
   }
 
