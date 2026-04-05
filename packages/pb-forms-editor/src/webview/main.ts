@@ -242,6 +242,9 @@ import {
   PREVIEW_MAC_MINIMIZE_BUTTON_DATA_URI,
   PREVIEW_MAC_MAXIMIZE_BUTTON_DATA_URI,
   PREVIEW_MAC_DISABLED_BUTTON_DATA_URI,
+  PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_LINUX_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_LINUX_MAXIMIZE_BUTTON_DATA_URI,
   PREVIEW_MAC_CHECKBOX_DATA_URI,
   PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI,
   PREVIEW_WINDOWS7_CHECKBOX_DATA_URI,
@@ -636,6 +639,7 @@ let previewSubmenuIconImage: HTMLImageElement | null = null;
 let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewMacTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewLinuxTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
 const previewComboArrowImageCache = new Map<string, HTMLImageElement | null>();
@@ -761,6 +765,31 @@ function getPreviewMacTitleButtonImage(
 
   const image = createPreviewRasterIcon(getPreviewMacTitleButtonDataUri(kind, enabled));
   previewMacTitleButtonImageCache.set(cacheKey, image);
+  return image;
+}
+
+function getPreviewLinuxTitleButtonDataUri(kind: "close" | "minimize" | "maximize"): string {
+  const assetKind = getWindowPreviewTitleButtonAssetKind("linux", kind, true);
+  switch (assetKind) {
+    case "linuxClose":
+      return PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI;
+    case "linuxMinimize":
+      return PREVIEW_LINUX_MINIMIZE_BUTTON_DATA_URI;
+    case "linuxMaximize":
+      return PREVIEW_LINUX_MAXIMIZE_BUTTON_DATA_URI;
+    default:
+      return PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI;
+  }
+}
+
+function getPreviewLinuxTitleButtonImage(kind: "close" | "minimize" | "maximize"): HTMLImageElement | null {
+  const cached = previewLinuxTitleButtonImageCache.get(kind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewLinuxTitleButtonDataUri(kind));
+  previewLinuxTitleButtonImageCache.set(kind, image);
   return image;
 }
 
@@ -7930,6 +7959,15 @@ function render() {
           drewRasterTitleButton = drawPreviewRasterIcon(
             ctx,
             getPreviewMacTitleButtonImage(kind, isEnabled),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
+        } else if (isLinuxPreview && isEnabled) {
+          drewRasterTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewLinuxTitleButtonImage(kind),
             buttonX,
             buttonY,
             buttonW,

@@ -332,12 +332,16 @@ test('window preview frame decoration follows the original per-skin outer border
 });
 
 
-test('window preview title buttons use the original macOS raster assets only on the macOS skin', () => {
+test('window preview title buttons use the original macOS and Linux raster assets only on those skins', () => {
   assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'close', true), 'macClose');
   assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'minimize', true), 'macMinimize');
   assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'maximize', true), 'macMaximize');
   assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'minimize', false), 'macDisabled');
   assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'maximize', false), 'macDisabled');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'close', true), 'linuxClose');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'minimize', true), 'linuxMinimize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'maximize', true), 'linuxMaximize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'minimize', false), null);
   assert.equal(getWindowPreviewTitleButtonAssetKind('windows7', 'close', true), null);
 });
 

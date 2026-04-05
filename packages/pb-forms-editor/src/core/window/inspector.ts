@@ -69,7 +69,7 @@ export type WindowPreviewTitleButtonSize = {
   height: number;
 };
 
-export type WindowPreviewTitleButtonAssetKind = "macClose" | "macMinimize" | "macMaximize" | "macDisabled";
+export type WindowPreviewTitleButtonAssetKind = "macClose" | "macMinimize" | "macMaximize" | "macDisabled" | "linuxClose" | "linuxMinimize" | "linuxMaximize";
 
 export type WindowPreviewTitleIconSize = {
   width: number;
@@ -603,22 +603,37 @@ export function getWindowPreviewTitleButtonAssetKind(
   kind: WindowPreviewTitleButtonKind,
   enabled: boolean
 ): WindowPreviewTitleButtonAssetKind | null {
-  if (osSkin !== "macos") {
-    return null;
+  if (osSkin === "macos") {
+    if (!enabled && kind !== "close") {
+      return "macDisabled";
+    }
+
+    switch (kind) {
+      case "close":
+        return "macClose";
+      case "minimize":
+        return "macMinimize";
+      case "maximize":
+        return "macMaximize";
+    }
   }
 
-  if (!enabled && kind !== "close") {
-    return "macDisabled";
+  if (osSkin === "linux") {
+    if (!enabled) {
+      return null;
+    }
+
+    switch (kind) {
+      case "close":
+        return "linuxClose";
+      case "minimize":
+        return "linuxMinimize";
+      case "maximize":
+        return "linuxMaximize";
+    }
   }
 
-  switch (kind) {
-    case "close":
-      return "macClose";
-    case "minimize":
-      return "macMinimize";
-    case "maximize":
-      return "macMaximize";
-  }
+  return null;
 }
 
 export function getWindowPreviewTitleIconSize(
