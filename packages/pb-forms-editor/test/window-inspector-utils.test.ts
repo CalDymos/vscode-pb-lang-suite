@@ -721,17 +721,17 @@ test('window preview add and submenu icon metrics follow the original image asse
 
 
 test('window preview root menu entry rect follows the original MenuTitle outline box', () => {
-  assert.deepEqual(getWindowPreviewMenuRootEntryRect(15, 2, 54, 13), {
+  assert.deepEqual(getWindowPreviewMenuRootEntryRect(15, 2, 54, 13, 7), {
     x: 14,
     y: 1,
     w: 61,
-    h: 9,
+    h: 15,
   });
 
-  assert.deepEqual(getWindowPreviewMenuRootEntryRect(20, 4, 32.2, 12.1), {
+  assert.deepEqual(getWindowPreviewMenuRootEntryRect(20, 4, 32.2, 11.1, 20), {
     x: 19,
     y: 3,
-    w: 40,
-    h: 8.1,
+    w: 53,
+    h: 14,
   });
 });
