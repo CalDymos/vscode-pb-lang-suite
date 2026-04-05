@@ -76,10 +76,10 @@ test('getPreviewStringLikeTextY follows the original StringGadget and IPAddressG
   assert.equal(getPreviewStringLikeTextY(10, 25, 12), 16);
 });
 
-test('getPreviewComboTextY follows the original fixed 22px macOS combo baseline', () => {
-  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'macos' }), 15);
-  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: true, osSkin: 'macos' }), 16);
-  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'windows7' }), 16);
+test('getPreviewComboTextY follows the original blank-text-height baseline, including the fixed 22px macOS combo chrome', () => {
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 9, isEditable: false, osSkin: 'macos' }), 16);
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 9, isEditable: true, osSkin: 'macos' }), 18);
+  assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 9, isEditable: false, osSkin: 'windows7' }), 18);
 });
 
 

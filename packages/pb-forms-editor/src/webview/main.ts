@@ -4874,8 +4874,9 @@ function drawComboLikeGadgetChrome(
     drawComboDropArrow(ctx, comboArrowLayout.centerX, comboArrowLayout.centerY, arrowColor);
   }
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
   const textX = getPreviewComboTextX({ x, isEditable, osSkin });
-  const textY = getPreviewComboTextY({ y, height: h, textHeight: textStyle.sizePx, isEditable, osSkin });
+  const textY = getPreviewComboTextY({ y, height: h, textHeight, isEditable, osSkin });
   ctx.fillStyle = textColor;
   ctx.fillText(itemLabel, textX, textY);
   drawPreviewTextDecorations(ctx, itemLabel, textX, textY, textStyle, textColor);
