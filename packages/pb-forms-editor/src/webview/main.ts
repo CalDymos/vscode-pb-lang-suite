@@ -44,7 +44,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4677,6 +4677,12 @@ function drawComboLikeGadgetChrome(
   ctx.restore();
 }
 
+function measurePreviewTextHeight(ctx: CanvasRenderingContext2D, text: string, fallbackHeight: number): number {
+  const metrics = ctx.measureText(text.length > 0 ? text : " ");
+  const measuredHeight = Math.ceil((metrics.actualBoundingBoxAscent ?? 0) + (metrics.actualBoundingBoxDescent ?? 0));
+  return measuredHeight > 0 ? measuredHeight : fallbackHeight;
+}
+
 function drawSpinSpinnerFallback(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -4813,7 +4819,8 @@ function drawSpinGadgetChrome(
   }
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-  const textY = y + Math.max(1, Math.trunc((h - textStyle.sizePx) / 2));
+  const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+  const textY = getPreviewSpinTextY(y, h, textHeight);
   ctx.fillStyle = textColor;
   ctx.fillText(label, x + 3, textY);
   drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);

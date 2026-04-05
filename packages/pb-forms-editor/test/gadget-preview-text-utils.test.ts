@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -61,4 +61,10 @@ test('getPreviewComboTextY follows the original fixed 22px macOS combo baseline'
   assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'macos' }), 15);
   assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: true, osSkin: 'macos' }), 16);
   assert.equal(getPreviewComboTextY({ y: 10, height: 25, textHeight: 12, isEditable: false, osSkin: 'windows7' }), 16);
+});
+
+
+test('getPreviewSpinTextY follows the original caption centering by measured text height', () => {
+  assert.equal(getPreviewSpinTextY(10, 25, 9), 18);
+  assert.equal(getPreviewSpinTextY(10, 25, 12), 16);
 });
