@@ -35,7 +35,7 @@ test('getPreviewTextLikeTextPosition preserves original right and center alignme
 });
 
 
-test('getPreviewListRowAdvance follows FD_DrawGadget item spacing for tree and list-like gadgets', () => {
+test('getPreviewListRowAdvance follows FD_DrawGadget blank-text-height item spacing for tree and list-like gadgets', () => {
   assert.equal(getPreviewListRowAdvance('tree', 12), 18);
   assert.equal(getPreviewListRowAdvance('listview', 12), 16);
   assert.equal(getPreviewListRowAdvance('listicon', 15), 19);

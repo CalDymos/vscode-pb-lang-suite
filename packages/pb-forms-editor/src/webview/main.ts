@@ -5765,7 +5765,8 @@ function drawListLikeGadgetChrome(
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-  const lineAdvance = getPreviewListRowAdvance(isTree ? "tree" : "listview", textStyle.sizePx);
+  const blankTextHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
+  const lineAdvance = getPreviewListRowAdvance(isTree ? "tree" : "listview", blankTextHeight);
   ctx.fillStyle = textColor;
 
   if (rows.length === 0) {
@@ -5905,7 +5906,8 @@ function drawListIconLikeGadgetChrome(
   }
 
   const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-  const rowAdvance = getPreviewListRowAdvance(variant, textStyle.sizePx);
+  const blankTextHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
+  const rowAdvance = getPreviewListRowAdvance(variant, blankTextHeight);
   ctx.fillStyle = textColor;
 
   let rowY = contentStartY;
