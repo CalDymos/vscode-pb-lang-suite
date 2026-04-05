@@ -141,6 +141,63 @@ export type PreviewScrollBarArrowAssetLayout = {
   height: number;
 };
 
+export type PreviewScrollBarThumbFillLayout = {
+  thumbRect: PreviewRect;
+  lightRect: PreviewRect;
+  darkRect: PreviewRect;
+};
+
+export function getPreviewScrollBarThumbFillLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewScrollBarThumbFillLayout | null {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin === "windows8" || osSkin === "macos") {
+    return null;
+  }
+
+  if (isVertical) {
+    const thumbHeight = Math.max(0, Math.trunc((height - 34) / 3));
+    return {
+      thumbRect: { x: x + 1, y: y + 18, w: Math.max(0, width - 3), h: thumbHeight },
+      lightRect: {
+        x: x + 2,
+        y: y + 19,
+        w: Math.max(0, Math.trunc((width * 3) / 8) - 4),
+        h: Math.max(0, thumbHeight - 2)
+      },
+      darkRect: {
+        x: x + 2 + Math.trunc((width * 3) / 8),
+        y: y + 19,
+        w: Math.max(0, Math.trunc((width * 5) / 8) - 4),
+        h: Math.max(0, thumbHeight - 2)
+      }
+    };
+  }
+
+  const thumbWidth = Math.max(0, Math.trunc((width - 34) / 3));
+  return {
+    thumbRect: { x: x + 18, y: y + 1, w: thumbWidth, h: Math.max(0, height - 3) },
+    lightRect: {
+      x: x + 19,
+      y: y + 2,
+      w: Math.max(0, thumbWidth - 2),
+      h: Math.max(0, Math.trunc((height * 3) / 8) - 4)
+    },
+    darkRect: {
+      x: x + 19,
+      y: y + 2 + Math.trunc((height * 3) / 8),
+      w: Math.max(0, thumbWidth - 2),
+      h: Math.max(0, Math.trunc((height * 5) / 8) - 4)
+    }
+  };
+}
+
 export function getPreviewScrollBarArrowAssetLayouts(args: {
   x: number;
   y: number;

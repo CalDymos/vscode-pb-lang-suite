@@ -32,6 +32,7 @@ import {
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
   getPreviewScrollBarArrowAssetLayouts,
+  getPreviewScrollBarThumbFillLayout,
   getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   getRectHandlePoints,
@@ -5434,14 +5435,21 @@ function drawScrollBarGadgetChrome(
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 1, y + 17, Math.max(0, w - 1), Math.max(0, Math.trunc((h - 34) / 3)));
     } else {
-      traceRoundedRect(ctx, x + 1.5, y + 18.5, Math.max(0, w - 3), Math.max(0, Math.trunc((h - 34) / 3)), 1);
-      ctx.fillStyle = thumbColor;
-      ctx.fill();
-      ctx.strokeStyle = "rgb(155, 155, 155)";
-      ctx.stroke();
-      if (thumbHighlight) {
-        ctx.fillStyle = thumbHighlight;
-        ctx.fillRect(x + 2, y + 19, Math.max(0, Math.trunc((w * 3) / 8) - 4), Math.max(0, Math.trunc((h - 34) / 3) - 2));
+      const thumbFillLayout = getPreviewScrollBarThumbFillLayout({ x, y, width: w, height: h, osSkin, isVertical: true });
+      if (thumbFillLayout) {
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.strokeStyle = "rgb(155, 155, 155)";
+        ctx.stroke();
+        ctx.save();
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.clip();
+        if (thumbHighlight) {
+          ctx.fillStyle = thumbHighlight;
+          ctx.fillRect(thumbFillLayout.lightRect.x, thumbFillLayout.lightRect.y, thumbFillLayout.lightRect.w, thumbFillLayout.lightRect.h);
+        }
+        ctx.fillStyle = thumbColor;
+        ctx.fillRect(thumbFillLayout.darkRect.x, thumbFillLayout.darkRect.y, thumbFillLayout.darkRect.w, thumbFillLayout.darkRect.h);
+        ctx.restore();
       }
     }
   } else {
@@ -5462,14 +5470,21 @@ function drawScrollBarGadgetChrome(
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 17, y + 1, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 1));
     } else {
-      traceRoundedRect(ctx, x + 18.5, y + 1.5, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 3), 1);
-      ctx.fillStyle = thumbColor;
-      ctx.fill();
-      ctx.strokeStyle = "rgb(155, 155, 155)";
-      ctx.stroke();
-      if (thumbHighlight) {
-        ctx.fillStyle = thumbHighlight;
-        ctx.fillRect(x + 19, y + 2, Math.max(0, Math.trunc((w - 34) / 3) - 2), Math.max(0, Math.trunc((h * 3) / 8) - 4));
+      const thumbFillLayout = getPreviewScrollBarThumbFillLayout({ x, y, width: w, height: h, osSkin, isVertical: false });
+      if (thumbFillLayout) {
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.strokeStyle = "rgb(155, 155, 155)";
+        ctx.stroke();
+        ctx.save();
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.clip();
+        if (thumbHighlight) {
+          ctx.fillStyle = thumbHighlight;
+          ctx.fillRect(thumbFillLayout.lightRect.x, thumbFillLayout.lightRect.y, thumbFillLayout.lightRect.w, thumbFillLayout.lightRect.h);
+        }
+        ctx.fillStyle = thumbColor;
+        ctx.fillRect(thumbFillLayout.darkRect.x, thumbFillLayout.darkRect.y, thumbFillLayout.darkRect.w, thumbFillLayout.darkRect.h);
+        ctx.restore();
       }
     }
   }

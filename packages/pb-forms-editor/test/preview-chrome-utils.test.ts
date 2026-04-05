@@ -39,6 +39,7 @@ import {
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
   getPreviewScrollBarArrowAssetLayouts,
+  getPreviewScrollBarThumbFillLayout,
   getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   type PreviewChromeMetrics,
@@ -333,6 +334,29 @@ test("uses the original scrollbar arrow assets for Windows, Windows 8 and Linux 
     getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 120, height: 18, osSkin: "macos", isVertical: false }).length,
     0
   );
+});
+
+test("uses the original split scrollbar thumb fills for Windows 7 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows7", isVertical: true }),
+    {
+      thumbRect: { x: 11, y: 38, w: 15, h: 28 },
+      lightRect: { x: 12, y: 39, w: 2, h: 26 },
+      darkRect: { x: 18, y: 39, w: 7, h: 26 }
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 120, height: 18, osSkin: "linux", isVertical: false }),
+    {
+      thumbRect: { x: 28, y: 21, w: 28, h: 15 },
+      lightRect: { x: 29, y: 22, w: 26, h: 2 },
+      darkRect: { x: 29, y: 28, w: 26, h: 7 }
+    }
+  );
+
+  assert.equal(getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows8", isVertical: true }), null);
+  assert.equal(getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 120, height: 18, osSkin: "macos", isVertical: false }), null);
 });
 
 test("uses the original trackbar thumb assets for macOS, Windows 7 and Linux only", () => {
