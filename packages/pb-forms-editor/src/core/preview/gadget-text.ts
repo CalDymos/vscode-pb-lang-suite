@@ -75,6 +75,10 @@ export function getPreviewCheckableTextY(kind: "checkbox" | "option", y: number,
   return y + Math.trunc((height - (kind === "option" ? 17 : 15)) / 2);
 }
 
+export function getPreviewStringLikeTextY(y: number, height: number, textHeight: number): number {
+  return y + Math.trunc((height - textHeight) / 2);
+}
+
 export function getPreviewDateTextY(y: number, height: number, textHeight: number): number {
   return y + Math.trunc((height - textHeight) / 2);
 }

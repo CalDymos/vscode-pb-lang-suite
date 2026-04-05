@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -62,6 +62,11 @@ test('getPreviewComboTextX follows the original editable/non-editable combo text
 test('getPreviewCheckableTextY follows the original fixed checkbox and option baselines', () => {
   assert.equal(getPreviewCheckableTextY('checkbox', 10, 25), 15);
   assert.equal(getPreviewCheckableTextY('option', 10, 25), 14);
+});
+
+test('getPreviewStringLikeTextY follows the original StringGadget and IPAddressGadget caption centering by measured text height', () => {
+  assert.equal(getPreviewStringLikeTextY(10, 25, 9), 18);
+  assert.equal(getPreviewStringLikeTextY(10, 25, 12), 16);
 });
 
 test('getPreviewComboTextY follows the original fixed 22px macOS combo baseline', () => {
