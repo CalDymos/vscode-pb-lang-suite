@@ -41,6 +41,23 @@ export function getPreviewComboChromeHeight(
 
 export type PreviewComboArrowAssetKind = "windowsComboDown" | "windows8ComboDown";
 
+export type PreviewDateArrowLayout =
+  | {
+    kind: "rasterDown";
+    assetKind: PreviewComboArrowAssetKind;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fallbackCenterX: number;
+    fallbackCenterY: number;
+  }
+  | {
+    kind: "singleDown";
+    centerX: number;
+    centerY: number;
+  };
+
 export type PreviewComboArrowLayout =
   | {
     kind: "macDoubleArrows";
@@ -64,6 +81,50 @@ export type PreviewComboArrowLayout =
     centerX: number;
     centerY: number;
   };
+
+export function getPreviewDateArrowLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+}): PreviewDateArrowLayout {
+  const { x, y, width, height, osSkin } = args;
+  const centerX = x + width - 12;
+  const centerY = y + Math.trunc(height / 2);
+
+  if (osSkin === "windows8") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 7,
+      height: 6,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  if (osSkin === "windows7") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((height - 4) / 2),
+      width: 7,
+      height: 4,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  return {
+    kind: "singleDown",
+    centerX,
+    centerY
+  };
+}
 
 export function getPreviewComboArrowLayout(args: {
   x: number;

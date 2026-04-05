@@ -35,6 +35,7 @@ import {
   toWindowLocalPoint,
   usesOriginalMacRoundedButtonChrome,
   getPreviewComboArrowLayout,
+  getPreviewDateArrowLayout,
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
@@ -287,6 +288,41 @@ test("uses the original fixed 22px macOS combo chrome only for non-editable comb
   assert.equal(getPreviewComboChromeHeight("windows7", 25, false), 25);
 });
 
+
+test("uses the original Windows date arrow assets only for Windows skins", () => {
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7" }),
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows8" }),
+    {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: 118,
+      y: 29,
+      width: 7,
+      height: 6,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos" }),
+    { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
+});
 
 test("uses the original macOS combo double-arrows asset placement only for non-editable combos", () => {
   assert.deepEqual(

@@ -28,6 +28,7 @@ import {
   resolvePreviewChromeMetrics,
   usesOriginalMacRoundedButtonChrome,
   getPreviewComboArrowLayout,
+  getPreviewDateArrowLayout,
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
@@ -4445,6 +4446,8 @@ function drawDateGadgetChrome(
   ctx.textBaseline = "top";
 
   if (osSkin === "windows7" || osSkin === "windows8") {
+    const arrowLayout = getPreviewDateArrowLayout({ x, y, width: w, height: h, osSkin });
+
     ctx.fillStyle = fillColor;
     ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
     ctx.strokeStyle = ensurePreviewLineContrast(
@@ -4453,7 +4456,22 @@ function drawDateGadgetChrome(
       "rgb(150, 150, 150)"
     );
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
-    drawComboDropArrow(ctx, x + w - 8, y + Math.trunc(h / 2), textColor);
+    if (arrowLayout.kind === "rasterDown") {
+      const arrowImage = getPreviewComboArrowImage(arrowLayout.assetKind);
+      const drewRasterArrow = drawPreviewRasterIcon(
+        ctx,
+        arrowImage,
+        arrowLayout.x,
+        arrowLayout.y,
+        arrowLayout.width,
+        arrowLayout.height
+      );
+      if (!drewRasterArrow) {
+        drawComboDropArrow(ctx, arrowLayout.fallbackCenterX, arrowLayout.fallbackCenterY, textColor);
+      }
+    } else {
+      drawComboDropArrow(ctx, arrowLayout.centerX, arrowLayout.centerY, textColor);
+    }
     if (label.length > 0) {
       const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
       const textY = y + Math.trunc((h - textStyle.sizePx) / 2);
