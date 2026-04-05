@@ -38,6 +38,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   type PreviewChromeMetrics,
   type PreviewRect
@@ -358,5 +359,30 @@ test("uses the original macOS no-ticks guide fill rect only for trackbars withou
   assert.equal(
     getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isVertical: false }),
     null
+  );
+});
+
+test("uses the original macOS trackbar groove highlight lines only for the macOS skin", () => {
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isVertical: false }),
+    [
+      { x: 11, y: 24, w: 118, h: 1, color: "rgb(170, 170, 170)" },
+      { x: 11, y: 25, w: 118, h: 1, color: "rgb(193, 193, 193)" },
+      { x: 11, y: 26, w: 118, h: 1, color: "rgb(205, 205, 205)" }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 25, height: 120, osSkin: "macos", isVertical: true }),
+    [
+      { x: 14, y: 21, w: 1, h: 118, color: "rgb(170, 170, 170)" },
+      { x: 15, y: 21, w: 1, h: 118, color: "rgb(193, 193, 193)" },
+      { x: 16, y: 21, w: 1, h: 118, color: "rgb(205, 205, 205)" }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isVertical: false }),
+    []
   );
 });

@@ -130,6 +130,36 @@ export type PreviewTrackBarThumbAssetLayout = {
   height: number;
 };
 
+export type PreviewTrackBarGrooveHighlightLine = PreviewRect & {
+  color: string;
+};
+
+export function getPreviewTrackBarMacGrooveHighlightLines(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewTrackBarGrooveHighlightLine[] {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin !== "macos") {
+    return [];
+  }
+
+  return isVertical
+    ? [
+      { x: x + 4, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(170, 170, 170)" },
+      { x: x + 5, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(193, 193, 193)" },
+      { x: x + 6, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(205, 205, 205)" }
+    ]
+    : [
+      { x: x + 1, y: y + 4, w: Math.max(0, width - 2), h: 1, color: "rgb(170, 170, 170)" },
+      { x: x + 1, y: y + 5, w: Math.max(0, width - 2), h: 1, color: "rgb(193, 193, 193)" },
+      { x: x + 1, y: y + 6, w: Math.max(0, width - 2), h: 1, color: "rgb(205, 205, 205)" }
+    ];
+}
 
 export function getPreviewTrackBarNoTicksFillRect(args: {
   x: number;

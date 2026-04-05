@@ -31,6 +31,7 @@ import {
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
   getPreviewTrackBarThumbAssetLayout,
+  getPreviewTrackBarMacGrooveHighlightLines,
   getPreviewTrackBarNoTicksFillRect,
   getRectHandlePoints,
   hitHandlePoints,
@@ -5097,18 +5098,19 @@ function drawTrackBarGadgetChrome(
   const showTicks = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Ticks");
   const trackFill = osSkin === "windows8"
     ? (windowsSkinColors?.buttonFace ?? "rgb(231, 231, 231)")
-    : "rgb(231, 231, 231)";
+    : (osSkin === "macos" ? null : "rgb(231, 231, 231)");
   const trackBorder = osSkin === "windows8"
     ? ensurePreviewLineContrast(
       windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(176, 176, 176)",
-      trackFill,
+      trackFill ?? "rgb(231, 231, 231)",
       "rgb(176, 176, 176)"
     )
-    : "rgb(176, 176, 176)";
+    : (osSkin === "macos" ? "rgb(116, 116, 116)" : "rgb(176, 176, 176)");
+  const trackContrastBase = trackFill ?? "rgb(231, 231, 231)";
   const tickColor = osSkin === "windows8"
     ? ensurePreviewLineContrast(
       windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(154, 154, 154)",
-      trackFill,
+      trackContrastBase,
       "rgb(154, 154, 154)"
     )
     : "rgb(154, 154, 154)";
@@ -5125,16 +5127,24 @@ function drawTrackBarGadgetChrome(
 
   ctx.save();
   const thumbAssetLayout = getPreviewTrackBarThumbAssetLayout({ x, y, osSkin, isVertical });
+  const macGrooveHighlightLines = getPreviewTrackBarMacGrooveHighlightLines({ x, y, width: w, height: h, osSkin, isVertical });
   const noTicksFillRect = !showTicks
     ? getPreviewTrackBarNoTicksFillRect({ x, y, width: w, height: h, osSkin, isVertical })
     : null;
 
   if (isVertical) {
     traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
-    ctx.fillStyle = trackFill;
-    ctx.fill();
+    if (trackFill) {
+      ctx.fillStyle = trackFill;
+      ctx.fill();
+    }
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
+
+    for (const line of macGrooveHighlightLines) {
+      ctx.fillStyle = line.color;
+      ctx.fillRect(line.x, line.y, line.w, line.h);
+    }
 
     const thumbDrawn = thumbAssetLayout
       ? drawPreviewRasterIcon(
@@ -5175,10 +5185,17 @@ function drawTrackBarGadgetChrome(
     }
   } else {
     traceRoundedRect(ctx, x + 0.5, y + 3.5, Math.max(0, w - 1), 5, 1);
-    ctx.fillStyle = trackFill;
-    ctx.fill();
+    if (trackFill) {
+      ctx.fillStyle = trackFill;
+      ctx.fill();
+    }
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
+
+    for (const line of macGrooveHighlightLines) {
+      ctx.fillStyle = line.color;
+      ctx.fillRect(line.x, line.y, line.w, line.h);
+    }
 
     const thumbDrawn = thumbAssetLayout
       ? drawPreviewRasterIcon(
