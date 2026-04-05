@@ -122,6 +122,37 @@ export function getPreviewSpinButtonLayout(args: {
   };
 }
 
+export type PreviewTrackBarThumbAssetLayout = {
+  assetKind: "macHorizontal" | "macVertical" | "windowsHorizontal" | "windowsVertical";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export function getPreviewTrackBarThumbAssetLayout(args: {
+  x: number;
+  y: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewTrackBarThumbAssetLayout | null {
+  const { x, y, osSkin, isVertical } = args;
+
+  if (osSkin === "windows8") {
+    return null;
+  }
+
+  if (osSkin === "macos") {
+    return isVertical
+      ? { assetKind: "macVertical", x, y, width: 19, height: 17 }
+      : { assetKind: "macHorizontal", x, y, width: 17, height: 19 };
+  }
+
+  return isVertical
+    ? { assetKind: "windowsVertical", x, y, width: 18, height: 10 }
+    : { assetKind: "windowsHorizontal", x, y, width: 10, height: 18 };
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 

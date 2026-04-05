@@ -37,6 +37,7 @@ import {
   getPreviewComboArrowLayout,
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
+  getPreviewTrackBarThumbAssetLayout,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/preview/chrome";
@@ -298,6 +299,30 @@ test("uses the original macOS combo double-arrows asset placement only for non-e
     getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isEditable: false }),
     { kind: "singleDown", centerX: 118, centerY: 32 }
   );
+});
+
+test("uses the original trackbar thumb assets for macOS, Windows 7 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "macos", isVertical: false }),
+    { assetKind: "macHorizontal", x: 10, y: 20, width: 17, height: 19 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "macos", isVertical: true }),
+    { assetKind: "macVertical", x: 10, y: 20, width: 19, height: 17 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "windows7", isVertical: false }),
+    { assetKind: "windowsHorizontal", x: 10, y: 20, width: 10, height: 18 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "linux", isVertical: true }),
+    { assetKind: "windowsVertical", x: 10, y: 20, width: 18, height: 10 }
+  );
+
+  assert.equal(getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "windows8", isVertical: false }), null);
 });
 
 test("uses the original spin button image layout from FD_DrawGadget for each preview skin", () => {

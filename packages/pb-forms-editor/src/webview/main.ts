@@ -30,6 +30,7 @@ import {
   getPreviewComboArrowLayout,
   getPreviewComboChromeHeight,
   getPreviewSpinButtonLayout,
+  getPreviewTrackBarThumbAssetLayout,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -245,7 +246,11 @@ import {
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
   PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
+  PREVIEW_MAC_TRACKBAR_DATA_URI,
+  PREVIEW_MAC_TRACKBAR_VERTICAL_DATA_URI,
   PREVIEW_MAC_SPIN_DATA_URI,
+  PREVIEW_WINDOWS7_TRACKBAR_DATA_URI,
+  PREVIEW_WINDOWS7_TRACKBAR_VERTICAL_DATA_URI,
   PREVIEW_WINDOWS8_SPIN_DATA_URI,
 } from "../core/preview/assets";
 
@@ -613,6 +618,10 @@ const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | n
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
 let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
+let previewMacTrackBarImage: HTMLImageElement | null = null;
+let previewMacTrackBarVerticalImage: HTMLImageElement | null = null;
+let previewWindows7TrackBarImage: HTMLImageElement | null = null;
+let previewWindows7TrackBarVerticalImage: HTMLImageElement | null = null;
 let previewMacSpinImage: HTMLImageElement | null = null;
 let previewWindows8SpinImage: HTMLImageElement | null = null;
 const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
@@ -761,6 +770,33 @@ function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
   }
 
   return previewMacComboDoubleArrowsImage;
+}
+
+function getPreviewTrackBarThumbImage(
+  assetKind: "macHorizontal" | "macVertical" | "windowsHorizontal" | "windowsVertical"
+): HTMLImageElement | null {
+  switch (assetKind) {
+    case "macHorizontal":
+      if (!previewMacTrackBarImage) {
+        previewMacTrackBarImage = createPreviewRasterIcon(PREVIEW_MAC_TRACKBAR_DATA_URI);
+      }
+      return previewMacTrackBarImage;
+    case "macVertical":
+      if (!previewMacTrackBarVerticalImage) {
+        previewMacTrackBarVerticalImage = createPreviewRasterIcon(PREVIEW_MAC_TRACKBAR_VERTICAL_DATA_URI);
+      }
+      return previewMacTrackBarVerticalImage;
+    case "windowsHorizontal":
+      if (!previewWindows7TrackBarImage) {
+        previewWindows7TrackBarImage = createPreviewRasterIcon(PREVIEW_WINDOWS7_TRACKBAR_DATA_URI);
+      }
+      return previewWindows7TrackBarImage;
+    case "windowsVertical":
+      if (!previewWindows7TrackBarVerticalImage) {
+        previewWindows7TrackBarVerticalImage = createPreviewRasterIcon(PREVIEW_WINDOWS7_TRACKBAR_VERTICAL_DATA_URI);
+      }
+      return previewWindows7TrackBarVerticalImage;
+  }
 }
 
 function getPreviewSpinImage(osSkin: DesignerSettings["osSkin"]): HTMLImageElement | null {
@@ -5087,6 +5123,7 @@ function drawTrackBarGadgetChrome(
     : "rgb(161, 161, 161)";
 
   ctx.save();
+  const thumbAssetLayout = getPreviewTrackBarThumbAssetLayout({ x, y, osSkin, isVertical });
 
   if (isVertical) {
     traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
@@ -5095,19 +5132,32 @@ function drawTrackBarGadgetChrome(
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
 
-    const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
-    const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
-    if (osSkin === "windows8") {
-      ctx.fillStyle = thumbFill;
-      ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
-      ctx.strokeStyle = thumbBorder;
-      ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
-    } else {
-      traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
-      ctx.fillStyle = thumbFill;
-      ctx.fill();
-      ctx.strokeStyle = thumbBorder;
-      ctx.stroke();
+    const thumbDrawn = thumbAssetLayout
+      ? drawPreviewRasterIcon(
+        ctx,
+        getPreviewTrackBarThumbImage(thumbAssetLayout.assetKind),
+        thumbAssetLayout.x,
+        thumbAssetLayout.y,
+        thumbAssetLayout.width,
+        thumbAssetLayout.height
+      )
+      : false;
+
+    if (!thumbDrawn) {
+      const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
+      const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
+      if (osSkin === "windows8") {
+        ctx.fillStyle = thumbFill;
+        ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+        ctx.strokeStyle = thumbBorder;
+        ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+      } else {
+        traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
+        ctx.fillStyle = thumbFill;
+        ctx.fill();
+        ctx.strokeStyle = thumbBorder;
+        ctx.stroke();
+      }
     }
 
     if (showTicks) {
@@ -5123,19 +5173,32 @@ function drawTrackBarGadgetChrome(
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
 
-    const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
-    const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
-    if (osSkin === "windows8") {
-      ctx.fillStyle = thumbFill;
-      ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
-      ctx.strokeStyle = thumbBorder;
-      ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
-    } else {
-      traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
-      ctx.fillStyle = thumbFill;
-      ctx.fill();
-      ctx.strokeStyle = thumbBorder;
-      ctx.stroke();
+    const thumbDrawn = thumbAssetLayout
+      ? drawPreviewRasterIcon(
+        ctx,
+        getPreviewTrackBarThumbImage(thumbAssetLayout.assetKind),
+        thumbAssetLayout.x,
+        thumbAssetLayout.y,
+        thumbAssetLayout.width,
+        thumbAssetLayout.height
+      )
+      : false;
+
+    if (!thumbDrawn) {
+      const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
+      const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
+      if (osSkin === "windows8") {
+        ctx.fillStyle = thumbFill;
+        ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+        ctx.strokeStyle = thumbBorder;
+        ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+      } else {
+        traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
+        ctx.fillStyle = thumbFill;
+        ctx.fill();
+        ctx.strokeStyle = thumbBorder;
+        ctx.stroke();
+      }
     }
 
     if (showTicks) {
