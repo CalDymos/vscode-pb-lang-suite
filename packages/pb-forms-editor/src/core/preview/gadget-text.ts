@@ -91,6 +91,11 @@ export function getPreviewSpinTextY(y: number, height: number, textHeight: numbe
   return y + Math.trunc((height - textHeight) / 2);
 }
 
+export function getPreviewFrameMacBodyOffsetY(textHeight: number): number {
+  const safeTextHeight = Math.max(1, Math.trunc(textHeight));
+  return safeTextHeight + 1;
+}
+
 export function getPreviewListHeaderTextY(
   variant: "listicon" | "explorerlist",
   y: number

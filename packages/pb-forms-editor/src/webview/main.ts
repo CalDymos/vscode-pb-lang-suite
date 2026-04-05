@@ -50,7 +50,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewFrameMacBodyOffsetY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -5113,6 +5113,7 @@ function drawFrameGadgetChrome(
   ctx.textBaseline = "top";
   // const captionTextStyle = applyPreviewColumnHeaderTextStyle(ctx, 12); // The original PureBasic form editor uses a fixed font for the column headers 
   const captionTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const captionBlankTextHeight = measurePreviewTextHeight(ctx, " ", captionTextStyle.sizePx);
 
   if (osSkin === "macos") {
     if (isSingle) {
@@ -5144,10 +5145,11 @@ function drawFrameGadgetChrome(
       drawPreviewTextDecorations(ctx, caption, x + 10, y, captionTextStyle, captionColor);
     }
 
-    traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
+    const frameBodyOffsetY = getPreviewFrameMacBodyOffsetY(captionBlankTextHeight);
+    traceRoundedRect(ctx, x + 1.5, y + frameBodyOffsetY + 1.5, Math.max(0, w - 3), Math.max(0, h - frameBodyOffsetY - 2), 3);
     ctx.strokeStyle = "rgb(222, 222, 222)";
     ctx.stroke();
-    traceRoundedRect(ctx, x + 0.5, y + captionHeight + 1.5, Math.max(0, w - 1), Math.max(0, h - captionHeight - 1), 3);
+    traceRoundedRect(ctx, x + 0.5, y + frameBodyOffsetY + 0.5, Math.max(0, w - 1), Math.max(0, h - frameBodyOffsetY), 3);
     ctx.strokeStyle = "rgb(200, 200, 200)";
     ctx.stroke();
     ctx.restore();

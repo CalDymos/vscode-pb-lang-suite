@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
+import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewFrameMacBodyOffsetY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from '../src/core/preview/gadget-text';
 
 test('getPreviewGadgetText returns literal captions unchanged', () => {
   assert.equal(getPreviewGadgetText({ text: 'Apply', textVariable: false }, 'ButtonGadget'), 'Apply');
@@ -46,6 +46,11 @@ test('getPreviewListRowAdvance follows FD_DrawGadget blank-text-height item spac
 test('getPreviewListHeaderTextY follows the original header baseline split for ListIcon and ExplorerList', () => {
   assert.equal(getPreviewListHeaderTextY('listicon', 40), 40);
   assert.equal(getPreviewListHeaderTextY('explorerlist', 40), 42);
+});
+
+test('getPreviewFrameMacBodyOffsetY follows the original macOS FrameGadget body offset based on blank text height', () => {
+  assert.equal(getPreviewFrameMacBodyOffsetY(8), 9);
+  assert.equal(getPreviewFrameMacBodyOffsetY(11), 12);
 });
 
 
