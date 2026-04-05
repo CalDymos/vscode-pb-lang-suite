@@ -50,7 +50,7 @@ import {
   applyPreviewGadgetTextStyle,
   drawPreviewTextDecorations,
 } from "../core/preview/gadget-font";
-import { getPreviewComboTextX, getPreviewComboTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
+import { getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -4474,7 +4474,8 @@ function drawDateGadgetChrome(
     }
     if (label.length > 0) {
       const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-      const textY = y + Math.trunc((h - textStyle.sizePx) / 2);
+      const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+      const textY = getPreviewDateTextY(y, h, textHeight);
       ctx.fillStyle = textColor;
       ctx.fillText(label, x + 3, textY);
       drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
@@ -4510,7 +4511,8 @@ function drawDateGadgetChrome(
 
   if (label.length > 0) {
     const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
-    const textY = y + Math.trunc((h - textStyle.sizePx) / 2);
+    const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+    const textY = getPreviewDateTextY(y, h, textHeight);
     ctx.fillStyle = textColor;
     ctx.fillText(label, x + 3, textY);
     drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);

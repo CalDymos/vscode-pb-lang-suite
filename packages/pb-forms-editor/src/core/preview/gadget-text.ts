@@ -71,6 +71,10 @@ export function getPreviewComboTextY(
   return y + Math.max(1, Math.trunc((comboHeight - textHeight) / 2));
 }
 
+export function getPreviewDateTextY(y: number, height: number, textHeight: number): number {
+  return y + Math.trunc((height - textHeight) / 2);
+}
+
 export function getPreviewSpinTextY(y: number, height: number, textHeight: number): number {
   return y + Math.trunc((height - textHeight) / 2);
 }
