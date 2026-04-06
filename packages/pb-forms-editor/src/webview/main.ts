@@ -71,6 +71,7 @@ import {
   getDefaultMenuItemInsertArgs,
   getMenuEntryMoveTarget,
   getMenuEntryRect,
+  getMenuFlyoutAnchorRect,
   getMenuFlyoutPanelRect,
   getOpenSubMenuBalance,
   getDirectMenuChildIndices,
@@ -7263,9 +7264,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     const parentRect = getMenuEntryRect(menuEntryPreviewRects, menu.id, parentIndex);
     if (!parentRect) continue;
 
-    const anchorRect: PreviewRect = previousPanelRect
-      ? { x: previousPanelRect.x + previousPanelRect.w, y: parentRect.y, w: 0, h: 0 }
-      : { x: parentRect.x, y: rect.y + rect.h - 2, w: 0, h: 0 };
+    const anchorRect: PreviewRect = getMenuFlyoutAnchorRect(rect, parentRect, previousPanelRect);
 
     const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;

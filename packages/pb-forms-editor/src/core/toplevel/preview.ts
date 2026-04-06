@@ -492,6 +492,28 @@ export function getMenuFlyoutFooterTextPosition(
   };
 }
 
+export function getMenuFlyoutAnchorRect(
+  menuBarRect: PreviewRectLike,
+  parentRect: PreviewRectLike,
+  previousPanelRect: PreviewRectLike | null
+): PreviewRectLike {
+  if (previousPanelRect) {
+    return {
+      x: previousPanelRect.x + previousPanelRect.w,
+      y: parentRect.y,
+      w: 0,
+      h: 0,
+    };
+  }
+
+  return {
+    x: parentRect.x,
+    y: menuBarRect.y + menuBarRect.h,
+    w: 0,
+    h: 0,
+  };
+}
+
 
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
