@@ -477,9 +477,9 @@ export function getMenuFlyoutEntryTextLayout(
 } {
   return {
     labelX: entryRect.x + 24,
-    labelY: entryRect.y,
+    labelY: entryRect.y + 14,
     shortcutX: entryRect.x + entryRect.w - 10 - Math.max(0, Math.ceil(shortcutWidth)),
-    shortcutY: entryRect.y,
+    shortcutY: entryRect.y + 14,
   };
 }
 
@@ -488,7 +488,7 @@ export function getMenuFlyoutFooterTextPosition(
 ): { x: number; y: number } {
   return {
     x: footerRect.x + 5,
-    y: footerRect.y,
+    y: footerRect.y + 14,
   };
 }
 

@@ -6993,7 +6993,7 @@ function drawMenuFlyoutPanelPreview(
 
   let posY = panelRect.y;
   ctx.save();
-  ctx.textBaseline = "top";
+  ctx.textBaseline = "alphabetic";
   for (const childIndex of childIndices) {
     const entry = menu.entries[childIndex];
     if (entry.kind === "MenuBar") {
@@ -7071,7 +7071,6 @@ function drawMenuFlyoutPanelPreview(
   ctx.save();
   ctx.globalAlpha = getMenuFlyoutFooterOpacity();
   ctx.fillStyle = menuTextColor;
-  ctx.textBaseline = "top";
   ctx.fillText("Add Item...", footerTextPosition.x, footerTextPosition.y);
   ctx.restore();
   ctx.restore();
@@ -7191,8 +7190,9 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
 
   let x = rect.x + menuBarDecoration.itemInsetX;
   const textY = rect.y + menuBarDecoration.itemInsetY;
+  const baseline = textY + Math.min(Math.max(12, rect.h - 8), 13);
   ctx.save();
-  ctx.textBaseline = "top";
+  ctx.textBaseline = "alphabetic";
   for (const [entryIndex, entry] of menu.entries.entries()) {
     if (getMenuEntryLevel(entry) !== 0) continue;
     if (entry.kind === "MenuBar") {
@@ -7212,15 +7212,8 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     if (!label.length) continue;
     const metrics = ctx.measureText(label);
     const textWidth = Math.ceil(metrics.width);
-    const textHeight = measurePreviewTextHeight(ctx, label, 12);
-    const itemAdvance = textWidth + menuBarDecoration.itemSpacing;
-    const entryRect = getWindowPreviewMenuRootEntryRect(
-      x,
-      textY,
-      textWidth,
-      textHeight,
-      menuBarDecoration.itemSpacing,
-    );
+    const itemW = Math.max(24, textWidth + 6);
+    const entryRect = getWindowPreviewMenuRootEntryRect(x, textY, textWidth, rect.h);
 
     menuEntryPreviewRects.push({
       ownerId: menu.id, index: entryIndex,
@@ -7230,7 +7223,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     });
 
     ctx.fillStyle = menuTextColor;
-    ctx.fillText(label, x, textY);
+    ctx.fillText(label, x, baseline);
 
     if (menuBarDecoration.useSelectedOutline && selectedRootEntryIndex === entryIndex) {
       ctx.save();
@@ -7239,7 +7232,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.restore();
     }
 
-    x += itemAdvance;
+    x += itemW + menuBarDecoration.itemSpacing;
     if (x >= rect.x + rect.w - 20) break;
   }
   ctx.restore();

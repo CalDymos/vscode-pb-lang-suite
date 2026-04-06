@@ -148,17 +148,17 @@ test("keeps flyout shortcut and footer text at full original opacity", () => {
   assert.equal(getMenuFlyoutFooterOpacity(), 1);
 });
 
-test("uses the original top-aligned text positions and menu-bar anchored flyout positions", () => {
+test("uses the restored flyout text baseline and menu-bar anchored flyout positions", () => {
   assert.deepEqual(getMenuFlyoutEntryTextLayout({ x: 120, y: 48, w: 160, h: 20 }, 37.2), {
     labelX: 144,
-    labelY: 48,
+    labelY: 62,
     shortcutX: 232,
-    shortcutY: 48,
+    shortcutY: 62,
   });
 
   assert.deepEqual(getMenuFlyoutFooterTextPosition({ x: 120, y: 108, w: 160, h: 20 }), {
     x: 125,
-    y: 108,
+    y: 122,
   });
 
   assert.deepEqual(
