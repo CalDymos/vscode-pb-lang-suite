@@ -81,6 +81,7 @@ import {
   getMenuEntrySourceLine,
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterTextPosition,
+  getMenuFlyoutShortcutOpacity,
   getMenuFooterRect,
   getMenuPreviewLabel,
   getMenuVisibleEntries,
@@ -7035,7 +7036,7 @@ function drawMenuFlyoutPanelPreview(
 
     if (entry.shortcut) {
       ctx.save();
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = getMenuFlyoutShortcutOpacity();
       ctx.fillStyle = menuTextColor;
       ctx.fillText(entry.shortcut, textLayout.shortcutX, textLayout.shortcutY);
       ctx.restore();

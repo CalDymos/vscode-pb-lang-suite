@@ -492,6 +492,10 @@ export function getMenuFlyoutFooterTextPosition(
   };
 }
 
+export function getMenuFlyoutShortcutOpacity(): number {
+  return 1;
+}
+
 export function getMenuFlyoutAnchorRect(
   menuBarRect: PreviewRectLike,
   parentRect: PreviewRectLike,
