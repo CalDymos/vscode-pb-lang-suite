@@ -82,6 +82,8 @@ import {
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
+  getMenuFlyoutSeparatorLineY,
+  getMenuFlyoutSeparatorPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuFooterRect,
   getMenuPreviewLabel,
@@ -6997,15 +6999,29 @@ function drawMenuFlyoutPanelPreview(
   for (const childIndex of childIndices) {
     const entry = menu.entries[childIndex];
     if (entry.kind === "MenuBar") {
-      menuEntryPreviewRects.push({ ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 12 });
+      const entryRect: PreviewEntryRect = {
+        ownerId: menu.id,
+        index: childIndex,
+        ...getMenuFlyoutSeparatorPreviewRect(panelRect.x, posY, panelRect.w)
+      };
+      menuEntryPreviewRects.push(entryRect);
       ctx.save();
       ctx.strokeStyle = separatorColor;
       ctx.beginPath();
-      ctx.moveTo(panelRect.x + 0.5, posY + 6.5);
-      ctx.lineTo(panelRect.x + panelRect.w - 0.5, posY + 6.5);
+      ctx.moveTo(entryRect.x + 0.5, getMenuFlyoutSeparatorLineY(entryRect) + 0.5);
+      ctx.lineTo(entryRect.x + entryRect.w - 0.5, getMenuFlyoutSeparatorLineY(entryRect) + 0.5);
       ctx.stroke();
       ctx.restore();
-      posY += 12;
+      const isSelectedEntry = selection?.kind === "menuEntry"
+        && selection.menuId === menu.id
+        && selection.entryIndex === childIndex;
+      if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
+        ctx.save();
+        ctx.strokeStyle = selectedOutlineColor;
+        ctx.strokeRect(entryRect.x, entryRect.y, Math.max(0, entryRect.w), Math.max(0, entryRect.h));
+        ctx.restore();
+      }
+      posY += entryRect.h;
       continue;
     }
 

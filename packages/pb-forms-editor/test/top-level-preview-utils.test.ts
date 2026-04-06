@@ -15,6 +15,8 @@ import {
   getMenuFlyoutEntryTextLayout,
   getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
+  getMenuFlyoutSeparatorLineY,
+  getMenuFlyoutSeparatorPreviewRect,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntryMoveTarget,
@@ -146,6 +148,12 @@ test("resolves direct menu children and ancestor chains from entry levels", () =
 test("keeps flyout shortcut and footer text at full original opacity", () => {
   assert.equal(getMenuFlyoutShortcutOpacity(), 1);
   assert.equal(getMenuFlyoutFooterOpacity(), 1);
+});
+
+test("uses the original flyout separator hit rectangle and separator line offset", () => {
+  const entryRect = getMenuFlyoutSeparatorPreviewRect(120, 48, 160);
+  assert.deepEqual(entryRect, { x: 120, y: 48, w: 160, h: 12 });
+  assert.equal(getMenuFlyoutSeparatorLineY(entryRect), 54);
 });
 
 test("uses the restored flyout text baseline and menu-bar anchored flyout positions", () => {

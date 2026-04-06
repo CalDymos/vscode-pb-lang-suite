@@ -500,6 +500,19 @@ export function getMenuFlyoutFooterOpacity(): number {
   return 1;
 }
 
+export function getMenuFlyoutSeparatorPreviewRect(x: number, y: number, width: number): PreviewRectLike {
+  return {
+    x,
+    y,
+    w: Math.max(0, width),
+    h: 12,
+  };
+}
+
+export function getMenuFlyoutSeparatorLineY(entryRect: PreviewRectLike): number {
+  return entryRect.y + 6;
+}
+
 export function getMenuFlyoutAnchorRect(
   menuBarRect: PreviewRectLike,
   parentRect: PreviewRectLike,
