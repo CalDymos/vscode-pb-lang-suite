@@ -80,6 +80,7 @@ import {
   getMenuEntryLevel,
   getMenuEntrySourceLine,
   getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
   getMenuFlyoutShortcutOpacity,
   getMenuFooterRect,
@@ -7066,7 +7067,7 @@ function drawMenuFlyoutPanelPreview(
   const footerTextPosition = getMenuFlyoutFooterTextPosition(footerRect);
 
   ctx.save();
-  ctx.globalAlpha = 0.92;
+  ctx.globalAlpha = getMenuFlyoutFooterOpacity();
   ctx.fillStyle = menuTextColor;
   ctx.textBaseline = "top";
   ctx.fillText("Add Item...", footerTextPosition.x, footerTextPosition.y);

@@ -13,6 +13,7 @@ import {
   getMenuEntryLevel,
   getMenuFlyoutAnchorRect,
   getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterOpacity,
   getMenuFlyoutFooterTextPosition,
   getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
@@ -140,8 +141,9 @@ test("resolves direct menu children and ancestor chains from entry levels", () =
   assert.equal(getMenuEntrySourceLine(menu, 99), undefined);
 });
 
-test("keeps flyout shortcut text at full original opacity", () => {
+test("keeps flyout shortcut and footer text at full original opacity", () => {
   assert.equal(getMenuFlyoutShortcutOpacity(), 1);
+  assert.equal(getMenuFlyoutFooterOpacity(), 1);
 });
 
 test("uses the original top-aligned text positions and menu-bar anchored flyout positions", () => {
