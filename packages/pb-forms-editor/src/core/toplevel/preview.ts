@@ -522,6 +522,24 @@ export function getMenuFlyoutAnchorRect(
   };
 }
 
+export function getToolBarSeparatorPreviewRect(x: number, y: number): PreviewRectLike {
+  return {
+    x,
+    y,
+    w: 10,
+    h: 16,
+  };
+}
+
+export function getToolBarSeparatorSelectedOutlineRect(entryRect: PreviewRectLike): PreviewRectLike {
+  return {
+    x: entryRect.x - 1,
+    y: entryRect.y - 1,
+    w: 8,
+    h: 18,
+  };
+}
+
 
 function rectContainsPoint(rect: PreviewRectLike, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;

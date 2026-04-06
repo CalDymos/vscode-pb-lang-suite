@@ -34,6 +34,8 @@ import {
   resolveTopLevelChromeHit,
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
+  getToolBarSeparatorPreviewRect,
+  getToolBarSeparatorSelectedOutlineRect,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
@@ -205,6 +207,18 @@ test("predicts menu block end indices and move targets for subtree moves", () =>
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 6, "after"), 4);
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 5, 0, "before"), 0);
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 2, "before"), null);
+});
+
+
+test("uses the original toolbar separator hit and selection geometry", () => {
+  const entryRect = getToolBarSeparatorPreviewRect(42, 17);
+  assert.deepEqual(entryRect, { x: 42, y: 17, w: 10, h: 16 });
+  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(entryRect), {
+    x: 41,
+    y: 16,
+    w: 8,
+    h: 18,
+  });
 });
 
 test("builds default toolbar insert ids and preview insert args", () => {

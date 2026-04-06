@@ -95,6 +95,8 @@ import {
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
+  getToolBarSeparatorPreviewRect,
+  getToolBarSeparatorSelectedOutlineRect,
   hasPbFlag,
   hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
@@ -7346,7 +7348,11 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
-      toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 6, h: 16 });
+      const entryRect = { ownerId: toolbar.id, index: entryIndex, ...getToolBarSeparatorPreviewRect(x, y) };
+      toolBarEntryPreviewRects.push(entryRect);
+      const isSelectedEntry = selection?.kind === "toolBarEntry"
+        && selection.toolBarId === toolbar.id
+        && selection.entryIndex === entryIndex;
       if (toolBarDecoration.separatorColorStyle !== "none") {
         ctx.save();
         ctx.strokeStyle = toolbarSeparatorColor;
@@ -7354,6 +7360,13 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
         ctx.moveTo(x + 2.5, y + 1);
         ctx.lineTo(x + 2.5, y + 15);
         ctx.stroke();
+        ctx.restore();
+      }
+      if (isSelectedEntry) {
+        const outlineRect = getToolBarSeparatorSelectedOutlineRect(entryRect);
+        ctx.save();
+        ctx.strokeStyle = toolbarSelectedOutlineColor;
+        ctx.strokeRect(outlineRect.x + 0.5, outlineRect.y + 0.5, outlineRect.w, outlineRect.h);
         ctx.restore();
       }
       x += 10;
