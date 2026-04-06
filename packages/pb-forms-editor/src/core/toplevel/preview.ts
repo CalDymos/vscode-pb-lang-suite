@@ -539,7 +539,7 @@ export function getToolBarSeparatorPreviewRect(x: number, y: number): PreviewRec
   return {
     x,
     y,
-    w: 10,
+    w: 6,
     h: 16,
   };
 }

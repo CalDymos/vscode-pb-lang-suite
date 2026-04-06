@@ -220,7 +220,7 @@ test("predicts menu block end indices and move targets for subtree moves", () =>
 
 test("uses the original toolbar separator hit and selection geometry", () => {
   const entryRect = getToolBarSeparatorPreviewRect(42, 17);
-  assert.deepEqual(entryRect, { x: 42, y: 17, w: 10, h: 16 });
+  assert.deepEqual(entryRect, { x: 42, y: 17, w: 6, h: 16 });
   assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(entryRect), {
     x: 41,
     y: 16,
