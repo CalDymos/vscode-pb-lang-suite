@@ -5,6 +5,7 @@ import {
   getRectHandlePoints,
   clampRect,
   applyResize,
+  getCanvasMenuBarRect,
   getMenuBarRect,
   getPanelTabLayouts,
   clampScrollAreaOffset,
@@ -157,6 +158,10 @@ test("computes macOS menu bar chrome outside the rounded window body", () => {
     statusBarRect: { x: 40, y: 269, w: 320, h: 23 },
     contentRect: { x: 40, y: 122, w: 320, h: 147 }
   });
+});
+
+test("computes the macOS external menu band across the full preview canvas width", () => {
+  assert.deepEqual(getCanvasMenuBarRect(480, METRICS), { x: 0, y: 0, w: 480, h: 22 });
 });
 
 test("computes combined window chrome layout with Windows client-side and bottom insets", () => {

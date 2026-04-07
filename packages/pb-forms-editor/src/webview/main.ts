@@ -23,6 +23,7 @@ import {
   getSplitterPaneRect,
   getGadgetContentRect,
   getStatusBarAlignedX,
+  getCanvasMenuBarRect,
   getWindowChromeLayout,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
@@ -2768,7 +2769,7 @@ function hasParsedStatusbarChrome(): boolean {
 function getWindowLocalRect(): PreviewRect {
   return {
     x: 0,
-    y: usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome() ? previewChromeMetrics.menuHeight : 0,
+    y: 0,
     w: Math.max(0, model.window?.w ?? 0),
     h: Math.max(0, model.window?.h ?? 0)
   };
@@ -2802,7 +2803,8 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
   const wr = getWinRect();
   if (!wr) return null;
   const platformSkin = resolvePbFormSkinPlatform();
-  return getWindowChromeLayout(
+  const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
+  const layout = getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
     getWindowPreviewChromeTopPadding(
       platformSkin,
@@ -2816,8 +2818,17 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
     metrics,
     getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
     getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
-    usesWindowPreviewExternalMenuBar(settings.osSkin)
+    externalMenuBar
   );
+
+  if (!externalMenuBar) {
+    return layout;
+  }
+
+  return {
+    ...layout,
+    menuBarRect: getCanvasMenuBarRect(canvas.getBoundingClientRect().width, metrics)
+  };
 }
 
 function hitWindow(mx: number, my: number): boolean {

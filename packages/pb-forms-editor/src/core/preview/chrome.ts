@@ -860,6 +860,18 @@ export function getMenuBarRect(
   };
 }
 
+export function getCanvasMenuBarRect(
+  canvasWidth: number,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return {
+    x: 0,
+    y: 0,
+    w: Math.max(0, Math.trunc(canvasWidth)),
+    h: metrics.menuHeight
+  };
+}
+
 export function getToolBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
