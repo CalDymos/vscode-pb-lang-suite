@@ -145,6 +145,20 @@ test("computes combined window chrome layout from title and top-level bands", ()
   });
 });
 
+test("computes macOS menu bar chrome outside the rounded window body", () => {
+  const windowRect: PreviewRect = { x: 40, y: 72, w: 320, h: 220 };
+
+  assert.deepEqual(getMenuBarRect(windowRect, 26, METRICS, 0, true), { x: 40, y: 50, w: 320, h: 22 });
+  assert.deepEqual(getToolBarRect(windowRect, 26, true, METRICS, 0, true), { x: 40, y: 98, w: 320, h: 24 });
+  assert.deepEqual(getWindowContentRect(windowRect, 26, true, true, true, METRICS, 0, 0, true), { x: 40, y: 122, w: 320, h: 147 });
+  assert.deepEqual(getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 0, 0, true), {
+    menuBarRect: { x: 40, y: 50, w: 320, h: 22 },
+    toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
+    statusBarRect: { x: 40, y: 269, w: 320, h: 23 },
+    contentRect: { x: 40, y: 122, w: 320, h: 147 }
+  });
+});
+
 test("computes combined window chrome layout with Windows client-side and bottom insets", () => {
   const windowRect: PreviewRect = { x: 40, y: 50, w: 320, h: 220 };
   const layout = getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 8, 8);

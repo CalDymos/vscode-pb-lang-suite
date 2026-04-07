@@ -519,6 +519,36 @@ export function getWindowPreviewTitleBarDecoration(
   };
 }
 
+export function usesWindowPreviewExternalMenuBar(osSkin: WindowPreviewOsSkin): boolean {
+  return osSkin === "macos";
+}
+
+export function getWindowPreviewTitleTextLayout(args: {
+  osSkin: WindowPreviewOsSkin;
+  titleAlignment: "left" | "center";
+  titleLeft: number;
+  titleRight: number;
+  windowX: number;
+  windowWidth: number;
+  titleWidth: number;
+}): { clipLeft: number; clipRight: number; titleX: number } {
+  if (args.osSkin === "macos") {
+    return {
+      clipLeft: args.windowX,
+      clipRight: args.windowX + args.windowWidth,
+      titleX: args.windowX + Math.max(0, (args.windowWidth - args.titleWidth) / 2),
+    };
+  }
+
+  return {
+    clipLeft: args.titleLeft,
+    clipRight: args.titleRight,
+    titleX: args.titleAlignment === "center"
+      ? args.titleLeft + Math.max(0, (args.titleRight - args.titleLeft - args.titleWidth) / 2)
+      : args.titleLeft,
+  };
+}
+
 export function getWindowPreviewTitleBarMetrics(
   osSkin: WindowPreviewOsSkin
 ): WindowPreviewTitleBarMetrics {

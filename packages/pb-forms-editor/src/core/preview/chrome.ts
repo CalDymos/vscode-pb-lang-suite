@@ -847,11 +847,14 @@ export function getMenuBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
   metrics: PreviewChromeMetrics,
-  clientSidePadding = 0
+  clientSidePadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   return {
     x: windowRect.x + clientSidePadding,
-    y: windowRect.y + Math.max(0, titleBarHeight),
+    y: menuOutsideWindow
+      ? windowRect.y - metrics.menuHeight
+      : windowRect.y + Math.max(0, titleBarHeight),
     w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: metrics.menuHeight
   };
@@ -862,11 +865,12 @@ export function getToolBarRect(
   titleBarHeight: number,
   hasMenu: boolean,
   metrics: PreviewChromeMetrics,
-  clientSidePadding = 0
+  clientSidePadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   return {
     x: windowRect.x + clientSidePadding,
-    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
+    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu && !menuOutsideWindow ? metrics.menuHeight : 0),
     w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: metrics.toolBarHeight
   };
@@ -987,10 +991,11 @@ export function getWindowContentRect(
   hasStatusbar: boolean,
   metrics: PreviewChromeMetrics,
   clientSidePadding = 0,
-  clientBottomPadding = 0
+  clientBottomPadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   const top = Math.max(0, titleBarHeight)
-    + (hasMenu ? metrics.menuHeight : 0)
+    + (hasMenu && !menuOutsideWindow ? metrics.menuHeight : 0)
     + (hasToolbar ? metrics.toolBarHeight : 0);
   const bottom = (hasStatusbar ? metrics.statusBarHeight : 0) + Math.max(0, clientBottomPadding);
   return {
@@ -1009,12 +1014,23 @@ export function getWindowChromeLayout(
   hasStatusbar: boolean,
   metrics: PreviewChromeMetrics,
   clientSidePadding = 0,
-  clientBottomPadding = 0
+  clientBottomPadding = 0,
+  menuOutsideWindow = false
 ): WindowChromeLayout {
   return {
-    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics, clientSidePadding, clientBottomPadding),
-    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding) : null,
-    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding) : null,
+    contentRect: getWindowContentRect(
+      windowRect,
+      titleBarHeight,
+      hasMenu,
+      hasToolbar,
+      hasStatusbar,
+      metrics,
+      clientSidePadding,
+      clientBottomPadding,
+      menuOutsideWindow
+    ),
+    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding, menuOutsideWindow) : null,
+    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding, menuOutsideWindow) : null,
     statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics, clientSidePadding, clientBottomPadding) : null
   };
 }

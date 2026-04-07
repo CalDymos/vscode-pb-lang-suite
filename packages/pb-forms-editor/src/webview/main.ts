@@ -195,6 +195,7 @@ import {
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewTitleBarMetrics,
   getWindowPreviewTitleButtonSize,
+  getWindowPreviewTitleTextLayout,
   getWindowPreviewTitleIconSize,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
@@ -205,6 +206,7 @@ import {
   getWindowPreviewMenuSubmenuIconMetrics,
   getWindowPreviewMenuRootEntryRect,
   getWindowPreviewBodyDecoration,
+  usesWindowPreviewExternalMenuBar,
   getWindowPreviewFrameDecoration,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
@@ -2725,10 +2727,11 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const origin = getWindowPreviewCanvasOrigin(storedX, storedY);
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
+  const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
 
   return {
     x: origin.x,
-    y: origin.y,
+    y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0),
     w,
     h,
     title: model.window.title ?? "",
@@ -2765,7 +2768,7 @@ function hasParsedStatusbarChrome(): boolean {
 function getWindowLocalRect(): PreviewRect {
   return {
     x: 0,
-    y: 0,
+    y: usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome() ? previewChromeMetrics.menuHeight : 0,
     w: Math.max(0, model.window?.w ?? 0),
     h: Math.max(0, model.window?.h ?? 0)
   };
@@ -2790,7 +2793,8 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
     hasParsedStatusbarChrome(),
     metrics,
     getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
-    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+    usesWindowPreviewExternalMenuBar(settings.osSkin)
   );
 }
 
@@ -2811,7 +2815,8 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
     hasParsedStatusbarChrome(),
     metrics,
     getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
-    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+    usesWindowPreviewExternalMenuBar(settings.osSkin)
   );
 }
 
@@ -2819,6 +2824,16 @@ function hitWindow(mx: number, my: number): boolean {
   const wr = getWinRect();
   if (!wr) return false;
   return isPointInWindowRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
+}
+
+function hitPreviewShell(mx: number, my: number): boolean {
+  if (hitWindow(mx, my)) {
+    return true;
+  }
+
+  const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const menuBarRect = chromeLayout?.menuBarRect ?? null;
+  return Boolean(menuBarRect && rectContainsPoint(menuBarRect, mx, my));
 }
 
 function toLocal(mx: number, my: number): { lx: number; ly: number } {
@@ -3310,7 +3325,7 @@ canvas.addEventListener("contextmenu", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -3417,7 +3432,7 @@ canvas.addEventListener("mousedown", (e) => {
   const footerHit = resolveMenuFooterHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuRect: footerChromeLayout?.menuBarRect ?? null,
     footerRects: menuFooterPreviewRects
   });
@@ -3444,7 +3459,7 @@ canvas.addEventListener("mousedown", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -3686,7 +3701,7 @@ window.addEventListener("mousemove", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -7957,22 +7972,28 @@ function render() {
 
     if (titleRight > titleLeft) {
       const titleWidth = ctx.measureText(winTitle).width;
-      const titleX = titleButtonLayout.titleAlignment === "center"
-        ? titleLeft + Math.max(0, (titleRight - titleLeft - titleWidth) / 2)
-        : titleLeft;
+      const titleLayout = getWindowPreviewTitleTextLayout({
+        osSkin: settings.osSkin,
+        titleAlignment: titleButtonLayout.titleAlignment,
+        titleLeft,
+        titleRight,
+        windowX: winX,
+        windowWidth: winW,
+        titleWidth,
+      });
       ctx.save();
       ctx.beginPath();
-      ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
+      ctx.rect(titleLayout.clipLeft, winY + 2, titleLayout.clipRight - titleLayout.clipLeft, Math.max(0, tbH - 4));
       ctx.clip();
       ctx.textBaseline = "top";
       if (titleBarDecoration.drawShadowedTitle) {
         ctx.fillStyle = "rgb(255, 255, 255)";
-        ctx.fillText(winTitle, titleX, titleTop + 1);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop + 1);
         ctx.fillStyle = "rgb(54, 54, 54)";
-        ctx.fillText(winTitle, titleX, titleTop);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop);
       } else {
         ctx.fillStyle = titleFg;
-        ctx.fillText(winTitle, titleX, titleTop);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop);
       }
       ctx.restore();
     }
