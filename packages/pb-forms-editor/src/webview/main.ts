@@ -130,6 +130,7 @@ import {
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
+  isDpiScaledGadgetState,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -1201,7 +1202,7 @@ function isActiveLayoutDpiScalingEnabled(): boolean {
   return isLayoutDpiScalingActive(getActiveLayoutDpiScale());
 }
 
-type LayoutDisplayField = "x" | "y" | "w" | "h" | "min" | "max";
+type LayoutDisplayField = "x" | "y" | "w" | "h" | "min" | "max" | "state";
 
 function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string): string {
   return `${targetKind}:${targetId}:${field}:${raw}`;
@@ -1251,6 +1252,7 @@ function syncGadgetDisplayLayout(g: Gadget): void {
   g.w = resolveDisplayedLayoutValue("gadget", g.id, "w", g.wRaw, g.w);
   g.h = resolveDisplayedLayoutValue("gadget", g.id, "h", g.hRaw, g.h);
   syncGadgetDisplayCtorRanges(g);
+  syncGadgetDisplayState(g);
 }
 
 function resolveDisplayedOptionalLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number | undefined): number | undefined {
@@ -1283,6 +1285,11 @@ function syncGadgetDisplayCtorRanges(g: Gadget): void {
   if (!isDpiScaledGadgetCtorRange(g.kind)) return;
   g.min = resolveDisplayedOptionalLayoutValue("gadget", g.id, "min", g.minRaw, g.min);
   g.max = resolveDisplayedOptionalLayoutValue("gadget", g.id, "max", g.maxRaw, g.max);
+}
+
+function syncGadgetDisplayState(g: Gadget): void {
+  if (!isDpiScaledGadgetState(g.kind)) return;
+  g.state = resolveDisplayedOptionalLayoutValue("gadget", g.id, "state", g.stateRaw, g.state);
 }
 
 function syncModelDisplayLayout(currentModel: Model | undefined): void {
@@ -1342,6 +1349,17 @@ function getReadonlyUnscaledGadgetCtorRangeValue(g: Gadget, field: "min" | "max"
 
 function shouldShowReadonlyUnscaledGadgetCtorRangeRows(g: Gadget): boolean {
   return isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind);
+}
+
+function getReadonlyUnscaledGadgetStateValue(g: Gadget): string {
+  if (!Number.isFinite(g.state)) {
+    return g.stateRaw?.trim() ?? "";
+  }
+  return formatDisplayedLayoutUnscaledValue(g.stateRaw, g.state as number, getActiveLayoutDpiScale());
+}
+
+function shouldShowReadonlyUnscaledGadgetStateRows(g: Gadget): boolean {
+  return isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind);
 }
 
 function shouldShowReadonlyUnscaledLayoutRows(): boolean {
@@ -11741,14 +11759,25 @@ function renderProps() {
             renderProps();
             return;
           }
-          g.state = next;
-          g.stateRaw = String(next);
-          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+          if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
+            const nextRaw = toUnscaledLayoutRaw(next);
+            storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
+            g.state = next;
+            g.stateRaw = nextRaw;
+            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: nextRaw });
+          } else {
+            g.state = next;
+            g.stateRaw = String(next);
+            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+          }
           render();
           renderProps();
         })
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetStateRows(g)) {
+      propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
+    }
     propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
   }
 

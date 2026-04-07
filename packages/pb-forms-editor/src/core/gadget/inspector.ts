@@ -213,6 +213,9 @@ export function isDpiScaledGadgetCtorRange(kind: string | undefined): boolean {
   return kind === GADGET_KIND.ScrollAreaGadget;
 }
 
+export function isDpiScaledGadgetState(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.SplitterGadget;
+}
 
 export function getGadgetTextInspectorValue(gadget: GadgetTextLike): string {
   return buildInspectorValue(gadget.textRaw, gadget.text);

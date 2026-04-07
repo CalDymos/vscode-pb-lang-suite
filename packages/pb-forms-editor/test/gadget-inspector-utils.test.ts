@@ -19,6 +19,7 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
+  isDpiScaledGadgetState,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -172,6 +173,13 @@ test("limits DPI-scaled constructor-range handling to ScrollArea inner dimension
   assert.equal(isDpiScaledGadgetCtorRange("ScrollBarGadget"), false);
   assert.equal(isDpiScaledGadgetCtorRange("ProgressBarGadget"), false);
   assert.equal(isDpiScaledGadgetCtorRange(undefined), false);
+});
+
+test("limits DPI-scaled gadget state handling to Splitter position values", () => {
+  assert.equal(isDpiScaledGadgetState("SplitterGadget"), true);
+  assert.equal(isDpiScaledGadgetState("ScrollAreaGadget"), false);
+  assert.equal(isDpiScaledGadgetState("CheckBoxGadget"), false);
+  assert.equal(isDpiScaledGadgetState(undefined), false);
 });
 
 
