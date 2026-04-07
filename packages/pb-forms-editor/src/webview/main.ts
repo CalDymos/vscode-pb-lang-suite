@@ -68,6 +68,7 @@ import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
   canEditToolBarTooltip,
+  deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
   getMenuEntryMoveTarget,
   getMenuEntryRect,
@@ -7120,12 +7121,11 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       break;
     }
     case "windows7-layered": {
-      const topFillColor = windowsSkinColors?.buttonFace ?? "rgb(245, 245, 245)";
-      const bottomFillColor = windowsSkinColors?.menuBar ?? "rgb(218, 224, 241)";
-      ctx.fillStyle = topFillColor;
+      const palette = deriveWindows7MenuBarPalette(windowsSkinColors?.menu, windowsSkinColors?.menuBar);
+      ctx.fillStyle = palette.topFill;
       ctx.fillRect(rect.x, rect.y, rect.w, Math.min(rect.h, 7));
       if (rect.h > 7) {
-        ctx.fillStyle = bottomFillColor;
+        ctx.fillStyle = palette.bottomFill;
         ctx.fillRect(rect.x, rect.y + 7, rect.w, Math.max(0, rect.h - 7));
       }
       break;
@@ -7160,23 +7160,25 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
       ctx.stroke();
       break;
-    case "windows7-triple":
-      ctx.strokeStyle = windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
+    case "windows7-triple": {
+      const palette = deriveWindows7MenuBarPalette(windowsSkinColors?.menu, windowsSkinColors?.menuBar);
+      ctx.strokeStyle = palette.separatorUpper;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
       ctx.stroke();
-      ctx.strokeStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+      ctx.strokeStyle = palette.separatorMiddle;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 1.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 1.5);
       ctx.stroke();
-      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(160, 160, 160)";
+      ctx.strokeStyle = palette.separatorLower;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
       ctx.stroke();
       break;
+    }
     case "windows8-light":
       ctx.strokeStyle = windowsSkinColors
         ? ensurePreviewLineContrast(

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canEditToolBarTooltip,
+  deriveWindows7MenuBarPalette,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
   getDefaultMenuItemInsertArgs,
@@ -143,6 +144,24 @@ test("resolves direct menu children and ancestor chains from entry levels", () =
   assert.deepEqual(getMenuAncestorChain(menu, 3), [0, 1, 3]);
   assert.equal(getMenuEntrySourceLine(menu, 5), 15);
   assert.equal(getMenuEntrySourceLine(menu, 99), undefined);
+});
+
+test("derives the windows7 menu-bar palette from Menu/MenuBar colors with original fallbacks", () => {
+  assert.deepEqual(deriveWindows7MenuBarPalette(undefined, undefined), {
+    topFill: "rgb(245, 245, 245)",
+    bottomFill: "rgb(218, 224, 241)",
+    separatorUpper: "rgb(182, 188, 204)",
+    separatorMiddle: "rgb(240, 240, 240)",
+    separatorLower: "rgb(160, 160, 160)",
+  });
+
+  assert.deepEqual(deriveWindows7MenuBarPalette("rgb(240, 240, 240)", "rgb(240, 240, 240)"), {
+    topFill: "rgb(244, 244, 244)",
+    bottomFill: "rgb(224, 228, 241)",
+    separatorUpper: "rgb(197, 201, 213)",
+    separatorMiddle: "rgb(240, 240, 240)",
+    separatorLower: "rgb(180, 180, 180)",
+  });
 });
 
 test("keeps flyout shortcut and footer text at full original opacity", () => {

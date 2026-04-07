@@ -102,6 +102,103 @@ export type VisibleMenuEntryLike = {
 export type ToolBarPreviewInsertAction = "button" | "toggle" | "separator";
 export type StatusBarPreviewInsertAction = "image" | "label" | "progress";
 
+export type Windows7MenuBarPalette = {
+  topFill: string;
+  bottomFill: string;
+  separatorUpper: string;
+  separatorMiddle: string;
+  separatorLower: string;
+};
+
+const ORIGINAL_WINDOWS7_MENU_BAR_PALETTE: Windows7MenuBarPalette = {
+  topFill: "rgb(245, 245, 245)",
+  bottomFill: "rgb(218, 224, 241)",
+  separatorUpper: "rgb(182, 188, 204)",
+  separatorMiddle: "rgb(240, 240, 240)",
+  separatorLower: "rgb(160, 160, 160)",
+};
+
+type PreviewRgbColor = {
+  r: number;
+  g: number;
+  b: number;
+};
+
+function parsePreviewRgbColor(value: string | undefined): PreviewRgbColor | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const rgbMatch = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i.exec(trimmed);
+  if (rgbMatch) {
+    return {
+      r: Math.max(0, Math.min(255, Number.parseInt(rgbMatch[1] ?? "0", 10))),
+      g: Math.max(0, Math.min(255, Number.parseInt(rgbMatch[2] ?? "0", 10))),
+      b: Math.max(0, Math.min(255, Number.parseInt(rgbMatch[3] ?? "0", 10))),
+    };
+  }
+
+  const hexMatch = /^#([0-9a-f]{6})$/i.exec(trimmed);
+  if (!hexMatch) return null;
+
+  const hex = hexMatch[1] ?? "000000";
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function formatPreviewRgbColor(color: PreviewRgbColor): string {
+  return `rgb(${color.r}, ${color.g}, ${color.b})`;
+}
+
+function mixPreviewRgbColor(colorA: PreviewRgbColor, colorB: PreviewRgbColor, ratio: number): PreviewRgbColor {
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const mixChannel = (a: number, b: number) => Math.round(a + ((b - a) * clampedRatio));
+  return {
+    r: mixChannel(colorA.r, colorB.r),
+    g: mixChannel(colorA.g, colorB.g),
+    b: mixChannel(colorA.b, colorB.b),
+  };
+}
+
+function averagePreviewRgbColor(colorA: PreviewRgbColor, colorB: PreviewRgbColor): PreviewRgbColor {
+  return {
+    r: Math.round((colorA.r + colorB.r) / 2),
+    g: Math.round((colorA.g + colorB.g) / 2),
+    b: Math.round((colorA.b + colorB.b) / 2),
+  };
+}
+
+export function deriveWindows7MenuBarPalette(menuColor?: string, menuBarColor?: string): Windows7MenuBarPalette {
+  const originalTopFill = parsePreviewRgbColor(ORIGINAL_WINDOWS7_MENU_BAR_PALETTE.topFill);
+  const originalBottomFill = parsePreviewRgbColor(ORIGINAL_WINDOWS7_MENU_BAR_PALETTE.bottomFill);
+  const originalSeparatorUpper = parsePreviewRgbColor(ORIGINAL_WINDOWS7_MENU_BAR_PALETTE.separatorUpper);
+  const originalSeparatorMiddle = parsePreviewRgbColor(ORIGINAL_WINDOWS7_MENU_BAR_PALETTE.separatorMiddle);
+  const originalSeparatorLower = parsePreviewRgbColor(ORIGINAL_WINDOWS7_MENU_BAR_PALETTE.separatorLower);
+  const menu = parsePreviewRgbColor(menuColor);
+  const menuBar = parsePreviewRgbColor(menuBarColor);
+
+  if (!originalTopFill || !originalBottomFill || !originalSeparatorUpper || !originalSeparatorMiddle || !originalSeparatorLower) {
+    return { ...ORIGINAL_WINDOWS7_MENU_BAR_PALETTE };
+  }
+
+  if (!menu && !menuBar) {
+    return { ...ORIGINAL_WINDOWS7_MENU_BAR_PALETTE };
+  }
+
+  const resolvedMenu = menu ?? menuBar ?? originalBottomFill;
+  const resolvedMenuBar = menuBar ?? menu ?? originalTopFill;
+  const averageBase = averagePreviewRgbColor(resolvedMenu, resolvedMenuBar);
+
+  return {
+    topFill: formatPreviewRgbColor(mixPreviewRgbColor(resolvedMenuBar, originalTopFill, 0.75)),
+    bottomFill: formatPreviewRgbColor(mixPreviewRgbColor(resolvedMenu, originalBottomFill, 0.75)),
+    separatorUpper: formatPreviewRgbColor(mixPreviewRgbColor(averageBase, originalSeparatorUpper, 0.75)),
+    separatorMiddle: formatPreviewRgbColor(mixPreviewRgbColor(resolvedMenuBar, originalSeparatorMiddle, 0.75)),
+    separatorLower: formatPreviewRgbColor(mixPreviewRgbColor(averageBase, originalSeparatorLower, 0.75)),
+  };
+}
+
 export function buildOptionalInspectorLiteralRaw(value: string): string {
   return value.length ? quotePbString(value) : "";
 }
