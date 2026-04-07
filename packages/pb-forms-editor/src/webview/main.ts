@@ -152,6 +152,15 @@ import {
 } from "../core/gadget/insert";
 import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
 import {
+  formatDisplayedLayoutUnscaledValue,
+  getDisplayedLayoutValue,
+  getLayoutDpiScale,
+  getStableDisplayedLayoutValue,
+  isLayoutDpiScalingActive,
+  parseUnscaledLayoutRaw,
+  unscaleDisplayedLayoutValue
+} from "../core/utils/layout-dpi";
+import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
 } from "../core/gadget/reparent";
@@ -1126,6 +1135,8 @@ const systemColorCache = new Map<string, string>();
 // Windows registry colors received from the extension (win32 only).
 // null = not yet received or non-Windows host.
 let windowsRegistryColors: WindowsRegistryColors | null = null;
+const layoutDisplayOverrides = new Map<string, number>();
+let lastLayoutDpiScale = getLayoutDpiScale(typeof window !== "undefined" ? window.devicePixelRatio : 1);
 
 
 type PbfdSymbols = {
@@ -1179,6 +1190,152 @@ function toolBarEntryKindHint(): string {
 
 function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
   return isVariable ? value : toPbString(value);
+}
+
+function getActiveLayoutDpiScale(): number {
+  return getLayoutDpiScale(typeof window !== "undefined" ? window.devicePixelRatio : 1);
+}
+
+function isActiveLayoutDpiScalingEnabled(): boolean {
+  return isLayoutDpiScalingActive(getActiveLayoutDpiScale());
+}
+
+function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", raw: string): string {
+  return `${targetKind}:${targetId}:${field}:${raw}`;
+}
+
+function storeLayoutDisplayOverride(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", displayValue: number, raw: string | undefined): void {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return;
+  layoutDisplayOverrides.set(getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed), Math.trunc(displayValue));
+}
+
+function resolveDisplayedLayoutValue(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", raw: string | undefined, fallbackValue: number): number {
+  const trimmed = raw?.trim();
+  const scale = getActiveLayoutDpiScale();
+  const parsed = parseUnscaledLayoutRaw(trimmed);
+  if (parsed === undefined) {
+    return Math.trunc(fallbackValue);
+  }
+
+  if (!trimmed?.length) {
+    return getDisplayedLayoutValue(undefined, fallbackValue, scale);
+  }
+
+  const overrideKey = getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed);
+  const overrideValue = layoutDisplayOverrides.get(overrideKey);
+  if (typeof overrideValue === "number" && unscaleDisplayedLayoutValue(overrideValue, scale) === parsed) {
+    return Math.trunc(overrideValue);
+  }
+
+  if (typeof overrideValue === "number") {
+    layoutDisplayOverrides.delete(overrideKey);
+  }
+
+  return getStableDisplayedLayoutValue(parsed, scale);
+}
+
+function syncWindowDisplayLayout(win: FormWindow): void {
+  win.x = resolveDisplayedLayoutValue("window", win.id, "x", win.xRaw, win.x);
+  win.y = resolveDisplayedLayoutValue("window", win.id, "y", win.yRaw, win.y);
+  win.w = resolveDisplayedLayoutValue("window", win.id, "w", win.wRaw, win.w);
+  win.h = resolveDisplayedLayoutValue("window", win.id, "h", win.hRaw, win.h);
+}
+
+function syncGadgetDisplayLayout(g: Gadget): void {
+  g.x = resolveDisplayedLayoutValue("gadget", g.id, "x", g.xRaw, g.x);
+  g.y = resolveDisplayedLayoutValue("gadget", g.id, "y", g.yRaw, g.y);
+  g.w = resolveDisplayedLayoutValue("gadget", g.id, "w", g.wRaw, g.w);
+  g.h = resolveDisplayedLayoutValue("gadget", g.id, "h", g.hRaw, g.h);
+}
+
+function syncModelDisplayLayout(currentModel: Model | undefined): void {
+  if (!currentModel) return;
+  if (currentModel.window) syncWindowDisplayLayout(currentModel.window);
+  for (const gadget of currentModel.gadgets) {
+    syncGadgetDisplayLayout(gadget);
+  }
+}
+
+function ensureLayoutScaleState(): void {
+  const scale = getActiveLayoutDpiScale();
+  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return;
+  lastLayoutDpiScale = scale;
+  layoutDisplayOverrides.clear();
+  syncModelDisplayLayout(model);
+}
+
+function toUnscaledLayoutRaw(displayValue: number): string {
+  return String(unscaleDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale()));
+}
+
+function getInspectorLayoutDisplayValue(raw: string | undefined, displayValue: number): string {
+  const trimmed = raw?.trim();
+  if (trimmed === WINDOW_POSITION_IGNORE_LITERAL || displayValue === -65535) {
+    return WINDOW_POSITION_IGNORE_LITERAL;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled()) {
+    return String(Math.trunc(displayValue));
+  }
+
+  return getWindowPositionInspectorValue(raw, displayValue);
+}
+
+function getReadonlyUnscaledLayoutValue(raw: string | undefined, displayValue: number): string {
+  return formatDisplayedLayoutUnscaledValue(raw, displayValue, getActiveLayoutDpiScale());
+}
+
+function shouldShowReadonlyUnscaledLayoutRows(): boolean {
+  return isActiveLayoutDpiScalingEnabled();
+}
+
+function updateWindowDisplayField(win: FormWindow, field: "x" | "y" | "w" | "h", displayValue: number): void {
+  const nextDisplayValue = Math.trunc(displayValue);
+  const nextRaw = toUnscaledLayoutRaw(nextDisplayValue);
+  storeLayoutDisplayOverride("window", win.id, field, nextDisplayValue, nextRaw);
+  switch (field) {
+    case "x":
+      win.x = nextDisplayValue;
+      win.xRaw = nextRaw;
+      return;
+    case "y":
+      win.y = nextDisplayValue;
+      win.yRaw = nextRaw;
+      return;
+    case "w":
+      win.w = nextDisplayValue;
+      win.wRaw = nextRaw;
+      return;
+    case "h":
+      win.h = nextDisplayValue;
+      win.hRaw = nextRaw;
+      return;
+  }
+}
+
+function updateGadgetDisplayField(g: Gadget, field: "x" | "y" | "w" | "h", displayValue: number): void {
+  const nextDisplayValue = Math.trunc(displayValue);
+  const nextRaw = toUnscaledLayoutRaw(nextDisplayValue);
+  storeLayoutDisplayOverride("gadget", g.id, field, nextDisplayValue, nextRaw);
+  switch (field) {
+    case "x":
+      g.x = nextDisplayValue;
+      g.xRaw = nextRaw;
+      return;
+    case "y":
+      g.y = nextDisplayValue;
+      g.yRaw = nextRaw;
+      return;
+    case "w":
+      g.w = nextDisplayValue;
+      g.wRaw = nextRaw;
+      return;
+    case "h":
+      g.h = nextDisplayValue;
+      g.hRaw = nextRaw;
+      return;
+  }
 }
 
 function getWindowCurrentFlagsExpr(win: FormWindow): string | undefined {
@@ -1239,7 +1396,35 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
 
   clearInfoError();
 
-  if (axis === "x") {
+  if (parsed.isIgnore) {
+    if (axis === "x") {
+      win.xRaw = parsed.raw;
+      win.x = parsed.previewValue;
+      postWindowOpenArgs(win, { xRaw: parsed.raw });
+    } else {
+      win.yRaw = parsed.raw;
+      win.y = parsed.previewValue;
+      postWindowOpenArgs(win, { yRaw: parsed.raw });
+    }
+    render();
+    renderProps();
+    return;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled()) {
+    const displayValue = parsed.previewValue;
+    const nextRaw = toUnscaledLayoutRaw(displayValue);
+    storeLayoutDisplayOverride("window", win.id, axis, displayValue, nextRaw);
+    if (axis === "x") {
+      win.xRaw = nextRaw;
+      win.x = displayValue;
+      postWindowOpenArgs(win, { xRaw: nextRaw });
+    } else {
+      win.yRaw = nextRaw;
+      win.y = displayValue;
+      postWindowOpenArgs(win, { yRaw: nextRaw });
+    }
+  } else if (axis === "x") {
     win.xRaw = parsed.raw;
     win.x = parsed.previewValue;
     postWindowOpenArgs(win, { xRaw: parsed.raw });
@@ -1768,14 +1953,18 @@ function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructive
 function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
+  const nextX = isActiveLayoutDpiScalingEnabled() ? unscaleDisplayedLayoutValue(x, getActiveLayoutDpiScale()) : x;
+  const nextY = isActiveLayoutDpiScalingEnabled() ? unscaleDisplayedLayoutValue(y, getActiveLayoutDpiScale()) : y;
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
+    storeLayoutDisplayOverride("gadget", predictedId, "x", x, String(Math.trunc(nextX)));
+    storeLayoutDisplayOverride("gadget", predictedId, "y", y, String(Math.trunc(nextY)));
   }
   post({
     type: "insertGadget",
     kind,
-    x,
-    y,
+    x: Math.trunc(nextX),
+    y: Math.trunc(nextY),
     parentId,
     parentItem,
     gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
@@ -2482,6 +2671,7 @@ function applySettings(s: DesignerSettings) {
 }
 
 function resizeCanvas() {
+  ensureLayoutScaleState();
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.max(1, Math.floor(rect.width * dpr));
@@ -2526,7 +2716,9 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
 
   if (msg.type === "init") {
     errEl.textContent = "";
+    ensureLayoutScaleState();
     model = msg.model;
+    syncModelDisplayLayout(model);
     windowParentAsRawExpressionOverrides.clear();
     const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
@@ -2548,6 +2740,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   }
 
   if (msg.type === "settings") {
+    ensureLayoutScaleState();
     applySettings(msg.settings);
     return;
   }
@@ -2934,20 +3127,46 @@ function snapValue(v: number, gridSize: number): number {
 
 function postGadgetRect(g: Gadget) {
   normalizeRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
-  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: g.x, y: g.y, w: g.w, h: g.h });
+  const scale = getActiveLayoutDpiScale();
+  const nextX = unscaleDisplayedLayoutValue(g.x, scale);
+  const nextY = unscaleDisplayedLayoutValue(g.y, scale);
+  const nextW = unscaleDisplayedLayoutValue(g.w, scale);
+  const nextH = unscaleDisplayedLayoutValue(g.h, scale);
+  g.xRaw = String(nextX);
+  g.yRaw = String(nextY);
+  g.wRaw = String(nextW);
+  g.hRaw = String(nextH);
+  storeLayoutDisplayOverride("gadget", g.id, "x", g.x, g.xRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "y", g.y, g.yRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "w", g.w, g.wRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "h", g.h, g.hRaw);
+  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: nextX, y: nextY, w: nextW, h: nextH });
 }
 
 function postWindowRect() {
   if (!model.window) return;
 
   normalizeRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
+  const scale = getActiveLayoutDpiScale();
+  const nextX = unscaleDisplayedLayoutValue(model.window.x, scale);
+  const nextY = unscaleDisplayedLayoutValue(model.window.y, scale);
+  const nextW = unscaleDisplayedLayoutValue(model.window.w, scale);
+  const nextH = unscaleDisplayedLayoutValue(model.window.h, scale);
+  model.window.xRaw = String(nextX);
+  model.window.yRaw = String(nextY);
+  model.window.wRaw = String(nextW);
+  model.window.hRaw = String(nextH);
+  storeLayoutDisplayOverride("window", model.window.id, "x", model.window.x, model.window.xRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "y", model.window.y, model.window.yRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "w", model.window.w, model.window.wRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "h", model.window.h, model.window.hRaw);
   vscode.postMessage({
     type: "setWindowRect",
     id: model.window.id,
-    x: model.window.x,
-    y: model.window.y,
-    w: model.window.w,
-    h: model.window.h
+    x: nextX,
+    y: nextY,
+    w: nextW,
+    h: nextH
   });
 }
 
@@ -9082,16 +9301,28 @@ function renderProps() {
     }
 
     propsEl.appendChild(section("Layout"));
-    propsEl.appendChild(row("X", textInput(getWindowPositionInspectorValue(win.xRaw, win.x), v => {
+    propsEl.appendChild(row("X", textInput(getInspectorLayoutDisplayValue(win.xRaw, win.x), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "x", v);
     }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
-    propsEl.appendChild(row("Y", textInput(getWindowPositionInspectorValue(win.yRaw, win.y), v => {
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.xRaw, win.x), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Y", textInput(getInspectorLayoutDisplayValue(win.yRaw, win.y), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "y", v);
     }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
-    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
-    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.yRaw, win.y), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; updateWindowDisplayField(win, "w", asInt(v)); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.wRaw, win.w), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; updateWindowDisplayField(win, "h", asInt(v)); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.hRaw, win.h), "Readonly code value written to OpenWindow(...).")));
+    }
     propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
       if (!model.window) return;
       win.hidden = checked;
@@ -11397,10 +11628,22 @@ function renderProps() {
   };
   propsEl.appendChild(row("", changeParentBtn));
 
-  propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
+  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("W", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("H", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
+  }
 
   if (g.kind === GADGET_KIND.SplitterGadget) {
     propsEl.appendChild(
