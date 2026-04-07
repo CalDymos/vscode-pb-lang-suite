@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  commitDisplayedLayoutPoint,
+  commitDisplayedLayoutRect,
+  commitDisplayedLayoutValue,
   formatDisplayedLayoutUnscaledValue,
   getDisplayedLayoutValue,
   getLayoutDpiScale,
@@ -45,4 +48,41 @@ test("formats readonly unscaled inspector values from the current displayed layo
   assert.equal(formatDisplayedLayoutUnscaledValue("8", 10, 1.33), "8");
   assert.equal(formatDisplayedLayoutUnscaledValue("", 10, 1.33), "8");
   assert.equal(formatDisplayedLayoutUnscaledValue("#PB_Ignore", 0, 1.33), "#PB_Ignore");
+});
+
+
+test("commits a displayed layout value into a stable unscaled code literal", () => {
+  assert.deepEqual(commitDisplayedLayoutValue(10, 1.33), {
+    displayValue: 10,
+    unscaledValue: 8,
+    raw: "8",
+  });
+});
+
+test("commits displayed insert points with matching raw code coordinates", () => {
+  assert.deepEqual(commitDisplayedLayoutPoint(10, 15, 1.33), {
+    x: 10,
+    y: 15,
+    xUnscaled: 8,
+    yUnscaled: 11,
+    xRaw: "8",
+    yRaw: "11",
+  });
+});
+
+test("commits displayed drag or resize rectangles with matching raw code coordinates", () => {
+  assert.deepEqual(commitDisplayedLayoutRect(10, 15, 100, 40, 1.33), {
+    x: 10,
+    y: 15,
+    w: 100,
+    h: 40,
+    xUnscaled: 8,
+    yUnscaled: 11,
+    wUnscaled: 75,
+    hUnscaled: 30,
+    xRaw: "8",
+    yRaw: "11",
+    wRaw: "75",
+    hRaw: "30",
+  });
 });

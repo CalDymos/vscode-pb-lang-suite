@@ -154,6 +154,9 @@ import {
 } from "../core/gadget/insert";
 import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
 import {
+  commitDisplayedLayoutPoint,
+  commitDisplayedLayoutRect,
+  commitDisplayedLayoutValue,
   formatDisplayedLayoutUnscaledValue,
   getDisplayedLayoutValue,
   getLayoutDpiScale,
@@ -1309,7 +1312,7 @@ function ensureLayoutScaleState(): void {
 }
 
 function toUnscaledLayoutRaw(displayValue: number): string {
-  return String(unscaleDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale()));
+  return commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale()).raw;
 }
 
 function getInspectorLayoutDisplayValue(raw: string | undefined, displayValue: number): string {
@@ -1367,49 +1370,47 @@ function shouldShowReadonlyUnscaledLayoutRows(): boolean {
 }
 
 function updateWindowDisplayField(win: FormWindow, field: "x" | "y" | "w" | "h", displayValue: number): void {
-  const nextDisplayValue = Math.trunc(displayValue);
-  const nextRaw = toUnscaledLayoutRaw(nextDisplayValue);
-  storeLayoutDisplayOverride("window", win.id, field, nextDisplayValue, nextRaw);
+  const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
+  storeLayoutDisplayOverride("window", win.id, field, committed.displayValue, committed.raw);
   switch (field) {
     case "x":
-      win.x = nextDisplayValue;
-      win.xRaw = nextRaw;
+      win.x = committed.displayValue;
+      win.xRaw = committed.raw;
       return;
     case "y":
-      win.y = nextDisplayValue;
-      win.yRaw = nextRaw;
+      win.y = committed.displayValue;
+      win.yRaw = committed.raw;
       return;
     case "w":
-      win.w = nextDisplayValue;
-      win.wRaw = nextRaw;
+      win.w = committed.displayValue;
+      win.wRaw = committed.raw;
       return;
     case "h":
-      win.h = nextDisplayValue;
-      win.hRaw = nextRaw;
+      win.h = committed.displayValue;
+      win.hRaw = committed.raw;
       return;
   }
 }
 
 function updateGadgetDisplayField(g: Gadget, field: "x" | "y" | "w" | "h", displayValue: number): void {
-  const nextDisplayValue = Math.trunc(displayValue);
-  const nextRaw = toUnscaledLayoutRaw(nextDisplayValue);
-  storeLayoutDisplayOverride("gadget", g.id, field, nextDisplayValue, nextRaw);
+  const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
+  storeLayoutDisplayOverride("gadget", g.id, field, committed.displayValue, committed.raw);
   switch (field) {
     case "x":
-      g.x = nextDisplayValue;
-      g.xRaw = nextRaw;
+      g.x = committed.displayValue;
+      g.xRaw = committed.raw;
       return;
     case "y":
-      g.y = nextDisplayValue;
-      g.yRaw = nextRaw;
+      g.y = committed.displayValue;
+      g.yRaw = committed.raw;
       return;
     case "w":
-      g.w = nextDisplayValue;
-      g.wRaw = nextRaw;
+      g.w = committed.displayValue;
+      g.wRaw = committed.raw;
       return;
     case "h":
-      g.h = nextDisplayValue;
-      g.hRaw = nextRaw;
+      g.h = committed.displayValue;
+      g.hRaw = committed.raw;
       return;
   }
 }
@@ -2029,18 +2030,17 @@ function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructive
 function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
-  const nextX = isActiveLayoutDpiScalingEnabled() ? unscaleDisplayedLayoutValue(x, getActiveLayoutDpiScale()) : x;
-  const nextY = isActiveLayoutDpiScalingEnabled() ? unscaleDisplayedLayoutValue(y, getActiveLayoutDpiScale()) : y;
+  const committed = commitDisplayedLayoutPoint(x, y, getActiveLayoutDpiScale());
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
-    storeLayoutDisplayOverride("gadget", predictedId, "x", x, String(Math.trunc(nextX)));
-    storeLayoutDisplayOverride("gadget", predictedId, "y", y, String(Math.trunc(nextY)));
+    storeLayoutDisplayOverride("gadget", predictedId, "x", committed.x, committed.xRaw);
+    storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, committed.yRaw);
   }
   post({
     type: "insertGadget",
     kind,
-    x: Math.trunc(nextX),
-    y: Math.trunc(nextY),
+    x: committed.xUnscaled,
+    y: committed.yUnscaled,
     parentId,
     parentItem,
     gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
@@ -3203,35 +3203,35 @@ function snapValue(v: number, gridSize: number): number {
 
 function postGadgetRect(g: Gadget) {
   normalizeRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
-  const scale = getActiveLayoutDpiScale();
-  const nextX = unscaleDisplayedLayoutValue(g.x, scale);
-  const nextY = unscaleDisplayedLayoutValue(g.y, scale);
-  const nextW = unscaleDisplayedLayoutValue(g.w, scale);
-  const nextH = unscaleDisplayedLayoutValue(g.h, scale);
-  g.xRaw = String(nextX);
-  g.yRaw = String(nextY);
-  g.wRaw = String(nextW);
-  g.hRaw = String(nextH);
+  const committed = commitDisplayedLayoutRect(g.x, g.y, g.w, g.h, getActiveLayoutDpiScale());
+  g.x = committed.x;
+  g.y = committed.y;
+  g.w = committed.w;
+  g.h = committed.h;
+  g.xRaw = committed.xRaw;
+  g.yRaw = committed.yRaw;
+  g.wRaw = committed.wRaw;
+  g.hRaw = committed.hRaw;
   storeLayoutDisplayOverride("gadget", g.id, "x", g.x, g.xRaw);
   storeLayoutDisplayOverride("gadget", g.id, "y", g.y, g.yRaw);
   storeLayoutDisplayOverride("gadget", g.id, "w", g.w, g.wRaw);
   storeLayoutDisplayOverride("gadget", g.id, "h", g.h, g.hRaw);
-  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: nextX, y: nextY, w: nextW, h: nextH });
+  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled });
 }
 
 function postWindowRect() {
   if (!model.window) return;
 
   normalizeRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
-  const scale = getActiveLayoutDpiScale();
-  const nextX = unscaleDisplayedLayoutValue(model.window.x, scale);
-  const nextY = unscaleDisplayedLayoutValue(model.window.y, scale);
-  const nextW = unscaleDisplayedLayoutValue(model.window.w, scale);
-  const nextH = unscaleDisplayedLayoutValue(model.window.h, scale);
-  model.window.xRaw = String(nextX);
-  model.window.yRaw = String(nextY);
-  model.window.wRaw = String(nextW);
-  model.window.hRaw = String(nextH);
+  const committed = commitDisplayedLayoutRect(model.window.x, model.window.y, model.window.w, model.window.h, getActiveLayoutDpiScale());
+  model.window.x = committed.x;
+  model.window.y = committed.y;
+  model.window.w = committed.w;
+  model.window.h = committed.h;
+  model.window.xRaw = committed.xRaw;
+  model.window.yRaw = committed.yRaw;
+  model.window.wRaw = committed.wRaw;
+  model.window.hRaw = committed.hRaw;
   storeLayoutDisplayOverride("window", model.window.id, "x", model.window.x, model.window.xRaw);
   storeLayoutDisplayOverride("window", model.window.id, "y", model.window.y, model.window.yRaw);
   storeLayoutDisplayOverride("window", model.window.id, "w", model.window.w, model.window.wRaw);
@@ -3239,10 +3239,10 @@ function postWindowRect() {
   vscode.postMessage({
     type: "setWindowRect",
     id: model.window.id,
-    x: nextX,
-    y: nextY,
-    w: nextW,
-    h: nextH
+    x: committed.xUnscaled,
+    y: committed.yUnscaled,
+    w: committed.wUnscaled,
+    h: committed.hUnscaled
   });
 }
 
@@ -3615,17 +3615,16 @@ function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value:
   }
 
   if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind)) {
-    const displayValue = parsed;
-    const nextRaw = toUnscaledLayoutRaw(displayValue);
-    storeLayoutDisplayOverride("gadget", g.id, field, displayValue, nextRaw);
+    const committed = commitDisplayedLayoutValue(parsed, getActiveLayoutDpiScale());
+    storeLayoutDisplayOverride("gadget", g.id, field, committed.displayValue, committed.raw);
     if (field === "min") {
-      g.minRaw = nextRaw;
-      g.min = displayValue;
-      postGadgetOpenArgs(g.id, { minRaw: nextRaw });
+      g.minRaw = committed.raw;
+      g.min = committed.displayValue;
+      postGadgetOpenArgs(g.id, { minRaw: committed.raw });
     } else {
-      g.maxRaw = nextRaw;
-      g.max = displayValue;
-      postGadgetOpenArgs(g.id, { maxRaw: nextRaw });
+      g.maxRaw = committed.raw;
+      g.max = committed.displayValue;
+      postGadgetOpenArgs(g.id, { maxRaw: committed.raw });
     }
   } else if (field === "min") {
     g.minRaw = trimmed;

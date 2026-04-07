@@ -15,6 +15,30 @@ export function isLayoutDpiScalingActive(scale: number): boolean {
   return Number.isFinite(scale) && Math.abs(scale - 1) >= 0.001;
 }
 
+export type DisplayedLayoutValueCommit = {
+  displayValue: number;
+  unscaledValue: number;
+  raw: string;
+};
+
+export type DisplayedLayoutPointCommit = {
+  x: number;
+  y: number;
+  xUnscaled: number;
+  yUnscaled: number;
+  xRaw: string;
+  yRaw: string;
+};
+
+export type DisplayedLayoutRectCommit = DisplayedLayoutPointCommit & {
+  w: number;
+  h: number;
+  wUnscaled: number;
+  hUnscaled: number;
+  wRaw: string;
+  hRaw: string;
+};
+
 function isIntegerLiteral(raw: string | undefined): raw is string {
   return /^-?\d+$/.test((raw ?? "").trim());
 }
@@ -61,4 +85,42 @@ export function formatDisplayedLayoutUnscaledValue(raw: string | undefined, disp
     return trimmed;
   }
   return String(unscaleDisplayedLayoutValue(displayValue, scale));
+}
+
+export function commitDisplayedLayoutValue(displayValue: number, scale: number): DisplayedLayoutValueCommit {
+  const nextDisplayValue = Math.trunc(displayValue);
+  const unscaledValue = unscaleDisplayedLayoutValue(nextDisplayValue, scale);
+  return {
+    displayValue: nextDisplayValue,
+    unscaledValue,
+    raw: String(unscaledValue),
+  };
+}
+
+export function commitDisplayedLayoutPoint(x: number, y: number, scale: number): DisplayedLayoutPointCommit {
+  const xCommit = commitDisplayedLayoutValue(x, scale);
+  const yCommit = commitDisplayedLayoutValue(y, scale);
+  return {
+    x: xCommit.displayValue,
+    y: yCommit.displayValue,
+    xUnscaled: xCommit.unscaledValue,
+    yUnscaled: yCommit.unscaledValue,
+    xRaw: xCommit.raw,
+    yRaw: yCommit.raw,
+  };
+}
+
+export function commitDisplayedLayoutRect(x: number, y: number, w: number, h: number, scale: number): DisplayedLayoutRectCommit {
+  const point = commitDisplayedLayoutPoint(x, y, scale);
+  const wCommit = commitDisplayedLayoutValue(w, scale);
+  const hCommit = commitDisplayedLayoutValue(h, scale);
+  return {
+    ...point,
+    w: wCommit.displayValue,
+    h: hCommit.displayValue,
+    wUnscaled: wCommit.unscaledValue,
+    hUnscaled: hCommit.unscaledValue,
+    wRaw: wCommit.raw,
+    hRaw: hCommit.raw,
+  };
 }
