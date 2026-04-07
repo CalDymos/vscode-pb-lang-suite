@@ -18,6 +18,7 @@ import {
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeInspectorValue,
+  isDpiScaledGadgetCtorRange,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -166,6 +167,13 @@ test("resolves constructor-bound gadget field inspector values from raw or parse
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, 95), "95");
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, undefined), "");
 });
+test("limits DPI-scaled constructor-range handling to ScrollArea inner dimensions", () => {
+  assert.equal(isDpiScaledGadgetCtorRange("ScrollAreaGadget"), true);
+  assert.equal(isDpiScaledGadgetCtorRange("ScrollBarGadget"), false);
+  assert.equal(isDpiScaledGadgetCtorRange("ProgressBarGadget"), false);
+  assert.equal(isDpiScaledGadgetCtorRange(undefined), false);
+});
+
 
 test("prefers the parsed form image path for gadget CurrentImage display", () => {
   assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgOpen)" }, { image: "images/open.png" }), "images/open.png");

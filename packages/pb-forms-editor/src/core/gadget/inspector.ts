@@ -209,6 +209,10 @@ export function getGadgetCtorRangeFieldLabels(kind: string | undefined): GadgetC
   if (typeof kind !== "string") return undefined;
   return GADGET_CTOR_RANGE_FIELD_LABELS.get(kind);
 }
+export function isDpiScaledGadgetCtorRange(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.ScrollAreaGadget;
+}
+
 
 export function getGadgetTextInspectorValue(gadget: GadgetTextLike): string {
   return buildInspectorValue(gadget.textRaw, gadget.text);

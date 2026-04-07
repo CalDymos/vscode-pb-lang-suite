@@ -129,6 +129,7 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
+  isDpiScaledGadgetCtorRange,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -1200,17 +1201,19 @@ function isActiveLayoutDpiScalingEnabled(): boolean {
   return isLayoutDpiScalingActive(getActiveLayoutDpiScale());
 }
 
-function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", raw: string): string {
+type LayoutDisplayField = "x" | "y" | "w" | "h" | "min" | "max";
+
+function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string): string {
   return `${targetKind}:${targetId}:${field}:${raw}`;
 }
 
-function storeLayoutDisplayOverride(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", displayValue: number, raw: string | undefined): void {
+function storeLayoutDisplayOverride(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, displayValue: number, raw: string | undefined): void {
   const trimmed = raw?.trim();
   if (!trimmed?.length) return;
   layoutDisplayOverrides.set(getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed), Math.trunc(displayValue));
 }
 
-function resolveDisplayedLayoutValue(targetKind: "window" | "gadget", targetId: string, field: "x" | "y" | "w" | "h", raw: string | undefined, fallbackValue: number): number {
+function resolveDisplayedLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number): number {
   const trimmed = raw?.trim();
   const scale = getActiveLayoutDpiScale();
   const parsed = parseUnscaledLayoutRaw(trimmed);
@@ -1247,6 +1250,39 @@ function syncGadgetDisplayLayout(g: Gadget): void {
   g.y = resolveDisplayedLayoutValue("gadget", g.id, "y", g.yRaw, g.y);
   g.w = resolveDisplayedLayoutValue("gadget", g.id, "w", g.wRaw, g.w);
   g.h = resolveDisplayedLayoutValue("gadget", g.id, "h", g.hRaw, g.h);
+  syncGadgetDisplayCtorRanges(g);
+}
+
+function resolveDisplayedOptionalLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number | undefined): number | undefined {
+  const trimmed = raw?.trim();
+  const scale = getActiveLayoutDpiScale();
+  const parsed = parseUnscaledLayoutRaw(trimmed);
+  if (parsed === undefined) {
+    const fallback = typeof fallbackValue === "number" && Number.isFinite(fallbackValue) ? fallbackValue : undefined;
+    return fallback === undefined ? undefined : Math.trunc(fallback);
+  }
+
+  if (!trimmed?.length) {
+    return getDisplayedLayoutValue(undefined, fallbackValue ?? parsed, scale);
+  }
+
+  const overrideKey = getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed);
+  const overrideValue = layoutDisplayOverrides.get(overrideKey);
+  if (typeof overrideValue === "number" && unscaleDisplayedLayoutValue(overrideValue, scale) === parsed) {
+    return Math.trunc(overrideValue);
+  }
+
+  if (typeof overrideValue === "number") {
+    layoutDisplayOverrides.delete(overrideKey);
+  }
+
+  return getStableDisplayedLayoutValue(parsed, scale);
+}
+
+function syncGadgetDisplayCtorRanges(g: Gadget): void {
+  if (!isDpiScaledGadgetCtorRange(g.kind)) return;
+  g.min = resolveDisplayedOptionalLayoutValue("gadget", g.id, "min", g.minRaw, g.min);
+  g.max = resolveDisplayedOptionalLayoutValue("gadget", g.id, "max", g.maxRaw, g.max);
 }
 
 function syncModelDisplayLayout(currentModel: Model | undefined): void {
@@ -1284,6 +1320,28 @@ function getInspectorLayoutDisplayValue(raw: string | undefined, displayValue: n
 
 function getReadonlyUnscaledLayoutValue(raw: string | undefined, displayValue: number): string {
   return formatDisplayedLayoutUnscaledValue(raw, displayValue, getActiveLayoutDpiScale());
+}
+
+function getInspectorGadgetCtorRangeValue(g: Gadget, field: "min" | "max"): string {
+  const raw = field === "min" ? g.minRaw : g.maxRaw;
+  const fallback = field === "min" ? g.min : g.max;
+  if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind) && Number.isFinite(fallback)) {
+    return String(Math.trunc(fallback as number));
+  }
+  return getGadgetCtorRangeInspectorValue(raw, fallback);
+}
+
+function getReadonlyUnscaledGadgetCtorRangeValue(g: Gadget, field: "min" | "max"): string {
+  const raw = field === "min" ? g.minRaw : g.maxRaw;
+  const displayValue = field === "min" ? g.min : g.max;
+  if (!Number.isFinite(displayValue)) {
+    return raw?.trim() ?? "";
+  }
+  return formatDisplayedLayoutUnscaledValue(raw, displayValue as number, getActiveLayoutDpiScale());
+}
+
+function shouldShowReadonlyUnscaledGadgetCtorRangeRows(g: Gadget): boolean {
+  return isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind);
 }
 
 function shouldShowReadonlyUnscaledLayoutRows(): boolean {
@@ -3532,7 +3590,26 @@ function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value:
     return;
   }
   const parsed = parseOptionalIntegerLiteral(trimmed);
-  if (field === "min") {
+  if (parsed === undefined) {
+    alert(`${fieldLabel} accepts only an integer literal.`);
+    renderProps();
+    return;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind)) {
+    const displayValue = parsed;
+    const nextRaw = toUnscaledLayoutRaw(displayValue);
+    storeLayoutDisplayOverride("gadget", g.id, field, displayValue, nextRaw);
+    if (field === "min") {
+      g.minRaw = nextRaw;
+      g.min = displayValue;
+      postGadgetOpenArgs(g.id, { minRaw: nextRaw });
+    } else {
+      g.maxRaw = nextRaw;
+      g.max = displayValue;
+      postGadgetOpenArgs(g.id, { maxRaw: nextRaw });
+    }
+  } else if (field === "min") {
     g.minRaw = trimmed;
     g.min = parsed;
     postGadgetOpenArgs(g.id, { minRaw: trimmed });
@@ -11455,7 +11532,7 @@ function renderProps() {
       row(
         gadgetCtorRangeLabels.minLabel,
         textInput(
-          getGadgetCtorRangeInspectorValue(g.minRaw, g.min),
+          getInspectorGadgetCtorRangeValue(g, "min"),
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "min", v);
           },
@@ -11463,11 +11540,14 @@ function renderProps() {
         )
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
+      propsEl.appendChild(row(`${gadgetCtorRangeLabels.minLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), "Readonly code value written to the gadget constructor.")));
+    }
     propsEl.appendChild(
       row(
         gadgetCtorRangeLabels.maxLabel,
         textInput(
-          getGadgetCtorRangeInspectorValue(g.maxRaw, g.max),
+          getInspectorGadgetCtorRangeValue(g, "max"),
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "max", v);
           },
@@ -11475,6 +11555,9 @@ function renderProps() {
         )
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
+      propsEl.appendChild(row(`${gadgetCtorRangeLabels.maxLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), "Readonly code value written to the gadget constructor.")));
+    }
   }
 
   if (canEditChecked) {
