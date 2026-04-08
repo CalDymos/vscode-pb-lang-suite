@@ -3322,7 +3322,8 @@ function getWindowResizeLockContext() {
     menuCount: model.menus?.length ?? 0,
     toolbarCount: model.toolbars?.length ?? 0,
     statusBarCount: model.statusbars?.length ?? 0,
-    platformSkin: resolvePbFormSkinPlatform()
+    platformSkin: resolvePbFormSkinPlatform(),
+    layoutDpiScale: getActiveLayoutDpiScale()
   };
 }
 

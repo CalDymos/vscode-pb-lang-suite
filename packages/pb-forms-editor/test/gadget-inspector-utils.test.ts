@@ -280,6 +280,32 @@ test("builds a horizontal resize update that matches the original right-anchor f
   });
 });
 
+
+test("keeps horizontal right-anchor formulas unscaled when layout values are displayed with DPI scaling", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 13,
+    y: 27,
+    w: 106,
+    h: 32,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 426, layoutDpiScale: 1.33 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
 test("returns a delete instruction when horizontal locks no longer require ResizeGadget emission", () => {
   const update = buildGadgetHorizontalLockResizeUpdate({
     x: 10,
@@ -409,6 +435,36 @@ test("derives the original top-level bottom-anchor formula from the preserved co
     resizeWRaw: "80",
     resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
   }, { w: 320, h: 220 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("rebuilds vertical anchor formulas from unscaled offsets even when the inspector shows scaled geometry", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 13,
+    y: 13,
+    w: 106,
+    h: 32,
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 10",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: true,
+    resizeXRaw: "10",
+    resizeYRaw: "ToolBarHeight(0) + 10",
+    resizeWRaw: "80",
+    resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
+  }, { w: 426, h: 293, layoutDpiScale: 1.33 }, false, true);
 
   assert.deepEqual(update, {
     xRaw: "10",
