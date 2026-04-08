@@ -47,6 +47,18 @@ test("parses original top-level width and height reference expressions into thei
   assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + FormWindowHeight - 210", "y"), 210);
 });
 
+
+
+test("parses original parent-relative width and height reference expressions into their stored base offsets", () => {
+  assert.equal(parseDesignerLayoutRaw("GadgetWidth(#Container_0) - 30", "x"), 30);
+  assert.equal(parseDesignerLayoutRaw("WindowWidth(#WINDOW_Main) - 44", "w"), 44);
+  assert.equal(parseDesignerLayoutRaw("GetGadgetAttribute(#Panel_0,#PB_Panel_ItemWidth) - 52", "w"), 52);
+  assert.equal(parseDesignerLayoutRaw("GadgetHeight(#Container_0) - 18", "y"), 18);
+  assert.equal(parseDesignerLayoutRaw("WindowHeight(#WINDOW_Main) - 90", "h"), 90);
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + GetGadgetAttribute(#Panel_0,#PB_Panel_ItemHeight) - 118", "y"), 118);
+  assert.equal(parseDesignerLayoutRaw("FormWindowHeight - MenuHeight() - ToolBarHeight(0) - StatusBarHeight(0) - 127", "h"), 127);
+});
+
 test("maps displayed layout values back to unscaled code values", () => {
   assert.equal(unscaleDisplayedLayoutValue(10, 1.33), 8);
   assert.equal(unscaleDisplayedLayoutValue(11, 1.33), 8);
