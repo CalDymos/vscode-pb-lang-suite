@@ -8555,7 +8555,10 @@ function render() {
   // Gadgets (offset by window origin)
   for (const g of model.gadgets) {
     const layout = getGadgetPreviewLayout(g, chromeMetrics, layoutCache);
-    if (!layout.visible) continue;
+    const isHiddenSelected = isGadgetHiddenInDesignerPreview(g.hidden)
+      && selection?.kind === "gadget" && g.id === selection.id;
+
+    if (!layout.visible && !isHiddenSelected) continue;
 
     const gx = winX + layout.rect.x;
     const gy = winY + layout.rect.y;
@@ -8564,6 +8567,7 @@ function render() {
     const clipX = winX + layout.clip.x;
     const clipY = winY + layout.clip.y;
 
+    if (layout.visible) {
     ctx.strokeStyle = fg;
     ctx.fillStyle = fg;
     ctx.lineWidth = 1;
@@ -8749,6 +8753,7 @@ function render() {
     }
 
     ctx.restore();
+    } // end if (layout.visible)
 
     const sel = selection;
     if (sel && sel.kind === "gadget" && g.id === sel.id) {
