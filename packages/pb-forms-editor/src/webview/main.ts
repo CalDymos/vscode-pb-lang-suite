@@ -11260,6 +11260,24 @@ function renderProps() {
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
 
+  const deleteGadgetBtn = document.createElement("button");
+  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
+  deleteGadgetBtn.textContent = "Delete Gadget";
+  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
+  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
+  deleteGadgetBtn.onclick = () => {
+    const action = buildGadgetDeleteAction(g);
+    if (!action) return;
+    openDestructiveAction(action);
+  };
+
+  propsEl.appendChild(section("Actions"));
+  propsEl.appendChild(row("Delete", deleteGadgetBtn));
+  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
+
   propsEl.appendChild(section("Properties"));
 
   const gadgetVariableName = getGadgetVariableInspectorValue(g) || "Gadget_0";
@@ -11813,22 +11831,6 @@ function renderProps() {
         renderProps();
       })
     ));
-  }
-
-  const deleteGadgetBtn = document.createElement("button");
-  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
-  deleteGadgetBtn.textContent = "Delete Gadget";
-  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
-  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
-  deleteGadgetBtn.onclick = () => {
-    const action = buildGadgetDeleteAction(g);
-    if (!action) return;
-    openDestructiveAction(action);
-  };
-  propsEl.appendChild(row("Delete", deleteGadgetBtn));
-  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
   // Items editor (minimal UI)
