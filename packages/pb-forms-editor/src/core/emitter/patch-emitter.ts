@@ -3860,9 +3860,10 @@ export function applyWindowPropertyUpdate(
     document,
     windowKey,
     window => {
-      window.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
-      window.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
-      window.colorRaw = normalizeOptionalRaw(args.colorRaw);
+      const has = (k: keyof WindowPropertyArgs) => Object.prototype.hasOwnProperty.call(args, k);
+      if (has("hiddenRaw"))   { window.hiddenRaw   = normalizeOptionalRaw(args.hiddenRaw); }
+      if (has("disabledRaw")) { window.disabledRaw = normalizeOptionalRaw(args.disabledRaw); }
+      if (has("colorRaw"))    { window.colorRaw    = normalizeOptionalRaw(args.colorRaw); }
       return true;
     },
     scanRange
@@ -3965,13 +3966,14 @@ export function applyGadgetPropertyUpdate(
     document,
     gadgetKey,
     gadget => {
-      gadget.hiddenRaw = normalizeOptionalRaw(args.hiddenRaw);
-      gadget.disabledRaw = normalizeOptionalRaw(args.disabledRaw);
-      gadget.tooltipRaw = normalizeOptionalRaw(args.tooltipRaw);
-      gadget.stateRaw = normalizeOptionalRaw(args.stateRaw);
-      gadget.frontColorRaw = normalizeOptionalRaw(args.frontColorRaw);
-      gadget.backColorRaw = normalizeOptionalRaw(args.backColorRaw);
-      gadget.gadgetFontRaw = normalizeOptionalRaw(args.gadgetFontRaw);
+      const has = (k: keyof GadgetPropertyArgs) => Object.prototype.hasOwnProperty.call(args, k);
+      if (has("hiddenRaw"))     { gadget.hiddenRaw     = normalizeOptionalRaw(args.hiddenRaw); }
+      if (has("disabledRaw"))   { gadget.disabledRaw   = normalizeOptionalRaw(args.disabledRaw); }
+      if (has("tooltipRaw"))    { gadget.tooltipRaw    = normalizeOptionalRaw(args.tooltipRaw); }
+      if (has("stateRaw"))      { gadget.stateRaw      = normalizeOptionalRaw(args.stateRaw); }
+      if (has("frontColorRaw")) { gadget.frontColorRaw = normalizeOptionalRaw(args.frontColorRaw); }
+      if (has("backColorRaw"))  { gadget.backColorRaw  = normalizeOptionalRaw(args.backColorRaw); }
+      if (has("gadgetFontRaw")) { gadget.gadgetFontRaw = normalizeOptionalRaw(args.gadgetFontRaw); }
       return true;
     },
     scanRange

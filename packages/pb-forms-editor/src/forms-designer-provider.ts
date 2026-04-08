@@ -53,7 +53,9 @@ import {
   applyGadgetVariableNamePatch,
   buildImageIdReference,
   toPbAnyAssignedVar,
-  toEnumImageId
+  toEnumImageId,
+  GadgetPropertyArgs,
+  WindowPropertyArgs
 } from "./core/emitter/patch-emitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
@@ -765,11 +767,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           if (Object.prototype.hasOwnProperty.call(msg, "colorRaw") && !validateWindowColorRaw(msg.colorRaw)) {
             return;
           }
-          const edit = applyWindowPropertyUpdate(document, msg.windowKey, {
-            hiddenRaw: msg.hiddenRaw,
-            disabledRaw: msg.disabledRaw,
-            colorRaw: msg.colorRaw
-          }, sr);
+          const windowPropArgs: WindowPropertyArgs = {};
+          if (Object.prototype.hasOwnProperty.call(msg, "hiddenRaw"))   { windowPropArgs.hiddenRaw   = msg.hiddenRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "disabledRaw")) { windowPropArgs.disabledRaw = msg.disabledRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "colorRaw"))    { windowPropArgs.colorRaw    = msg.colorRaw; }
+          const edit = applyWindowPropertyUpdate(document, msg.windowKey, windowPropArgs, sr);
           await applyEditOrError(edit, `Could not patch window property lines for '${msg.windowKey}'. No matching OpenWindow call found${rangeInfo}.`);
           return;
         }
@@ -891,14 +893,14 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw") && !validateVariableRaw(msg.tooltipRaw, "Tooltip")) {
             return;
           }
-          const edit = applyGadgetPropertyUpdate(document, msg.id, {
-            hiddenRaw: msg.hiddenRaw,
-            disabledRaw: msg.disabledRaw,
-            tooltipRaw: msg.tooltipRaw,
-            frontColorRaw: msg.frontColorRaw,
-            backColorRaw: msg.backColorRaw,
-            gadgetFontRaw: msg.gadgetFontRaw
-          }, sr);
+          const gadgetPropArgs: GadgetPropertyArgs = {};
+          if (Object.prototype.hasOwnProperty.call(msg, "hiddenRaw"))     { gadgetPropArgs.hiddenRaw     = msg.hiddenRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "disabledRaw"))   { gadgetPropArgs.disabledRaw   = msg.disabledRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw"))    { gadgetPropArgs.tooltipRaw    = msg.tooltipRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "frontColorRaw")) { gadgetPropArgs.frontColorRaw = msg.frontColorRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "backColorRaw"))  { gadgetPropArgs.backColorRaw  = msg.backColorRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "gadgetFontRaw")) { gadgetPropArgs.gadgetFontRaw = msg.gadgetFontRaw; }
+          const edit = applyGadgetPropertyUpdate(document, msg.id, gadgetPropArgs, sr);
           await applyEditOrError(edit, `Could not patch properties for gadget '${msg.id}'. No matching gadget property block found${rangeInfo}.`);
           return;
         }

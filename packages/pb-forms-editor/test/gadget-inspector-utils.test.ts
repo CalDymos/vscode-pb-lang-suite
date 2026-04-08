@@ -17,6 +17,7 @@ import {
   getCustomGadgetHelpDisplay,
   getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
+  isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
   getGadgetKnownFlags,
@@ -121,6 +122,12 @@ test("uses only parsed boolean gadget hidden state for the designer preview visi
   assert.equal(isGadgetHiddenInDesignerPreview(true), true);
   assert.equal(isGadgetHiddenInDesignerPreview(false), false);
   assert.equal(isGadgetHiddenInDesignerPreview(undefined), false);
+});
+
+test("uses only parsed boolean gadget disabled state for the designer preview overlay path", () => {
+  assert.equal(isGadgetDisabledInDesignerPreview(true), true);
+  assert.equal(isGadgetDisabledInDesignerPreview(false), false);
+  assert.equal(isGadgetDisabledInDesignerPreview(undefined), false);
 });
 
 test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {

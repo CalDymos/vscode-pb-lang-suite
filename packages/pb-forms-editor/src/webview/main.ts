@@ -132,6 +132,7 @@ import {
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
   getGadgetBooleanInspectorState,
+  isGadgetDisabledInDesignerPreview,
   isGadgetHiddenInDesignerPreview,
   isDpiScaledGadgetCtorRange,
   isDpiScaledGadgetState,
@@ -4311,6 +4312,22 @@ function setScrollAreaPreviewOffset(g: Gadget, rect: PreviewRect, metrics: Previ
     return;
   }
   scrollAreaOffsets.set(g.id, next);
+}
+
+function drawDisabledGadgetOverlay(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = "rgba(140,140,140,0.7)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, width - 1), Math.max(0, height - 1));
+  ctx.restore();
 }
 
 function getPanelTabRects(
@@ -8726,6 +8743,11 @@ function render() {
     if (drawDefaultLabel) {
       ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
     }
+
+    if (isGadgetDisabledInDesignerPreview(g.disabled)) {
+      drawDisabledGadgetOverlay(ctx, gx, gy, gw, gh);
+    }
+
     ctx.restore();
 
     const sel = selection;
