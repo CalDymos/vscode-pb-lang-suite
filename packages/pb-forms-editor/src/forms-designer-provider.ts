@@ -244,7 +244,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
@@ -853,7 +853,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, {
             textRaw: msg.textRaw,
             minRaw: msg.minRaw,
-            maxRaw: msg.maxRaw
+            maxRaw: msg.maxRaw,
+            flagsExpr: msg.flagsExpr
           }, sr);
           if (!await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`)) {
             return;

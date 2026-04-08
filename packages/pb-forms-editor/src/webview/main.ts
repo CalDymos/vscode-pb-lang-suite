@@ -119,6 +119,7 @@ import {
   buildGadgetCheckedStateRaw,
   buildGadgetHorizontalLockResizeUpdate,
   buildGadgetVerticalLockResizeUpdate,
+  buildGadgetFlagsExpr,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
@@ -132,6 +133,7 @@ import {
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
   isDpiScaledGadgetState,
+  getGadgetKnownFlags,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -382,7 +384,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
@@ -3266,7 +3268,7 @@ function postWindowRect() {
   });
 }
 
-function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }): void {
+function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }): void {
   post({ type: "setGadgetOpenArgs", id, ...args });
 }
 
@@ -11257,55 +11259,6 @@ function renderProps() {
   }
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
-  if (isImageCapableGadget) {
-    propsEl.appendChild(
-      row(
-        "CurrentImage",
-        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
-      )
-    );
-    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
-      const canToggle = canToggleImagePbAny(gadgetImage);
-      propsEl.appendChild(row(
-        `Image ${PB_ANY}`,
-        checkboxInput(
-          Boolean(gadgetImage.pbAny),
-          () => {
-            if (!canToggle) return;
-            post({
-              type: "toggleImagePbAny",
-              sourceLine: gadgetImage!.source!.line,
-              toPbAny: !gadgetImage!.pbAny,
-            });
-          },
-          {
-            disabled: !canToggle,
-            title: gadgetImage.pbAny
-              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
-              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
-          }
-        )
-      ));
-    }
-  }
-  const gadgetImageActions = document.createElement("div");
-  gadgetImageActions.className = "row-actions";
-
-  if (isImageCapableGadget) {
-    const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Select";
-    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
-    gadgetChooseFileBtn.onclick = () => {
-      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
-    };
-    gadgetImageActions.appendChild(gadgetChooseFileBtn);
-    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
-  }
-
-  if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
-    const pendingEl = createPendingImageAssignmentDraftEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
-  }
 
   propsEl.appendChild(section("Properties"));
 
@@ -11429,6 +11382,24 @@ function renderProps() {
       )
     )
   );
+
+  propsEl.appendChild(section("Layout"));
+  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Width", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Height", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
+  }
 
   propsEl.appendChild(
     row(
@@ -11681,45 +11652,6 @@ function renderProps() {
     propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
   }
 
-  propsEl.appendChild(
-    row(
-      "SelectProc",
-      editableComboInput(
-        g.eventProc ?? "",
-        getProcedureSuggestions(),
-        v => {
-          g.eventProc = v.length ? v : undefined;
-          post({
-            type: "setGadgetEventProc",
-            id: g.id,
-            eventProc: v.length ? v : undefined
-          });
-          renderProps();
-        },
-        {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
-        }
-      )
-    )
-  );
-
-  const deleteGadgetBtn = document.createElement("button");
-  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
-  deleteGadgetBtn.textContent = "Delete Gadget";
-  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
-  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
-  deleteGadgetBtn.onclick = () => {
-    const action = buildGadgetDeleteAction(g);
-    if (!action) return;
-    openDestructiveAction(action);
-  };
-  propsEl.appendChild(row("Delete", deleteGadgetBtn));
-  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
-  }
-
   if (g.parentId) {
     const btn = document.createElement("button");
     btn.textContent = "Select Parent";
@@ -11744,23 +11676,6 @@ function renderProps() {
     openSelectParentDialog(g);
   };
   propsEl.appendChild(row("", changeParentBtn));
-
-  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("W", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
-  }
-  propsEl.appendChild(row("H", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
-  if (shouldShowReadonlyUnscaledLayoutRows()) {
-    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
-  }
 
   if (g.kind === GADGET_KIND.SplitterGadget) {
     propsEl.appendChild(
@@ -11795,6 +11710,125 @@ function renderProps() {
       propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
     }
     propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
+  }
+
+  if (isImageCapableGadget) {
+    propsEl.appendChild(
+      row(
+        "CurrentImage",
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+      )
+    );
+    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
+      const canToggle = canToggleImagePbAny(gadgetImage);
+      propsEl.appendChild(row(
+        `Image ${PB_ANY}`,
+        checkboxInput(
+          Boolean(gadgetImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: gadgetImage!.source!.line,
+              toPbAny: !gadgetImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: gadgetImage.pbAny
+              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+          }
+        )
+      ));
+    }
+
+    const gadgetImageActions = document.createElement("div");
+    gadgetImageActions.className = "row-actions";
+    const gadgetChooseFileBtn = document.createElement("button");
+    gadgetChooseFileBtn.textContent = "Select";
+    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
+    gadgetChooseFileBtn.onclick = () => {
+      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
+    };
+    gadgetImageActions.appendChild(gadgetChooseFileBtn);
+    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
+  }
+
+  if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
+    const pendingEl = createPendingImageAssignmentDraftEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
+
+  propsEl.appendChild(
+    row(
+      "SelectProc",
+      editableComboInput(
+        g.eventProc ?? "",
+        getProcedureSuggestions(),
+        v => {
+          g.eventProc = v.length ? v : undefined;
+          post({
+            type: "setGadgetEventProc",
+            id: g.id,
+            eventProc: v.length ? v : undefined
+          });
+          renderProps();
+        },
+        {
+          title: "Choose an existing procedure or type a procedure name.",
+          placeholder: "Type or pick a procedure"
+        }
+      )
+    )
+  );
+
+  const gadgetKnownFlags = getGadgetKnownFlags(g.kind);
+  const enabledGadgetFlags = new Set(
+    (g.flagsExpr ?? "")
+      .split("|")
+      .map(part => part.trim())
+      .filter(Boolean)
+  );
+
+  propsEl.appendChild(section("Constants"));
+  for (const flag of gadgetKnownFlags) {
+    propsEl.appendChild(row(
+      flag,
+      checkboxInput(enabledGadgetFlags.has(flag), checked => {
+        const nextEnabled = new Set(
+          (g.flagsExpr ?? "")
+            .split("|")
+            .map(part => part.trim())
+            .filter(Boolean)
+            .filter(part => gadgetKnownFlags.includes(part))
+        );
+        if (checked) nextEnabled.add(flag);
+        else nextEnabled.delete(flag);
+        const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
+        const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
+        g.flagsExpr = nextExpr;
+        postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
+        render();
+        renderProps();
+      })
+    ));
+  }
+
+  const deleteGadgetBtn = document.createElement("button");
+  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
+  deleteGadgetBtn.textContent = "Delete Gadget";
+  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
+  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
+  deleteGadgetBtn.onclick = () => {
+    const action = buildGadgetDeleteAction(g);
+    if (!action) return;
+    openDestructiveAction(action);
+  };
+  propsEl.appendChild(row("Delete", deleteGadgetBtn));
+  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
   // Items editor (minimal UI)

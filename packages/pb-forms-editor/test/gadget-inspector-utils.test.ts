@@ -17,6 +17,7 @@ import {
   getCustomGadgetHelpDisplay,
   getGadgetCaptionFieldConfig,
   getGadgetCurrentImageDisplay,
+  getGadgetKnownFlags,
   getGadgetCtorRangeInspectorValue,
   isDpiScaledGadgetCtorRange,
   isDpiScaledGadgetState,
@@ -24,6 +25,7 @@ import {
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue,
+  buildGadgetFlagsExpr,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
 } from "../src/core/gadget/inspector";
@@ -58,6 +60,24 @@ test("marks only original listicon gadgets for inspector column sections", () =>
   assert.equal(canInspectGadgetColumns("ListIconGadget"), true);
   assert.equal(canInspectGadgetColumns("PanelGadget"), false);
   assert.equal(canInspectGadgetColumns("TreeGadget"), false);
+});
+
+test("returns original gadget constant lists from declare.pb order", () => {
+  assert.deepEqual(getGadgetKnownFlags("ImageGadget"), ["#PB_Image_Border", "#PB_Image_Raised"]);
+  assert.deepEqual(getGadgetKnownFlags("SplitterGadget"), ["#PB_Splitter_Vertical", "#PB_Splitter_Separator", "#PB_Splitter_FirstFixed", "#PB_Splitter_SecondFixed"]);
+  assert.deepEqual(getGadgetKnownFlags("OptionGadget"), []);
+});
+
+test("rebuilds gadget flag expressions in original constant order while preserving custom tails", () => {
+  assert.equal(
+    buildGadgetFlagsExpr("StringGadget", ["#PB_String_ReadOnly", "#PB_String_Numeric"], "#PB_String_UpperCase | MyCustomFlag"),
+    "#PB_String_Numeric | #PB_String_ReadOnly | MyCustomFlag"
+  );
+  assert.equal(
+    buildGadgetFlagsExpr("ImageGadget", ["#PB_Image_Raised"], undefined),
+    "#PB_Image_Raised"
+  );
+  assert.equal(buildGadgetFlagsExpr("OptionGadget", [], undefined), undefined);
 });
 
 test("marks original checkbox/option gadget kinds as checked-state editable", () => {

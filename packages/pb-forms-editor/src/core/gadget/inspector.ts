@@ -180,6 +180,55 @@ const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ListIconGadget
 ]);
 
+const GADGET_KNOWN_FLAGS: ReadonlyMap<string, readonly string[]> = new Map([
+  [GADGET_KIND.ButtonGadget, ["#PB_Button_Right", "#PB_Button_Left", "#PB_Button_Default", "#PB_Button_MultiLine", "#PB_Button_Toggle"]],
+  [GADGET_KIND.ButtonImageGadget, ["#PB_Button_Toggle"]],
+  [GADGET_KIND.CalendarGadget, ["#PB_Calendar_Borderless"]],
+  [GADGET_KIND.CanvasGadget, ["#PB_Canvas_Border", "#PB_Canvas_ClipMouse", "#PB_Canvas_Keyboard", "#PB_Canvas_DrawFocus"]],
+  [GADGET_KIND.CheckBoxGadget, ["#PB_CheckBox_Right", "#PB_CheckBox_Center", "#PB_CheckBox_ThreeState"]],
+  [GADGET_KIND.ComboBoxGadget, ["#PB_ComboBox_Editable", "#PB_ComboBox_LowerCase", "#PB_ComboBox_UpperCase", "#PB_ComboBox_Image"]],
+  [GADGET_KIND.ContainerGadget, ["#PB_Container_BorderLess", "#PB_Container_Flat", "#PB_Container_Raised", "#PB_Container_Single", "#PB_Container_Double"]],
+  [GADGET_KIND.DateGadget, ["#PB_Date_UpDown", "#PB_Date_CheckBox"]],
+  [GADGET_KIND.EditorGadget, ["#PB_Editor_ReadOnly", "#PB_Editor_WordWrap", "#PB_Editor_TabNavigation"]],
+  [GADGET_KIND.ExplorerComboGadget, ["#PB_Explorer_DrivesOnly", "#PB_Explorer_Editable", "#PB_Explorer_NoMyDocuments"]],
+  [GADGET_KIND.ExplorerListGadget, ["#PB_Explorer_NoMyDocuments", "#PB_Explorer_BorderLess", "#PB_Explorer_AlwaysShowSelection", "#PB_Explorer_MultiSelect", "#PB_Explorer_GridLines", "#PB_Explorer_HeaderDragDrop", "#PB_Explorer_FullRowSelect", "#PB_Explorer_NoFiles", "#PB_Explorer_NoFolders", "#PB_Explorer_NoParentFolder", "#PB_Explorer_NoDirectoryChange", "#PB_Explorer_NoDriveRequester", "#PB_Explorer_NoSort", "#PB_Explorer_AutoSort", "#PB_Explorer_HiddenFiles"]],
+  [GADGET_KIND.ExplorerTreeGadget, ["#PB_Explorer_BorderLess", "#PB_Explorer_AlwaysShowSelection", "#PB_Explorer_NoLines", "#PB_Explorer_NoButtons", "#PB_Explorer_NoFiles", "#PB_Explorer_NoDriveRequester", "#PB_Explorer_NoMyDocuments", "#PB_Explorer_AutoSort"]],
+  [GADGET_KIND.FrameGadget, ["#PB_Frame_Single", "#PB_Frame_Double", "#PB_Frame_Flat", "#PB_Frame_Container"]],
+  [GADGET_KIND.HyperLinkGadget, ["#PB_HyperLink_Underline"]],
+  [GADGET_KIND.ImageGadget, ["#PB_Image_Border", "#PB_Image_Raised"]],
+  [GADGET_KIND.ListIconGadget, ["#PB_ListIcon_CheckBoxes", "#PB_ListIcon_ThreeState", "#PB_ListIcon_MultiSelect", "#PB_ListIcon_GridLines", "#PB_ListIcon_FullRowSelect", "#PB_ListIcon_HeaderDragDrop", "#PB_ListIcon_AlwaysShowSelection", "#PB_ListIcon_LargeIcon", "#PB_ListIcon_SmallIcon", "#PB_ListIcon_List", "#PB_ListIcon_Report"]],
+  [GADGET_KIND.ListViewGadget, ["#PB_ListView_MultiSelect", "#PB_ListView_ClickSelect"]],
+  [GADGET_KIND.OpenGLGadget, ["#PB_OpenGL_Keyboard", "#PB_OpenGL_NoFlipSynchronization", "#PB_OpenGL_FlipSynchronization", "#PB_OpenGL_NoDepthBuffer", "#PB_OpenGL_16BitDepthBuffer", "#PB_OpenGL_24BitDepthBuffer", "#PB_OpenGL_NoStencilBuffer", "#PB_OpenGL_8BitStencilBuffer", "#PB_OpenGL_NoAccumulationBuffer", "#PB_OpenGL_32BitAccumulationBuffer", "#PB_OpenGL_64BitAccumulationBuffer"]],
+  [GADGET_KIND.ProgressBarGadget, ["#PB_ProgressBar_Smooth", "#PB_ProgressBar_Vertical"]],
+  [GADGET_KIND.ScrollAreaGadget, ["#PB_ScrollArea_Flat", "#PB_ScrollArea_Raised", "#PB_ScrollArea_Single", "#PB_ScrollArea_BorderLess", "#PB_ScrollArea_Center"]],
+  [GADGET_KIND.ScrollBarGadget, ["#PB_ScrollBar_Vertical"]],
+  [GADGET_KIND.SpinGadget, ["#PB_Spin_ReadOnly", "#PB_Spin_Numeric"]],
+  [GADGET_KIND.SplitterGadget, ["#PB_Splitter_Vertical", "#PB_Splitter_Separator", "#PB_Splitter_FirstFixed", "#PB_Splitter_SecondFixed"]],
+  [GADGET_KIND.StringGadget, ["#PB_String_Numeric", "#PB_String_Password", "#PB_String_ReadOnly", "#PB_String_LowerCase", "#PB_String_UpperCase", "#PB_String_BorderLess"]],
+  [GADGET_KIND.TextGadget, ["#PB_Text_Center", "#PB_Text_Right", "#PB_Text_Border"]],
+  [GADGET_KIND.TrackBarGadget, ["#PB_TrackBar_Ticks", "#PB_TrackBar_Vertical"]],
+  [GADGET_KIND.TreeGadget, ["#PB_Tree_AlwaysShowSelection", "#PB_Tree_NoLines", "#PB_Tree_NoButtons", "#PB_Tree_CheckBoxes", "#PB_Tree_ThreeState"]],
+  [GADGET_KIND.WebGadget, ["#PB_Web_Edge"]],
+  [GADGET_KIND.WebViewGadget, ["#PB_WebView_Debug"]],
+]);
+
+function splitGadgetFlags(flagsExpr: string | undefined): string[] {
+  if (!flagsExpr) return [];
+  return flagsExpr
+    .split("|")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function uniqueFlags(flags: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const flag of flags) {
+    if (out.includes(flag)) continue;
+    out.push(flag);
+  }
+  return out;
+}
+
 function buildInspectorValue(raw: string | undefined, fallback: string | undefined): string {
   const literal = raw ? unquoteString(raw) : undefined;
   if (literal !== undefined) return literal;
@@ -205,6 +254,24 @@ export function canInspectGadgetItems(kind: string | undefined): boolean {
 
 export function canInspectGadgetColumns(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind);
+}
+
+export function getGadgetKnownFlags(kind: string | undefined): readonly string[] {
+  if (typeof kind !== "string") return [];
+  return GADGET_KNOWN_FLAGS.get(kind) ?? [];
+}
+
+export function buildGadgetFlagsExpr(
+  kind: string | undefined,
+  enabledKnownFlags: readonly string[],
+  currentFlagsExpr?: string
+): string | undefined {
+  const knownFlags = getGadgetKnownFlags(kind);
+  const knownFlagSet = new Set(knownFlags);
+  const orderedKnown = uniqueFlags(knownFlags).filter(flag => enabledKnownFlags.includes(flag));
+  const customFlags = uniqueFlags(splitGadgetFlags(currentFlagsExpr).filter(flag => !knownFlagSet.has(flag)));
+  const parts = [...orderedKnown, ...customFlags];
+  return parts.length ? parts.join(" | ") : undefined;
 }
 
 export function shouldShowGadgetParentDetail(gadget: GadgetInspectorDetailsLike): boolean {
