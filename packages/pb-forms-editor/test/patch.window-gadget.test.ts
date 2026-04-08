@@ -893,7 +893,11 @@ EndProcedure
 `;
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowPropertyUpdate(document, "#FrmMain", {})
+    applyWindowPropertyUpdate(document, "#FrmMain", {
+      hiddenRaw: undefined,
+      disabledRaw: undefined,
+      colorRaw: undefined,
+    })
   );
 
   assert.doesNotMatch(patchedText, /HideWindow\(#FrmMain,/);
