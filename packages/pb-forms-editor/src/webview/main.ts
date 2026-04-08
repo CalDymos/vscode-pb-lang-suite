@@ -110,7 +110,9 @@ import {
   getVisibleToolBarEntryCount,
   shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry,
-  hasToolBarPreviewAssignedImage
+  hasToolBarPreviewAssignedImage,
+  canMoveWindowInCanvas,
+  canResizeWindowHandleInCanvas
 } from "../core/toplevel/preview";
 
 import {
@@ -2727,7 +2729,6 @@ type DragState =
       startW: number;
       startH: number;
     }
-  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "window";
       mode: "resize";
@@ -3186,8 +3187,8 @@ function hitHandleWindow(mx: number, my: number): Handle | null {
   const wr = getWinRect();
   if (!wr) return null;
 
-  // Handles are around the outer window rect
-  const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h });
+  // Original Form Designer: top-level windows resize only to the right and bottom.
+  const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }).filter(([handle]) => canResizeWindowHandleInCanvas(handle));
   return hitHandlePoints(pts, mx, my, HANDLE_HIT);
 }
 
@@ -3989,17 +3990,8 @@ canvas.addEventListener("mousedown", (e) => {
       };
       canvas.style.cursor = getHandleCursor(wh);
     } else if (isInTitleBar(mx, my)) {
-      drag = {
-        target: "window",
-        mode: "move",
-        startMx: mx,
-        startMy: my,
-        startX: asInt(model.window?.x ?? 0),
-        startY: asInt(model.window?.y ?? 0),
-        startW: wr.w,
-        startH: wr.h
-      };
-      canvas.style.cursor = "move";
+      drag = null;
+      canvas.style.cursor = "default";
     } else {
       drag = null;
       canvas.style.cursor = "default";
@@ -4034,7 +4026,7 @@ window.addEventListener("mousemove", (e) => {
       return;
     }
 
-    if (isInTitleBar(mx, my)) {
+    if (isInTitleBar(mx, my) && canMoveWindowInCanvas()) {
       canvas.style.cursor = "move";
       return;
     }
@@ -4181,41 +4173,27 @@ window.addEventListener("mousemove", (e) => {
     return;
   }
 
-  // Window dragging
+  // Window resize only (original Form Designer behavior keeps window X/Y inspector-only)
   if (!model.window) return;
 
-  if (d.mode === "move") {
-    let nx = asInt(d.startX + dx);
-    let ny = asInt(d.startY + dy);
+  const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_WIN_W, MIN_WIN_H);
 
-    const p = applyLiveSnapPoint(nx, ny);
-    nx = p.x;
-    ny = p.y;
+  let nx = r0.x;
+  let ny = r0.y;
+  let nw = r0.w;
+  let nh = r0.h;
+  const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
+  nx = r1.x;
+  ny = r1.y;
+  nw = r1.w;
+  nh = r1.h;
 
-    model.window.x = nx;
-    model.window.y = ny;
+  model.window.x = nx;
+  model.window.y = ny;
+  model.window.w = nw;
+  model.window.h = nh;
 
-    canvas.style.cursor = "move";
-  } else {
-    const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_WIN_W, MIN_WIN_H);
-
-    let nx = r0.x;
-    let ny = r0.y;
-    let nw = r0.w;
-    let nh = r0.h;
-    const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
-    nx = r1.x;
-    ny = r1.y;
-    nw = r1.w;
-    nh = r1.h;
-
-    model.window.x = nx;
-    model.window.y = ny;
-    model.window.w = nw;
-    model.window.h = nh;
-
-    canvas.style.cursor = getHandleCursor(d.handle);
-  }
+  canvas.style.cursor = getHandleCursor(d.handle);
 
   render();
   renderProps();

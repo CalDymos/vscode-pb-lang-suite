@@ -5,6 +5,12 @@ import {
   deriveWindows7MenuBarPalette,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  canMoveWindowInCanvas,
+  canResizeWindowTopInCanvas,
+  canResizeWindowLeftInCanvas,
+  canResizeWindowRightInCanvas,
+  canResizeWindowBottomInCanvas,
+  canResizeWindowHandleInCanvas,
   getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
   getOpenSubMenuBalance,
@@ -86,6 +92,26 @@ test("preserves whitespace-only inspector text values when converting to raw pay
   assert.equal(buildOptionalInspectorLiteralRaw(' A "quoted" value '), '" A ""quoted"" value "');
   assert.equal(buildOptionalInspectorPlainValue(""), undefined);
   assert.equal(buildOptionalInspectorPlainValue("   "), "   ");
+});
+
+test("keeps top-level window canvas movement disabled to match the original designer", () => {
+  assert.equal(canMoveWindowInCanvas(), false);
+});
+
+test("limits top-level window canvas resize handles to the original right and bottom edges", () => {
+  assert.equal(canResizeWindowTopInCanvas(), false);
+  assert.equal(canResizeWindowLeftInCanvas(), false);
+  assert.equal(canResizeWindowRightInCanvas(), true);
+  assert.equal(canResizeWindowBottomInCanvas(), true);
+
+  assert.equal(canResizeWindowHandleInCanvas("nw"), false);
+  assert.equal(canResizeWindowHandleInCanvas("n"), false);
+  assert.equal(canResizeWindowHandleInCanvas("ne"), false);
+  assert.equal(canResizeWindowHandleInCanvas("w"), false);
+  assert.equal(canResizeWindowHandleInCanvas("e"), true);
+  assert.equal(canResizeWindowHandleInCanvas("sw"), false);
+  assert.equal(canResizeWindowHandleInCanvas("s"), true);
+  assert.equal(canResizeWindowHandleInCanvas("se"), true);
 });
 
 test("builds default menu labels, levels and insert args", () => {

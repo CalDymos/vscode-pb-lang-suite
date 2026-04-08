@@ -207,6 +207,39 @@ export function buildOptionalInspectorPlainValue(value: string): string | undefi
   return value.length ? value : undefined;
 }
 
+export function canMoveWindowInCanvas(): boolean {
+  return false;
+}
+
+export function canResizeWindowTopInCanvas(): boolean {
+  return false;
+}
+
+export function canResizeWindowLeftInCanvas(): boolean {
+  return false;
+}
+
+export function canResizeWindowRightInCanvas(): boolean {
+  return true;
+}
+
+export function canResizeWindowBottomInCanvas(): boolean {
+  return true;
+}
+
+export function canResizeWindowHandleInCanvas(handle: "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se"): boolean {
+  const touchesTop = handle === "nw" || handle === "n" || handle === "ne";
+  const touchesLeft = handle === "nw" || handle === "w" || handle === "sw";
+  const touchesRight = handle === "ne" || handle === "e" || handle === "se";
+  const touchesBottom = handle === "sw" || handle === "s" || handle === "se";
+
+  if (touchesTop && !canResizeWindowTopInCanvas()) return false;
+  if (touchesLeft && !canResizeWindowLeftInCanvas()) return false;
+  if (touchesRight && !canResizeWindowRightInCanvas()) return false;
+  if (touchesBottom && !canResizeWindowBottomInCanvas()) return false;
+  return true;
+}
+
 export function unquotePbString(raw?: string): string {
   if (!raw) return "";
   return unquoteString(raw) ?? raw.trim();
