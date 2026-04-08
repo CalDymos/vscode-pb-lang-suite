@@ -230,6 +230,7 @@ import {
   getWindowPreviewBodyDecoration,
   usesWindowPreviewExternalMenuBar,
   getWindowPreviewFrameDecoration,
+  getWindowPreviewFrameStrokeRect,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -8536,14 +8537,23 @@ function render() {
 
   // Window selection overlay
   if (selection?.kind === "window") {
+    const selectionStrokeRect = getWindowPreviewFrameStrokeRect(settings.osSkin, { x: winX, y: winY, w: winW, h: winH });
+
     ctx.save();
     ctx.strokeStyle = focus;
     ctx.lineWidth = 2;
     if (frameDecoration.borderStyle === "macos-rounded" || frameDecoration.borderStyle === "windows7-rounded") {
-      traceRoundedRect(ctx, winX + 0.5, winY + 0.5, winW - 1, winH - 1, frameDecoration.borderRadius);
+      traceRoundedRect(
+        ctx,
+        selectionStrokeRect.x,
+        selectionStrokeRect.y,
+        selectionStrokeRect.w,
+        selectionStrokeRect.h,
+        frameDecoration.borderRadius
+      );
       ctx.stroke();
     } else {
-      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
+      ctx.strokeRect(selectionStrokeRect.x, selectionStrokeRect.y, selectionStrokeRect.w, selectionStrokeRect.h);
     }
     ctx.restore();
 
@@ -8949,11 +8959,13 @@ function drawWindowPreviewFrame(
     return;
   }
 
+  const strokeRect = getWindowPreviewFrameStrokeRect(settings.osSkin, rect);
+
   if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
-    traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);
+    traceRoundedRect(ctx, strokeRect.x, strokeRect.y, strokeRect.w, strokeRect.h, decoration.borderRadius);
     ctx.stroke();
   } else {
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+    ctx.strokeRect(strokeRect.x, strokeRect.y, strokeRect.w, strokeRect.h);
   }
 
   ctx.restore();

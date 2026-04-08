@@ -170,6 +170,13 @@ export type WindowPreviewFrameDecoration = {
   strokeAlpha: number;
 };
 
+export type WindowPreviewFrameStrokeRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export const WINDOW_PREVIEW_PAGE_PADDING = 10;
 
 export type WindowPreviewCanvasOrigin = {
@@ -959,6 +966,29 @@ export function getWindowPreviewBodyDecoration(
     clientBorderStyle: "none",
     showBodyOutline: false,
     bodyOutlineStyle: "none",
+  };
+}
+
+export function getWindowPreviewFrameStrokeRect(
+  osSkin: WindowPreviewOsSkin,
+  rect: { x: number; y: number; w: number; h: number }
+): WindowPreviewFrameStrokeRect {
+  const decoration = getWindowPreviewFrameDecoration(osSkin);
+
+  if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
+    return {
+      x: rect.x - 0.5,
+      y: rect.y - 0.5,
+      w: rect.w + 1,
+      h: rect.h + 1,
+    };
+  }
+
+  return {
+    x: rect.x + 0.5,
+    y: rect.y + 0.5,
+    w: rect.w - 1,
+    h: rect.h - 1,
   };
 }
 
