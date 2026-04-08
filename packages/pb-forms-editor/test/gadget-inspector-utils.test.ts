@@ -253,6 +253,62 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     lockTop: true,
     lockBottom: false
   }, { w: 320 }), false);
+
+  assert.equal(canEditGadgetHorizontalLocks({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }), true);
+
+  assert.equal(canEditGadgetHorizontalLocks({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }), false);
 });
 
 test("builds a horizontal resize update that matches the original right-anchor formulas", () => {
@@ -274,6 +330,43 @@ test("builds a horizontal resize update that matches the original right-anchor f
 
   assert.deepEqual(update, {
     xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("builds parent-relative horizontal resize updates from original GadgetWidth parent formulas", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "GadgetWidth(#Container_0) - 210",
     yRaw: "20",
     wRaw: "80",
     hRaw: "24"
@@ -439,6 +532,48 @@ test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constr
   assert.deepEqual(update, {
     xRaw: "10",
     yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("builds parent-relative vertical resize updates from original GadgetHeight parent formulas", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "GadgetHeight(#Container_0) - 140",
     wRaw: "80",
     hRaw: "24"
   });

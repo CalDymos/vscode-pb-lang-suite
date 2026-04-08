@@ -3333,8 +3333,9 @@ function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" {
   return resolvePreviewPlatformFromOsSkin(settings.osSkin);
 }
 
-function getWindowResizeLockContext() {
+function getWindowResizeLockContext(gadget?: Gadget) {
   if (!model.window) return undefined;
+  const parent = gadget?.parentId ? model.gadgets.find(entry => entry.id === gadget.parentId) : undefined;
   return {
     w: model.window.w,
     wRaw: model.window.wRaw,
@@ -3344,12 +3345,23 @@ function getWindowResizeLockContext() {
     toolbarCount: model.toolbars?.length ?? 0,
     statusBarCount: model.statusbars?.length ?? 0,
     platformSkin: resolvePbFormSkinPlatform(),
-    layoutDpiScale: getActiveLayoutDpiScale()
+    layoutDpiScale: getActiveLayoutDpiScale(),
+    parent: parent ? {
+      id: parent.id,
+      kind: parent.kind,
+      pbAny: parent.pbAny,
+      variable: parent.variable,
+      firstParam: parent.firstParam,
+      w: parent.w,
+      wRaw: parent.wRaw,
+      h: parent.h,
+      hRaw: parent.hRaw
+    } : undefined
   };
 }
 
 function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, nextLockRight: boolean): void {
-  const resizeCtx = getWindowResizeLockContext();
+  const resizeCtx = getWindowResizeLockContext(g);
   if (!resizeCtx) return;
   const update = buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, nextLockLeft, nextLockRight);
   if (!update) return;
@@ -3588,7 +3600,7 @@ function openCanvasContextMenu(
 }
 
 function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
-  const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(), nextLockTop, nextLockBottom);
+  const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(g), nextLockTop, nextLockBottom);
   if (!update) return;
 
   g.lockTop = nextLockTop;
@@ -11468,7 +11480,7 @@ function renderProps() {
       })
     )
   );
-  const resizeCtx = getWindowResizeLockContext();
+  const resizeCtx = getWindowResizeLockContext(g);
   const horizontalLockLeftToggle = resizeCtx
     ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockLeft), Boolean(g.lockRight))
     : undefined;
