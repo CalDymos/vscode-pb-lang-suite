@@ -11546,36 +11546,82 @@ function renderProps() {
   }
 
   if (canEditColors) {
-    propsEl.appendChild(
-      row(
-        "FrontColor Raw",
-        textInput(
-          g.frontColorRaw ?? "",
-          v => {
-            const trimmed = v.trim();
-            g.frontColorRaw = trimmed || undefined;
-            postGadgetProperties(g.id, { frontColorRaw: trimmed || undefined });
-            renderProps();
-          },
-          { title: "Edit the front color expression used for this gadget." }
-        )
-      )
-    );
-    propsEl.appendChild(
-      row(
-        "BackColor Raw",
-        textInput(
-          g.backColorRaw ?? "",
-          v => {
-            const trimmed = v.trim();
-            g.backColorRaw = trimmed || undefined;
-            postGadgetProperties(g.id, { backColorRaw: trimmed || undefined });
-            renderProps();
-          },
-          { title: "Edit the background color expression used for this gadget." }
-        )
-      )
-    );
+    const frontColorInput = readonlyInput((g.frontColorRaw ?? "").trim());
+    frontColorInput.title = "Use the color picker to choose the gadget front color, or Remove to clear it.";
+    const frontColorPicker = document.createElement("input");
+    frontColorPicker.type = "color";
+    frontColorPicker.value = pbColorNumberToCssHex(g.frontColor) ?? "#000000";
+    frontColorPicker.title = "Choose the gadget front color. The value is saved as RGB(...).";
+    frontColorPicker.style.width = "40px";
+    frontColorPicker.style.minWidth = "40px";
+    frontColorPicker.style.padding = "0";
+    frontColorPicker.onchange = () => {
+      const nextColorRaw = cssHexToPbRgbRaw(frontColorPicker.value);
+      if (!nextColorRaw) return;
+      const parsedColor = parseWindowColorInspectorInput(nextColorRaw);
+      clearInfoError();
+      g.frontColorRaw = nextColorRaw;
+      if (parsedColor.ok) {
+        g.frontColor = parsedColor.previewColor;
+      }
+      postGadgetProperties(g.id, { frontColorRaw: nextColorRaw });
+      render();
+      renderProps();
+    };
+    const clearFrontColorBtn = document.createElement("button");
+    clearFrontColorBtn.textContent = "Remove";
+    clearFrontColorBtn.disabled = !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
+    clearFrontColorBtn.title = clearFrontColorBtn.disabled
+      ? "No gadget front color is set."
+      : "Remove the current gadget front color.";
+    clearFrontColorBtn.onclick = () => {
+      clearInfoError();
+      g.frontColorRaw = undefined;
+      g.frontColor = undefined;
+      postGadgetProperties(g.id, { frontColorRaw: "" });
+      render();
+      renderProps();
+    };
+    propsEl.appendChild(row("FrontColor", inputWithActions(frontColorInput, frontColorPicker, clearFrontColorBtn)));
+
+    const backColorInput = readonlyInput((g.backColorRaw ?? "").trim());
+    backColorInput.title = "Use the color picker to choose the gadget background color, or Remove to clear it.";
+    const backColorPicker = document.createElement("input");
+    backColorPicker.type = "color";
+    backColorPicker.value = pbColorNumberToCssHex(g.backColor) ?? "#000000";
+    backColorPicker.title = "Choose the gadget background color. The value is saved as RGB(...).";
+    backColorPicker.style.width = "40px";
+    backColorPicker.style.minWidth = "40px";
+    backColorPicker.style.padding = "0";
+    backColorPicker.onchange = () => {
+      const nextColorRaw = cssHexToPbRgbRaw(backColorPicker.value);
+      if (!nextColorRaw) return;
+      const parsedColor = parseWindowColorInspectorInput(nextColorRaw);
+      clearInfoError();
+      g.backColorRaw = nextColorRaw;
+      if (parsedColor.ok) {
+        g.backColor = parsedColor.previewColor;
+      }
+      postGadgetProperties(g.id, { backColorRaw: nextColorRaw });
+      render();
+      renderProps();
+    };
+    const clearBackColorBtn = document.createElement("button");
+    clearBackColorBtn.textContent = "Remove";
+    clearBackColorBtn.disabled = !(g.backColorRaw?.trim() || typeof g.backColor === "number");
+    clearBackColorBtn.title = clearBackColorBtn.disabled
+      ? "No gadget background color is set."
+      : "Remove the current gadget background color.";
+    clearBackColorBtn.onclick = () => {
+      clearInfoError();
+      g.backColorRaw = undefined;
+      g.backColor = undefined;
+      postGadgetProperties(g.id, { backColorRaw: "" });
+      render();
+      renderProps();
+    };
+    propsEl.appendChild(row("BackColor", inputWithActions(backColorInput, backColorPicker, clearBackColorBtn)));
+    propsEl.appendChild(mutedNote("Use the pickers to set gadget front/background colors. Remove clears the current color."));
   }
 
   const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);

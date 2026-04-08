@@ -723,6 +723,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return false;
       };
 
+      const validateGadgetColorRaw = (raw: string | undefined, label: "FrontColor" | "BackColor"): boolean => {
+        const parsed = parseWindowColorInspectorInput(raw);
+        if (parsed.ok) return true;
+        postError(`${label} accepts only RGB(r,g,b) or a $hex literal.`);
+        return false;
+      };
+
       switch (msg.type) {
         case WEBVIEW_TO_EXT_MSG_TYPE.ready:
           sendInit();
@@ -891,6 +898,12 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties: {
           if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw") && !validateVariableRaw(msg.tooltipRaw, "Tooltip")) {
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(msg, "frontColorRaw") && !validateGadgetColorRaw(msg.frontColorRaw, "FrontColor")) {
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(msg, "backColorRaw") && !validateGadgetColorRaw(msg.backColorRaw, "BackColor")) {
             return;
           }
           const gadgetPropArgs: GadgetPropertyArgs = {};
