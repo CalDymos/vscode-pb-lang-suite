@@ -40,6 +40,13 @@ test("parses original top-level toolbar and statusbar Y expressions into unscale
   assert.equal(parseDesignerLayoutRaw("MenuHeight() + FormWindowTop + 12", "y"), 12);
 });
 
+test("parses original top-level width and height reference expressions into their stored base offsets", () => {
+  assert.equal(parseDesignerLayoutRaw("FormWindowWidth - 40", "w"), 40);
+  assert.equal(parseDesignerLayoutRaw("FormWindowWidth - 310", "x"), 310);
+  assert.equal(parseDesignerLayoutRaw("FormWindowHeight - StatusBarHeight(0) - 120", "h"), 120);
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + FormWindowHeight - 210", "y"), 210);
+});
+
 test("maps displayed layout values back to unscaled code values", () => {
   assert.equal(unscaleDisplayedLayoutValue(10, 1.33), 8);
   assert.equal(unscaleDisplayedLayoutValue(11, 1.33), 8);

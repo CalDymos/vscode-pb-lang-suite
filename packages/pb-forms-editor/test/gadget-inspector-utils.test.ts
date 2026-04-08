@@ -475,13 +475,13 @@ test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constr
 });
 
 
-test("blocks horizontal lock synthesis when the constructor x expression cannot be resolved numerically", () => {
+test("blocks horizontal lock synthesis when the constructor x expression is not one of the original width reference forms", () => {
   const update = buildGadgetHorizontalLockResizeUpdate({
     x: 0,
     y: 20,
     w: 80,
     h: 24,
-    xRaw: "WindowWidth(0) - 80",
+    xRaw: "HostWidth() - 80",
     yRaw: "20",
     wRaw: "80",
     hRaw: "24",

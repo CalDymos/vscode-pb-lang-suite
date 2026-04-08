@@ -47,12 +47,17 @@ export type DesignerLayoutNumericField = "x" | "y" | "w" | "h" | "min" | "max" |
 
 const TOP_LEVEL_Y_ZERO_TERM_RE = /(?:MenuHeight\(\)|FormWindowTop|ToolBarHeight\(\s*\d+\s*\)|StatusBarHeight\(\s*\d+\s*\))/gi;
 const HEIGHT_REFERENCE_RE = /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i;
+const WIDTH_REFERENCE_RE = /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i;
 
 function parseTrailingExpressionInteger(raw: string): number | undefined {
   const matches = [...raw.matchAll(/-?\d+/g)];
   const last = matches.length ? matches[matches.length - 1]?.[0] : undefined;
   if (!last) return undefined;
   return Number(last);
+}
+
+function stripTopLevelYZeroTerms(raw: string): string {
+  return raw.replace(TOP_LEVEL_Y_ZERO_TERM_RE, "").replace(/\+/g, "").trim();
 }
 
 export function parseDesignerLayoutRaw(raw: string | undefined, field: DesignerLayoutNumericField): number | undefined {
@@ -62,13 +67,17 @@ export function parseDesignerLayoutRaw(raw: string | undefined, field: DesignerL
   const direct = parseUnscaledLayoutRaw(trimmed);
   if (typeof direct === "number") return direct;
 
-  if (field === "y") {
-    const stripped = trimmed.replace(TOP_LEVEL_Y_ZERO_TERM_RE, "").replace(/\+/g, "").trim();
+  if (field === "y" || field === "h") {
+    const stripped = stripTopLevelYZeroTerms(trimmed);
     const additive = parseUnscaledLayoutRaw(stripped);
     if (typeof additive === "number") return additive;
     if (HEIGHT_REFERENCE_RE.test(stripped)) {
       return parseTrailingExpressionInteger(stripped);
     }
+  }
+
+  if ((field === "x" || field === "w") && WIDTH_REFERENCE_RE.test(trimmed)) {
+    return parseTrailingExpressionInteger(trimmed);
   }
 
   return undefined;

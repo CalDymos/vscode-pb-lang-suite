@@ -1036,7 +1036,7 @@ EndProcedure
 });
 
 
-test("preserves raw gadget rect expressions for future resize lock regeneration", () => {
+test("parses original raw gadget rect expressions into the same stored base offsets that the PureBasic designer uses", () => {
   const src = `; Form Designer for PureBasic - 6.30
 ; EnableExplicit
 
@@ -1046,16 +1046,19 @@ EndEnumeration
 
 Enumeration FormGadget
   #BtnApply
+  #BtnBottom
 EndEnumeration
 
 Procedure OpenFrmMain()
   OpenWindow(#FrmMain, 0, 0, 320, 220, "RawRect")
   ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, 25, "Apply")
+  ButtonGadget(#BtnBottom, FormWindowWidth - 180, ToolBarHeight(0) + FormWindowHeight - 210, 80, FormWindowHeight - StatusBarHeight(0) - 120, "Bottom")
 EndProcedure
 `;
 
   const doc = parseFormDocument(src);
   const gadget = doc.gadgets.find(entry => entry.id === "#BtnApply");
+  const bottom = doc.gadgets.find(entry => entry.id === "#BtnBottom");
 
   assert.ok(gadget);
   assert.equal(gadget?.xRaw, "10");
@@ -1064,6 +1067,12 @@ EndProcedure
   assert.equal(gadget?.hRaw, "25");
   assert.equal(gadget?.x, 10);
   assert.equal(gadget?.y, 10);
-  assert.equal(gadget?.w, 0);
+  assert.equal(gadget?.w, 40);
   assert.equal(gadget?.h, 25);
+
+  assert.ok(bottom);
+  assert.equal(bottom?.x, 180);
+  assert.equal(bottom?.y, 210);
+  assert.equal(bottom?.w, 80);
+  assert.equal(bottom?.h, 120);
 });
