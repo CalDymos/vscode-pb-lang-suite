@@ -15,7 +15,9 @@ import {
   canInspectGadgetItems,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
+  isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
   getGadgetKnownFlags,
   getGadgetCtorRangeInspectorValue,
@@ -105,6 +107,20 @@ test("builds gadget tooltip raw values for literal, variable and cleared modes w
   assert.equal(buildGadgetTooltipRaw("Tooltip$", true), "Tooltip$");
   assert.equal(buildGadgetTooltipRaw("", false), undefined);
   assert.equal(buildGadgetTooltipRaw("  Tooltip$  ", true), "  Tooltip$  ");
+});
+
+test("prefers parsed gadget hidden/disabled booleans and treats raw 0 as unchecked", () => {
+  assert.equal(getGadgetBooleanInspectorState(undefined, true), true);
+  assert.equal(getGadgetBooleanInspectorState("0", undefined), false);
+  assert.equal(getGadgetBooleanInspectorState("HideExpr()", undefined), true);
+  assert.equal(getGadgetBooleanInspectorState("DisableExpr()", undefined), true);
+  assert.equal(getGadgetBooleanInspectorState(undefined, false), false);
+});
+
+test("uses only parsed boolean gadget hidden state for the designer preview visibility path", () => {
+  assert.equal(isGadgetHiddenInDesignerPreview(true), true);
+  assert.equal(isGadgetHiddenInDesignerPreview(false), false);
+  assert.equal(isGadgetHiddenInDesignerPreview(undefined), false);
 });
 
 test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {

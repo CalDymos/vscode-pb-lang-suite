@@ -131,6 +131,8 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
+  getGadgetBooleanInspectorState,
+  isGadgetHiddenInDesignerPreview,
   isDpiScaledGadgetCtorRange,
   isDpiScaledGadgetState,
   getGadgetKnownFlags,
@@ -4342,7 +4344,7 @@ function getGadgetPreviewLayout(
 
   let rect: PreviewRect = { x: g.x, y: g.y, w: g.w, h: g.h };
   let clip = windowRect;
-  let visible = rect.w > 0 && rect.h > 0;
+  let visible = rect.w > 0 && rect.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
 
   if (g.splitterId) {
     const splitter = getGadgetById(g.splitterId);
@@ -11422,7 +11424,7 @@ function renderProps() {
   propsEl.appendChild(
     row(
       "Hidden",
-      checkboxInput(Boolean(g.hidden), v => {
+      checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
         g.hidden = v;
         g.hiddenRaw = v ? "1" : "0";
         postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
@@ -11436,7 +11438,7 @@ function renderProps() {
   propsEl.appendChild(
     row(
       "Disabled",
-      checkboxInput(Boolean(g.disabled), v => {
+      checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
         g.disabled = v;
         g.disabledRaw = v ? "1" : "0";
         postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });

@@ -236,6 +236,23 @@ function buildInspectorValue(raw: string | undefined, fallback: string | undefin
   return raw?.trim() ?? "";
 }
 
+export function getGadgetBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed || trimmed === "0") {
+    return false;
+  }
+
+  return true;
+}
+
+export function isGadgetHiddenInDesignerPreview(value: boolean | undefined): boolean {
+  return value === true;
+}
+
 export function canEditGadgetText(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_TEXT_CAPABLE_KINDS.has(kind);
 }
