@@ -403,52 +403,100 @@ function getParentResizeReferenceRaw(parent: ParentResizeLockLike | undefined): 
   return trimmedId.startsWith("#") ? trimmedId : `#${trimmedId}`;
 }
 
+function resolvePanelHeaderHeight(skin: PbFormSkinLike | undefined): number | undefined {
+  switch (skin) {
+    case "macos":
+      return 31;
+    case "linux":
+      return 29;
+    case "windows":
+      return 22;
+    default:
+      return undefined;
+  }
+}
+
+function getParentWidthResizeReferenceRaw(parent: ParentResizeLockLike | undefined): string | undefined {
+  const parentRef = getParentResizeReferenceRaw(parent);
+  if (!parentRef) return undefined;
+  if (parent?.kind === GADGET_KIND.PanelGadget) {
+    return `GetGadgetAttribute(${parentRef},#PB_Panel_ItemWidth)`;
+  }
+  return `GadgetWidth(${parentRef})`;
+}
+
+function getParentHeightResizeReferenceRaw(parent: ParentResizeLockLike | undefined): string | undefined {
+  const parentRef = getParentResizeReferenceRaw(parent);
+  if (!parentRef) return undefined;
+  if (parent?.kind === GADGET_KIND.PanelGadget) {
+    return `GetGadgetAttribute(${parentRef},#PB_Panel_ItemHeight)`;
+  }
+  return `GadgetHeight(${parentRef})`;
+}
+
 function isSupportedParentResizeContext(parent: ParentResizeLockLike | undefined): boolean {
-  if (!parent) return false;
-  return parent.kind !== GADGET_KIND.PanelGadget;
+  return Boolean(parent);
 }
 
 function resolveParentUnscaledLayoutNumber(
   parent: ParentResizeLockLike | undefined,
   field: "w" | "h",
-  scale: number
+  scale: number,
+  skin?: PbFormSkinLike
 ): number | undefined {
   if (!parent) return undefined;
-  return field === "w"
+  const resolved = field === "w"
     ? resolveUnscaledLayoutNumber(parent.wRaw, parent.w, scale, "w", { allowExpressionFallback: false })
     : resolveUnscaledLayoutNumber(parent.hRaw, parent.h, scale, "h", { allowExpressionFallback: false });
+  if (typeof resolved !== "number") return undefined;
+  if (field === "h" && parent.kind === GADGET_KIND.PanelGadget) {
+    const panelHeader = resolvePanelHeaderHeight(skin);
+    if (typeof panelHeader !== "number") return undefined;
+    return Math.max(0, Math.trunc(resolved - panelHeader));
+  }
+  return resolved;
 }
 
 function buildParentRightAnchorXRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
   const gadgetX = resolveUnscaledLayoutNumber(gadget.xRaw, gadget.x, scale, "x", { allowExpressionFallback: false });
   const parentW = resolveParentUnscaledLayoutNumber(parent, "w", scale);
-  const parentRef = getParentResizeReferenceRaw(parent);
+  const parentRef = getParentWidthResizeReferenceRaw(parent);
   if (typeof gadgetX !== "number" || typeof parentW !== "number" || !parentRef) return undefined;
-  return `GadgetWidth(${parentRef}) - ${Math.trunc(parentW - gadgetX)}`;
+  return `${parentRef} - ${Math.trunc(parentW - gadgetX)}`;
 }
 
 function buildParentStretchWidthRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
   const gadgetW = resolveUnscaledLayoutNumber(gadget.wRaw, gadget.w, scale, "w", { allowExpressionFallback: false });
   const parentW = resolveParentUnscaledLayoutNumber(parent, "w", scale);
-  const parentRef = getParentResizeReferenceRaw(parent);
+  const parentRef = getParentWidthResizeReferenceRaw(parent);
   if (typeof gadgetW !== "number" || typeof parentW !== "number" || !parentRef) return undefined;
-  return `GadgetWidth(${parentRef}) - ${Math.trunc(parentW - gadgetW)}`;
+  return `${parentRef} - ${Math.trunc(parentW - gadgetW)}`;
 }
 
-function buildParentBottomAnchorYRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
+function buildParentBottomAnchorYRaw(
+  gadget: GadgetResizeLockLike,
+  parent: ParentResizeLockLike,
+  scale: number,
+  skin?: PbFormSkinLike
+): string | undefined {
   const gadgetY = resolveUnscaledLayoutNumber(gadget.yRaw, gadget.y, scale, "y", { allowExpressionFallback: false });
-  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale);
-  const parentRef = getParentResizeReferenceRaw(parent);
+  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale, skin);
+  const parentRef = getParentHeightResizeReferenceRaw(parent);
   if (typeof gadgetY !== "number" || typeof parentH !== "number" || !parentRef) return undefined;
-  return `GadgetHeight(${parentRef}) - ${Math.trunc(parentH - gadgetY)}`;
+  return `${parentRef} - ${Math.trunc(parentH - gadgetY)}`;
 }
 
-function buildParentStretchHeightRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
+function buildParentStretchHeightRaw(
+  gadget: GadgetResizeLockLike,
+  parent: ParentResizeLockLike,
+  scale: number,
+  skin?: PbFormSkinLike
+): string | undefined {
   const gadgetH = resolveUnscaledLayoutNumber(gadget.hRaw, gadget.h, scale, "h", { allowExpressionFallback: false });
-  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale);
-  const parentRef = getParentResizeReferenceRaw(parent);
+  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale, skin);
+  const parentRef = getParentHeightResizeReferenceRaw(parent);
   if (typeof gadgetH !== "number" || typeof parentH !== "number" || !parentRef) return undefined;
-  return `GadgetHeight(${parentRef}) - ${Math.trunc(parentH - gadgetH)}`;
+  return `${parentRef} - ${Math.trunc(parentH - gadgetH)}`;
 }
 
 function hasExplicitNonNumericLayoutRaw(raw: string | undefined): boolean {
@@ -627,6 +675,7 @@ export function buildGadgetVerticalLockResizeUpdate(
 
   const scale = getResizeLockLayoutScale(win);
   const parent = gadget.parentId && isSupportedParentResizeContext(win?.parent) ? win?.parent : undefined;
+  const skin = win?.platformSkin;
   if (gadget.parentId && !parent) return undefined;
   const horizontalArgs = buildCurrentHorizontalResizeArgs(gadget, scale);
   const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale);
@@ -635,10 +684,10 @@ export function buildGadgetVerticalLockResizeUpdate(
 
   const bottomAnchorYRaw = usesHeightResizeReference(gadget.resizeYRaw)
     ? gadget.resizeYRaw?.trim()
-    : (parent ? buildParentBottomAnchorYRaw(gadget, parent, scale) : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined));
+    : (parent ? buildParentBottomAnchorYRaw(gadget, parent, scale, skin) : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined));
   const stretchHeightRaw = usesHeightResizeReference(gadget.resizeHRaw)
     ? gadget.resizeHRaw?.trim()
-    : (parent ? buildParentStretchHeightRaw(gadget, parent, scale) : (win ? buildTopLevelStretchHeightRaw(gadget, win) : undefined));
+    : (parent ? buildParentStretchHeightRaw(gadget, parent, scale, skin) : (win ? buildTopLevelStretchHeightRaw(gadget, win) : undefined));
 
   if (!nextLockBottom) {
     return {

@@ -308,7 +308,7 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
       h: 160,
       hRaw: "160"
     }
-  }), false);
+  }), true);
 });
 
 test("builds a horizontal resize update that matches the original right-anchor formulas", () => {
@@ -367,6 +367,44 @@ test("builds parent-relative horizontal resize updates from original GadgetWidth
 
   assert.deepEqual(update, {
     xRaw: "GadgetWidth(#Container_0) - 210",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("builds panel-parent horizontal resize updates from original panel item width formulas", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "GetGadgetAttribute(#Panel_0,#PB_Panel_ItemWidth) - 210",
     yRaw: "20",
     wRaw: "80",
     hRaw: "24"
@@ -577,6 +615,87 @@ test("builds parent-relative vertical resize updates from original GadgetHeight 
     wRaw: "80",
     hRaw: "24"
   });
+});
+
+
+test("builds panel-parent vertical resize updates from original panel item height formulas", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    platformSkin: "windows",
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "GetGadgetAttribute(#Panel_0,#PB_Panel_ItemHeight) - 118",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("keeps panel-parent vertical resize editing blocked when the host skin is unknown", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.equal(update, undefined);
 });
 
 
