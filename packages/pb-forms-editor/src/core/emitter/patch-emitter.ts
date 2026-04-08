@@ -1094,7 +1094,8 @@ export function applyRectPatch(
   y: number,
   w: number,
   h: number,
-  scanRange?: ScanRange
+  scanRange?: ScanRange,
+  rawArgs?: { yRaw?: string }
 ): vscode.WorkspaceEdit | undefined {
   const parsed = parseFormDocument(document.getText());
   const customGadget = parsed.gadgets.find(entry => entry.id === gadgetKey && entry.kind === GADGET_KIND.CustomGadget);
@@ -1118,7 +1119,7 @@ export function applyRectPatch(
   if (params.length < 5) return undefined;
 
   params[1] = String(Math.trunc(x));
-  params[2] = String(Math.trunc(y));
+  params[2] = rawArgs?.yRaw?.trim() || String(Math.trunc(y));
   params[3] = String(Math.trunc(w));
   params[4] = String(Math.trunc(h));
 
@@ -1386,6 +1387,7 @@ type GadgetInsertArgs = {
   kind: InsertableGadgetKind;
   x: number;
   y: number;
+  yRaw?: string;
   parentId?: string;
   parentItem?: number;
 };
@@ -1442,7 +1444,7 @@ function buildInsertedGadgetBlock(
   extraArgs?: GadgetInsertExtraArgs
 ): string | undefined {
   const x = String(Math.trunc(args.x));
-  const y = String(Math.trunc(args.y));
+  const y = args.yRaw?.trim() || String(Math.trunc(args.y));
   const w = "100";
   const h = "25";
   const idRaw = identity.idRaw;
@@ -1671,7 +1673,8 @@ export function applyGadgetInsert(
   parentItem?: number,
   scanRange?: ScanRange,
   extraArgs?: GadgetInsertExtraArgs,
-  insertDefaults?: GadgetInsertDefaults
+  insertDefaults?: GadgetInsertDefaults,
+  yRaw?: string,
 ): vscode.WorkspaceEdit | undefined {
   if (!isInsertableGadgetKind(kind)) return undefined;
 
@@ -1717,7 +1720,7 @@ export function applyGadgetInsert(
     : findTopLevelGadgetInsertAnchor(document, calls, openCall, proc);
   if (!anchor) return undefined;
 
-  const block = buildInsertedGadgetBlock({ kind, x, y, parentId, parentItem }, identity, anchor.indent, extraArgs);
+  const block = buildInsertedGadgetBlock({ kind, x, y, yRaw, parentId, parentItem }, identity, anchor.indent, extraArgs);
   if (!block) return undefined;
   const edit = new vscode.WorkspaceEdit();
   const anchorPos = new vscode.Position(Math.min(document.lineCount, anchor.insertLine), 0);

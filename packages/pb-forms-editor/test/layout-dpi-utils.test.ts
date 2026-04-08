@@ -10,6 +10,7 @@ import {
   getLayoutDpiScale,
   getStableDisplayedLayoutValue,
   isLayoutDpiScalingActive,
+  parseDesignerLayoutRaw,
   parseUnscaledLayoutRaw,
   unscaleDisplayedLayoutValue,
 } from "../src/core/utils/layout-dpi";
@@ -30,6 +31,13 @@ test("parses numeric unscaled layout literals and ignores expressions", () => {
   assert.equal(parseUnscaledLayoutRaw("  -5  "), -5);
   assert.equal(parseUnscaledLayoutRaw("#PB_Ignore"), undefined);
   assert.equal(parseUnscaledLayoutRaw("FormWindowWidth - 10"), undefined);
+});
+
+
+test("parses original top-level toolbar and statusbar Y expressions into unscaled offsets", () => {
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + 10", "y"), 10);
+  assert.equal(parseDesignerLayoutRaw("StatusBarHeight(0) + 10", "y"), 10);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight() + FormWindowTop + 12", "y"), 12);
 });
 
 test("maps displayed layout values back to unscaled code values", () => {

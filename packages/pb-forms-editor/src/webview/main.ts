@@ -121,7 +121,6 @@ import {
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
   canEditGadgetColors,
-  canEditGadgetHorizontalLocks,
   canInspectGadgetColumns,
   canInspectGadgetItems,
   getCustomGadgetHelpDisplay,
@@ -162,6 +161,7 @@ import {
   getLayoutDpiScale,
   getStableDisplayedLayoutValue,
   isLayoutDpiScalingActive,
+  parseDesignerLayoutRaw,
   parseUnscaledLayoutRaw,
   unscaleDisplayedLayoutValue
 } from "../core/utils/layout-dpi";
@@ -379,7 +379,7 @@ type ExtensionToWebviewMessage =
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
@@ -399,7 +399,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; yRaw?: string; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -1217,10 +1217,17 @@ function storeLayoutDisplayOverride(targetKind: "window" | "gadget", targetId: s
   layoutDisplayOverrides.set(getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed), Math.trunc(displayValue));
 }
 
+function parseDisplayedLayoutFieldRaw(raw: string | undefined, field: LayoutDisplayField): number | undefined {
+  if (field === "x" || field === "y" || field === "w" || field === "h") {
+    return parseDesignerLayoutRaw(raw, field);
+  }
+  return parseUnscaledLayoutRaw(raw);
+}
+
 function resolveDisplayedLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number): number {
   const trimmed = raw?.trim();
   const scale = getActiveLayoutDpiScale();
-  const parsed = parseUnscaledLayoutRaw(trimmed);
+  const parsed = parseDisplayedLayoutFieldRaw(trimmed, field);
   if (parsed === undefined) {
     return Math.trunc(fallbackValue);
   }
@@ -1261,7 +1268,7 @@ function syncGadgetDisplayLayout(g: Gadget): void {
 function resolveDisplayedOptionalLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number | undefined): number | undefined {
   const trimmed = raw?.trim();
   const scale = getActiveLayoutDpiScale();
-  const parsed = parseUnscaledLayoutRaw(trimmed);
+  const parsed = parseDisplayedLayoutFieldRaw(trimmed, field);
   if (parsed === undefined) {
     const fallback = typeof fallbackValue === "number" && Number.isFinite(fallbackValue) ? fallbackValue : undefined;
     return fallback === undefined ? undefined : Math.trunc(fallback);
@@ -2027,20 +2034,31 @@ function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructive
   };
 }
 
+function buildTopLevelWindowGadgetYRaw(unscaledY: number, parentId?: string): string {
+  const baseRaw = String(Math.trunc(unscaledY));
+  if (parentId) return baseRaw;
+  if (resolvePbFormSkinPlatform() !== "windows") return baseRaw;
+  const toolbarCount = model.toolbars?.length ?? 0;
+  if (toolbarCount <= 0) return baseRaw;
+  return `ToolBarHeight(${toolbarCount - 1}) + ${baseRaw}`;
+}
+
 function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
   const committed = commitDisplayedLayoutPoint(x, y, getActiveLayoutDpiScale());
+  const yRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, parentId);
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
     storeLayoutDisplayOverride("gadget", predictedId, "x", committed.x, committed.xRaw);
-    storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, committed.yRaw);
+    storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, yRaw);
   }
   post({
     type: "insertGadget",
     kind,
     x: committed.xUnscaled,
     y: committed.yUnscaled,
+    yRaw,
     parentId,
     parentItem,
     gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
@@ -3204,19 +3222,20 @@ function snapValue(v: number, gridSize: number): number {
 function postGadgetRect(g: Gadget) {
   normalizeRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
   const committed = commitDisplayedLayoutRect(g.x, g.y, g.w, g.h, getActiveLayoutDpiScale());
+  const nextYRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, g.parentId);
   g.x = committed.x;
   g.y = committed.y;
   g.w = committed.w;
   g.h = committed.h;
   g.xRaw = committed.xRaw;
-  g.yRaw = committed.yRaw;
+  g.yRaw = nextYRaw;
   g.wRaw = committed.wRaw;
   g.hRaw = committed.hRaw;
   storeLayoutDisplayOverride("gadget", g.id, "x", g.x, g.xRaw);
   storeLayoutDisplayOverride("gadget", g.id, "y", g.y, g.yRaw);
   storeLayoutDisplayOverride("gadget", g.id, "w", g.w, g.wRaw);
   storeLayoutDisplayOverride("gadget", g.id, "h", g.h, g.hRaw);
-  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled });
+  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled, yRaw: nextYRaw });
 }
 
 function postWindowRect() {
@@ -3318,7 +3337,9 @@ function getWindowResizeLockContext() {
   if (!model.window) return undefined;
   return {
     w: model.window.w,
+    wRaw: model.window.wRaw,
     h: model.window.h,
+    hRaw: model.window.hRaw,
     menuCount: model.menus?.length ?? 0,
     toolbarCount: model.toolbars?.length ?? 0,
     statusBarCount: model.statusbars?.length ?? 0,
@@ -11448,24 +11469,29 @@ function renderProps() {
     )
   );
   const resizeCtx = getWindowResizeLockContext();
-  const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, resizeCtx);
+  const horizontalLockLeftToggle = resizeCtx
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockLeft), Boolean(g.lockRight))
+    : undefined;
+  const horizontalLockRightToggle = resizeCtx
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, Boolean(g.lockLeft), !Boolean(g.lockRight))
+    : undefined;
   const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockTop), Boolean(g.lockBottom));
   const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, Boolean(g.lockTop), !Boolean(g.lockBottom));
   propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
   }, {
-    disabled: !canEditHorizontalLocks,
-    title: canEditHorizontalLocks
+    disabled: !horizontalLockLeftToggle,
+    title: horizontalLockLeftToggle
       ? "Keep the gadget anchored to the left when the window is resized."
-      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
     applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
   }, {
-    disabled: !canEditHorizontalLocks,
-    title: canEditHorizontalLocks
+    disabled: !horizontalLockRightToggle,
+    title: horizontalLockRightToggle
       ? "Keep the gadget anchored to the right when the window is resized."
-      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
     applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
@@ -11483,7 +11509,7 @@ function renderProps() {
       ? "Keep the gadget anchored to the bottom when the window is resized."
       : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
-  propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
+  propsEl.appendChild(mutedNote(horizontalLockLeftToggle || horizontalLockRightToggle || verticalLockTopToggle || verticalLockBottomToggle
     ? "These lock options update an existing ResizeGadget(...) line for this gadget."
     : "Lock editing is available only when the existing ResizeGadget(...) setup can be updated safely."
   ));

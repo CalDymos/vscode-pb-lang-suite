@@ -415,7 +415,7 @@ test("preserves horizontal-only ResizeGadget emission when both vertical locks a
   });
 });
 
-test("derives the original top-level bottom-anchor formula from the preserved constructor y expression", () => {
+test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constructor Y expressions", () => {
   const update = buildGadgetVerticalLockResizeUpdate({
     x: 10,
     y: 10,
@@ -445,7 +445,7 @@ test("derives the original top-level bottom-anchor formula from the preserved co
 });
 
 
-test("rebuilds vertical anchor formulas from unscaled offsets even when the inspector shows scaled geometry", () => {
+test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constructor Y expressions even with DPI-scaled geometry", () => {
   const update = buildGadgetVerticalLockResizeUpdate({
     x: 13,
     y: 13,
@@ -465,6 +465,57 @@ test("rebuilds vertical anchor formulas from unscaled offsets even when the insp
     resizeWRaw: "80",
     resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
   }, { w: 426, h: 293, layoutDpiScale: 1.33 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("blocks horizontal lock synthesis when the constructor x expression cannot be resolved numerically", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 0,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "WindowWidth(0) - 80",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320, wRaw: "320" }, false, true);
+
+  assert.equal(update, undefined);
+});
+
+
+test("keeps bottom-anchor vertical resize synthesis editable for original toolbar constructor Y expressions", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 0,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 10",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "ToolBarHeight(0) + 10",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320, h: 220, hRaw: "220" }, false, true);
 
   assert.deepEqual(update, {
     xRaw: "10",

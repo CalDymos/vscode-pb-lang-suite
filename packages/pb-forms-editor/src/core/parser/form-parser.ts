@@ -28,6 +28,7 @@ import {
 } from "../model";
 
 import { canHostInsertedGadgets } from "../gadget/insert";
+import { parseDesignerLayoutRaw } from "../utils/layout-dpi";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 
@@ -1780,10 +1781,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const wRaw = (p[3] ?? "").trim();
   const hRaw = (p[4] ?? "").trim();
 
-  const x = asNumber(xRaw) ?? 0;
-  const y = asNumber(yRaw) ?? 0;
-  const w = asNumber(wRaw) ?? 0;
-  const h = asNumber(hRaw) ?? 0;
+  const x = parseDesignerLayoutRaw(xRaw, "x") ?? asNumber(xRaw) ?? 0;
+  const y = parseDesignerLayoutRaw(yRaw, "y") ?? asNumber(yRaw) ?? 0;
+  const w = parseDesignerLayoutRaw(wRaw, "w") ?? asNumber(wRaw) ?? 0;
+  const h = parseDesignerLayoutRaw(hRaw, "h") ?? asNumber(hRaw) ?? 0;
 
   const ctor = parseGadgetConstructorDetails(kind, p);
   const literalText = unquoteString(ctor.textRaw ?? "");

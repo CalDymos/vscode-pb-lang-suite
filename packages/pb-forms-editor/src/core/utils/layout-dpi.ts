@@ -43,6 +43,37 @@ function isIntegerLiteral(raw: string | undefined): raw is string {
   return /^-?\d+$/.test((raw ?? "").trim());
 }
 
+export type DesignerLayoutNumericField = "x" | "y" | "w" | "h" | "min" | "max" | "state";
+
+const TOP_LEVEL_Y_ZERO_TERM_RE = /(?:MenuHeight\(\)|FormWindowTop|ToolBarHeight\(\s*\d+\s*\)|StatusBarHeight\(\s*\d+\s*\))/gi;
+const HEIGHT_REFERENCE_RE = /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i;
+
+function parseTrailingExpressionInteger(raw: string): number | undefined {
+  const matches = [...raw.matchAll(/-?\d+/g)];
+  const last = matches.length ? matches[matches.length - 1]?.[0] : undefined;
+  if (!last) return undefined;
+  return Number(last);
+}
+
+export function parseDesignerLayoutRaw(raw: string | undefined, field: DesignerLayoutNumericField): number | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return undefined;
+
+  const direct = parseUnscaledLayoutRaw(trimmed);
+  if (typeof direct === "number") return direct;
+
+  if (field === "y") {
+    const stripped = trimmed.replace(TOP_LEVEL_Y_ZERO_TERM_RE, "").replace(/\+/g, "").trim();
+    const additive = parseUnscaledLayoutRaw(stripped);
+    if (typeof additive === "number") return additive;
+    if (HEIGHT_REFERENCE_RE.test(stripped)) {
+      return parseTrailingExpressionInteger(stripped);
+    }
+  }
+
+  return undefined;
+}
+
 export function parseUnscaledLayoutRaw(raw: string | undefined): number | undefined {
   const trimmed = raw?.trim();
   if (!isIntegerLiteral(trimmed)) return undefined;

@@ -116,6 +116,44 @@ EndProcedure
   assert.equal(gadget?.h, 25);
 });
 
+
+test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, 80, 24, "Apply")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyRectPatch(document, "#BtnApply", 10, 15, 90, 28, undefined, { yRaw: "ToolBarHeight(0) + 15" })
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#BtnApply, 10, ToolBarHeight\(0\) \+ 15, 90, 28, "Apply"\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 15");
+  assert.equal(gadget?.y, 15);
+});
+
+test("inserts a new top-level Windows toolbar gadget with the original toolbar Y padding expression", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  CreateToolBar(0, WindowID(#FrmMain))
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "ButtonGadget", 12, 10, undefined, undefined, undefined, undefined, undefined, "ToolBarHeight(0) + 10")
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#Button_0, 12, ToolBarHeight\(0\) \+ 10, 100, 25, ""\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Button_0");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 10");
+  assert.equal(gadget?.y, 10);
+});
+
 test("inserts a new panel child into the active panel item", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow

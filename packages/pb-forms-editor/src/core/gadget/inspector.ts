@@ -1,6 +1,6 @@
 import { GADGET_KIND } from "../model";
 import { quotePbString, unquoteString } from "../parser/tokenizer";
-import { parseUnscaledLayoutRaw, unscaleDisplayedLayoutValue } from "../utils/layout-dpi";
+import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, unscaleDisplayedLayoutValue, type DesignerLayoutNumericField } from "../utils/layout-dpi";
 
 export type GadgetTextLike = {
   textRaw?: string;
@@ -74,7 +74,9 @@ export type PbFormSkinLike = "windows" | "linux" | "macos";
 
 export type WindowResizeLockLike = {
   w: number;
+  wRaw?: string;
   h?: number;
+  hRaw?: string;
   menuCount?: number;
   toolbarCount?: number;
   statusBarCount?: number;
@@ -324,8 +326,8 @@ function getTopLevelStretchHeightDynamicParts(win: WindowResizeLockLike): string
 function buildTopLevelStretchHeightRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
   const skin = win.platformSkin;
   const scale = getResizeLockLayoutScale(win);
-  const winH = resolveUnscaledLayoutNumber(undefined, win.h, scale);
-  const gadgetH = resolveUnscaledLayoutNumber(gadget.hRaw, gadget.h, scale);
+  const winH = resolveUnscaledLayoutNumber(win.hRaw, win.h, scale, "h", { allowExpressionFallback: false });
+  const gadgetH = resolveUnscaledLayoutNumber(gadget.hRaw, gadget.h, scale, "h", { allowExpressionFallback: false });
   if (!skin || typeof winH !== 'number' || !Number.isFinite(winH) || winH <= 0 || typeof gadgetH !== 'number' || !Number.isFinite(gadgetH)) {
     return undefined;
   }
@@ -375,32 +377,44 @@ function getResizeLockLayoutScale(win: WindowResizeLockLike | undefined): number
   return typeof scale === "number" && Number.isFinite(scale) && scale > 0 ? scale : 1;
 }
 
-function resolveUnscaledLayoutNumber(raw: string | undefined, displayValue: number | undefined, scale: number): number | undefined {
-  const parsed = parseUnscaledLayoutRaw(raw);
+function hasExplicitNonNumericLayoutRaw(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  return Boolean(trimmed?.length) && parseUnscaledLayoutRaw(trimmed) === undefined;
+}
+
+function resolveUnscaledLayoutNumber(
+  raw: string | undefined,
+  displayValue: number | undefined,
+  scale: number,
+  field: DesignerLayoutNumericField,
+  options?: { allowExpressionFallback?: boolean }
+): number | undefined {
+  const parsed = parseDesignerLayoutRaw(raw, field);
   if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  if (options?.allowExpressionFallback === false && hasExplicitNonNumericLayoutRaw(raw)) return undefined;
   if (typeof displayValue !== "number" || !Number.isFinite(displayValue)) return undefined;
   return unscaleDisplayedLayoutValue(displayValue, scale);
 }
 
-function getBaseRectRaw(raw: string | undefined, fallback: number, scale = 1): string | undefined {
+function getBaseRectRaw(raw: string | undefined, fallback: number, field: DesignerLayoutNumericField, scale = 1): string | undefined {
   const trimmed = raw?.trim();
   if (trimmed?.length) return trimmed;
-  const unscaled = resolveUnscaledLayoutNumber(undefined, fallback, scale);
+  const unscaled = resolveUnscaledLayoutNumber(undefined, fallback, scale, field);
   return typeof unscaled === "number" && Number.isFinite(unscaled) ? String(Math.trunc(unscaled)) : undefined;
 }
 
 function buildTopLevelRightAnchorXRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
   const scale = getResizeLockLayoutScale(win);
-  const gadgetX = resolveUnscaledLayoutNumber(gadget.xRaw, gadget.x, scale);
-  const winW = resolveUnscaledLayoutNumber(undefined, win.w, scale);
+  const gadgetX = resolveUnscaledLayoutNumber(gadget.xRaw, gadget.x, scale, "x", { allowExpressionFallback: false });
+  const winW = resolveUnscaledLayoutNumber(win.wRaw, win.w, scale, "w", { allowExpressionFallback: false });
   if (typeof gadgetX !== "number" || typeof winW !== "number") return undefined;
   return `FormWindowWidth - ${Math.trunc(winW - gadgetX)}`;
 }
 
 function buildTopLevelStretchWidthRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
   const scale = getResizeLockLayoutScale(win);
-  const gadgetW = resolveUnscaledLayoutNumber(gadget.wRaw, gadget.w, scale);
-  const winW = resolveUnscaledLayoutNumber(undefined, win.w, scale);
+  const gadgetW = resolveUnscaledLayoutNumber(gadget.wRaw, gadget.w, scale, "w", { allowExpressionFallback: false });
+  const winW = resolveUnscaledLayoutNumber(win.wRaw, win.w, scale, "w", { allowExpressionFallback: false });
   if (typeof gadgetW !== "number" || typeof winW !== "number") return undefined;
   return `FormWindowWidth - ${Math.trunc(winW - gadgetW)}`;
 }
@@ -409,11 +423,11 @@ function buildCurrentVerticalResizeArgs(gadget: GadgetResizeLockLike, scale = 1)
   const lockTop = gadget.lockTop !== false;
   const lockBottom = gadget.lockBottom === true;
   const yRaw = lockTop
-    ? getBaseRectRaw(gadget.yRaw, gadget.y, scale)
+    ? getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale)
     : gadget.resizeYRaw?.trim();
   const hRaw = lockTop && lockBottom
     ? gadget.resizeHRaw?.trim()
-    : getBaseRectRaw(gadget.hRaw, gadget.h, scale);
+    : getBaseRectRaw(gadget.hRaw, gadget.h, "h", scale);
 
   if (!yRaw || !hRaw) return undefined;
   return { yRaw, hRaw };
@@ -423,11 +437,11 @@ function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike, scale = 
   const lockLeft = gadget.lockLeft !== false;
   const lockRight = gadget.lockRight === true;
   const xRaw = lockLeft
-    ? getBaseRectRaw(gadget.xRaw, gadget.x, scale)
+    ? getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale)
     : gadget.resizeXRaw?.trim();
   const wRaw = lockLeft && lockRight
     ? gadget.resizeWRaw?.trim()
-    : getBaseRectRaw(gadget.wRaw, gadget.w, scale);
+    : getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
 
   if (!xRaw || !wRaw) return undefined;
   return { xRaw, wRaw };
@@ -435,10 +449,10 @@ function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike, scale = 
 
 function buildTopLevelBottomAnchorYRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
   const scale = getResizeLockLayoutScale(win);
-  const winH = resolveUnscaledLayoutNumber(undefined, win.h, scale);
-  const gadgetY = resolveUnscaledLayoutNumber(gadget.yRaw, gadget.y, scale);
+  const winH = resolveUnscaledLayoutNumber(win.hRaw, win.h, scale, "h", { allowExpressionFallback: false });
+  const gadgetY = resolveUnscaledLayoutNumber(gadget.yRaw, gadget.y, scale, "y", { allowExpressionFallback: false });
   if (typeof gadgetY !== "number" || typeof winH !== "number" || !Number.isFinite(winH) || winH <= 0) return undefined;
-  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, scale);
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale);
   if (!baseYRaw) return undefined;
 
   const trimmed = baseYRaw.trim();
@@ -469,8 +483,8 @@ export function canEditGadgetHorizontalLocks(gadget: GadgetResizeLockLike, win: 
   if (!Number.isFinite(win.w) || win.w <= 0) return false;
   if (!Number.isFinite(gadget.x) || !Number.isFinite(gadget.w)) return false;
   const scale = getResizeLockLayoutScale(win);
-  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, scale);
-  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, scale);
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
   if (!baseXRaw || !baseWRaw) return false;
   const verticalArgs = buildCurrentVerticalResizeArgs(gadget, scale);
   if (!verticalArgs) return false;
@@ -492,8 +506,8 @@ export function buildGadgetHorizontalLockResizeUpdate(
   }
 
   const scale = getResizeLockLayoutScale(win);
-  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, scale);
-  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, scale);
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
   const verticalArgs = buildCurrentVerticalResizeArgs(gadget, scale);
   if (!baseXRaw || !baseWRaw || !verticalArgs?.yRaw || !verticalArgs.hRaw) return undefined;
 
@@ -533,8 +547,8 @@ export function buildGadgetVerticalLockResizeUpdate(
 
   const scale = getResizeLockLayoutScale(win);
   const horizontalArgs = buildCurrentHorizontalResizeArgs(gadget, scale);
-  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, scale);
-  const baseHRaw = getBaseRectRaw(gadget.hRaw, gadget.h, scale);
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale);
+  const baseHRaw = getBaseRectRaw(gadget.hRaw, gadget.h, "h", scale);
   if (!horizontalArgs?.xRaw || !horizontalArgs.wRaw || !baseYRaw || !baseHRaw) return undefined;
 
   const bottomAnchorYRaw = usesHeightResizeReference(gadget.resizeYRaw)

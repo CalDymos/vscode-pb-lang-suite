@@ -1063,7 +1063,7 @@ EndProcedure
   assert.equal(gadget?.wRaw, "FormWindowWidth - 40");
   assert.equal(gadget?.hRaw, "25");
   assert.equal(gadget?.x, 10);
-  assert.equal(gadget?.y, 0);
+  assert.equal(gadget?.y, 10);
   assert.equal(gadget?.w, 0);
   assert.equal(gadget?.h, 25);
 });
