@@ -4374,7 +4374,7 @@ function getGadgetPreviewLayout(
           : splitterLayout.rect;
       rect = paneRect;
       clip = intersectRect(splitterLayout.clip, paneRect);
-      visible = splitterLayout.visible && clip.w > 0 && clip.h > 0;
+      visible = splitterLayout.visible && clip.w > 0 && clip.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
     }
   } else if (g.parentId) {
     const parent = getGadgetById(g.parentId);
@@ -4389,7 +4389,7 @@ function getGadgetPreviewLayout(
         localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
       }
       rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
-      visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
+      visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip) && !isGadgetHiddenInDesignerPreview(g.hidden);
 
       if (parent.kind === GADGET_KIND.PanelGadget && typeof g.parentItem === "number") {
         visible = visible && g.parentItem === getPanelActiveItem(parent);
@@ -4398,7 +4398,7 @@ function getGadgetPreviewLayout(
   } else {
     rect = { x: windowContentRect.x + g.x, y: windowContentRect.y + g.y, w: g.w, h: g.h };
     clip = intersectRect(windowContentRect, rect);
-    visible = clip.w > 0 && clip.h > 0;
+    visible = clip.w > 0 && clip.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
   }
 
   const layout: GadgetPreviewLayout = { rect, clip, visible };
