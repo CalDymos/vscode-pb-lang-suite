@@ -15,13 +15,20 @@ import {
   canInspectGadgetItems,
   getGadgetCtorRangeFieldLabels,
   getCustomGadgetHelpDisplay,
+  getGadgetBooleanInspectorState,
   getGadgetCaptionFieldConfig,
+  isGadgetDisabledInDesignerPreview,
+  isGadgetHiddenInDesignerPreview,
   getGadgetCurrentImageDisplay,
+  getGadgetKnownFlags,
   getGadgetCtorRangeInspectorValue,
+  isDpiScaledGadgetCtorRange,
+  isDpiScaledGadgetState,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
   getGadgetTooltipInspectorValue,
+  buildGadgetFlagsExpr,
   shouldShowGadgetParentDetail,
   shouldShowGadgetTabDetail
 } from "../src/core/gadget/inspector";
@@ -58,6 +65,24 @@ test("marks only original listicon gadgets for inspector column sections", () =>
   assert.equal(canInspectGadgetColumns("TreeGadget"), false);
 });
 
+test("returns original gadget constant lists from declare.pb order", () => {
+  assert.deepEqual(getGadgetKnownFlags("ImageGadget"), ["#PB_Image_Border", "#PB_Image_Raised"]);
+  assert.deepEqual(getGadgetKnownFlags("SplitterGadget"), ["#PB_Splitter_Vertical", "#PB_Splitter_Separator", "#PB_Splitter_FirstFixed", "#PB_Splitter_SecondFixed"]);
+  assert.deepEqual(getGadgetKnownFlags("OptionGadget"), []);
+});
+
+test("rebuilds gadget flag expressions in original constant order while preserving custom tails", () => {
+  assert.equal(
+    buildGadgetFlagsExpr("StringGadget", ["#PB_String_ReadOnly", "#PB_String_Numeric"], "#PB_String_UpperCase | MyCustomFlag"),
+    "#PB_String_Numeric | #PB_String_ReadOnly | MyCustomFlag"
+  );
+  assert.equal(
+    buildGadgetFlagsExpr("ImageGadget", ["#PB_Image_Raised"], undefined),
+    "#PB_Image_Raised"
+  );
+  assert.equal(buildGadgetFlagsExpr("OptionGadget", [], undefined), undefined);
+});
+
 test("marks original checkbox/option gadget kinds as checked-state editable", () => {
   assert.equal(canEditGadgetCheckedState("CheckBoxGadget"), true);
   assert.equal(canEditGadgetCheckedState("OptionGadget"), true);
@@ -83,6 +108,26 @@ test("builds gadget tooltip raw values for literal, variable and cleared modes w
   assert.equal(buildGadgetTooltipRaw("Tooltip$", true), "Tooltip$");
   assert.equal(buildGadgetTooltipRaw("", false), undefined);
   assert.equal(buildGadgetTooltipRaw("  Tooltip$  ", true), "  Tooltip$  ");
+});
+
+test("prefers parsed gadget hidden/disabled booleans and treats raw 0 as unchecked", () => {
+  assert.equal(getGadgetBooleanInspectorState(undefined, true), true);
+  assert.equal(getGadgetBooleanInspectorState("0", undefined), false);
+  assert.equal(getGadgetBooleanInspectorState("HideExpr()", undefined), true);
+  assert.equal(getGadgetBooleanInspectorState("DisableExpr()", undefined), true);
+  assert.equal(getGadgetBooleanInspectorState(undefined, false), false);
+});
+
+test("uses only parsed boolean gadget hidden state for the designer preview visibility path", () => {
+  assert.equal(isGadgetHiddenInDesignerPreview(true), true);
+  assert.equal(isGadgetHiddenInDesignerPreview(false), false);
+  assert.equal(isGadgetHiddenInDesignerPreview(undefined), false);
+});
+
+test("uses only parsed boolean gadget disabled state for the designer preview overlay path", () => {
+  assert.equal(isGadgetDisabledInDesignerPreview(true), true);
+  assert.equal(isGadgetDisabledInDesignerPreview(false), false);
+  assert.equal(isGadgetDisabledInDesignerPreview(undefined), false);
 });
 
 test("returns the original caption field behavior for Date, Scintilla, Editor and Canvas gadgets", () => {
@@ -166,6 +211,20 @@ test("resolves constructor-bound gadget field inspector values from raw or parse
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, 95), "95");
   assert.equal(getGadgetCtorRangeInspectorValue(undefined, undefined), "");
 });
+test("limits DPI-scaled constructor-range handling to ScrollArea inner dimensions", () => {
+  assert.equal(isDpiScaledGadgetCtorRange("ScrollAreaGadget"), true);
+  assert.equal(isDpiScaledGadgetCtorRange("ScrollBarGadget"), false);
+  assert.equal(isDpiScaledGadgetCtorRange("ProgressBarGadget"), false);
+  assert.equal(isDpiScaledGadgetCtorRange(undefined), false);
+});
+
+test("limits DPI-scaled gadget state handling to Splitter position values", () => {
+  assert.equal(isDpiScaledGadgetState("SplitterGadget"), true);
+  assert.equal(isDpiScaledGadgetState("ScrollAreaGadget"), false);
+  assert.equal(isDpiScaledGadgetState("CheckBoxGadget"), false);
+  assert.equal(isDpiScaledGadgetState(undefined), false);
+});
+
 
 test("prefers the parsed form image path for gadget CurrentImage display", () => {
   assert.equal(getGadgetCurrentImageDisplay({ imageRaw: "ImageID(#ImgOpen)" }, { image: "images/open.png" }), "images/open.png");
@@ -237,6 +296,62 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     lockTop: true,
     lockBottom: false
   }, { w: 320 }), false);
+
+  assert.equal(canEditGadgetHorizontalLocks({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }), true);
+
+  assert.equal(canEditGadgetHorizontalLocks({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }), true);
 });
 
 test("builds a horizontal resize update that matches the original right-anchor formulas", () => {
@@ -255,6 +370,107 @@ test("builds a horizontal resize update that matches the original right-anchor f
     lockTop: true,
     lockBottom: false
   }, { w: 320 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("builds parent-relative horizontal resize updates from original GadgetWidth parent formulas", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "GadgetWidth(#Container_0) - 210",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("builds panel-parent horizontal resize updates from original panel item width formulas", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, {
+    w: 320,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "GetGadgetAttribute(#Panel_0,#PB_Panel_ItemWidth) - 210",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("keeps horizontal right-anchor formulas unscaled when layout values are displayed with DPI scaling", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 13,
+    y: 27,
+    w: 106,
+    h: 32,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 426, layoutDpiScale: 1.33 }, false, true);
 
   assert.deepEqual(update, {
     xRaw: "FormWindowWidth - 310",
@@ -373,7 +589,7 @@ test("preserves horizontal-only ResizeGadget emission when both vertical locks a
   });
 });
 
-test("derives the original top-level bottom-anchor formula from the preserved constructor y expression", () => {
+test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constructor Y expressions", () => {
   const update = buildGadgetVerticalLockResizeUpdate({
     x: 10,
     y: 10,
@@ -393,6 +609,210 @@ test("derives the original top-level bottom-anchor formula from the preserved co
     resizeWRaw: "80",
     resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
   }, { w: 320, h: 220 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("builds parent-relative vertical resize updates from original GadgetHeight parent formulas", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Container_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    parent: {
+      id: "Container_0",
+      kind: "ContainerGadget",
+      firstParam: "#Container_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "GadgetHeight(#Container_0) - 140",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("builds panel-parent vertical resize updates from original panel item height formulas", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    platformSkin: "windows",
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "GetGadgetAttribute(#Panel_0,#PB_Panel_ItemHeight) - 118",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+test("keeps panel-parent vertical resize editing blocked when the host skin is unknown", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    parentId: "Panel_0",
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "20",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, {
+    w: 320,
+    h: 220,
+    parent: {
+      id: "Panel_0",
+      kind: "PanelGadget",
+      firstParam: "#Panel_0",
+      w: 220,
+      wRaw: "220",
+      h: 160,
+      hRaw: "160"
+    }
+  }, false, true);
+
+  assert.equal(update, undefined);
+});
+
+
+test("rebuilds bottom-anchor lock editing from original toolbar/statusbar constructor Y expressions even with DPI-scaled geometry", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 13,
+    y: 13,
+    w: 106,
+    h: 32,
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 10",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: true,
+    resizeXRaw: "10",
+    resizeYRaw: "ToolBarHeight(0) + 10",
+    resizeWRaw: "80",
+    resizeHRaw: "FormWindowHeight - StatusBarHeight(0) - ToolBarHeight(0) - 120"
+  }, { w: 426, h: 293, layoutDpiScale: 1.33 }, false, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    wRaw: "80",
+    hRaw: "24"
+  });
+});
+
+
+test("blocks horizontal lock synthesis when the constructor x expression is not one of the original width reference forms", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 0,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "HostWidth() - 80",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320, wRaw: "320" }, false, true);
+
+  assert.equal(update, undefined);
+});
+
+
+test("keeps bottom-anchor vertical resize synthesis editable for original toolbar constructor Y expressions", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 0,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "ToolBarHeight(0) + 10",
+    wRaw: "80",
+    hRaw: "24",
+    resizeSource: { line: 12 },
+    lockLeft: true,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false,
+    resizeXRaw: "10",
+    resizeYRaw: "ToolBarHeight(0) + 10",
+    resizeWRaw: "80",
+    resizeHRaw: "24"
+  }, { w: 320, h: 220, hRaw: "220" }, false, true);
 
   assert.deepEqual(update, {
     xRaw: "10",

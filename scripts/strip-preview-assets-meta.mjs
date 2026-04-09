@@ -34,7 +34,7 @@ import { resolve } from "node:path";
 // ── Configuration ──────────────────────────────────────────────────────────
 
 const DEFAULT_TARGET = resolve(
-  "packages/pb-forms-editor/src/webview/preview-assets.ts"
+  "packages/pb-forms-editor/src/core/preview/assets.ts"
 );
 
 /** Chunk types whose sole purpose is metadata — safe to remove. */

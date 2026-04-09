@@ -1456,7 +1456,14 @@ test("roundtrips splitter state update via SetGadgetState", () => {
 
 test("roundtrips gadget property update removing managed property lines", () => {
   const { text } = parseGadgetFixture();
-  const args: GadgetPropertyArgs = {};
+  const args: GadgetPropertyArgs = {
+    hiddenRaw: undefined,
+    disabledRaw: undefined,
+    tooltipRaw: undefined,
+    frontColorRaw: undefined,
+    backColorRaw: undefined,
+    gadgetFontRaw: undefined,
+  };
 
   const { parsed, patchedText } = patchAndReparse(text, (document) =>
     applyGadgetPropertyUpdate(document, "#TxtName", args)

@@ -1,5 +1,6 @@
 import { GADGET_KIND } from "../model";
 import { quotePbString, unquoteString } from "../parser/tokenizer";
+import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, unscaleDisplayedLayoutValue, type DesignerLayoutNumericField } from "../utils/layout-dpi";
 
 export type GadgetTextLike = {
   textRaw?: string;
@@ -73,11 +74,27 @@ export type PbFormSkinLike = "windows" | "linux" | "macos";
 
 export type WindowResizeLockLike = {
   w: number;
+  wRaw?: string;
   h?: number;
+  hRaw?: string;
   menuCount?: number;
   toolbarCount?: number;
   statusBarCount?: number;
   platformSkin?: PbFormSkinLike;
+  layoutDpiScale?: number;
+  parent?: ParentResizeLockLike;
+};
+
+export type ParentResizeLockLike = {
+  id: string;
+  kind: string;
+  pbAny?: boolean;
+  variable?: string;
+  firstParam?: string;
+  w: number;
+  wRaw?: string;
+  h: number;
+  hRaw?: string;
 };
 
 export type GadgetResizeRawUpdate = {
@@ -163,11 +180,81 @@ const GADGET_COLUMN_EDITOR_CAPABLE_KINDS: ReadonlySet<string> = new Set([
   GADGET_KIND.ListIconGadget
 ]);
 
+const GADGET_KNOWN_FLAGS: ReadonlyMap<string, readonly string[]> = new Map([
+  [GADGET_KIND.ButtonGadget, ["#PB_Button_Right", "#PB_Button_Left", "#PB_Button_Default", "#PB_Button_MultiLine", "#PB_Button_Toggle"]],
+  [GADGET_KIND.ButtonImageGadget, ["#PB_Button_Toggle"]],
+  [GADGET_KIND.CalendarGadget, ["#PB_Calendar_Borderless"]],
+  [GADGET_KIND.CanvasGadget, ["#PB_Canvas_Border", "#PB_Canvas_ClipMouse", "#PB_Canvas_Keyboard", "#PB_Canvas_DrawFocus"]],
+  [GADGET_KIND.CheckBoxGadget, ["#PB_CheckBox_Right", "#PB_CheckBox_Center", "#PB_CheckBox_ThreeState"]],
+  [GADGET_KIND.ComboBoxGadget, ["#PB_ComboBox_Editable", "#PB_ComboBox_LowerCase", "#PB_ComboBox_UpperCase", "#PB_ComboBox_Image"]],
+  [GADGET_KIND.ContainerGadget, ["#PB_Container_BorderLess", "#PB_Container_Flat", "#PB_Container_Raised", "#PB_Container_Single", "#PB_Container_Double"]],
+  [GADGET_KIND.DateGadget, ["#PB_Date_UpDown", "#PB_Date_CheckBox"]],
+  [GADGET_KIND.EditorGadget, ["#PB_Editor_ReadOnly", "#PB_Editor_WordWrap", "#PB_Editor_TabNavigation"]],
+  [GADGET_KIND.ExplorerComboGadget, ["#PB_Explorer_DrivesOnly", "#PB_Explorer_Editable", "#PB_Explorer_NoMyDocuments"]],
+  [GADGET_KIND.ExplorerListGadget, ["#PB_Explorer_NoMyDocuments", "#PB_Explorer_BorderLess", "#PB_Explorer_AlwaysShowSelection", "#PB_Explorer_MultiSelect", "#PB_Explorer_GridLines", "#PB_Explorer_HeaderDragDrop", "#PB_Explorer_FullRowSelect", "#PB_Explorer_NoFiles", "#PB_Explorer_NoFolders", "#PB_Explorer_NoParentFolder", "#PB_Explorer_NoDirectoryChange", "#PB_Explorer_NoDriveRequester", "#PB_Explorer_NoSort", "#PB_Explorer_AutoSort", "#PB_Explorer_HiddenFiles"]],
+  [GADGET_KIND.ExplorerTreeGadget, ["#PB_Explorer_BorderLess", "#PB_Explorer_AlwaysShowSelection", "#PB_Explorer_NoLines", "#PB_Explorer_NoButtons", "#PB_Explorer_NoFiles", "#PB_Explorer_NoDriveRequester", "#PB_Explorer_NoMyDocuments", "#PB_Explorer_AutoSort"]],
+  [GADGET_KIND.FrameGadget, ["#PB_Frame_Single", "#PB_Frame_Double", "#PB_Frame_Flat", "#PB_Frame_Container"]],
+  [GADGET_KIND.HyperLinkGadget, ["#PB_HyperLink_Underline"]],
+  [GADGET_KIND.ImageGadget, ["#PB_Image_Border", "#PB_Image_Raised"]],
+  [GADGET_KIND.ListIconGadget, ["#PB_ListIcon_CheckBoxes", "#PB_ListIcon_ThreeState", "#PB_ListIcon_MultiSelect", "#PB_ListIcon_GridLines", "#PB_ListIcon_FullRowSelect", "#PB_ListIcon_HeaderDragDrop", "#PB_ListIcon_AlwaysShowSelection", "#PB_ListIcon_LargeIcon", "#PB_ListIcon_SmallIcon", "#PB_ListIcon_List", "#PB_ListIcon_Report"]],
+  [GADGET_KIND.ListViewGadget, ["#PB_ListView_MultiSelect", "#PB_ListView_ClickSelect"]],
+  [GADGET_KIND.OpenGLGadget, ["#PB_OpenGL_Keyboard", "#PB_OpenGL_NoFlipSynchronization", "#PB_OpenGL_FlipSynchronization", "#PB_OpenGL_NoDepthBuffer", "#PB_OpenGL_16BitDepthBuffer", "#PB_OpenGL_24BitDepthBuffer", "#PB_OpenGL_NoStencilBuffer", "#PB_OpenGL_8BitStencilBuffer", "#PB_OpenGL_NoAccumulationBuffer", "#PB_OpenGL_32BitAccumulationBuffer", "#PB_OpenGL_64BitAccumulationBuffer"]],
+  [GADGET_KIND.ProgressBarGadget, ["#PB_ProgressBar_Smooth", "#PB_ProgressBar_Vertical"]],
+  [GADGET_KIND.ScrollAreaGadget, ["#PB_ScrollArea_Flat", "#PB_ScrollArea_Raised", "#PB_ScrollArea_Single", "#PB_ScrollArea_BorderLess", "#PB_ScrollArea_Center"]],
+  [GADGET_KIND.ScrollBarGadget, ["#PB_ScrollBar_Vertical"]],
+  [GADGET_KIND.SpinGadget, ["#PB_Spin_ReadOnly", "#PB_Spin_Numeric"]],
+  [GADGET_KIND.SplitterGadget, ["#PB_Splitter_Vertical", "#PB_Splitter_Separator", "#PB_Splitter_FirstFixed", "#PB_Splitter_SecondFixed"]],
+  [GADGET_KIND.StringGadget, ["#PB_String_Numeric", "#PB_String_Password", "#PB_String_ReadOnly", "#PB_String_LowerCase", "#PB_String_UpperCase", "#PB_String_BorderLess"]],
+  [GADGET_KIND.TextGadget, ["#PB_Text_Center", "#PB_Text_Right", "#PB_Text_Border"]],
+  [GADGET_KIND.TrackBarGadget, ["#PB_TrackBar_Ticks", "#PB_TrackBar_Vertical"]],
+  [GADGET_KIND.TreeGadget, ["#PB_Tree_AlwaysShowSelection", "#PB_Tree_NoLines", "#PB_Tree_NoButtons", "#PB_Tree_CheckBoxes", "#PB_Tree_ThreeState"]],
+  [GADGET_KIND.WebGadget, ["#PB_Web_Edge"]],
+  [GADGET_KIND.WebViewGadget, ["#PB_WebView_Debug"]],
+]);
+
+function splitGadgetFlags(flagsExpr: string | undefined): string[] {
+  if (!flagsExpr) return [];
+  return flagsExpr
+    .split("|")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function uniqueFlags(flags: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const flag of flags) {
+    if (out.includes(flag)) continue;
+    out.push(flag);
+  }
+  return out;
+}
+
 function buildInspectorValue(raw: string | undefined, fallback: string | undefined): string {
   const literal = raw ? unquoteString(raw) : undefined;
   if (literal !== undefined) return literal;
   if (typeof fallback === "string") return fallback;
   return raw?.trim() ?? "";
+}
+
+export function getGadgetBooleanInspectorState(raw: string | undefined, value: boolean | undefined): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed || trimmed === "0") {
+    return false;
+  }
+
+  return true;
+}
+
+export function isGadgetHiddenInDesignerPreview(value: boolean | undefined): boolean {
+  return value === true;
+}
+
+export function isGadgetDisabledInDesignerPreview(value: boolean | undefined): boolean {
+  return value === true;
 }
 
 export function canEditGadgetText(kind: string | undefined): boolean {
@@ -190,6 +277,24 @@ export function canInspectGadgetColumns(kind: string | undefined): boolean {
   return typeof kind === "string" && GADGET_COLUMN_EDITOR_CAPABLE_KINDS.has(kind);
 }
 
+export function getGadgetKnownFlags(kind: string | undefined): readonly string[] {
+  if (typeof kind !== "string") return [];
+  return GADGET_KNOWN_FLAGS.get(kind) ?? [];
+}
+
+export function buildGadgetFlagsExpr(
+  kind: string | undefined,
+  enabledKnownFlags: readonly string[],
+  currentFlagsExpr?: string
+): string | undefined {
+  const knownFlags = getGadgetKnownFlags(kind);
+  const knownFlagSet = new Set(knownFlags);
+  const orderedKnown = uniqueFlags(knownFlags).filter(flag => enabledKnownFlags.includes(flag));
+  const customFlags = uniqueFlags(splitGadgetFlags(currentFlagsExpr).filter(flag => !knownFlagSet.has(flag)));
+  const parts = [...orderedKnown, ...customFlags];
+  return parts.length ? parts.join(" | ") : undefined;
+}
+
 export function shouldShowGadgetParentDetail(gadget: GadgetInspectorDetailsLike): boolean {
   return typeof gadget.parentId === "string" && gadget.parentId.trim().length > 0;
 }
@@ -208,6 +313,13 @@ export function buildGadgetCheckedStateRaw(kind: string | undefined, checked: bo
 export function getGadgetCtorRangeFieldLabels(kind: string | undefined): GadgetCtorRangeFieldLabels | undefined {
   if (typeof kind !== "string") return undefined;
   return GADGET_CTOR_RANGE_FIELD_LABELS.get(kind);
+}
+export function isDpiScaledGadgetCtorRange(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.ScrollAreaGadget;
+}
+
+export function isDpiScaledGadgetState(kind: string | undefined): boolean {
+  return kind === GADGET_KIND.SplitterGadget;
 }
 
 export function getGadgetTextInspectorValue(gadget: GadgetTextLike): string {
@@ -314,8 +426,10 @@ function getTopLevelStretchHeightDynamicParts(win: WindowResizeLockLike): string
 
 function buildTopLevelStretchHeightRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
   const skin = win.platformSkin;
-  const winH = win.h;
-  if (!skin || typeof winH !== 'number' || !Number.isFinite(winH) || winH <= 0 || !Number.isFinite(gadget.h)) {
+  const scale = getResizeLockLayoutScale(win);
+  const winH = resolveUnscaledLayoutNumber(win.hRaw, win.h, scale, "h", { allowExpressionFallback: false });
+  const gadgetH = resolveUnscaledLayoutNumber(gadget.hRaw, gadget.h, scale, "h", { allowExpressionFallback: false });
+  if (!skin || typeof winH !== 'number' || !Number.isFinite(winH) || winH <= 0 || typeof gadgetH !== 'number' || !Number.isFinite(gadgetH)) {
     return undefined;
   }
 
@@ -325,7 +439,7 @@ function buildTopLevelStretchHeightRaw(gadget: GadgetResizeLockLike, win: Window
   const statusBarCount = win.statusBarCount ?? 0;
   const dynamicParts = getTopLevelStretchHeightDynamicParts(win);
 
-  let value = Math.trunc(winH - gadget.h);
+  let value = Math.trunc(winH - gadgetH);
   if (statusBarCount > 0) {
     value -= constants.statusHeight;
   }
@@ -359,58 +473,200 @@ function usesHeightResizeReference(raw: string | undefined): boolean {
   return /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i.test(trimmed);
 }
 
-function getBaseRectRaw(raw: string | undefined, fallback: number): string | undefined {
+function getResizeLockLayoutScale(win: WindowResizeLockLike | undefined): number {
+  const scale = win?.layoutDpiScale;
+  return typeof scale === "number" && Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+function getParentResizeReferenceRaw(parent: ParentResizeLockLike | undefined): string | undefined {
+  if (!parent) return undefined;
+  if (parent.pbAny) {
+    return parent.variable?.trim() || parent.id.trim();
+  }
+
+  const firstParam = parent.firstParam?.trim();
+  if (firstParam?.length) return firstParam;
+  const trimmedId = parent.id.trim();
+  if (!trimmedId.length) return undefined;
+  return trimmedId.startsWith("#") ? trimmedId : `#${trimmedId}`;
+}
+
+function resolvePanelHeaderHeight(skin: PbFormSkinLike | undefined): number | undefined {
+  switch (skin) {
+    case "macos":
+      return 31;
+    case "linux":
+      return 29;
+    case "windows":
+      return 22;
+    default:
+      return undefined;
+  }
+}
+
+function getParentWidthResizeReferenceRaw(parent: ParentResizeLockLike | undefined): string | undefined {
+  const parentRef = getParentResizeReferenceRaw(parent);
+  if (!parentRef) return undefined;
+  if (parent?.kind === GADGET_KIND.PanelGadget) {
+    return `GetGadgetAttribute(${parentRef},#PB_Panel_ItemWidth)`;
+  }
+  return `GadgetWidth(${parentRef})`;
+}
+
+function getParentHeightResizeReferenceRaw(parent: ParentResizeLockLike | undefined): string | undefined {
+  const parentRef = getParentResizeReferenceRaw(parent);
+  if (!parentRef) return undefined;
+  if (parent?.kind === GADGET_KIND.PanelGadget) {
+    return `GetGadgetAttribute(${parentRef},#PB_Panel_ItemHeight)`;
+  }
+  return `GadgetHeight(${parentRef})`;
+}
+
+function isSupportedParentResizeContext(parent: ParentResizeLockLike | undefined): boolean {
+  return Boolean(parent);
+}
+
+function resolveParentUnscaledLayoutNumber(
+  parent: ParentResizeLockLike | undefined,
+  field: "w" | "h",
+  scale: number,
+  skin?: PbFormSkinLike
+): number | undefined {
+  if (!parent) return undefined;
+  const resolved = field === "w"
+    ? resolveUnscaledLayoutNumber(parent.wRaw, parent.w, scale, "w", { allowExpressionFallback: false })
+    : resolveUnscaledLayoutNumber(parent.hRaw, parent.h, scale, "h", { allowExpressionFallback: false });
+  if (typeof resolved !== "number") return undefined;
+  if (field === "h" && parent.kind === GADGET_KIND.PanelGadget) {
+    const panelHeader = resolvePanelHeaderHeight(skin);
+    if (typeof panelHeader !== "number") return undefined;
+    return Math.max(0, Math.trunc(resolved - panelHeader));
+  }
+  return resolved;
+}
+
+function buildParentRightAnchorXRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
+  const gadgetX = resolveUnscaledLayoutNumber(gadget.xRaw, gadget.x, scale, "x", { allowExpressionFallback: false });
+  const parentW = resolveParentUnscaledLayoutNumber(parent, "w", scale);
+  const parentRef = getParentWidthResizeReferenceRaw(parent);
+  if (typeof gadgetX !== "number" || typeof parentW !== "number" || !parentRef) return undefined;
+  return `${parentRef} - ${Math.trunc(parentW - gadgetX)}`;
+}
+
+function buildParentStretchWidthRaw(gadget: GadgetResizeLockLike, parent: ParentResizeLockLike, scale: number): string | undefined {
+  const gadgetW = resolveUnscaledLayoutNumber(gadget.wRaw, gadget.w, scale, "w", { allowExpressionFallback: false });
+  const parentW = resolveParentUnscaledLayoutNumber(parent, "w", scale);
+  const parentRef = getParentWidthResizeReferenceRaw(parent);
+  if (typeof gadgetW !== "number" || typeof parentW !== "number" || !parentRef) return undefined;
+  return `${parentRef} - ${Math.trunc(parentW - gadgetW)}`;
+}
+
+function buildParentBottomAnchorYRaw(
+  gadget: GadgetResizeLockLike,
+  parent: ParentResizeLockLike,
+  scale: number,
+  skin?: PbFormSkinLike
+): string | undefined {
+  const gadgetY = resolveUnscaledLayoutNumber(gadget.yRaw, gadget.y, scale, "y", { allowExpressionFallback: false });
+  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale, skin);
+  const parentRef = getParentHeightResizeReferenceRaw(parent);
+  if (typeof gadgetY !== "number" || typeof parentH !== "number" || !parentRef) return undefined;
+  return `${parentRef} - ${Math.trunc(parentH - gadgetY)}`;
+}
+
+function buildParentStretchHeightRaw(
+  gadget: GadgetResizeLockLike,
+  parent: ParentResizeLockLike,
+  scale: number,
+  skin?: PbFormSkinLike
+): string | undefined {
+  const gadgetH = resolveUnscaledLayoutNumber(gadget.hRaw, gadget.h, scale, "h", { allowExpressionFallback: false });
+  const parentH = resolveParentUnscaledLayoutNumber(parent, "h", scale, skin);
+  const parentRef = getParentHeightResizeReferenceRaw(parent);
+  if (typeof gadgetH !== "number" || typeof parentH !== "number" || !parentRef) return undefined;
+  return `${parentRef} - ${Math.trunc(parentH - gadgetH)}`;
+}
+
+function hasExplicitNonNumericLayoutRaw(raw: string | undefined): boolean {
+  const trimmed = raw?.trim();
+  return Boolean(trimmed?.length) && parseUnscaledLayoutRaw(trimmed) === undefined;
+}
+
+function resolveUnscaledLayoutNumber(
+  raw: string | undefined,
+  displayValue: number | undefined,
+  scale: number,
+  field: DesignerLayoutNumericField,
+  options?: { allowExpressionFallback?: boolean }
+): number | undefined {
+  const parsed = parseDesignerLayoutRaw(raw, field);
+  if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  if (options?.allowExpressionFallback === false && hasExplicitNonNumericLayoutRaw(raw)) return undefined;
+  if (typeof displayValue !== "number" || !Number.isFinite(displayValue)) return undefined;
+  return unscaleDisplayedLayoutValue(displayValue, scale);
+}
+
+function getBaseRectRaw(raw: string | undefined, fallback: number, field: DesignerLayoutNumericField, scale = 1): string | undefined {
   const trimmed = raw?.trim();
   if (trimmed?.length) return trimmed;
-  return Number.isFinite(fallback) ? String(Math.trunc(fallback)) : undefined;
+  const unscaled = resolveUnscaledLayoutNumber(undefined, fallback, scale, field);
+  return typeof unscaled === "number" && Number.isFinite(unscaled) ? String(Math.trunc(unscaled)) : undefined;
 }
 
 function buildTopLevelRightAnchorXRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
-  if (!Number.isFinite(gadget.x) || !Number.isFinite(win.w)) return undefined;
-  return `FormWindowWidth - ${Math.trunc(win.w - gadget.x)}`;
+  const scale = getResizeLockLayoutScale(win);
+  const gadgetX = resolveUnscaledLayoutNumber(gadget.xRaw, gadget.x, scale, "x", { allowExpressionFallback: false });
+  const winW = resolveUnscaledLayoutNumber(win.wRaw, win.w, scale, "w", { allowExpressionFallback: false });
+  if (typeof gadgetX !== "number" || typeof winW !== "number") return undefined;
+  return `FormWindowWidth - ${Math.trunc(winW - gadgetX)}`;
 }
 
 function buildTopLevelStretchWidthRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
-  if (!Number.isFinite(gadget.w) || !Number.isFinite(win.w)) return undefined;
-  return `FormWindowWidth - ${Math.trunc(win.w - gadget.w)}`;
+  const scale = getResizeLockLayoutScale(win);
+  const gadgetW = resolveUnscaledLayoutNumber(gadget.wRaw, gadget.w, scale, "w", { allowExpressionFallback: false });
+  const winW = resolveUnscaledLayoutNumber(win.wRaw, win.w, scale, "w", { allowExpressionFallback: false });
+  if (typeof gadgetW !== "number" || typeof winW !== "number") return undefined;
+  return `FormWindowWidth - ${Math.trunc(winW - gadgetW)}`;
 }
 
-function buildCurrentVerticalResizeArgs(gadget: GadgetResizeLockLike): { yRaw?: string; hRaw?: string } | undefined {
+function buildCurrentVerticalResizeArgs(gadget: GadgetResizeLockLike, scale = 1): { yRaw?: string; hRaw?: string } | undefined {
   const lockTop = gadget.lockTop !== false;
   const lockBottom = gadget.lockBottom === true;
   const yRaw = lockTop
-    ? getBaseRectRaw(gadget.yRaw, gadget.y)
+    ? getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale)
     : gadget.resizeYRaw?.trim();
   const hRaw = lockTop && lockBottom
     ? gadget.resizeHRaw?.trim()
-    : getBaseRectRaw(gadget.hRaw, gadget.h);
+    : getBaseRectRaw(gadget.hRaw, gadget.h, "h", scale);
 
   if (!yRaw || !hRaw) return undefined;
   return { yRaw, hRaw };
 }
 
-function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike): { xRaw?: string; wRaw?: string } | undefined {
+function buildCurrentHorizontalResizeArgs(gadget: GadgetResizeLockLike, scale = 1): { xRaw?: string; wRaw?: string } | undefined {
   const lockLeft = gadget.lockLeft !== false;
   const lockRight = gadget.lockRight === true;
   const xRaw = lockLeft
-    ? getBaseRectRaw(gadget.xRaw, gadget.x)
+    ? getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale)
     : gadget.resizeXRaw?.trim();
   const wRaw = lockLeft && lockRight
     ? gadget.resizeWRaw?.trim()
-    : getBaseRectRaw(gadget.wRaw, gadget.w);
+    : getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
 
   if (!xRaw || !wRaw) return undefined;
   return { xRaw, wRaw };
 }
 
 function buildTopLevelBottomAnchorYRaw(gadget: GadgetResizeLockLike, win: WindowResizeLockLike): string | undefined {
-  const winH = win.h;
-  if (!Number.isFinite(gadget.y) || typeof winH !== "number" || !Number.isFinite(winH) || winH <= 0) return undefined;
-  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y);
+  const scale = getResizeLockLayoutScale(win);
+  const winH = resolveUnscaledLayoutNumber(win.hRaw, win.h, scale, "h", { allowExpressionFallback: false });
+  const gadgetY = resolveUnscaledLayoutNumber(gadget.yRaw, gadget.y, scale, "y", { allowExpressionFallback: false });
+  if (typeof gadgetY !== "number" || typeof winH !== "number" || !Number.isFinite(winH) || winH <= 0) return undefined;
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale);
   if (!baseYRaw) return undefined;
 
   const trimmed = baseYRaw.trim();
-  const baseOffset = Math.trunc(winH - gadget.y);
+  const baseOffset = Math.trunc(winH - gadgetY);
   if (/^-?\d+$/.test(trimmed)) {
     return `FormWindowHeight - ${baseOffset}`;
   }
@@ -432,14 +688,21 @@ function shouldEmitResizeGadget(lockLeft: boolean, lockRight: boolean, lockTop: 
 
 export function canEditGadgetHorizontalLocks(gadget: GadgetResizeLockLike, win: WindowResizeLockLike | undefined): boolean {
   if (!gadget.resizeSource) return false;
-  if (gadget.parentId) return false;
   if (!win) return false;
-  if (!Number.isFinite(win.w) || win.w <= 0) return false;
+  const scale = getResizeLockLayoutScale(win);
+  const parent = isSupportedParentResizeContext(win.parent) ? win.parent : undefined;
+  if (gadget.parentId) {
+    if (!parent) return false;
+    const parentW = resolveParentUnscaledLayoutNumber(parent, "w", scale);
+    if (typeof parentW !== "number" || !Number.isFinite(parentW) || parentW <= 0) return false;
+  } else if (!Number.isFinite(win.w) || win.w <= 0) {
+    return false;
+  }
   if (!Number.isFinite(gadget.x) || !Number.isFinite(gadget.w)) return false;
-  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x);
-  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w);
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
   if (!baseXRaw || !baseWRaw) return false;
-  const verticalArgs = buildCurrentVerticalResizeArgs(gadget);
+  const verticalArgs = buildCurrentVerticalResizeArgs(gadget, scale);
   if (!verticalArgs) return false;
   return true;
 }
@@ -458,17 +721,19 @@ export function buildGadgetHorizontalLockResizeUpdate(
     return { deleteResize: true };
   }
 
-  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x);
-  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w);
-  const verticalArgs = buildCurrentVerticalResizeArgs(gadget);
+  const scale = getResizeLockLayoutScale(win);
+  const parent = gadget.parentId && isSupportedParentResizeContext(win.parent) ? win.parent : undefined;
+  const baseXRaw = getBaseRectRaw(gadget.xRaw, gadget.x, "x", scale);
+  const baseWRaw = getBaseRectRaw(gadget.wRaw, gadget.w, "w", scale);
+  const verticalArgs = buildCurrentVerticalResizeArgs(gadget, scale);
   if (!baseXRaw || !baseWRaw || !verticalArgs?.yRaw || !verticalArgs.hRaw) return undefined;
 
   const rightAnchorXRaw = usesWidthResizeReference(gadget.resizeXRaw)
     ? gadget.resizeXRaw?.trim()
-    : buildTopLevelRightAnchorXRaw(gadget, win);
+    : (parent ? buildParentRightAnchorXRaw(gadget, parent, scale) : buildTopLevelRightAnchorXRaw(gadget, win));
   const stretchWidthRaw = usesWidthResizeReference(gadget.resizeWRaw)
     ? gadget.resizeWRaw?.trim()
-    : buildTopLevelStretchWidthRaw(gadget, win);
+    : (parent ? buildParentStretchWidthRaw(gadget, parent, scale) : buildTopLevelStretchWidthRaw(gadget, win));
 
   const xRaw = nextLockLeft ? baseXRaw : rightAnchorXRaw;
   const wRaw = nextLockLeft && nextLockRight ? stretchWidthRaw : baseWRaw;
@@ -489,7 +754,6 @@ export function buildGadgetVerticalLockResizeUpdate(
   nextLockBottom: boolean
 ): GadgetResizeRawUpdate | undefined {
   if (!gadget.resizeSource) return undefined;
-  if (gadget.parentId) return undefined;
 
   const lockLeft = gadget.lockLeft !== false;
   const lockRight = gadget.lockRight === true;
@@ -497,17 +761,21 @@ export function buildGadgetVerticalLockResizeUpdate(
     return { deleteResize: true };
   }
 
-  const horizontalArgs = buildCurrentHorizontalResizeArgs(gadget);
-  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y);
-  const baseHRaw = getBaseRectRaw(gadget.hRaw, gadget.h);
+  const scale = getResizeLockLayoutScale(win);
+  const parent = gadget.parentId && isSupportedParentResizeContext(win?.parent) ? win?.parent : undefined;
+  const skin = win?.platformSkin;
+  if (gadget.parentId && !parent) return undefined;
+  const horizontalArgs = buildCurrentHorizontalResizeArgs(gadget, scale);
+  const baseYRaw = getBaseRectRaw(gadget.yRaw, gadget.y, "y", scale);
+  const baseHRaw = getBaseRectRaw(gadget.hRaw, gadget.h, "h", scale);
   if (!horizontalArgs?.xRaw || !horizontalArgs.wRaw || !baseYRaw || !baseHRaw) return undefined;
 
   const bottomAnchorYRaw = usesHeightResizeReference(gadget.resizeYRaw)
     ? gadget.resizeYRaw?.trim()
-    : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined);
+    : (parent ? buildParentBottomAnchorYRaw(gadget, parent, scale, skin) : (win ? buildTopLevelBottomAnchorYRaw(gadget, win) : undefined));
   const stretchHeightRaw = usesHeightResizeReference(gadget.resizeHRaw)
     ? gadget.resizeHRaw?.trim()
-    : (win ? buildTopLevelStretchHeightRaw(gadget, win) : undefined);
+    : (parent ? buildParentStretchHeightRaw(gadget, parent, scale, skin) : (win ? buildTopLevelStretchHeightRaw(gadget, win) : undefined));
 
   if (!nextLockBottom) {
     return {

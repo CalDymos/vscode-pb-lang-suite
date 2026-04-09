@@ -984,8 +984,14 @@ Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnLeftTop, 10, 12, 80, 24, "LeftTop")
   ButtonGadget(#BtnRightBottom, 140, 120, 80, 24, "RightBottom")
-  ResizeGadget(#BtnRightBottom, FormWindowWidth - 180, FormWindowHeight - 100, 80, 24)
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#BtnRightBottom, FormWindowWidth - 180, FormWindowHeight - 100, 80, 24)
   ResizeGadget(#BtnStretch, 10, 50, FormWindowWidth - 40, FormWindowHeight - 120)
 EndProcedure
 `;
@@ -1020,6 +1026,12 @@ test("preserves raw ResizeGadget expressions and source ranges for later lock wr
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
   ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
 EndProcedure
 `;
@@ -1036,7 +1048,7 @@ EndProcedure
 });
 
 
-test("preserves raw gadget rect expressions for future resize lock regeneration", () => {
+test("parses original loader-compatible raw gadget rect expressions into the same stored base offsets that the PureBasic designer uses", () => {
   const src = `; Form Designer for PureBasic - 6.30
 ; EnableExplicit
 
@@ -1046,24 +1058,44 @@ EndEnumeration
 
 Enumeration FormGadget
   #BtnApply
+  #BtnBottom
 EndEnumeration
 
 Procedure OpenFrmMain()
   OpenWindow(#FrmMain, 0, 0, 320, 220, "RawRect")
-  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, 25, "Apply")
+  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, WindowWidth(#FrmMain) - 40, 25, "Apply")
+  ButtonGadget(#BtnBottom, WindowWidth(#FrmMain) - 180, ToolBarHeight(0) + WindowHeight(#FrmMain) - 210, 80, WindowHeight(#FrmMain) - StatusBarHeight(0) - 120, "Bottom")
 EndProcedure
 `;
 
   const doc = parseFormDocument(src);
   const gadget = doc.gadgets.find(entry => entry.id === "#BtnApply");
+  const bottom = doc.gadgets.find(entry => entry.id === "#BtnBottom");
 
   assert.ok(gadget);
   assert.equal(gadget?.xRaw, "10");
   assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 10");
-  assert.equal(gadget?.wRaw, "FormWindowWidth - 40");
+  assert.equal(gadget?.wRaw, "WindowWidth(#FrmMain) - 40");
   assert.equal(gadget?.hRaw, "25");
   assert.equal(gadget?.x, 10);
-  assert.equal(gadget?.y, 0);
-  assert.equal(gadget?.w, 0);
+  assert.equal(gadget?.y, 10);
+  assert.equal(gadget?.w, 40);
   assert.equal(gadget?.h, 25);
+  assert.equal(gadget?.lockLeft, true);
+  assert.equal(gadget?.lockRight, true);
+  assert.equal(gadget?.lockTop, true);
+  assert.equal(gadget?.lockBottom, false);
+
+  assert.ok(bottom);
+  assert.equal(bottom?.xRaw, "WindowWidth(#FrmMain) - 180");
+  assert.equal(bottom?.yRaw, "ToolBarHeight(0) + WindowHeight(#FrmMain) - 210");
+  assert.equal(bottom?.hRaw, "WindowHeight(#FrmMain) - StatusBarHeight(0) - 120");
+  assert.equal(bottom?.x, 180);
+  assert.equal(bottom?.y, 210);
+  assert.equal(bottom?.w, 80);
+  assert.equal(bottom?.h, 120);
+  assert.equal(bottom?.lockLeft, false);
+  assert.equal(bottom?.lockRight, true);
+  assert.equal(bottom?.lockTop, true);
+  assert.equal(bottom?.lockBottom, true);
 });

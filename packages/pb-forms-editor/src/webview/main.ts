@@ -23,9 +23,20 @@ import {
   getSplitterPaneRect,
   getGadgetContentRect,
   getStatusBarAlignedX,
+  getCanvasMenuBarRect,
   getWindowChromeLayout,
   getWindowClientSurfaceRects,
   resolvePreviewChromeMetrics,
+  usesOriginalMacRoundedButtonChrome,
+  getPreviewComboArrowLayout,
+  getPreviewDateArrowLayout,
+  getPreviewComboChromeHeight,
+  getPreviewSpinButtonLayout,
+  getPreviewTrackBarThumbAssetLayout,
+  getPreviewScrollBarArrowAssetLayouts,
+  getPreviewScrollBarThumbFillLayout,
+  getPreviewTrackBarMacGrooveHighlightLines,
+  getPreviewTrackBarNoTicksFillRect,
   getRectHandlePoints,
   hitHandlePoints,
   clampRect,
@@ -35,6 +46,12 @@ import {
   toWindowGlobalPoint,
   toWindowLocalPoint
 } from "../core/preview/chrome";
+import {
+  applyPreviewColumnHeaderTextStyle,
+  applyPreviewGadgetTextStyle,
+  drawPreviewTextDecorations,
+} from "../core/preview/gadget-font";
+import { getPreviewButtonTextY, getPreviewCheckableTextY, getPreviewComboTextX, getPreviewComboTextY, getPreviewDateTextY, getPreviewFrameMacBodyOffsetY, getPreviewGadgetText, getPreviewListHeaderTextY, getPreviewListRowAdvance, getPreviewSpinTextY, getPreviewStringLikeTextY, getPreviewTextLikeTextPosition } from "../core/preview/gadget-text";
 import {
   STATUSBAR_KNOWN_FLAGS,
   buildStatusBarFlagsRaw,
@@ -52,9 +69,11 @@ import {
   type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
   canEditToolBarTooltip,
+  deriveWindows7MenuBarPalette,
   getDefaultMenuItemInsertArgs,
   getMenuEntryMoveTarget,
   getMenuEntryRect,
+  getMenuFlyoutAnchorRect,
   getMenuFlyoutPanelRect,
   getOpenSubMenuBalance,
   getDirectMenuChildIndices,
@@ -62,6 +81,12 @@ import {
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
   getMenuEntrySourceLine,
+  getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterOpacity,
+  getMenuFlyoutFooterTextPosition,
+  getMenuFlyoutSeparatorLineY,
+  getMenuFlyoutSeparatorPreviewRect,
+  getMenuFlyoutShortcutOpacity,
   getMenuFooterRect,
   getMenuPreviewLabel,
   getMenuVisibleEntries,
@@ -74,6 +99,8 @@ import {
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
   getToolBarPreviewInsertArgs,
+  getToolBarSeparatorPreviewRect,
+  getToolBarSeparatorSelectedOutlineRect,
   hasPbFlag,
   hasStatusBarPreviewAssignedImage,
   resolveMenuFooterHit,
@@ -83,18 +110,20 @@ import {
   getVisibleToolBarEntryCount,
   shouldShowToolBarPreviewUnselectedFrame,
   shouldShowToolBarStructureEntry,
-  hasToolBarPreviewAssignedImage
+  hasToolBarPreviewAssignedImage,
+  canMoveWindowInCanvas,
+  canResizeWindowHandleInCanvas
 } from "../core/toplevel/preview";
 
 import {
   buildGadgetCheckedStateRaw,
   buildGadgetHorizontalLockResizeUpdate,
   buildGadgetVerticalLockResizeUpdate,
+  buildGadgetFlagsExpr,
   buildGadgetTextRaw,
   buildGadgetTooltipRaw,
   canEditGadgetCheckedState,
   canEditGadgetColors,
-  canEditGadgetHorizontalLocks,
   canInspectGadgetColumns,
   canInspectGadgetItems,
   getCustomGadgetHelpDisplay,
@@ -102,6 +131,12 @@ import {
   getGadgetCurrentImageDisplay,
   getGadgetCtorRangeFieldLabels,
   getGadgetCtorRangeInspectorValue,
+  getGadgetBooleanInspectorState,
+  isGadgetDisabledInDesignerPreview,
+  isGadgetHiddenInDesignerPreview,
+  isDpiScaledGadgetCtorRange,
+  isDpiScaledGadgetState,
+  getGadgetKnownFlags,
   getGadgetVariableInspectorValue,
   getGadgetFontDisplaySummary,
   getGadgetTextInspectorValue,
@@ -125,10 +160,24 @@ import {
 } from "../core/gadget/insert";
 import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
 import {
+  commitDisplayedLayoutPoint,
+  commitDisplayedLayoutRect,
+  commitDisplayedLayoutValue,
+  formatDisplayedLayoutUnscaledValue,
+  getDisplayedLayoutValue,
+  getLayoutDpiScale,
+  getStableDisplayedLayoutValue,
+  isLayoutDpiScalingActive,
+  parseDesignerLayoutRaw,
+  parseUnscaledLayoutRaw,
+  unscaleDisplayedLayoutValue
+} from "../core/utils/layout-dpi";
+import {
   canOpenGadgetReparentDialog,
   getGadgetReparentParentOptions,
 } from "../core/gadget/reparent";
 import { getPanelInspectorItemLabel } from "../core/gadget/item-label";
+import { resolveGadgetCtorPreviewLocalRect } from "../core/gadget/layout";
 import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
@@ -164,10 +213,12 @@ import {
   getWindowPreviewClientBottomPadding,
   getWindowPreviewClientSidePadding,
   getWindowPreviewCanvasOrigin,
+  getWindowPreviewTitleButtonAssetKind,
   getWindowPreviewTitleButtonLayout,
   getWindowPreviewTitleBarDecoration,
   getWindowPreviewTitleBarMetrics,
   getWindowPreviewTitleButtonSize,
+  getWindowPreviewTitleTextLayout,
   getWindowPreviewTitleIconSize,
   getWindowPreviewToolBarDecoration,
   getWindowPreviewStatusBarDecoration,
@@ -178,7 +229,9 @@ import {
   getWindowPreviewMenuSubmenuIconMetrics,
   getWindowPreviewMenuRootEntryRect,
   getWindowPreviewBodyDecoration,
+  usesWindowPreviewExternalMenuBar,
   getWindowPreviewFrameDecoration,
+  getWindowPreviewFrameStrokeRect,
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
@@ -221,6 +274,13 @@ import {
   PREVIEW_WINDOWS8_CLOSE_BUTTON_DATA_URI,
   PREVIEW_WINDOWS8_MINIMIZE_BUTTON_DATA_URI,
   PREVIEW_WINDOWS8_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_MAC_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_MAXIMIZE_BUTTON_DATA_URI,
+  PREVIEW_MAC_DISABLED_BUTTON_DATA_URI,
+  PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI,
+  PREVIEW_LINUX_MINIMIZE_BUTTON_DATA_URI,
+  PREVIEW_LINUX_MAXIMIZE_BUTTON_DATA_URI,
   PREVIEW_MAC_CHECKBOX_DATA_URI,
   PREVIEW_MAC_CHECKBOX_CHECKED_DATA_URI,
   PREVIEW_WINDOWS7_CHECKBOX_DATA_URI,
@@ -234,6 +294,23 @@ import {
   PREVIEW_WINDOWS8_OPTION_DATA_URI,
   PREVIEW_WINDOWS8_OPTION_CHECKED_DATA_URI,
   PREVIEW_DATE_ICON_DATA_URI,
+  PREVIEW_WINDOWS_COMBO_ARROW_DOWN_DATA_URI,
+  PREVIEW_WINDOWS8_COMBO_ARROW_DOWN_DATA_URI,
+  PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_UP_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_DOWN_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_LEFT_DATA_URI,
+  PREVIEW_WINDOWS_SCROLL_RIGHT_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_UP_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_DOWN_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_LEFT_DATA_URI,
+  PREVIEW_WINDOWS8_SCROLL_RIGHT_DATA_URI,
+  PREVIEW_MAC_TRACKBAR_DATA_URI,
+  PREVIEW_MAC_TRACKBAR_VERTICAL_DATA_URI,
+  PREVIEW_MAC_SPIN_DATA_URI,
+  PREVIEW_WINDOWS7_TRACKBAR_DATA_URI,
+  PREVIEW_WINDOWS7_TRACKBAR_VERTICAL_DATA_URI,
+  PREVIEW_WINDOWS8_SPIN_DATA_URI,
 } from "../core/preview/assets";
 
 
@@ -311,8 +388,8 @@ type ExtensionToWebviewMessage =
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
@@ -331,7 +408,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; yRaw?: string; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -597,8 +674,19 @@ let previewPlusIconImage: HTMLImageElement | null = null;
 let previewSubmenuIconImage: HTMLImageElement | null = null;
 let previewWindowsTitleIconImage: HTMLImageElement | null = null;
 const previewWindowsTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewMacTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
+const previewLinuxTitleButtonImageCache = new Map<string, HTMLImageElement | null>();
 const previewCheckableImageCache = new Map<string, HTMLImageElement | null>();
 let previewDateIconImage: HTMLImageElement | null = null;
+const previewComboArrowImageCache = new Map<string, HTMLImageElement | null>();
+let previewMacComboDoubleArrowsImage: HTMLImageElement | null = null;
+const previewScrollBarArrowImageCache = new Map<string, HTMLImageElement | null>();
+let previewMacTrackBarImage: HTMLImageElement | null = null;
+let previewMacTrackBarVerticalImage: HTMLImageElement | null = null;
+let previewWindows7TrackBarImage: HTMLImageElement | null = null;
+let previewWindows7TrackBarVerticalImage: HTMLImageElement | null = null;
+let previewMacSpinImage: HTMLImageElement | null = null;
+let previewWindows8SpinImage: HTMLImageElement | null = null;
 const previewResolvedGadgetImageCache = new Map<string, HTMLImageElement | null>();
 
 
@@ -685,6 +773,63 @@ function getPreviewWindowsTitleButtonImage(
 }
 
 
+function getPreviewMacTitleButtonDataUri(kind: "close" | "minimize" | "maximize", enabled: boolean): string {
+  const assetKind = getWindowPreviewTitleButtonAssetKind("macos", kind, enabled);
+  switch (assetKind) {
+    case "macClose":
+      return PREVIEW_MAC_CLOSE_BUTTON_DATA_URI;
+    case "macMinimize":
+      return PREVIEW_MAC_MINIMIZE_BUTTON_DATA_URI;
+    case "macMaximize":
+      return PREVIEW_MAC_MAXIMIZE_BUTTON_DATA_URI;
+    case "macDisabled":
+      return PREVIEW_MAC_DISABLED_BUTTON_DATA_URI;
+    default:
+      return PREVIEW_MAC_DISABLED_BUTTON_DATA_URI;
+  }
+}
+
+function getPreviewMacTitleButtonImage(
+  kind: "close" | "minimize" | "maximize",
+  enabled: boolean
+): HTMLImageElement | null {
+  const cacheKey = `${kind}:${enabled ? "enabled" : "disabled"}`;
+  const cached = previewMacTitleButtonImageCache.get(cacheKey);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewMacTitleButtonDataUri(kind, enabled));
+  previewMacTitleButtonImageCache.set(cacheKey, image);
+  return image;
+}
+
+function getPreviewLinuxTitleButtonDataUri(kind: "close" | "minimize" | "maximize"): string {
+  const assetKind = getWindowPreviewTitleButtonAssetKind("linux", kind, true);
+  switch (assetKind) {
+    case "linuxClose":
+      return PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI;
+    case "linuxMinimize":
+      return PREVIEW_LINUX_MINIMIZE_BUTTON_DATA_URI;
+    case "linuxMaximize":
+      return PREVIEW_LINUX_MAXIMIZE_BUTTON_DATA_URI;
+    default:
+      return PREVIEW_LINUX_CLOSE_BUTTON_DATA_URI;
+  }
+}
+
+function getPreviewLinuxTitleButtonImage(kind: "close" | "minimize" | "maximize"): HTMLImageElement | null {
+  const cached = previewLinuxTitleButtonImageCache.get(kind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const image = createPreviewRasterIcon(getPreviewLinuxTitleButtonDataUri(kind));
+  previewLinuxTitleButtonImageCache.set(kind, image);
+  return image;
+}
+
+
 function getPreviewCheckableImageDataUri(
   kind: "checkbox" | "option",
   osSkin: DesignerSettings["osSkin"],
@@ -737,6 +882,111 @@ function getPreviewDateIconImage(): HTMLImageElement | null {
   }
 
   return previewDateIconImage;
+}
+
+function getPreviewMacComboDoubleArrowsImage(): HTMLImageElement | null {
+  if (!previewMacComboDoubleArrowsImage) {
+    previewMacComboDoubleArrowsImage = createPreviewRasterIcon(PREVIEW_MAC_COMBO_DOUBLE_ARROWS_DATA_URI);
+  }
+
+  return previewMacComboDoubleArrowsImage;
+}
+
+function getPreviewComboArrowImage(assetKind: "windowsComboDown" | "windows8ComboDown"): HTMLImageElement | null {
+  const cached = previewComboArrowImageCache.get(assetKind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  const dataUri = assetKind === "windows8ComboDown"
+    ? PREVIEW_WINDOWS8_COMBO_ARROW_DOWN_DATA_URI
+    : PREVIEW_WINDOWS_COMBO_ARROW_DOWN_DATA_URI;
+  const image = createPreviewRasterIcon(dataUri);
+  previewComboArrowImageCache.set(assetKind, image);
+  return image;
+}
+
+function getPreviewScrollBarArrowImage(
+  assetKind: "windowsUp" | "windowsDown" | "windowsLeft" | "windowsRight" | "windows8Up" | "windows8Down" | "windows8Left" | "windows8Right"
+): HTMLImageElement | null {
+  const cached = previewScrollBarArrowImageCache.get(assetKind);
+  if (typeof cached !== "undefined") {
+    return cached;
+  }
+
+  let dataUri: string;
+  switch (assetKind) {
+    case "windowsUp":
+      dataUri = PREVIEW_WINDOWS_SCROLL_UP_DATA_URI;
+      break;
+    case "windowsDown":
+      dataUri = PREVIEW_WINDOWS_SCROLL_DOWN_DATA_URI;
+      break;
+    case "windowsLeft":
+      dataUri = PREVIEW_WINDOWS_SCROLL_LEFT_DATA_URI;
+      break;
+    case "windowsRight":
+      dataUri = PREVIEW_WINDOWS_SCROLL_RIGHT_DATA_URI;
+      break;
+    case "windows8Up":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_UP_DATA_URI;
+      break;
+    case "windows8Down":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_DOWN_DATA_URI;
+      break;
+    case "windows8Left":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_LEFT_DATA_URI;
+      break;
+    case "windows8Right":
+      dataUri = PREVIEW_WINDOWS8_SCROLL_RIGHT_DATA_URI;
+      break;
+  }
+
+  const image = createPreviewRasterIcon(dataUri);
+  previewScrollBarArrowImageCache.set(assetKind, image);
+  return image;
+}
+
+function getPreviewTrackBarThumbImage(
+  assetKind: "macHorizontal" | "macVertical" | "windowsHorizontal" | "windowsVertical"
+): HTMLImageElement | null {
+  switch (assetKind) {
+    case "macHorizontal":
+      if (!previewMacTrackBarImage) {
+        previewMacTrackBarImage = createPreviewRasterIcon(PREVIEW_MAC_TRACKBAR_DATA_URI);
+      }
+      return previewMacTrackBarImage;
+    case "macVertical":
+      if (!previewMacTrackBarVerticalImage) {
+        previewMacTrackBarVerticalImage = createPreviewRasterIcon(PREVIEW_MAC_TRACKBAR_VERTICAL_DATA_URI);
+      }
+      return previewMacTrackBarVerticalImage;
+    case "windowsHorizontal":
+      if (!previewWindows7TrackBarImage) {
+        previewWindows7TrackBarImage = createPreviewRasterIcon(PREVIEW_WINDOWS7_TRACKBAR_DATA_URI);
+      }
+      return previewWindows7TrackBarImage;
+    case "windowsVertical":
+      if (!previewWindows7TrackBarVerticalImage) {
+        previewWindows7TrackBarVerticalImage = createPreviewRasterIcon(PREVIEW_WINDOWS7_TRACKBAR_VERTICAL_DATA_URI);
+      }
+      return previewWindows7TrackBarVerticalImage;
+  }
+}
+
+function getPreviewSpinImage(osSkin: DesignerSettings["osSkin"]): HTMLImageElement | null {
+  if (osSkin === "windows8") {
+    if (!previewWindows8SpinImage) {
+      previewWindows8SpinImage = createPreviewRasterIcon(PREVIEW_WINDOWS8_SPIN_DATA_URI);
+    }
+    return previewWindows8SpinImage;
+  }
+
+  if (!previewMacSpinImage) {
+    previewMacSpinImage = createPreviewRasterIcon(PREVIEW_MAC_SPIN_DATA_URI);
+  }
+
+  return previewMacSpinImage;
 }
 
 function createResolvedPreviewImage(src: string): HTMLImageElement | null {
@@ -899,6 +1149,8 @@ const systemColorCache = new Map<string, string>();
 // Windows registry colors received from the extension (win32 only).
 // null = not yet received or non-Windows host.
 let windowsRegistryColors: WindowsRegistryColors | null = null;
+const layoutDisplayOverrides = new Map<string, number>();
+let lastLayoutDpiScale = getLayoutDpiScale(typeof window !== "undefined" ? window.devicePixelRatio : 1);
 
 
 type PbfdSymbols = {
@@ -952,6 +1204,231 @@ function toolBarEntryKindHint(): string {
 
 function buildWindowCaptionRaw(value: string, isVariable: boolean): string {
   return isVariable ? value : toPbString(value);
+}
+
+function getActiveLayoutDpiScale(): number {
+  return getLayoutDpiScale(typeof window !== "undefined" ? window.devicePixelRatio : 1);
+}
+
+function isActiveLayoutDpiScalingEnabled(): boolean {
+  return isLayoutDpiScalingActive(getActiveLayoutDpiScale());
+}
+
+type LayoutDisplayField = "x" | "y" | "w" | "h" | "min" | "max" | "state";
+
+function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string): string {
+  return `${targetKind}:${targetId}:${field}:${raw}`;
+}
+
+function storeLayoutDisplayOverride(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, displayValue: number, raw: string | undefined): void {
+  const trimmed = raw?.trim();
+  if (!trimmed?.length) return;
+  layoutDisplayOverrides.set(getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed), Math.trunc(displayValue));
+}
+
+function parseDisplayedLayoutFieldRaw(raw: string | undefined, field: LayoutDisplayField): number | undefined {
+  if (field === "x" || field === "y" || field === "w" || field === "h") {
+    return parseDesignerLayoutRaw(raw, field);
+  }
+  return parseUnscaledLayoutRaw(raw);
+}
+
+function resolveDisplayedLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number): number {
+  const trimmed = raw?.trim();
+  const scale = getActiveLayoutDpiScale();
+  const parsed = parseDisplayedLayoutFieldRaw(trimmed, field);
+  if (parsed === undefined) {
+    return Math.trunc(fallbackValue);
+  }
+
+  if (!trimmed?.length) {
+    return getDisplayedLayoutValue(undefined, fallbackValue, scale);
+  }
+
+  const overrideKey = getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed);
+  const overrideValue = layoutDisplayOverrides.get(overrideKey);
+  if (typeof overrideValue === "number" && unscaleDisplayedLayoutValue(overrideValue, scale) === parsed) {
+    return Math.trunc(overrideValue);
+  }
+
+  if (typeof overrideValue === "number") {
+    layoutDisplayOverrides.delete(overrideKey);
+  }
+
+  return getStableDisplayedLayoutValue(parsed, scale);
+}
+
+function syncWindowDisplayLayout(win: FormWindow): void {
+  win.x = resolveDisplayedLayoutValue("window", win.id, "x", win.xRaw, win.x);
+  win.y = resolveDisplayedLayoutValue("window", win.id, "y", win.yRaw, win.y);
+  win.w = resolveDisplayedLayoutValue("window", win.id, "w", win.wRaw, win.w);
+  win.h = resolveDisplayedLayoutValue("window", win.id, "h", win.hRaw, win.h);
+}
+
+function syncGadgetDisplayLayout(g: Gadget): void {
+  g.x = resolveDisplayedLayoutValue("gadget", g.id, "x", g.xRaw, g.x);
+  g.y = resolveDisplayedLayoutValue("gadget", g.id, "y", g.yRaw, g.y);
+  g.w = resolveDisplayedLayoutValue("gadget", g.id, "w", g.wRaw, g.w);
+  g.h = resolveDisplayedLayoutValue("gadget", g.id, "h", g.hRaw, g.h);
+  syncGadgetDisplayCtorRanges(g);
+  syncGadgetDisplayState(g);
+}
+
+function resolveDisplayedOptionalLayoutValue(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string | undefined, fallbackValue: number | undefined): number | undefined {
+  const trimmed = raw?.trim();
+  const scale = getActiveLayoutDpiScale();
+  const parsed = parseDisplayedLayoutFieldRaw(trimmed, field);
+  if (parsed === undefined) {
+    const fallback = typeof fallbackValue === "number" && Number.isFinite(fallbackValue) ? fallbackValue : undefined;
+    return fallback === undefined ? undefined : Math.trunc(fallback);
+  }
+
+  if (!trimmed?.length) {
+    return getDisplayedLayoutValue(undefined, fallbackValue ?? parsed, scale);
+  }
+
+  const overrideKey = getLayoutDisplayOverrideKey(targetKind, targetId, field, trimmed);
+  const overrideValue = layoutDisplayOverrides.get(overrideKey);
+  if (typeof overrideValue === "number" && unscaleDisplayedLayoutValue(overrideValue, scale) === parsed) {
+    return Math.trunc(overrideValue);
+  }
+
+  if (typeof overrideValue === "number") {
+    layoutDisplayOverrides.delete(overrideKey);
+  }
+
+  return getStableDisplayedLayoutValue(parsed, scale);
+}
+
+function syncGadgetDisplayCtorRanges(g: Gadget): void {
+  if (!isDpiScaledGadgetCtorRange(g.kind)) return;
+  g.min = resolveDisplayedOptionalLayoutValue("gadget", g.id, "min", g.minRaw, g.min);
+  g.max = resolveDisplayedOptionalLayoutValue("gadget", g.id, "max", g.maxRaw, g.max);
+}
+
+function syncGadgetDisplayState(g: Gadget): void {
+  if (!isDpiScaledGadgetState(g.kind)) return;
+  g.state = resolveDisplayedOptionalLayoutValue("gadget", g.id, "state", g.stateRaw, g.state);
+}
+
+function syncModelDisplayLayout(currentModel: Model | undefined): void {
+  if (!currentModel) return;
+  if (currentModel.window) syncWindowDisplayLayout(currentModel.window);
+  for (const gadget of currentModel.gadgets) {
+    syncGadgetDisplayLayout(gadget);
+  }
+}
+
+function ensureLayoutScaleState(): void {
+  const scale = getActiveLayoutDpiScale();
+  if (Math.abs(scale - lastLayoutDpiScale) < 0.001) return;
+  lastLayoutDpiScale = scale;
+  layoutDisplayOverrides.clear();
+  syncModelDisplayLayout(model);
+}
+
+function toUnscaledLayoutRaw(displayValue: number): string {
+  return commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale()).raw;
+}
+
+function getInspectorLayoutDisplayValue(raw: string | undefined, displayValue: number): string {
+  const trimmed = raw?.trim();
+  if (trimmed === WINDOW_POSITION_IGNORE_LITERAL || displayValue === -65535) {
+    return WINDOW_POSITION_IGNORE_LITERAL;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled()) {
+    return String(Math.trunc(displayValue));
+  }
+
+  return getWindowPositionInspectorValue(raw, displayValue);
+}
+
+function getReadonlyUnscaledLayoutValue(raw: string | undefined, displayValue: number): string {
+  return formatDisplayedLayoutUnscaledValue(raw, displayValue, getActiveLayoutDpiScale());
+}
+
+function getInspectorGadgetCtorRangeValue(g: Gadget, field: "min" | "max"): string {
+  const raw = field === "min" ? g.minRaw : g.maxRaw;
+  const fallback = field === "min" ? g.min : g.max;
+  if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind) && Number.isFinite(fallback)) {
+    return String(Math.trunc(fallback as number));
+  }
+  return getGadgetCtorRangeInspectorValue(raw, fallback);
+}
+
+function getReadonlyUnscaledGadgetCtorRangeValue(g: Gadget, field: "min" | "max"): string {
+  const raw = field === "min" ? g.minRaw : g.maxRaw;
+  const displayValue = field === "min" ? g.min : g.max;
+  if (!Number.isFinite(displayValue)) {
+    return raw?.trim() ?? "";
+  }
+  return formatDisplayedLayoutUnscaledValue(raw, displayValue as number, getActiveLayoutDpiScale());
+}
+
+function shouldShowReadonlyUnscaledGadgetCtorRangeRows(g: Gadget): boolean {
+  return isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind);
+}
+
+function getReadonlyUnscaledGadgetStateValue(g: Gadget): string {
+  if (!Number.isFinite(g.state)) {
+    return g.stateRaw?.trim() ?? "";
+  }
+  return formatDisplayedLayoutUnscaledValue(g.stateRaw, g.state as number, getActiveLayoutDpiScale());
+}
+
+function shouldShowReadonlyUnscaledGadgetStateRows(g: Gadget): boolean {
+  return isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind);
+}
+
+function shouldShowReadonlyUnscaledLayoutRows(): boolean {
+  return isActiveLayoutDpiScalingEnabled();
+}
+
+function updateWindowDisplayField(win: FormWindow, field: "x" | "y" | "w" | "h", displayValue: number): void {
+  const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
+  storeLayoutDisplayOverride("window", win.id, field, committed.displayValue, committed.raw);
+  switch (field) {
+    case "x":
+      win.x = committed.displayValue;
+      win.xRaw = committed.raw;
+      return;
+    case "y":
+      win.y = committed.displayValue;
+      win.yRaw = committed.raw;
+      return;
+    case "w":
+      win.w = committed.displayValue;
+      win.wRaw = committed.raw;
+      return;
+    case "h":
+      win.h = committed.displayValue;
+      win.hRaw = committed.raw;
+      return;
+  }
+}
+
+function updateGadgetDisplayField(g: Gadget, field: "x" | "y" | "w" | "h", displayValue: number): void {
+  const committed = commitDisplayedLayoutValue(displayValue, getActiveLayoutDpiScale());
+  storeLayoutDisplayOverride("gadget", g.id, field, committed.displayValue, committed.raw);
+  switch (field) {
+    case "x":
+      g.x = committed.displayValue;
+      g.xRaw = committed.raw;
+      return;
+    case "y":
+      g.y = committed.displayValue;
+      g.yRaw = committed.raw;
+      return;
+    case "w":
+      g.w = committed.displayValue;
+      g.wRaw = committed.raw;
+      return;
+    case "h":
+      g.h = committed.displayValue;
+      g.hRaw = committed.raw;
+      return;
+  }
 }
 
 function getWindowCurrentFlagsExpr(win: FormWindow): string | undefined {
@@ -1012,7 +1489,35 @@ function postWindowPositionRaw(win: FormWindow, axis: "x" | "y", rawValue: strin
 
   clearInfoError();
 
-  if (axis === "x") {
+  if (parsed.isIgnore) {
+    if (axis === "x") {
+      win.xRaw = parsed.raw;
+      win.x = parsed.previewValue;
+      postWindowOpenArgs(win, { xRaw: parsed.raw });
+    } else {
+      win.yRaw = parsed.raw;
+      win.y = parsed.previewValue;
+      postWindowOpenArgs(win, { yRaw: parsed.raw });
+    }
+    render();
+    renderProps();
+    return;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled()) {
+    const displayValue = parsed.previewValue;
+    const nextRaw = toUnscaledLayoutRaw(displayValue);
+    storeLayoutDisplayOverride("window", win.id, axis, displayValue, nextRaw);
+    if (axis === "x") {
+      win.xRaw = nextRaw;
+      win.x = displayValue;
+      postWindowOpenArgs(win, { xRaw: nextRaw });
+    } else {
+      win.yRaw = nextRaw;
+      win.y = displayValue;
+      postWindowOpenArgs(win, { yRaw: nextRaw });
+    }
+  } else if (axis === "x") {
     win.xRaw = parsed.raw;
     win.x = parsed.previewValue;
     postWindowOpenArgs(win, { xRaw: parsed.raw });
@@ -1538,17 +2043,31 @@ function buildGadgetDeleteAction(gadget: Gadget | undefined): PendingDestructive
   };
 }
 
+function buildTopLevelWindowGadgetYRaw(unscaledY: number, parentId?: string): string {
+  const baseRaw = String(Math.trunc(unscaledY));
+  if (parentId) return baseRaw;
+  if (resolvePbFormSkinPlatform() !== "windows") return baseRaw;
+  const toolbarCount = model.toolbars?.length ?? 0;
+  if (toolbarCount <= 0) return baseRaw;
+  return `ToolBarHeight(${toolbarCount - 1}) + ${baseRaw}`;
+}
+
 function postInsertGadget(kind: string, x: number, y: number, parentId?: string, parentItem?: number): void {
   if (!isInsertableGadgetKind(kind)) return;
   const predictedId = getPredictedInsertedGadgetId(kind);
+  const committed = commitDisplayedLayoutPoint(x, y, getActiveLayoutDpiScale());
+  const yRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, parentId);
   if (predictedId) {
     pendingGadgetSelection = { id: predictedId };
+    storeLayoutDisplayOverride("gadget", predictedId, "x", committed.x, committed.xRaw);
+    storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, yRaw);
   }
   post({
     type: "insertGadget",
     kind,
-    x,
-    y,
+    x: committed.xUnscaled,
+    y: committed.yUnscaled,
+    yRaw,
     parentId,
     parentItem,
     gadget1Id: pendingSplitterInsertConfig?.gadget1Id,
@@ -2217,7 +2736,6 @@ type DragState =
       startW: number;
       startH: number;
     }
-  | { target: "window"; mode: "move"; startMx: number; startMy: number; startX: number; startY: number; startW: number; startH: number }
   | {
       target: "window";
       mode: "resize";
@@ -2255,6 +2773,7 @@ function applySettings(s: DesignerSettings) {
 }
 
 function resizeCanvas() {
+  ensureLayoutScaleState();
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.max(1, Math.floor(rect.width * dpr));
@@ -2299,7 +2818,9 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
 
   if (msg.type === "init") {
     errEl.textContent = "";
+    ensureLayoutScaleState();
     model = msg.model;
+    syncModelDisplayLayout(model);
     windowParentAsRawExpressionOverrides.clear();
     const retainedPanelItems = retainPanelActiveItems(panelActiveItems, model.gadgets);
     panelActiveItems.clear();
@@ -2321,6 +2842,7 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage>)
   }
 
   if (msg.type === "settings") {
+    ensureLayoutScaleState();
     applySettings(msg.settings);
     return;
   }
@@ -2501,10 +3023,11 @@ function getWinRect(): { x: number; y: number; w: number; h: number; title: stri
   const origin = getWindowPreviewCanvasOrigin(storedX, storedY);
   const w = clampPos(model.window.w ?? rect.width);
   const h = clampPos(model.window.h ?? rect.height);
+  const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
 
   return {
     x: origin.x,
-    y: origin.y,
+    y: origin.y + (externalMenuBar ? previewChromeMetrics.menuHeight : 0),
     w,
     h,
     title: model.window.title ?? "",
@@ -2566,7 +3089,8 @@ function getWindowLocalChromeLayout(metrics: PreviewChromeMetrics): WindowChrome
     hasParsedStatusbarChrome(),
     metrics,
     getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
-    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+    usesWindowPreviewExternalMenuBar(settings.osSkin)
   );
 }
 
@@ -2574,7 +3098,8 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
   const wr = getWinRect();
   if (!wr) return null;
   const platformSkin = resolvePbFormSkinPlatform();
-  return getWindowChromeLayout(
+  const externalMenuBar = usesWindowPreviewExternalMenuBar(settings.osSkin) && hasParsedMenuChrome();
+  const layout = getWindowChromeLayout(
     { x: wr.x, y: wr.y, w: wr.w, h: wr.h },
     getWindowPreviewChromeTopPadding(
       platformSkin,
@@ -2587,14 +3112,34 @@ function getWindowGlobalChromeLayout(metrics: PreviewChromeMetrics): WindowChrom
     hasParsedStatusbarChrome(),
     metrics,
     getWindowPreviewClientSidePadding(platformSkin, asInt(settings.windowPreviewWindowsClientSidePadding)),
-    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding))
+    getWindowPreviewClientBottomPadding(platformSkin, asInt(settings.windowPreviewWindowsClientBottomPadding)),
+    externalMenuBar
   );
+
+  if (!externalMenuBar) {
+    return layout;
+  }
+
+  return {
+    ...layout,
+    menuBarRect: getCanvasMenuBarRect(canvas.getBoundingClientRect().width, metrics)
+  };
 }
 
 function hitWindow(mx: number, my: number): boolean {
   const wr = getWinRect();
   if (!wr) return false;
   return isPointInWindowRect({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }, mx, my);
+}
+
+function hitPreviewShell(mx: number, my: number): boolean {
+  if (hitWindow(mx, my)) {
+    return true;
+  }
+
+  const chromeLayout = getWindowGlobalChromeLayout(previewChromeMetrics);
+  const menuBarRect = chromeLayout?.menuBarRect ?? null;
+  return Boolean(menuBarRect && rectContainsPoint(menuBarRect, mx, my));
 }
 
 function toLocal(mx: number, my: number): { lx: number; ly: number } {
@@ -2649,8 +3194,8 @@ function hitHandleWindow(mx: number, my: number): Handle | null {
   const wr = getWinRect();
   if (!wr) return null;
 
-  // Handles are around the outer window rect
-  const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h });
+  // Original Form Designer: top-level windows resize only to the right and bottom.
+  const pts = getRectHandlePoints({ x: wr.x, y: wr.y, w: wr.w, h: wr.h }).filter(([handle]) => canResizeWindowHandleInCanvas(handle));
   return hitHandlePoints(pts, mx, my, HANDLE_HIT);
 }
 
@@ -2684,24 +3229,51 @@ function snapValue(v: number, gridSize: number): number {
 
 function postGadgetRect(g: Gadget) {
   normalizeRectInPlace(g, MIN_GADGET_W, MIN_GADGET_H);
-  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: g.x, y: g.y, w: g.w, h: g.h });
+  const committed = commitDisplayedLayoutRect(g.x, g.y, g.w, g.h, getActiveLayoutDpiScale());
+  const nextYRaw = buildTopLevelWindowGadgetYRaw(committed.yUnscaled, g.parentId);
+  g.x = committed.x;
+  g.y = committed.y;
+  g.w = committed.w;
+  g.h = committed.h;
+  g.xRaw = committed.xRaw;
+  g.yRaw = nextYRaw;
+  g.wRaw = committed.wRaw;
+  g.hRaw = committed.hRaw;
+  storeLayoutDisplayOverride("gadget", g.id, "x", g.x, g.xRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "y", g.y, g.yRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "w", g.w, g.wRaw);
+  storeLayoutDisplayOverride("gadget", g.id, "h", g.h, g.hRaw);
+  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled, yRaw: nextYRaw });
 }
 
 function postWindowRect() {
   if (!model.window) return;
 
   normalizeRectInPlace(model.window, MIN_WIN_W, MIN_WIN_H);
+  const committed = commitDisplayedLayoutRect(model.window.x, model.window.y, model.window.w, model.window.h, getActiveLayoutDpiScale());
+  model.window.x = committed.x;
+  model.window.y = committed.y;
+  model.window.w = committed.w;
+  model.window.h = committed.h;
+  model.window.xRaw = committed.xRaw;
+  model.window.yRaw = committed.yRaw;
+  model.window.wRaw = committed.wRaw;
+  model.window.hRaw = committed.hRaw;
+  storeLayoutDisplayOverride("window", model.window.id, "x", model.window.x, model.window.xRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "y", model.window.y, model.window.yRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "w", model.window.w, model.window.wRaw);
+  storeLayoutDisplayOverride("window", model.window.id, "h", model.window.h, model.window.hRaw);
   vscode.postMessage({
     type: "setWindowRect",
     id: model.window.id,
-    x: model.window.x,
-    y: model.window.y,
-    w: model.window.w,
-    h: model.window.h
+    x: committed.xUnscaled,
+    y: committed.yUnscaled,
+    w: committed.wUnscaled,
+    h: committed.hUnscaled
   });
 }
 
-function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }): void {
+function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }): void {
   post({ type: "setGadgetOpenArgs", id, ...args });
 }
 
@@ -2769,20 +3341,35 @@ function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" {
   return resolvePreviewPlatformFromOsSkin(settings.osSkin);
 }
 
-function getWindowResizeLockContext() {
+function getWindowResizeLockContext(gadget?: Gadget) {
   if (!model.window) return undefined;
+  const parent = gadget?.parentId ? model.gadgets.find(entry => entry.id === gadget.parentId) : undefined;
   return {
     w: model.window.w,
+    wRaw: model.window.wRaw,
     h: model.window.h,
+    hRaw: model.window.hRaw,
     menuCount: model.menus?.length ?? 0,
     toolbarCount: model.toolbars?.length ?? 0,
     statusBarCount: model.statusbars?.length ?? 0,
-    platformSkin: resolvePbFormSkinPlatform()
+    platformSkin: resolvePbFormSkinPlatform(),
+    layoutDpiScale: getActiveLayoutDpiScale(),
+    parent: parent ? {
+      id: parent.id,
+      kind: parent.kind,
+      pbAny: parent.pbAny,
+      variable: parent.variable,
+      firstParam: parent.firstParam,
+      w: parent.w,
+      wRaw: parent.wRaw,
+      h: parent.h,
+      hRaw: parent.hRaw
+    } : undefined
   };
 }
 
 function applyLocalGadgetHorizontalLockUpdate(g: Gadget, nextLockLeft: boolean, nextLockRight: boolean): void {
-  const resizeCtx = getWindowResizeLockContext();
+  const resizeCtx = getWindowResizeLockContext(g);
   if (!resizeCtx) return;
   const update = buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, nextLockLeft, nextLockRight);
   if (!update) return;
@@ -3021,7 +3608,7 @@ function openCanvasContextMenu(
 }
 
 function applyLocalGadgetVerticalLockUpdate(g: Gadget, nextLockTop: boolean, nextLockBottom: boolean): void {
-  const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(), nextLockTop, nextLockBottom);
+  const update = buildGadgetVerticalLockResizeUpdate(g, getWindowResizeLockContext(g), nextLockTop, nextLockBottom);
   if (!update) return;
 
   g.lockTop = nextLockTop;
@@ -3063,7 +3650,25 @@ function applyLocalGadgetCtorRangeUpdate(g: Gadget, field: "min" | "max", value:
     return;
   }
   const parsed = parseOptionalIntegerLiteral(trimmed);
-  if (field === "min") {
+  if (parsed === undefined) {
+    alert(`${fieldLabel} accepts only an integer literal.`);
+    renderProps();
+    return;
+  }
+
+  if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetCtorRange(g.kind)) {
+    const committed = commitDisplayedLayoutValue(parsed, getActiveLayoutDpiScale());
+    storeLayoutDisplayOverride("gadget", g.id, field, committed.displayValue, committed.raw);
+    if (field === "min") {
+      g.minRaw = committed.raw;
+      g.min = committed.displayValue;
+      postGadgetOpenArgs(g.id, { minRaw: committed.raw });
+    } else {
+      g.maxRaw = committed.raw;
+      g.max = committed.displayValue;
+      postGadgetOpenArgs(g.id, { maxRaw: committed.raw });
+    }
+  } else if (field === "min") {
     g.minRaw = trimmed;
     g.min = parsed;
     postGadgetOpenArgs(g.id, { minRaw: trimmed });
@@ -3086,7 +3691,7 @@ canvas.addEventListener("contextmenu", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -3193,7 +3798,7 @@ canvas.addEventListener("mousedown", (e) => {
   const footerHit = resolveMenuFooterHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuRect: footerChromeLayout?.menuBarRect ?? null,
     footerRects: menuFooterPreviewRects
   });
@@ -3220,7 +3825,7 @@ canvas.addEventListener("mousedown", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -3392,17 +3997,8 @@ canvas.addEventListener("mousedown", (e) => {
       };
       canvas.style.cursor = getHandleCursor(wh);
     } else if (isInTitleBar(mx, my)) {
-      drag = {
-        target: "window",
-        mode: "move",
-        startMx: mx,
-        startMy: my,
-        startX: asInt(model.window?.x ?? 0),
-        startY: asInt(model.window?.y ?? 0),
-        startW: wr.w,
-        startH: wr.h
-      };
-      canvas.style.cursor = "move";
+      drag = null;
+      canvas.style.cursor = "default";
     } else {
       drag = null;
       canvas.style.cursor = "default";
@@ -3437,7 +4033,7 @@ window.addEventListener("mousemove", (e) => {
       return;
     }
 
-    if (isInTitleBar(mx, my)) {
+    if (isInTitleBar(mx, my) && canMoveWindowInCanvas()) {
       canvas.style.cursor = "move";
       return;
     }
@@ -3462,7 +4058,7 @@ window.addEventListener("mousemove", (e) => {
   const topLevelChromeHit = resolveTopLevelChromeHit({
     x: mx,
     y: my,
-    windowHit: hitWindow(mx, my),
+    windowHit: hitPreviewShell(mx, my),
     menuId: getPrimaryMenu()?.id,
     menuRect: chromeLayout?.menuBarRect ?? null,
     menuEntryRects: menuEntryPreviewRects,
@@ -3584,41 +4180,27 @@ window.addEventListener("mousemove", (e) => {
     return;
   }
 
-  // Window dragging
+  // Window resize only (original Form Designer behavior keeps window X/Y inspector-only)
   if (!model.window) return;
 
-  if (d.mode === "move") {
-    let nx = asInt(d.startX + dx);
-    let ny = asInt(d.startY + dy);
+  const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_WIN_W, MIN_WIN_H);
 
-    const p = applyLiveSnapPoint(nx, ny);
-    nx = p.x;
-    ny = p.y;
+  let nx = r0.x;
+  let ny = r0.y;
+  let nw = r0.w;
+  let nh = r0.h;
+  const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
+  nx = r1.x;
+  ny = r1.y;
+  nw = r1.w;
+  nh = r1.h;
 
-    model.window.x = nx;
-    model.window.y = ny;
+  model.window.x = nx;
+  model.window.y = ny;
+  model.window.w = nw;
+  model.window.h = nh;
 
-    canvas.style.cursor = "move";
-  } else {
-    const r0 = applyResize({ x: d.startX, y: d.startY, w: d.startW, h: d.startH }, { dx, dy }, d.handle, MIN_WIN_W, MIN_WIN_H);
-
-    let nx = r0.x;
-    let ny = r0.y;
-    let nw = r0.w;
-    let nh = r0.h;
-    const r1 = applyLiveSnapRect(nx, ny, nw, nh, MIN_WIN_W, MIN_WIN_H);
-    nx = r1.x;
-    ny = r1.y;
-    nw = r1.w;
-    nh = r1.h;
-
-    model.window.x = nx;
-    model.window.y = ny;
-    model.window.w = nw;
-    model.window.h = nh;
-
-    canvas.style.cursor = getHandleCursor(d.handle);
-  }
+  canvas.style.cursor = getHandleCursor(d.handle);
 
   render();
   renderProps();
@@ -3734,6 +4316,22 @@ function setScrollAreaPreviewOffset(g: Gadget, rect: PreviewRect, metrics: Previ
   scrollAreaOffsets.set(g.id, next);
 }
 
+function drawDisabledGadgetOverlay(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = "rgba(140,140,140,0.7)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, width - 1), Math.max(0, height - 1));
+  ctx.restore();
+}
+
 function getPanelTabRects(
   ctx: CanvasRenderingContext2D,
   g: Gadget,
@@ -3765,7 +4363,7 @@ function getGadgetPreviewLayout(
 
   let rect: PreviewRect = { x: g.x, y: g.y, w: g.w, h: g.h };
   let clip = windowRect;
-  let visible = rect.w > 0 && rect.h > 0;
+  let visible = rect.w > 0 && rect.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
 
   if (g.splitterId) {
     const splitter = getGadgetById(g.splitterId);
@@ -3778,31 +4376,33 @@ function getGadgetPreviewLayout(
           : splitterLayout.rect;
       rect = paneRect;
       clip = intersectRect(splitterLayout.clip, paneRect);
-      visible = splitterLayout.visible && clip.w > 0 && clip.h > 0;
+      visible = splitterLayout.visible && clip.w > 0 && clip.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
     }
   } else if (g.parentId) {
     const parent = getGadgetById(g.parentId);
     if (parent) {
       const parentLayout = getGadgetPreviewLayout(parent, metrics, cache, visiting);
       const parentContentRect = getGadgetContentRect(parent.kind, parentLayout.rect, metrics);
+      const localRect = resolveGadgetCtorPreviewLocalRect(g, parentContentRect.w, parentContentRect.h);
       clip = intersectRect(parentLayout.clip, parentContentRect);
-      let localX = g.x;
-      let localY = g.y;
+      let localX = localRect.x;
+      let localY = localRect.y;
       if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
         localX -= getScrollAreaOffsetX(parent, parentLayout.rect, metrics);
         localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
       }
-      rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
-      visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip);
+      rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: localRect.w, h: localRect.h };
+      visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip) && !isGadgetHiddenInDesignerPreview(g.hidden);
 
       if (parent.kind === GADGET_KIND.PanelGadget && typeof g.parentItem === "number") {
         visible = visible && g.parentItem === getPanelActiveItem(parent);
       }
     }
   } else {
-    rect = { x: windowContentRect.x + g.x, y: windowContentRect.y + g.y, w: g.w, h: g.h };
+    const localRect = resolveGadgetCtorPreviewLocalRect(g, windowContentRect.w, windowContentRect.h);
+    rect = { x: windowContentRect.x + localRect.x, y: windowContentRect.y + localRect.y, w: localRect.w, h: localRect.h };
     clip = intersectRect(windowContentRect, rect);
-    visible = clip.w > 0 && clip.h > 0;
+    visible = clip.w > 0 && clip.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
   }
 
   const layout: GadgetPreviewLayout = { rect, clip, visible };
@@ -4023,7 +4623,7 @@ function drawButtonGadgetChrome(
   osSkin: DesignerSettings["osSkin"],
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.ButtonGadget;
+  const label = getPreviewGadgetText(g, GADGET_KIND.ButtonGadget);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const baseControlColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
   const buttonRadius = Math.max(2, Math.min(4, Math.trunc(Math.min(w, h) / 6)));
@@ -4080,6 +4680,24 @@ function drawButtonGadgetChrome(
     case "macos":
     case "linux":
     default: {
+      if (usesOriginalMacRoundedButtonChrome(osSkin, h)) {
+        const topBandHeight = Math.max(0, Math.min(10, h - 2));
+        const bottomBandY = y + 11;
+        const bottomBandHeight = Math.max(0, Math.min(10, (y + h - 1) - bottomBandY));
+        const outlineHeight = Math.max(0, Math.min(22, h - 1));
+        const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 10);
+        gradient.addColorStop(0, "rgb(244, 244, 244)");
+        gradient.addColorStop(1, "rgb(255, 255, 255)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), topBandHeight);
+        ctx.fillStyle = "rgb(236, 236, 236)";
+        ctx.fillRect(x + 1, bottomBandY, Math.max(0, w - 2), bottomBandHeight);
+        traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), outlineHeight, 3);
+        ctx.strokeStyle = "rgb(144, 144, 144)";
+        ctx.stroke();
+        break;
+      }
+
       traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), buttonRadius);
       ctx.strokeStyle = "rgb(220, 220, 220)";
       ctx.stroke();
@@ -4109,11 +4727,14 @@ function drawButtonGadgetChrome(
     }
   }
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textWidth = ctx.measureText(label).width;
+  const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
   const textX = x + Math.max(1, (w - textWidth) / 2);
-  const textY = y + Math.max(1, Math.trunc((h - 12) / 2));
+  const textY = getPreviewButtonTextY(y, h, textHeight);
   ctx.fillStyle = textColor;
   ctx.fillText(label, textX, textY);
+  drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -4134,6 +4755,31 @@ function drawComboDropArrow(
   ctx.restore();
 }
 
+function drawMacComboDoubleArrows(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + 4);
+  ctx.lineTo(x + 2.5, y);
+  ctx.lineTo(x + 5, y + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + 7);
+  ctx.lineTo(x + 2.5, y + 11);
+  ctx.lineTo(x + 5, y + 7);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
 
 function drawCheckableGadgetFallbackMark(
   ctx: CanvasRenderingContext2D,
@@ -4207,7 +4853,7 @@ function drawCheckableGadgetChrome(
 ) {
   const checked = Boolean(g.state);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = g.text ?? "";
+  const label = getPreviewGadgetText(g);
   const image = getPreviewCheckableImage(kind, osSkin, checked);
   const fallbackWidth = kind === "option" ? 16 : 14;
   const fallbackHeight = kind === "option" ? 17 : 15;
@@ -4216,7 +4862,7 @@ function drawCheckableGadgetChrome(
   const markX = x;
   const markY = y + Math.trunc((h - imageHeight) / 2);
   const textX = x + (kind === "option" ? 19 : 17);
-  const textY = y + Math.trunc((h - (kind === "option" ? 17 : 15)) / 2);
+  const textY = getPreviewCheckableTextY(kind, y, h);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -4226,8 +4872,10 @@ function drawCheckableGadgetChrome(
   }
 
   if (label.length > 0) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
     ctx.fillStyle = textColor;
     ctx.fillText(label, textX, textY);
+    drawPreviewTextDecorations(ctx, label, textX, textY, textStyle, textColor);
   }
 
   ctx.restore();
@@ -4245,12 +4893,14 @@ function drawDateGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = g.text ?? "";
+  const label = getPreviewGadgetText(g);
 
   ctx.save();
   ctx.textBaseline = "top";
 
   if (osSkin === "windows7" || osSkin === "windows8") {
+    const arrowLayout = getPreviewDateArrowLayout({ x, y, width: w, height: h, osSkin });
+
     ctx.fillStyle = fillColor;
     ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
     ctx.strokeStyle = ensurePreviewLineContrast(
@@ -4259,10 +4909,29 @@ function drawDateGadgetChrome(
       "rgb(150, 150, 150)"
     );
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
-    drawComboDropArrow(ctx, x + w - 8, y + Math.trunc(h / 2), textColor);
+    if (arrowLayout.kind === "rasterDown") {
+      const arrowImage = getPreviewComboArrowImage(arrowLayout.assetKind);
+      const drewRasterArrow = drawPreviewRasterIcon(
+        ctx,
+        arrowImage,
+        arrowLayout.x,
+        arrowLayout.y,
+        arrowLayout.width,
+        arrowLayout.height
+      );
+      if (!drewRasterArrow) {
+        drawComboDropArrow(ctx, arrowLayout.fallbackCenterX, arrowLayout.fallbackCenterY, textColor);
+      }
+    } else {
+      drawComboDropArrow(ctx, arrowLayout.centerX, arrowLayout.centerY, textColor);
+    }
     if (label.length > 0) {
+      const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+      const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+      const textY = getPreviewDateTextY(y, h, textHeight);
       ctx.fillStyle = textColor;
-      ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+      ctx.fillText(label, x + 3, textY);
+      drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
     }
     ctx.restore();
     return;
@@ -4294,8 +4963,12 @@ function drawDateGadgetChrome(
   ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
 
   if (label.length > 0) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+    const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+    const textY = getPreviewDateTextY(y, h, textHeight);
     ctx.fillStyle = textColor;
-    ctx.fillText(label, x + 3, y + Math.trunc((h - 12) / 2));
+    ctx.fillText(label, x + 3, textY);
+    drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   }
 
   if (!drawPreviewRasterIcon(ctx, iconImage, x + w - 21, y + Math.trunc((h - iconHeight) / 2), iconWidth, iconHeight)) {
@@ -4320,6 +4993,7 @@ function drawCalendarGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = "Calendar Gadget";
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -4327,13 +5001,16 @@ function drawCalendarGadgetChrome(
   ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   ctx.strokeStyle = "rgb(0, 0, 0)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
-  ctx.fillText("Calendar Gadget", x + 3, y + 3);
+  ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, textColor);
   ctx.restore();
 }
 
 function drawCanvasLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
+  g: Gadget,
   x: number,
   y: number,
   w: number,
@@ -4346,13 +5023,16 @@ function drawCanvasLikeGadgetChrome(
   ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   ctx.strokeStyle = "rgb(0, 0, 0)";
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = "rgb(0, 0, 0)";
   ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, "rgb(0, 0, 0)");
   ctx.restore();
 }
 
 function drawWebLikeGadgetChrome(
   ctx: CanvasRenderingContext2D,
+  g: Gadget,
   x: number,
   y: number,
   w: number,
@@ -4365,8 +5045,10 @@ function drawWebLikeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = "rgb(255, 255, 255)";
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = "rgb(0, 0, 0)";
   ctx.fillText(label, x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, label, x + 3, y + 3, textStyle, "rgb(0, 0, 0)");
   ctx.restore();
 }
 
@@ -4383,8 +5065,10 @@ function drawImageGadgetChrome(
   const imageEntry = findImageEntryById(g.imageId);
   const previewImage = getResolvedPreviewImage(resolvePreviewImageSrc(imageEntry));
   if (!drawResolvedPreviewImage(ctx, previewImage, x, y, w, h)) {
+    const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillText(GADGET_KIND.ImageGadget, x, y);
+    drawPreviewTextDecorations(ctx, GADGET_KIND.ImageGadget, x, y, textStyle, "rgb(0, 0, 0)");
   }
   ctx.restore();
 }
@@ -4457,6 +5141,8 @@ function drawComboLikeGadgetChrome(
   ctx.save();
   ctx.textBaseline = "top";
 
+  const comboChromeHeight = getPreviewComboChromeHeight(osSkin, h, isEditable);
+
   if (isEditable) {
     const borderColor = osSkin === "windows8"
       ? ensurePreviewLineContrast(
@@ -4517,14 +5203,15 @@ function drawComboLikeGadgetChrome(
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   } else if (osSkin === "macos") {
     const radius = 3;
+    const chromeHeight = Math.max(0, comboChromeHeight);
     const gradient = ctx.createLinearGradient(x + 1, y + 1, x + 1, y + 10);
     gradient.addColorStop(0, "rgb(244, 244, 244)");
     gradient.addColorStop(1, "rgb(255, 255, 255)");
     ctx.fillStyle = gradient;
-    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.min(10, Math.max(0, h - 2)));
+    ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, Math.min(10, chromeHeight - 2)));
     ctx.fillStyle = "rgb(236, 236, 236)";
-    ctx.fillRect(x + 1, y + 11, Math.max(0, w - 2), Math.max(0, Math.min(9, h - 12)));
-    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1), radius);
+    ctx.fillRect(x + 1, y + 11, Math.max(0, w - 2), Math.max(0, Math.min(9, chromeHeight - 12)));
+    traceRoundedRect(ctx, x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, chromeHeight - 1), radius);
     ctx.strokeStyle = "rgb(144, 144, 144)";
     ctx.stroke();
   } else {
@@ -4546,79 +5233,61 @@ function drawComboLikeGadgetChrome(
     ctx.stroke();
   }
 
-  drawComboDropArrow(ctx, x + w - 12, y + Math.trunc(h / 2), arrowColor);
+  const comboArrowLayout = getPreviewComboArrowLayout({ x, y, width: w, height: h, osSkin, isEditable });
+  if (comboArrowLayout.kind === "macDoubleArrows") {
+    if (!drawPreviewRasterIcon(
+      ctx,
+      getPreviewMacComboDoubleArrowsImage(),
+      comboArrowLayout.x,
+      comboArrowLayout.y,
+      comboArrowLayout.width,
+      comboArrowLayout.height
+    )) {
+      drawMacComboDoubleArrows(ctx, comboArrowLayout.x, comboArrowLayout.y, arrowColor);
+    }
+  } else if (comboArrowLayout.kind === "rasterDown") {
+    if (!drawPreviewRasterIcon(
+      ctx,
+      getPreviewComboArrowImage(comboArrowLayout.assetKind),
+      comboArrowLayout.x,
+      comboArrowLayout.y,
+      comboArrowLayout.width,
+      comboArrowLayout.height
+    )) {
+      drawComboDropArrow(ctx, comboArrowLayout.fallbackCenterX, comboArrowLayout.fallbackCenterY, arrowColor);
+    }
+  } else {
+    drawComboDropArrow(ctx, comboArrowLayout.centerX, comboArrowLayout.centerY, arrowColor);
+  }
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
+  const textX = getPreviewComboTextX({ x, isEditable, osSkin });
+  const textY = getPreviewComboTextY({ y, height: h, textHeight, isEditable, osSkin });
   ctx.fillStyle = textColor;
-  ctx.fillText(itemLabel, x + (isEditable ? 3 : 4), y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(itemLabel, textX, textY);
+  drawPreviewTextDecorations(ctx, itemLabel, textX, textY, textStyle, textColor);
   ctx.restore();
 }
 
-function drawSpinGadgetChrome(
+function measurePreviewTextHeight(ctx: CanvasRenderingContext2D, text: string, fallbackHeight: number): number {
+  const metrics = ctx.measureText(text.length > 0 ? text : " ");
+  const measuredHeight = Math.ceil((metrics.actualBoundingBoxAscent ?? 0) + (metrics.actualBoundingBoxDescent ?? 0));
+  return measuredHeight > 0 ? measuredHeight : fallbackHeight;
+}
+
+function drawSpinSpinnerFallback(
   ctx: CanvasRenderingContext2D,
-  g: Gadget,
   x: number,
   y: number,
   w: number,
   h: number,
   osSkin: DesignerSettings["osSkin"],
+  textColor: string,
+  fillColor: string,
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
-  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = (g.text && g.text.length > 0) ? g.text : GADGET_KIND.SpinGadget;
   const spinnerWidth = osSkin === "windows8" ? 18 : 20;
   const bodyWidth = Math.max(0, w - spinnerWidth);
-
-  ctx.save();
-  ctx.textBaseline = "top";
-
-  if (osSkin === "windows8") {
-    const borderColor = ensurePreviewLineContrast(
-      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
-      fillColor,
-      "rgb(171, 173, 179)"
-    );
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(x + 1, y + 1, Math.max(0, bodyWidth - 2), Math.max(0, h - 2));
-
-    ctx.fillStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
-    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
-  } else {
-    const outerBorder = osSkin === "windows7"
-      ? ensurePreviewLineContrast(
-        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
-        fillColor,
-        "rgb(165, 165, 165)"
-      )
-      : "rgb(165, 165, 165)";
-    ctx.strokeStyle = outerBorder;
-    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, bodyWidth - 0.5), Math.max(0, h - 1));
-    ctx.strokeStyle = "rgb(227, 227, 227)";
-    ctx.beginPath();
-    ctx.moveTo(x + 1.5, y + 1.5);
-    ctx.lineTo(x + bodyWidth - 1.5, y + 1.5);
-    ctx.stroke();
-    ctx.strokeStyle = "rgb(245, 245, 245)";
-    ctx.beginPath();
-    ctx.moveTo(x + 1.5, y + 2.5);
-    ctx.lineTo(x + bodyWidth - 1.5, y + 2.5);
-    ctx.moveTo(x + 1.5, y + 2.5);
-    ctx.lineTo(x + 1.5, y + h - 2.5);
-    ctx.moveTo(x + bodyWidth - 2.5, y + 2.5);
-    ctx.lineTo(x + bodyWidth - 2.5, y + h - 2.5);
-    ctx.stroke();
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(x + 2, y + 3, Math.max(0, bodyWidth - 4), Math.max(0, h - 4));
-
-    ctx.strokeStyle = outerBorder;
-    ctx.strokeRect(x + bodyWidth + 0.5, y + 0.5, Math.max(0, spinnerWidth - 1), Math.max(0, h - 1));
-    ctx.fillStyle = osSkin === "macos" ? "rgb(236, 236, 236)" : "rgb(240, 240, 240)";
-    ctx.fillRect(x + bodyWidth + 1, y + 1, Math.max(0, spinnerWidth - 2), Math.max(0, h - 2));
-  }
-
   const dividerX = x + bodyWidth;
   ctx.strokeStyle = osSkin === "windows8"
     ? ensurePreviewLineContrast(
@@ -4655,9 +5324,98 @@ function drawSpinGadgetChrome(
   ctx.lineTo(x + bodyWidth + spinnerWidth / 2, y + Math.trunc((3 * h) / 4) + 2);
   ctx.closePath();
   ctx.fill();
+}
 
+function drawSpinGadgetChrome(
+  ctx: CanvasRenderingContext2D,
+  g: Gadget,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  osSkin: DesignerSettings["osSkin"],
+  windowsSkinColors?: WindowsSkinSystemColors | null
+) {
+  const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
+  const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
+  const label = getPreviewGadgetText(g, GADGET_KIND.SpinGadget);
+  const layout = getPreviewSpinButtonLayout({ x, y, width: w, height: h, osSkin });
+
+  ctx.save();
+  ctx.textBaseline = "top";
+
+  if (osSkin === "windows8") {
+    const borderColor = ensurePreviewLineContrast(
+      windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+      fillColor,
+      "rgb(171, 173, 179)"
+    );
+    ctx.strokeStyle = borderColor;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, layout.bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 1, y + 1, Math.max(0, layout.bodyWidth - 2), Math.max(0, h - 2));
+  } else {
+    const outerBorder = osSkin === "windows7"
+      ? ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
+        fillColor,
+        "rgb(165, 165, 165)"
+      )
+      : "rgb(165, 165, 165)";
+    ctx.strokeStyle = outerBorder;
+    ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, layout.bodyWidth - 0.5), Math.max(0, h - 1));
+    ctx.strokeStyle = "rgb(227, 227, 227)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 1.5);
+    ctx.lineTo(x + layout.bodyWidth - 1.5, y + 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(245, 245, 245)";
+    ctx.beginPath();
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + layout.bodyWidth - 1.5, y + 2.5);
+    ctx.moveTo(x + 1.5, y + 2.5);
+    ctx.lineTo(x + 1.5, y + h - 2.5);
+    ctx.moveTo(x + layout.bodyWidth - 2.5, y + 2.5);
+    ctx.lineTo(x + layout.bodyWidth - 2.5, y + h - 2.5);
+    ctx.stroke();
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x + 2, y + 3, Math.max(0, layout.bodyWidth - 4), Math.max(0, h - 4));
+  }
+
+  const spinImage = getPreviewSpinImage(osSkin);
+  const spinDrawn = drawPreviewRasterIcon(ctx, spinImage, layout.imageX, layout.imageY, layout.imageWidth, layout.imageHeight);
+  if (!spinDrawn) {
+    if (osSkin === "windows8") {
+      const borderColor = ensurePreviewLineContrast(
+        windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(171, 173, 179)",
+        fillColor,
+        "rgb(171, 173, 179)"
+      );
+      ctx.fillStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+      ctx.fillRect(layout.imageX, layout.imageY, Math.max(0, layout.imageWidth), Math.max(0, layout.imageHeight));
+      ctx.strokeStyle = borderColor;
+      ctx.strokeRect(layout.imageX + 0.5, layout.imageY + 0.5, Math.max(0, layout.imageWidth - 1), Math.max(0, layout.imageHeight - 1));
+    } else {
+      ctx.strokeStyle = osSkin === "windows7"
+        ? ensurePreviewLineContrast(
+          windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(165, 165, 165)",
+          fillColor,
+          "rgb(165, 165, 165)"
+        )
+        : "rgb(165, 165, 165)";
+      ctx.strokeRect(x + layout.bodyWidth + 0.5, y + 0.5, Math.max(0, w - layout.bodyWidth - 1), Math.max(0, h - 1));
+      ctx.fillStyle = osSkin === "macos" ? "rgb(236, 236, 236)" : "rgb(240, 240, 240)";
+      ctx.fillRect(x + layout.bodyWidth + 1, y + 1, Math.max(0, w - layout.bodyWidth - 2), Math.max(0, h - 2));
+    }
+    drawSpinSpinnerFallback(ctx, x, y, w, h, osSkin, textColor, fillColor, windowsSkinColors);
+  }
+
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+  const textY = getPreviewSpinTextY(y, h, textHeight);
   ctx.fillStyle = textColor;
-  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, x + 3, textY);
+  drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -4728,7 +5486,7 @@ function drawFrameGadgetChrome(
   osSkin: DesignerSettings["osSkin"],
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
-  const caption = g.text ?? "";
+  const caption = getPreviewGadgetText(g);
   const captionColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const captionBgColor = getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
   const isSingle = hasPbFlag(g.flagsExpr, "#PB_Frame3D_Single");
@@ -4739,6 +5497,9 @@ function drawFrameGadgetChrome(
 
   ctx.save();
   ctx.textBaseline = "top";
+  // const captionTextStyle = applyPreviewColumnHeaderTextStyle(ctx, 12); // The original PureBasic form editor uses a fixed font for the column headers 
+  const captionTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const captionBlankTextHeight = measurePreviewTextHeight(ctx, " ", captionTextStyle.sizePx);
 
   if (osSkin === "macos") {
     if (isSingle) {
@@ -4767,12 +5528,14 @@ function drawFrameGadgetChrome(
     if (caption.length > 0) {
       ctx.fillStyle = captionColor;
       ctx.fillText(caption, x + 10, y);
+      drawPreviewTextDecorations(ctx, caption, x + 10, y, captionTextStyle, captionColor);
     }
 
-    traceRoundedRect(ctx, x + 1.5, y + captionHeight + 2.5, Math.max(0, w - 3), Math.max(0, h - captionHeight - 3), 3);
+    const frameBodyOffsetY = getPreviewFrameMacBodyOffsetY(captionBlankTextHeight);
+    traceRoundedRect(ctx, x + 1.5, y + frameBodyOffsetY + 1.5, Math.max(0, w - 3), Math.max(0, h - frameBodyOffsetY - 2), 3);
     ctx.strokeStyle = "rgb(222, 222, 222)";
     ctx.stroke();
-    traceRoundedRect(ctx, x + 0.5, y + captionHeight + 1.5, Math.max(0, w - 1), Math.max(0, h - captionHeight - 1), 3);
+    traceRoundedRect(ctx, x + 0.5, y + frameBodyOffsetY + 0.5, Math.max(0, w - 1), Math.max(0, h - frameBodyOffsetY), 3);
     ctx.strokeStyle = "rgb(200, 200, 200)";
     ctx.stroke();
     ctx.restore();
@@ -4871,6 +5634,7 @@ function drawFrameGadgetChrome(
     ctx.fillRect(x + 8, y, captionWidth + 4, captionHeight);
     ctx.fillStyle = captionColor;
     ctx.fillText(caption, x + 10, y);
+    drawPreviewTextDecorations(ctx, caption, x + 10, y, captionTextStyle, captionColor);
   }
 
   ctx.restore();
@@ -4890,18 +5654,19 @@ function drawTrackBarGadgetChrome(
   const showTicks = hasPbFlag(g.flagsExpr, "#PB_TrackBar_Ticks");
   const trackFill = osSkin === "windows8"
     ? (windowsSkinColors?.buttonFace ?? "rgb(231, 231, 231)")
-    : "rgb(231, 231, 231)";
+    : (osSkin === "macos" ? null : "rgb(231, 231, 231)");
   const trackBorder = osSkin === "windows8"
     ? ensurePreviewLineContrast(
       windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(176, 176, 176)",
-      trackFill,
+      trackFill ?? "rgb(231, 231, 231)",
       "rgb(176, 176, 176)"
     )
-    : "rgb(176, 176, 176)";
+    : (osSkin === "macos" ? "rgb(116, 116, 116)" : "rgb(176, 176, 176)");
+  const trackContrastBase = trackFill ?? "rgb(231, 231, 231)";
   const tickColor = osSkin === "windows8"
     ? ensurePreviewLineContrast(
       windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(154, 154, 154)",
-      trackFill,
+      trackContrastBase,
       "rgb(154, 154, 154)"
     )
     : "rgb(154, 154, 154)";
@@ -4917,27 +5682,52 @@ function drawTrackBarGadgetChrome(
     : "rgb(161, 161, 161)";
 
   ctx.save();
+  const thumbAssetLayout = getPreviewTrackBarThumbAssetLayout({ x, y, osSkin, isVertical });
+  const macGrooveHighlightLines = getPreviewTrackBarMacGrooveHighlightLines({ x, y, width: w, height: h, osSkin, isVertical });
+  const noTicksFillRect = !showTicks
+    ? getPreviewTrackBarNoTicksFillRect({ x, y, width: w, height: h, osSkin, isVertical })
+    : null;
 
   if (isVertical) {
     traceRoundedRect(ctx, x + 3.5, y + 0.5, 5, Math.max(0, h - 1), 1);
-    ctx.fillStyle = trackFill;
-    ctx.fill();
+    if (trackFill) {
+      ctx.fillStyle = trackFill;
+      ctx.fill();
+    }
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
 
-    const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
-    const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
-    if (osSkin === "windows8") {
-      ctx.fillStyle = thumbFill;
-      ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
-      ctx.strokeStyle = thumbBorder;
-      ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
-    } else {
-      traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
-      ctx.fillStyle = thumbFill;
-      ctx.fill();
-      ctx.strokeStyle = thumbBorder;
-      ctx.stroke();
+    for (const line of macGrooveHighlightLines) {
+      ctx.fillStyle = line.color;
+      ctx.fillRect(line.x, line.y, line.w, line.h);
+    }
+
+    const thumbDrawn = thumbAssetLayout
+      ? drawPreviewRasterIcon(
+        ctx,
+        getPreviewTrackBarThumbImage(thumbAssetLayout.assetKind),
+        thumbAssetLayout.x,
+        thumbAssetLayout.y,
+        thumbAssetLayout.width,
+        thumbAssetLayout.height
+      )
+      : false;
+
+    if (!thumbDrawn) {
+      const thumbH = Math.min(18, Math.max(12, Math.trunc(h / 5)));
+      const thumbY = y + Math.max(0, Math.trunc((h - thumbH) / 2));
+      if (osSkin === "windows8") {
+        ctx.fillStyle = thumbFill;
+        ctx.fillRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+        ctx.strokeStyle = thumbBorder;
+        ctx.strokeRect(x + 0.5, thumbY + 0.5, 16, thumbH);
+      } else {
+        traceRoundedRect(ctx, x + 0.5, thumbY + 0.5, 16, thumbH, 2);
+        ctx.fillStyle = thumbFill;
+        ctx.fill();
+        ctx.strokeStyle = thumbBorder;
+        ctx.stroke();
+      }
     }
 
     if (showTicks) {
@@ -4945,27 +5735,50 @@ function drawTrackBarGadgetChrome(
         ctx.fillStyle = tickColor;
         ctx.fillRect(x + 17, tickY, 4, 1);
       }
+    } else if (noTicksFillRect) {
+      ctx.fillStyle = "rgb(114, 114, 114)";
+      ctx.fillRect(noTicksFillRect.x, noTicksFillRect.y, noTicksFillRect.w, noTicksFillRect.h);
     }
   } else {
     traceRoundedRect(ctx, x + 0.5, y + 3.5, Math.max(0, w - 1), 5, 1);
-    ctx.fillStyle = trackFill;
-    ctx.fill();
+    if (trackFill) {
+      ctx.fillStyle = trackFill;
+      ctx.fill();
+    }
     ctx.strokeStyle = trackBorder;
     ctx.stroke();
 
-    const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
-    const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
-    if (osSkin === "windows8") {
-      ctx.fillStyle = thumbFill;
-      ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
-      ctx.strokeStyle = thumbBorder;
-      ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
-    } else {
-      traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
-      ctx.fillStyle = thumbFill;
-      ctx.fill();
-      ctx.strokeStyle = thumbBorder;
-      ctx.stroke();
+    for (const line of macGrooveHighlightLines) {
+      ctx.fillStyle = line.color;
+      ctx.fillRect(line.x, line.y, line.w, line.h);
+    }
+
+    const thumbDrawn = thumbAssetLayout
+      ? drawPreviewRasterIcon(
+        ctx,
+        getPreviewTrackBarThumbImage(thumbAssetLayout.assetKind),
+        thumbAssetLayout.x,
+        thumbAssetLayout.y,
+        thumbAssetLayout.width,
+        thumbAssetLayout.height
+      )
+      : false;
+
+    if (!thumbDrawn) {
+      const thumbW = Math.min(18, Math.max(12, Math.trunc(w / 5)));
+      const thumbX = x + Math.max(0, Math.trunc((w - thumbW) / 2));
+      if (osSkin === "windows8") {
+        ctx.fillStyle = thumbFill;
+        ctx.fillRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+        ctx.strokeStyle = thumbBorder;
+        ctx.strokeRect(thumbX + 0.5, y + 0.5, thumbW, 16);
+      } else {
+        traceRoundedRect(ctx, thumbX + 0.5, y + 0.5, thumbW, 16, 2);
+        ctx.fillStyle = thumbFill;
+        ctx.fill();
+        ctx.strokeStyle = thumbBorder;
+        ctx.stroke();
+      }
     }
 
     if (showTicks) {
@@ -4973,6 +5786,9 @@ function drawTrackBarGadgetChrome(
         ctx.fillStyle = tickColor;
         ctx.fillRect(tickX, y + 17, 1, 4);
       }
+    } else if (noTicksFillRect) {
+      ctx.fillStyle = "rgb(114, 114, 114)";
+      ctx.fillRect(noTicksFillRect.x, noTicksFillRect.y, noTicksFillRect.w, noTicksFillRect.h);
     }
   }
 
@@ -5103,38 +5919,76 @@ function drawScrollBarGadgetChrome(
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   }
 
+  const arrowLayouts = getPreviewScrollBarArrowAssetLayouts({ x, y, width: w, height: h, osSkin, isVertical });
+
   if (isVertical) {
-    drawScrollBarArrowGlyph(ctx, "up", x + Math.trunc(w / 2), y + 8, arrowColor);
-    drawScrollBarArrowGlyph(ctx, "down", x + Math.trunc(w / 2), y + h - 8, arrowColor);
+    for (const arrow of arrowLayouts) {
+      const drawn = drawPreviewRasterIcon(
+        ctx,
+        getPreviewScrollBarArrowImage(arrow.assetKind),
+        arrow.x,
+        arrow.y,
+        arrow.width,
+        arrow.height
+      );
+      if (!drawn) {
+        drawScrollBarArrowGlyph(ctx, arrow.direction, x + Math.trunc(w / 2), arrow.direction === "up" ? y + 8 : y + h - 8, arrowColor);
+      }
+    }
     if (osSkin === "windows8") {
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 1, y + 17, Math.max(0, w - 1), Math.max(0, Math.trunc((h - 34) / 3)));
     } else {
-      traceRoundedRect(ctx, x + 1.5, y + 18.5, Math.max(0, w - 3), Math.max(0, Math.trunc((h - 34) / 3)), 1);
-      ctx.fillStyle = thumbColor;
-      ctx.fill();
-      ctx.strokeStyle = "rgb(155, 155, 155)";
-      ctx.stroke();
-      if (thumbHighlight) {
-        ctx.fillStyle = thumbHighlight;
-        ctx.fillRect(x + 2, y + 19, Math.max(0, Math.trunc((w * 3) / 8) - 4), Math.max(0, Math.trunc((h - 34) / 3) - 2));
+      const thumbFillLayout = getPreviewScrollBarThumbFillLayout({ x, y, width: w, height: h, osSkin, isVertical: true });
+      if (thumbFillLayout) {
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.strokeStyle = "rgb(155, 155, 155)";
+        ctx.stroke();
+        ctx.save();
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.clip();
+        if (thumbHighlight) {
+          ctx.fillStyle = thumbHighlight;
+          ctx.fillRect(thumbFillLayout.lightRect.x, thumbFillLayout.lightRect.y, thumbFillLayout.lightRect.w, thumbFillLayout.lightRect.h);
+        }
+        ctx.fillStyle = thumbColor;
+        ctx.fillRect(thumbFillLayout.darkRect.x, thumbFillLayout.darkRect.y, thumbFillLayout.darkRect.w, thumbFillLayout.darkRect.h);
+        ctx.restore();
       }
     }
   } else {
-    drawScrollBarArrowGlyph(ctx, "left", x + 8, y + Math.trunc(h / 2), arrowColor);
-    drawScrollBarArrowGlyph(ctx, "right", x + w - 8, y + Math.trunc(h / 2), arrowColor);
+    for (const arrow of arrowLayouts) {
+      const drawn = drawPreviewRasterIcon(
+        ctx,
+        getPreviewScrollBarArrowImage(arrow.assetKind),
+        arrow.x,
+        arrow.y,
+        arrow.width,
+        arrow.height
+      );
+      if (!drawn) {
+        drawScrollBarArrowGlyph(ctx, arrow.direction, arrow.direction === "left" ? x + 8 : x + w - 8, y + Math.trunc(h / 2), arrowColor);
+      }
+    }
     if (osSkin === "windows8") {
       ctx.fillStyle = thumbColor;
       ctx.fillRect(x + 17, y + 1, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 1));
     } else {
-      traceRoundedRect(ctx, x + 18.5, y + 1.5, Math.max(0, Math.trunc((w - 34) / 3)), Math.max(0, h - 3), 1);
-      ctx.fillStyle = thumbColor;
-      ctx.fill();
-      ctx.strokeStyle = "rgb(155, 155, 155)";
-      ctx.stroke();
-      if (thumbHighlight) {
-        ctx.fillStyle = thumbHighlight;
-        ctx.fillRect(x + 19, y + 2, Math.max(0, Math.trunc((w - 34) / 3) - 2), Math.max(0, Math.trunc((h * 3) / 8) - 4));
+      const thumbFillLayout = getPreviewScrollBarThumbFillLayout({ x, y, width: w, height: h, osSkin, isVertical: false });
+      if (thumbFillLayout) {
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.strokeStyle = "rgb(155, 155, 155)";
+        ctx.stroke();
+        ctx.save();
+        traceRoundedRect(ctx, thumbFillLayout.thumbRect.x + 0.5, thumbFillLayout.thumbRect.y + 0.5, thumbFillLayout.thumbRect.w, thumbFillLayout.thumbRect.h, 1);
+        ctx.clip();
+        if (thumbHighlight) {
+          ctx.fillStyle = thumbHighlight;
+          ctx.fillRect(thumbFillLayout.lightRect.x, thumbFillLayout.lightRect.y, thumbFillLayout.lightRect.w, thumbFillLayout.lightRect.h);
+        }
+        ctx.fillStyle = thumbColor;
+        ctx.fillRect(thumbFillLayout.darkRect.x, thumbFillLayout.darkRect.y, thumbFillLayout.darkRect.w, thumbFillLayout.darkRect.h);
+        ctx.restore();
       }
     }
   }
@@ -5154,9 +6008,7 @@ function drawStringLikeGadgetChrome(
 ) {
   const fillColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultClientBg(windowsSkinColors);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
-  const label = (g.text && g.text.length > 0)
-    ? g.text
-    : (g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
+  const label = getPreviewGadgetText(g, g.kind === GADGET_KIND.IPAddressGadget ? "IPGadget" : GADGET_KIND.StringGadget);
 
   ctx.save();
   ctx.textBaseline = "top";
@@ -5199,8 +6051,12 @@ function drawStringLikeGadgetChrome(
     ctx.fillRect(x + 2, y + 3, Math.max(0, w - 4), Math.max(0, h - 4));
   }
 
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const textHeight = measurePreviewTextHeight(ctx, label, textStyle.sizePx);
+  const textY = getPreviewStringLikeTextY(y, h, textHeight);
   ctx.fillStyle = textColor;
-  ctx.fillText(label, x + 3, y + Math.max(1, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, x + 3, textY);
+  drawPreviewTextDecorations(ctx, label, x + 3, textY, textStyle, textColor);
   ctx.restore();
 }
 
@@ -5215,9 +6071,7 @@ function drawTextLikeGadgetChrome(
   windowsSkinColors?: WindowsSkinSystemColors | null
 ) {
   const isTextGadget = g.kind === GADGET_KIND.TextGadget;
-  const label = (g.text && g.text.length > 0)
-    ? g.text
-    : (isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
+  const label = getPreviewGadgetText(g, isTextGadget ? GADGET_KIND.TextGadget : GADGET_KIND.HyperLinkGadget);
   const textColor = pbColorNumberToCssHex(g.frontColor) ?? getPreviewGadgetDefaultTextColor(windowsSkinColors);
   const bgColor = pbColorNumberToCssHex(g.backColor) ?? getPreviewGadgetDefaultControlBg(osSkin, windowsSkinColors);
 
@@ -5229,16 +6083,18 @@ function drawTextLikeGadgetChrome(
     ctx.fillRect(x, y, Math.max(0, w), Math.max(0, h));
   }
 
-  let textX = x + 1;
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   const textWidth = ctx.measureText(label).width;
-  if (hasPbFlag(g.flagsExpr, "#PB_Text_Right")) {
-    textX = x + Math.max(1, w - textWidth - 1);
-  } else if (hasPbFlag(g.flagsExpr, "#PB_Text_Center")) {
-    textX = x + Math.max(1, (w - textWidth) / 2);
-  }
-
+  const textPos = getPreviewTextLikeTextPosition({
+    x,
+    y,
+    width: w,
+    textWidth,
+    flagsExpr: g.flagsExpr,
+  });
   ctx.fillStyle = textColor;
-  ctx.fillText(label, textX, y + Math.max(0, Math.trunc((h - 12) / 2)));
+  ctx.fillText(label, textPos.x, textPos.y);
+  drawPreviewTextDecorations(ctx, label, textPos.x, textPos.y, textStyle, textColor);
 
   if (isTextGadget && hasPbFlag(g.flagsExpr, "#PB_Text_Border")) {
     ctx.strokeStyle = ensurePreviewLineContrast(
@@ -5288,7 +6144,6 @@ function drawListLikeGadgetChrome(
   const placeholderX = x + 30;
   const rows = (g.items ?? []).map(getPreviewGadgetItemLabel);
   let textY = y + 4;
-  const lineAdvance = isTree ? 18 : 16;
   const lastTextY = y + Math.max(0, h - 14);
 
   ctx.save();
@@ -5297,10 +6152,14 @@ function drawListLikeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const blankTextHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
+  const lineAdvance = getPreviewListRowAdvance(isTree ? "tree" : "listview", blankTextHeight);
   ctx.fillStyle = textColor;
 
   if (rows.length === 0) {
     ctx.fillText(fallbackLabel, placeholderX, y + 4);
+    drawPreviewTextDecorations(ctx, fallbackLabel, placeholderX, y + 4, textStyle, textColor);
     ctx.restore();
     return;
   }
@@ -5308,6 +6167,7 @@ function drawListLikeGadgetChrome(
   for (const row of rows) {
     if (textY > lastTextY) break;
     ctx.fillText(row, itemX, textY);
+    drawPreviewTextDecorations(ctx, row, itemX, textY, textStyle, textColor);
     textY += lineAdvance;
   }
 
@@ -5408,15 +6268,20 @@ function drawListIconLikeGadgetChrome(
   ctx.lineTo(x + Math.max(1, w - 1), y + 16.5);
   ctx.stroke();
 
+/*   const headerTextStyle = variant === "explorerlist"
+  ? applyPreviewColumnHeaderTextStyle(ctx, 11)
+  : applyPreviewGadgetTextStyle(ctx, g, 11); */ // /* The original PureBasic form editor uses a fixed font with 11px for explorerlist
+  const headerTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = headerTextColor;
-  ctx.font = '11px sans-serif';
 
   if (columns.length > 0) {
+    const headerTextY = getPreviewListHeaderTextY(variant, y);
     let xCol = x + 2;
     for (let index = 0; index < columns.length; index += 1) {
       const column = columns[index];
       const label = column.label ?? "";
-      ctx.fillText(label, xCol + 2, y + 2);
+      ctx.fillText(label, xCol + 2, headerTextY);
+      drawPreviewTextDecorations(ctx, label, xCol + 2, headerTextY, headerTextStyle, headerTextColor);
       xCol += column.width;
       if (index < columns.length - 1 && xCol < x + w - 1) {
         ctx.strokeStyle = headerShadowColor;
@@ -5428,7 +6293,9 @@ function drawListIconLikeGadgetChrome(
     }
   }
 
-  ctx.font = '12px sans-serif';
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
+  const blankTextHeight = measurePreviewTextHeight(ctx, " ", textStyle.sizePx);
+  const rowAdvance = getPreviewListRowAdvance(variant, blankTextHeight);
   ctx.fillStyle = textColor;
 
   let rowY = contentStartY;
@@ -5440,14 +6307,17 @@ function drawListIconLikeGadgetChrome(
       const fields = row.split("|");
       let xCol = x + 2;
       for (let index = 0; index < fields.length && index < columns.length; index += 1) {
-        ctx.fillText(fields[index] ?? "", xCol, rowY);
+        const fieldText = fields[index] ?? "";
+        ctx.fillText(fieldText, xCol, rowY);
+        drawPreviewTextDecorations(ctx, fieldText, xCol, rowY, textStyle, textColor);
         xCol += columns[index].width;
       }
     } else {
       ctx.fillText(row, x + 6, rowY);
+      drawPreviewTextDecorations(ctx, row, x + 6, rowY, textStyle, textColor);
     }
 
-    rowY += 16;
+    rowY += rowAdvance;
   }
 
   ctx.restore();
@@ -5476,8 +6346,10 @@ function drawExplorerTreeGadgetChrome(
   ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
   ctx.fillStyle = fillColor;
   ctx.fillRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+  const textStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
   ctx.fillStyle = textColor;
   ctx.fillText("Explorer Tree", x + 3, y + 3);
+  drawPreviewTextDecorations(ctx, "Explorer Tree", x + 3, y + 3, textStyle, textColor);
   ctx.restore();
 }
 
@@ -5496,6 +6368,7 @@ function drawPanelChrome(
 
   ctx.save();
   ctx.textBaseline = "top";
+  const panelTextStyle = applyPreviewGadgetTextStyle(ctx, g, 12);
 
   if (osSkin === "macos") {
     const topOffset = 11;
@@ -5551,6 +6424,7 @@ function drawPanelChrome(
         }
 
         ctx.fillText(label, tabX, y + 3);
+        drawPreviewTextDecorations(ctx, label, tabX, y + 3, panelTextStyle, active ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)");
         tabX += tabWidth;
       }
     }
@@ -5600,6 +6474,7 @@ function drawPanelChrome(
 
       ctx.fillStyle = "rgb(0, 0, 0)";
       ctx.fillText(label, tabX + 6, y + 6);
+      drawPreviewTextDecorations(ctx, label, tabX + 6, y + 6, panelTextStyle, "rgb(0, 0, 0)");
       tabX += tabWidth + 8;
     }
 
@@ -5635,6 +6510,7 @@ function drawPanelChrome(
 
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillText(label, tabX + 6, y + 3);
+    drawPreviewTextDecorations(ctx, label, tabX + 6, y + 3, panelTextStyle, "rgb(0, 0, 0)");
     tabX += tabWidth;
   }
 
@@ -6495,18 +7371,34 @@ function drawMenuFlyoutPanelPreview(
   ctx.restore();
 
   let posY = panelRect.y;
+  ctx.save();
+  ctx.textBaseline = "alphabetic";
   for (const childIndex of childIndices) {
     const entry = menu.entries[childIndex];
     if (entry.kind === "MenuBar") {
-      menuEntryPreviewRects.push({ ownerId: menu.id, index: childIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 12 });
+      const entryRect: PreviewEntryRect = {
+        ownerId: menu.id,
+        index: childIndex,
+        ...getMenuFlyoutSeparatorPreviewRect(panelRect.x, posY, panelRect.w)
+      };
+      menuEntryPreviewRects.push(entryRect);
       ctx.save();
       ctx.strokeStyle = separatorColor;
       ctx.beginPath();
-      ctx.moveTo(panelRect.x + 0.5, posY + 6.5);
-      ctx.lineTo(panelRect.x + panelRect.w - 0.5, posY + 6.5);
+      ctx.moveTo(entryRect.x + 0.5, getMenuFlyoutSeparatorLineY(entryRect) + 0.5);
+      ctx.lineTo(entryRect.x + entryRect.w - 0.5, getMenuFlyoutSeparatorLineY(entryRect) + 0.5);
       ctx.stroke();
       ctx.restore();
-      posY += 12;
+      const isSelectedEntry = selection?.kind === "menuEntry"
+        && selection.menuId === menu.id
+        && selection.entryIndex === childIndex;
+      if (flyoutDecoration.useSelectedOutline && isSelectedEntry) {
+        ctx.save();
+        ctx.strokeStyle = selectedOutlineColor;
+        ctx.strokeRect(entryRect.x, entryRect.y, Math.max(0, entryRect.w), Math.max(0, entryRect.h));
+        ctx.restore();
+      }
+      posY += entryRect.h;
       continue;
     }
 
@@ -6534,15 +7426,15 @@ function drawMenuFlyoutPanelPreview(
     }
 
     const label = getMenuPreviewLabel(entry);
+    const textLayout = getMenuFlyoutEntryTextLayout(entryRect, entry.shortcut ? ctx.measureText(entry.shortcut).width : 0);
     ctx.fillStyle = menuTextColor;
-    ctx.fillText(label, entryRect.x + 24, entryRect.y + 14);
+    ctx.fillText(label, textLayout.labelX, textLayout.labelY);
 
     if (entry.shortcut) {
-      const shortcutWidth = Math.ceil(ctx.measureText(entry.shortcut).width);
       ctx.save();
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = getMenuFlyoutShortcutOpacity();
       ctx.fillStyle = menuTextColor;
-      ctx.fillText(entry.shortcut, entryRect.x + entryRect.w - 10 - shortcutWidth, entryRect.y + 14);
+      ctx.fillText(entry.shortcut, textLayout.shortcutX, textLayout.shortcutY);
       ctx.restore();
     }
 
@@ -6567,11 +7459,13 @@ function drawMenuFlyoutPanelPreview(
 
   const footerRect: PreviewMenuFooterRect = { menuId: menu.id, parentIndex, x: panelRect.x, y: posY, w: panelRect.w, h: 20 };
   menuFooterPreviewRects.push(footerRect);
+  const footerTextPosition = getMenuFlyoutFooterTextPosition(footerRect);
 
   ctx.save();
-  ctx.globalAlpha = 0.92;
+  ctx.globalAlpha = getMenuFlyoutFooterOpacity();
   ctx.fillStyle = menuTextColor;
-  ctx.fillText("Add Item...", footerRect.x + 5, footerRect.y + 14);
+  ctx.fillText("Add Item...", footerTextPosition.x, footerTextPosition.y);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -6603,12 +7497,11 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       break;
     }
     case "windows7-layered": {
-      const topFillColor = windowsSkinColors?.buttonFace ?? "rgb(245, 245, 245)";
-      const bottomFillColor = windowsSkinColors?.menuBar ?? "rgb(218, 224, 241)";
-      ctx.fillStyle = topFillColor;
+      const palette = deriveWindows7MenuBarPalette(windowsSkinColors?.menu, windowsSkinColors?.menuBar);
+      ctx.fillStyle = palette.topFill;
       ctx.fillRect(rect.x, rect.y, rect.w, Math.min(rect.h, 7));
       if (rect.h > 7) {
-        ctx.fillStyle = bottomFillColor;
+        ctx.fillStyle = palette.bottomFill;
         ctx.fillRect(rect.x, rect.y + 7, rect.w, Math.max(0, rect.h - 7));
       }
       break;
@@ -6643,23 +7536,25 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
       ctx.stroke();
       break;
-    case "windows7-triple":
-      ctx.strokeStyle = windowsSkinColors?.buttonShadow ?? windowsSkinColors?.threeDShadow ?? "rgb(182, 188, 204)";
+    case "windows7-triple": {
+      const palette = deriveWindows7MenuBarPalette(windowsSkinColors?.menu, windowsSkinColors?.menuBar);
+      ctx.strokeStyle = palette.separatorUpper;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 2.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 2.5);
       ctx.stroke();
-      ctx.strokeStyle = windowsSkinColors?.buttonFace ?? "rgb(240, 240, 240)";
+      ctx.strokeStyle = palette.separatorMiddle;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 1.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 1.5);
       ctx.stroke();
-      ctx.strokeStyle = windowsSkinColors?.scrollbar ?? "rgb(160, 160, 160)";
+      ctx.strokeStyle = palette.separatorLower;
       ctx.beginPath();
       ctx.moveTo(rect.x, rect.y + rect.h - 0.5);
       ctx.lineTo(rect.x + rect.w, rect.y + rect.h - 0.5);
       ctx.stroke();
       break;
+    }
     case "windows8-light":
       ctx.strokeStyle = windowsSkinColors
         ? ensurePreviewLineContrast(
@@ -6690,6 +7585,8 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   let x = rect.x + menuBarDecoration.itemInsetX;
   const textY = rect.y + menuBarDecoration.itemInsetY;
   const baseline = textY + Math.min(Math.max(12, rect.h - 8), 13);
+  ctx.save();
+  ctx.textBaseline = "alphabetic";
   for (const [entryIndex, entry] of menu.entries.entries()) {
     if (getMenuEntryLevel(entry) !== 0) continue;
     if (entry.kind === "MenuBar") {
@@ -6732,6 +7629,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     x += itemW + menuBarDecoration.itemSpacing;
     if (x >= rect.x + rect.w - 20) break;
   }
+  ctx.restore();
 
   const addIconMetrics = getWindowPreviewAddIconMetrics();
   const addRectX = Math.min(Math.max(rect.x + 6, x), Math.max(rect.x + 6, rect.x + rect.w - 20));
@@ -6757,9 +7655,7 @@ function drawMenuBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
     const parentRect = getMenuEntryRect(menuEntryPreviewRects, menu.id, parentIndex);
     if (!parentRect) continue;
 
-    const anchorRect: PreviewRect = previousPanelRect
-      ? { x: previousPanelRect.x + previousPanelRect.w, y: parentRect.y, w: 0, h: 0 }
-      : { x: parentRect.x, y: rect.y + rect.h - 2, w: 0, h: 0 };
+    const anchorRect: PreviewRect = getMenuFlyoutAnchorRect(rect, parentRect, previousPanelRect);
 
     const panelRect = getMenuFlyoutPanelRect(menu, parentIndex, anchorRect, (label) => ctx.measureText(label).width);
     if (!panelRect) continue;
@@ -6839,7 +7735,11 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
   for (const [entryIndex, entry] of toolbar.entries.entries()) {
     if (entry.kind === "ToolBarToolTip") continue;
     if (entry.kind === "ToolBarSeparator") {
-      toolBarEntryPreviewRects.push({ ownerId: toolbar.id, index: entryIndex, x, y, w: 6, h: 16 });
+      const entryRect = { ownerId: toolbar.id, index: entryIndex, ...getToolBarSeparatorPreviewRect(x, y) };
+      toolBarEntryPreviewRects.push(entryRect);
+      const isSelectedEntry = selection?.kind === "toolBarEntry"
+        && selection.toolBarId === toolbar.id
+        && selection.entryIndex === entryIndex;
       if (toolBarDecoration.separatorColorStyle !== "none") {
         ctx.save();
         ctx.strokeStyle = toolbarSeparatorColor;
@@ -6847,6 +7747,13 @@ function drawToolBarPreview(ctx: CanvasRenderingContext2D, rect: PreviewRect, fg
         ctx.moveTo(x + 2.5, y + 1);
         ctx.lineTo(x + 2.5, y + 15);
         ctx.stroke();
+        ctx.restore();
+      }
+      if (isSelectedEntry) {
+        const outlineRect = getToolBarSeparatorSelectedOutlineRect(entryRect);
+        ctx.save();
+        ctx.strokeStyle = toolbarSelectedOutlineColor;
+        ctx.strokeRect(outlineRect.x + 0.5, outlineRect.y + 0.5, outlineRect.w, outlineRect.h);
         ctx.restore();
       }
       x += 10;
@@ -7426,22 +8333,28 @@ function render() {
 
     if (titleRight > titleLeft) {
       const titleWidth = ctx.measureText(winTitle).width;
-      const titleX = titleButtonLayout.titleAlignment === "center"
-        ? titleLeft + Math.max(0, (titleRight - titleLeft - titleWidth) / 2)
-        : titleLeft;
+      const titleLayout = getWindowPreviewTitleTextLayout({
+        osSkin: settings.osSkin,
+        titleAlignment: titleButtonLayout.titleAlignment,
+        titleLeft,
+        titleRight,
+        windowX: winX,
+        windowWidth: winW,
+        titleWidth,
+      });
       ctx.save();
       ctx.beginPath();
-      ctx.rect(titleLeft, winY + 2, titleRight - titleLeft, Math.max(0, tbH - 4));
+      ctx.rect(titleLayout.clipLeft, winY + 2, titleLayout.clipRight - titleLayout.clipLeft, Math.max(0, tbH - 4));
       ctx.clip();
       ctx.textBaseline = "top";
       if (titleBarDecoration.drawShadowedTitle) {
         ctx.fillStyle = "rgb(255, 255, 255)";
-        ctx.fillText(winTitle, titleX, titleTop + 1);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop + 1);
         ctx.fillStyle = "rgb(54, 54, 54)";
-        ctx.fillText(winTitle, titleX, titleTop);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop);
       } else {
         ctx.fillStyle = titleFg;
-        ctx.fillText(winTitle, titleX, titleTop);
+        ctx.fillText(winTitle, titleLayout.titleX, titleTop);
       }
       ctx.restore();
     }
@@ -7461,9 +8374,9 @@ function render() {
         const buttonH = size.height;
         const kind = slot.kind;
         const isEnabled = slot.enabled;
-        let drewWindowsTitleButton = false;
+        let drewRasterTitleButton = false;
         if (isWindowsPreview && (settings.osSkin === "windows7" || settings.osSkin === "windows8")) {
-          drewWindowsTitleButton = drawPreviewRasterIcon(
+          drewRasterTitleButton = drawPreviewRasterIcon(
             ctx,
             getPreviewWindowsTitleButtonImage(settings.osSkin, kind, isEnabled),
             buttonX,
@@ -7471,9 +8384,27 @@ function render() {
             buttonW,
             buttonH
           );
+        } else if (isMacPreview) {
+          drewRasterTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewMacTitleButtonImage(kind, isEnabled),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
+        } else if (isLinuxPreview && isEnabled) {
+          drewRasterTitleButton = drawPreviewRasterIcon(
+            ctx,
+            getPreviewLinuxTitleButtonImage(kind),
+            buttonX,
+            buttonY,
+            buttonW,
+            buttonH
+          );
         }
 
-        if (!drewWindowsTitleButton) {
+        if (!drewRasterTitleButton) {
           if (isMacPreview) {
             const radius = Math.max(4, Math.trunc(Math.min(buttonW, buttonH) / 2));
             const cx = buttonX + Math.trunc(buttonW / 2);
@@ -7609,14 +8540,23 @@ function render() {
 
   // Window selection overlay
   if (selection?.kind === "window") {
+    const selectionStrokeRect = getWindowPreviewFrameStrokeRect(settings.osSkin, { x: winX, y: winY, w: winW, h: winH });
+
     ctx.save();
     ctx.strokeStyle = focus;
     ctx.lineWidth = 2;
     if (frameDecoration.borderStyle === "macos-rounded" || frameDecoration.borderStyle === "windows7-rounded") {
-      traceRoundedRect(ctx, winX + 0.5, winY + 0.5, winW - 1, winH - 1, frameDecoration.borderRadius);
+      traceRoundedRect(
+        ctx,
+        selectionStrokeRect.x,
+        selectionStrokeRect.y,
+        selectionStrokeRect.w,
+        selectionStrokeRect.h,
+        frameDecoration.borderRadius
+      );
       ctx.stroke();
     } else {
-      ctx.strokeRect(winX + 0.5, winY + 0.5, winW - 1, winH - 1);
+      ctx.strokeRect(selectionStrokeRect.x, selectionStrokeRect.y, selectionStrokeRect.w, selectionStrokeRect.h);
     }
     ctx.restore();
 
@@ -7628,7 +8568,10 @@ function render() {
   // Gadgets (offset by window origin)
   for (const g of model.gadgets) {
     const layout = getGadgetPreviewLayout(g, chromeMetrics, layoutCache);
-    if (!layout.visible) continue;
+    const isHiddenSelected = isGadgetHiddenInDesignerPreview(g.hidden)
+      && selection?.kind === "gadget" && g.id === selection.id;
+
+    if (!layout.visible && !isHiddenSelected) continue;
 
     const gx = winX + layout.rect.x;
     const gy = winY + layout.rect.y;
@@ -7637,6 +8580,7 @@ function render() {
     const clipX = winX + layout.clip.x;
     const clipY = winY + layout.clip.y;
 
+    if (layout.visible) {
     ctx.strokeStyle = fg;
     ctx.fillStyle = fg;
     ctx.lineWidth = 1;
@@ -7742,22 +8686,22 @@ function render() {
         break;
 
       case GADGET_KIND.CanvasGadget:
-        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "Canvas Gadget");
+        drawCanvasLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "Canvas Gadget");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.OpenGLGadget:
-        drawCanvasLikeGadgetChrome(ctx, gx, gy, gw, gh, "OpenGL Gadget");
+        drawCanvasLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "OpenGL Gadget");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.WebGadget:
-        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "Web");
+        drawWebLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "Web");
         drawDefaultLabel = false;
         break;
 
       case GADGET_KIND.WebViewGadget:
-        drawWebLikeGadgetChrome(ctx, gx, gy, gw, gh, "WebView");
+        drawWebLikeGadgetChrome(ctx, g, gx, gy, gw, gh, "WebView");
         drawDefaultLabel = false;
         break;
 
@@ -7816,7 +8760,13 @@ function render() {
     if (drawDefaultLabel) {
       ctx.fillText(`${g.kind} ${g.id}`, gx + 4, labelY);
     }
+
+    if (isGadgetDisabledInDesignerPreview(g.disabled)) {
+      drawDisabledGadgetOverlay(ctx, gx, gy, gw, gh);
+    }
+
     ctx.restore();
+    } // end if (layout.visible)
 
     const sel = selection;
     if (sel && sel.kind === "gadget" && g.id === sel.id) {
@@ -8012,11 +8962,13 @@ function drawWindowPreviewFrame(
     return;
   }
 
+  const strokeRect = getWindowPreviewFrameStrokeRect(settings.osSkin, rect);
+
   if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
-    traceRoundedRect(ctx, rect.x - 0.5, rect.y - 0.5, rect.w + 1, rect.h + 1, decoration.borderRadius);
+    traceRoundedRect(ctx, strokeRect.x, strokeRect.y, strokeRect.w, strokeRect.h, decoration.borderRadius);
     ctx.stroke();
   } else {
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+    ctx.strokeRect(strokeRect.x, strokeRect.y, strokeRect.w, strokeRect.h);
   }
 
   ctx.restore();
@@ -8501,16 +9453,28 @@ function renderProps() {
     }
 
     propsEl.appendChild(section("Layout"));
-    propsEl.appendChild(row("X", textInput(getWindowPositionInspectorValue(win.xRaw, win.x), v => {
+    propsEl.appendChild(row("X", textInput(getInspectorLayoutDisplayValue(win.xRaw, win.x), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "x", v);
     }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
-    propsEl.appendChild(row("Y", textInput(getWindowPositionInspectorValue(win.yRaw, win.y), v => {
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.xRaw, win.x), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Y", textInput(getInspectorLayoutDisplayValue(win.yRaw, win.y), v => {
       if (!model.window) return;
       postWindowPositionRaw(win, "y", v);
     }, { title: `Enter an integer value or ${WINDOW_POSITION_IGNORE_LITERAL}.` })));
-    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; win.w = asInt(v); postWindowRect(); render(); renderProps(); })));
-    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; win.h = asInt(v); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.yRaw, win.y), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Width", numberInput(win.w, v => { if (!model.window) return; updateWindowDisplayField(win, "w", asInt(v)); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.wRaw, win.w), "Readonly code value written to OpenWindow(...).")));
+    }
+    propsEl.appendChild(row("Height", numberInput(win.h, v => { if (!model.window) return; updateWindowDisplayField(win, "h", asInt(v)); postWindowRect(); render(); renderProps(); })));
+    if (shouldShowReadonlyUnscaledLayoutRows()) {
+      propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(win.hRaw, win.h), "Readonly code value written to OpenWindow(...).")));
+    }
     propsEl.appendChild(row("Hidden", checkboxInput(getWindowBooleanInspectorState(win.hiddenRaw, win.hidden), checked => {
       if (!model.window) return;
       win.hidden = checked;
@@ -10339,53 +11303,22 @@ function renderProps() {
   }
   const isImageCapableGadget = IMAGE_CAPABLE_GADGET_KINDS.has(g.kind);
   const gadgetImage = findImageEntryById(g.imageId);
-  if (isImageCapableGadget) {
-    propsEl.appendChild(
-      row(
-        "CurrentImage",
-        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
-      )
-    );
-    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
-      const canToggle = canToggleImagePbAny(gadgetImage);
-      propsEl.appendChild(row(
-        `Image ${PB_ANY}`,
-        checkboxInput(
-          Boolean(gadgetImage.pbAny),
-          () => {
-            if (!canToggle) return;
-            post({
-              type: "toggleImagePbAny",
-              sourceLine: gadgetImage!.source!.line,
-              toPbAny: !gadgetImage!.pbAny,
-            });
-          },
-          {
-            disabled: !canToggle,
-            title: gadgetImage.pbAny
-              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
-              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
-          }
-        )
-      ));
-    }
-  }
-  const gadgetImageActions = document.createElement("div");
-  gadgetImageActions.className = "row-actions";
 
-  if (isImageCapableGadget) {
-    const gadgetChooseFileBtn = document.createElement("button");
-    gadgetChooseFileBtn.textContent = "Select";
-    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
-    gadgetChooseFileBtn.onclick = () => {
-      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
-    };
-    gadgetImageActions.appendChild(gadgetChooseFileBtn);
-    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
-  }
+  const deleteGadgetBtn = document.createElement("button");
+  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
+  deleteGadgetBtn.textContent = "Delete Gadget";
+  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
+  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
+  deleteGadgetBtn.onclick = () => {
+    const action = buildGadgetDeleteAction(g);
+    if (!action) return;
+    openDestructiveAction(action);
+  };
 
-  if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
-    const pendingEl = createPendingImageAssignmentDraftEl();
+  propsEl.appendChild(section("Actions"));
+  propsEl.appendChild(row("Delete", deleteGadgetBtn));
+  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
+    const pendingEl = createPendingDestructiveActionEl();
     if (pendingEl) propsEl.appendChild(pendingEl);
   }
 
@@ -10512,10 +11445,28 @@ function renderProps() {
     )
   );
 
+  propsEl.appendChild(section("Layout"));
+  propsEl.appendChild(row("X", numberInput(g.x, v => { updateGadgetDisplayField(g, "x", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("X (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.xRaw, g.x), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Y", numberInput(g.y, v => { updateGadgetDisplayField(g, "y", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Y (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.yRaw, g.y), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Width", numberInput(g.w, v => { updateGadgetDisplayField(g, "w", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Width (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.wRaw, g.w), "Readonly code value written to the gadget constructor.")));
+  }
+  propsEl.appendChild(row("Height", numberInput(g.h, v => { updateGadgetDisplayField(g, "h", asInt(v)); postGadgetRect(g); render(); renderProps(); })));
+  if (shouldShowReadonlyUnscaledLayoutRows()) {
+    propsEl.appendChild(row("Height (Unscaled)", readonlyInput(getReadonlyUnscaledLayoutValue(g.hRaw, g.h), "Readonly code value written to the gadget constructor.")));
+  }
+
   propsEl.appendChild(
     row(
       "Hidden",
-      checkboxInput(Boolean(g.hidden), v => {
+      checkboxInput(getGadgetBooleanInspectorState(g.hiddenRaw, g.hidden), v => {
         g.hidden = v;
         g.hiddenRaw = v ? "1" : "0";
         postGadgetProperties(g.id, { hiddenRaw: g.hiddenRaw });
@@ -10529,7 +11480,7 @@ function renderProps() {
   propsEl.appendChild(
     row(
       "Disabled",
-      checkboxInput(Boolean(g.disabled), v => {
+      checkboxInput(getGadgetBooleanInspectorState(g.disabledRaw, g.disabled), v => {
         g.disabled = v;
         g.disabledRaw = v ? "1" : "0";
         postGadgetProperties(g.id, { disabledRaw: g.disabledRaw });
@@ -10540,25 +11491,30 @@ function renderProps() {
       })
     )
   );
-  const resizeCtx = getWindowResizeLockContext();
-  const canEditHorizontalLocks = canEditGadgetHorizontalLocks(g, resizeCtx);
+  const resizeCtx = getWindowResizeLockContext(g);
+  const horizontalLockLeftToggle = resizeCtx
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockLeft), Boolean(g.lockRight))
+    : undefined;
+  const horizontalLockRightToggle = resizeCtx
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, Boolean(g.lockLeft), !Boolean(g.lockRight))
+    : undefined;
   const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockTop), Boolean(g.lockBottom));
   const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, Boolean(g.lockTop), !Boolean(g.lockBottom));
   propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
     applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
   }, {
-    disabled: !canEditHorizontalLocks,
-    title: canEditHorizontalLocks
+    disabled: !horizontalLockLeftToggle,
+    title: horizontalLockLeftToggle
       ? "Keep the gadget anchored to the left when the window is resized."
-      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
     applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
   }, {
-    disabled: !canEditHorizontalLocks,
-    title: canEditHorizontalLocks
+    disabled: !horizontalLockRightToggle,
+    title: horizontalLockRightToggle
       ? "Keep the gadget anchored to the right when the window is resized."
-      : "This lock can be edited only when a compatible ResizeGadget(...) line is already present."
+      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
   propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
     applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
@@ -10576,7 +11532,7 @@ function renderProps() {
       ? "Keep the gadget anchored to the bottom when the window is resized."
       : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
   })));
-  propsEl.appendChild(mutedNote(canEditHorizontalLocks || verticalLockTopToggle || verticalLockBottomToggle
+  propsEl.appendChild(mutedNote(horizontalLockLeftToggle || horizontalLockRightToggle || verticalLockTopToggle || verticalLockBottomToggle
     ? "These lock options update an existing ResizeGadget(...) line for this gadget."
     : "Lock editing is available only when the existing ResizeGadget(...) setup can be updated safely."
   ));
@@ -10605,36 +11561,82 @@ function renderProps() {
   }
 
   if (canEditColors) {
-    propsEl.appendChild(
-      row(
-        "FrontColor Raw",
-        textInput(
-          g.frontColorRaw ?? "",
-          v => {
-            const trimmed = v.trim();
-            g.frontColorRaw = trimmed || undefined;
-            postGadgetProperties(g.id, { frontColorRaw: trimmed || undefined });
-            renderProps();
-          },
-          { title: "Edit the front color expression used for this gadget." }
-        )
-      )
-    );
-    propsEl.appendChild(
-      row(
-        "BackColor Raw",
-        textInput(
-          g.backColorRaw ?? "",
-          v => {
-            const trimmed = v.trim();
-            g.backColorRaw = trimmed || undefined;
-            postGadgetProperties(g.id, { backColorRaw: trimmed || undefined });
-            renderProps();
-          },
-          { title: "Edit the background color expression used for this gadget." }
-        )
-      )
-    );
+    const frontColorInput = readonlyInput((g.frontColorRaw ?? "").trim());
+    frontColorInput.title = "Use the color picker to choose the gadget front color, or Remove to clear it.";
+    const frontColorPicker = document.createElement("input");
+    frontColorPicker.type = "color";
+    frontColorPicker.value = pbColorNumberToCssHex(g.frontColor) ?? "#000000";
+    frontColorPicker.title = "Choose the gadget front color. The value is saved as RGB(...).";
+    frontColorPicker.style.width = "40px";
+    frontColorPicker.style.minWidth = "40px";
+    frontColorPicker.style.padding = "0";
+    frontColorPicker.onchange = () => {
+      const nextColorRaw = cssHexToPbRgbRaw(frontColorPicker.value);
+      if (!nextColorRaw) return;
+      const parsedColor = parseWindowColorInspectorInput(nextColorRaw);
+      clearInfoError();
+      g.frontColorRaw = nextColorRaw;
+      if (parsedColor.ok) {
+        g.frontColor = parsedColor.previewColor;
+      }
+      postGadgetProperties(g.id, { frontColorRaw: nextColorRaw });
+      render();
+      renderProps();
+    };
+    const clearFrontColorBtn = document.createElement("button");
+    clearFrontColorBtn.textContent = "Remove";
+    clearFrontColorBtn.disabled = !(g.frontColorRaw?.trim() || typeof g.frontColor === "number");
+    clearFrontColorBtn.title = clearFrontColorBtn.disabled
+      ? "No gadget front color is set."
+      : "Remove the current gadget front color.";
+    clearFrontColorBtn.onclick = () => {
+      clearInfoError();
+      g.frontColorRaw = undefined;
+      g.frontColor = undefined;
+      postGadgetProperties(g.id, { frontColorRaw: "" });
+      render();
+      renderProps();
+    };
+    propsEl.appendChild(row("FrontColor", inputWithActions(frontColorInput, frontColorPicker, clearFrontColorBtn)));
+
+    const backColorInput = readonlyInput((g.backColorRaw ?? "").trim());
+    backColorInput.title = "Use the color picker to choose the gadget background color, or Remove to clear it.";
+    const backColorPicker = document.createElement("input");
+    backColorPicker.type = "color";
+    backColorPicker.value = pbColorNumberToCssHex(g.backColor) ?? "#000000";
+    backColorPicker.title = "Choose the gadget background color. The value is saved as RGB(...).";
+    backColorPicker.style.width = "40px";
+    backColorPicker.style.minWidth = "40px";
+    backColorPicker.style.padding = "0";
+    backColorPicker.onchange = () => {
+      const nextColorRaw = cssHexToPbRgbRaw(backColorPicker.value);
+      if (!nextColorRaw) return;
+      const parsedColor = parseWindowColorInspectorInput(nextColorRaw);
+      clearInfoError();
+      g.backColorRaw = nextColorRaw;
+      if (parsedColor.ok) {
+        g.backColor = parsedColor.previewColor;
+      }
+      postGadgetProperties(g.id, { backColorRaw: nextColorRaw });
+      render();
+      renderProps();
+    };
+    const clearBackColorBtn = document.createElement("button");
+    clearBackColorBtn.textContent = "Remove";
+    clearBackColorBtn.disabled = !(g.backColorRaw?.trim() || typeof g.backColor === "number");
+    clearBackColorBtn.title = clearBackColorBtn.disabled
+      ? "No gadget background color is set."
+      : "Remove the current gadget background color.";
+    clearBackColorBtn.onclick = () => {
+      clearInfoError();
+      g.backColorRaw = undefined;
+      g.backColor = undefined;
+      postGadgetProperties(g.id, { backColorRaw: "" });
+      render();
+      renderProps();
+    };
+    propsEl.appendChild(row("BackColor", inputWithActions(backColorInput, backColorPicker, clearBackColorBtn)));
+    propsEl.appendChild(mutedNote("Use the pickers to set gadget front/background colors. Remove clears the current color."));
   }
 
   const gadgetCtorRangeLabels = getGadgetCtorRangeFieldLabels(g.kind);
@@ -10643,7 +11645,7 @@ function renderProps() {
       row(
         gadgetCtorRangeLabels.minLabel,
         textInput(
-          getGadgetCtorRangeInspectorValue(g.minRaw, g.min),
+          getInspectorGadgetCtorRangeValue(g, "min"),
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "min", v);
           },
@@ -10651,11 +11653,14 @@ function renderProps() {
         )
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
+      propsEl.appendChild(row(`${gadgetCtorRangeLabels.minLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "min"), "Readonly code value written to the gadget constructor.")));
+    }
     propsEl.appendChild(
       row(
         gadgetCtorRangeLabels.maxLabel,
         textInput(
-          getGadgetCtorRangeInspectorValue(g.maxRaw, g.max),
+          getInspectorGadgetCtorRangeValue(g, "max"),
           v => {
             applyLocalGadgetCtorRangeUpdate(g, "max", v);
           },
@@ -10663,6 +11668,9 @@ function renderProps() {
         )
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetCtorRangeRows(g)) {
+      propsEl.appendChild(row(`${gadgetCtorRangeLabels.maxLabel} (Unscaled)`, readonlyInput(getReadonlyUnscaledGadgetCtorRangeValue(g, "max"), "Readonly code value written to the gadget constructor.")));
+    }
   }
 
   if (canEditChecked) {
@@ -10752,45 +11760,6 @@ function renderProps() {
     propsEl.appendChild(mutedNote("SelectGadget follows the original combobox row. In the available PureBasic source, preset changes there are not written back automatically; InitCode and CreateCode remain the effective saved values."));
   }
 
-  propsEl.appendChild(
-    row(
-      "SelectProc",
-      editableComboInput(
-        g.eventProc ?? "",
-        getProcedureSuggestions(),
-        v => {
-          g.eventProc = v.length ? v : undefined;
-          post({
-            type: "setGadgetEventProc",
-            id: g.id,
-            eventProc: v.length ? v : undefined
-          });
-          renderProps();
-        },
-        {
-          title: "Choose an existing procedure or type a procedure name.",
-          placeholder: "Type or pick a procedure"
-        }
-      )
-    )
-  );
-
-  const deleteGadgetBtn = document.createElement("button");
-  const deleteGadgetBlockedReason = getGadgetDeleteBlockedReason(g);
-  deleteGadgetBtn.textContent = "Delete Gadget";
-  deleteGadgetBtn.disabled = Boolean(deleteGadgetBlockedReason);
-  deleteGadgetBtn.title = deleteGadgetBlockedReason ?? "Delete the currently selected gadget.";
-  deleteGadgetBtn.onclick = () => {
-    const action = buildGadgetDeleteAction(g);
-    if (!action) return;
-    openDestructiveAction(action);
-  };
-  propsEl.appendChild(row("Delete", deleteGadgetBtn));
-  if (pendingDestructiveAction?.kind === "deleteGadget" && pendingDestructiveAction.gadgetId === g.id) {
-    const pendingEl = createPendingDestructiveActionEl();
-    if (pendingEl) propsEl.appendChild(pendingEl);
-  }
-
   if (g.parentId) {
     const btn = document.createElement("button");
     btn.textContent = "Select Parent";
@@ -10816,11 +11785,6 @@ function renderProps() {
   };
   propsEl.appendChild(row("", changeParentBtn));
 
-  propsEl.appendChild(row("X", numberInput(g.x, v => { g.x = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("Y", numberInput(g.y, v => { g.y = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("W", numberInput(g.w, v => { g.w = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-  propsEl.appendChild(row("H", numberInput(g.h, v => { g.h = asInt(v); postGadgetRect(g); render(); renderProps(); })));
-
   if (g.kind === GADGET_KIND.SplitterGadget) {
     propsEl.appendChild(
       row(
@@ -10834,15 +11798,129 @@ function renderProps() {
             renderProps();
             return;
           }
-          g.state = next;
-          g.stateRaw = String(next);
-          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+          if (isActiveLayoutDpiScalingEnabled() && isDpiScaledGadgetState(g.kind)) {
+            const nextRaw = toUnscaledLayoutRaw(next);
+            storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
+            g.state = next;
+            g.stateRaw = nextRaw;
+            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: nextRaw });
+          } else {
+            g.state = next;
+            g.stateRaw = String(next);
+            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+          }
           render();
           renderProps();
         })
       )
     );
+    if (shouldShowReadonlyUnscaledGadgetStateRows(g)) {
+      propsEl.appendChild(row("Splitter Position (Unscaled)", readonlyInput(getReadonlyUnscaledGadgetStateValue(g), "Readonly code value written to SetGadgetState(...).")));
+    }
     propsEl.appendChild(mutedNote("Set the splitter position between the two child gadgets."));
+  }
+
+  if (isImageCapableGadget) {
+    propsEl.appendChild(
+      row(
+        "CurrentImage",
+        readonlyInput(getGadgetCurrentImageDisplay(g, gadgetImage))
+      )
+    );
+    if (gadgetImage && typeof gadgetImage.source?.line === "number") {
+      const canToggle = canToggleImagePbAny(gadgetImage);
+      propsEl.appendChild(row(
+        `Image ${PB_ANY}`,
+        checkboxInput(
+          Boolean(gadgetImage.pbAny),
+          () => {
+            if (!canToggle) return;
+            post({
+              type: "toggleImagePbAny",
+              sourceLine: gadgetImage!.source!.line,
+              toPbAny: !gadgetImage!.pbAny,
+            });
+          },
+          {
+            disabled: !canToggle,
+            title: gadgetImage.pbAny
+              ? `Switch the assigned image entry from ${PB_ANY} to a regular enum id and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+              : `Switch the assigned image entry to ${PB_ANY} variable mode and update all references. (This is separate from the gadget's own ${PB_ANY} toggle.)`
+          }
+        )
+      ));
+    }
+
+    const gadgetImageActions = document.createElement("div");
+    gadgetImageActions.className = "row-actions";
+    const gadgetChooseFileBtn = document.createElement("button");
+    gadgetChooseFileBtn.textContent = "Select";
+    gadgetChooseFileBtn.title = "Choose a file for this gadget. Existing matching LoadImage entries are reused when possible, and you can keep the gadget size or resize it to the image.";
+    gadgetChooseFileBtn.onclick = () => {
+      openImageAssignmentDraft({ kind: "gadget", gadgetId: g.id }, "chooseFile");
+    };
+    gadgetImageActions.appendChild(gadgetChooseFileBtn);
+    propsEl.appendChild(row("ChangeImage", gadgetImageActions));
+  }
+
+  if (isImageAssignmentDraftOpenFor({ kind: "gadget", gadgetId: g.id })) {
+    const pendingEl = createPendingImageAssignmentDraftEl();
+    if (pendingEl) propsEl.appendChild(pendingEl);
+  }
+
+  propsEl.appendChild(
+    row(
+      "SelectProc",
+      editableComboInput(
+        g.eventProc ?? "",
+        getProcedureSuggestions(),
+        v => {
+          g.eventProc = v.length ? v : undefined;
+          post({
+            type: "setGadgetEventProc",
+            id: g.id,
+            eventProc: v.length ? v : undefined
+          });
+          renderProps();
+        },
+        {
+          title: "Choose an existing procedure or type a procedure name.",
+          placeholder: "Type or pick a procedure"
+        }
+      )
+    )
+  );
+
+  const gadgetKnownFlags = getGadgetKnownFlags(g.kind);
+  const enabledGadgetFlags = new Set(
+    (g.flagsExpr ?? "")
+      .split("|")
+      .map(part => part.trim())
+      .filter(Boolean)
+  );
+
+  propsEl.appendChild(section("Constants"));
+  for (const flag of gadgetKnownFlags) {
+    propsEl.appendChild(row(
+      flag,
+      checkboxInput(enabledGadgetFlags.has(flag), checked => {
+        const nextEnabled = new Set(
+          (g.flagsExpr ?? "")
+            .split("|")
+            .map(part => part.trim())
+            .filter(Boolean)
+            .filter(part => gadgetKnownFlags.includes(part))
+        );
+        if (checked) nextEnabled.add(flag);
+        else nextEnabled.delete(flag);
+        const nextKnown = gadgetKnownFlags.filter(entry => nextEnabled.has(entry));
+        const nextExpr = buildGadgetFlagsExpr(g.kind, nextKnown, g.flagsExpr);
+        g.flagsExpr = nextExpr;
+        postGadgetOpenArgs(g.id, { flagsExpr: nextExpr ?? "" });
+        render();
+        renderProps();
+      })
+    ));
   }
 
   // Items editor (minimal UI)

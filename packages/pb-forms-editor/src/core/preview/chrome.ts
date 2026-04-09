@@ -26,6 +26,457 @@ export type WindowClientSurfaceRects = {
 
 export type ResizeHandle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
 
+
+export function usesOriginalMacRoundedButtonChrome(osSkin: "windows7" | "windows8" | "macos" | "linux", height: number): boolean {
+  return osSkin === "macos" && Math.trunc(height) === 25;
+}
+
+export function getPreviewComboChromeHeight(
+  osSkin: "windows7" | "windows8" | "macos" | "linux",
+  height: number,
+  isEditable: boolean
+): number {
+  return !isEditable && osSkin === "macos" ? 22 : height;
+}
+
+export type PreviewComboArrowAssetKind = "windowsComboDown" | "windows8ComboDown";
+
+export type PreviewDateArrowLayout =
+  | {
+    kind: "rasterDown";
+    assetKind: PreviewComboArrowAssetKind;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fallbackCenterX: number;
+    fallbackCenterY: number;
+  }
+  | {
+    kind: "singleDown";
+    centerX: number;
+    centerY: number;
+  };
+
+export type PreviewComboArrowLayout =
+  | {
+    kind: "macDoubleArrows";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+  | {
+    kind: "rasterDown";
+    assetKind: PreviewComboArrowAssetKind;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fallbackCenterX: number;
+    fallbackCenterY: number;
+  }
+  | {
+    kind: "singleDown";
+    centerX: number;
+    centerY: number;
+  };
+
+export function getPreviewDateArrowLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+}): PreviewDateArrowLayout {
+  const { x, y, width, height, osSkin } = args;
+  const centerX = x + width - 12;
+  const centerY = y + Math.trunc(height / 2);
+
+  if (osSkin === "windows8") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 7,
+      height: 6,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  if (osSkin === "windows7") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((height - 4) / 2),
+      width: 7,
+      height: 4,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  return {
+    kind: "singleDown",
+    centerX,
+    centerY
+  };
+}
+
+export function getPreviewComboArrowLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isEditable: boolean;
+}): PreviewComboArrowLayout {
+  const { x, y, width, height, osSkin, isEditable } = args;
+  const centerX = x + width - 12;
+  const centerY = y + Math.trunc(getPreviewComboChromeHeight(osSkin, height, isEditable) / 2);
+
+  if (!isEditable && osSkin === "macos") {
+    return {
+      kind: "macDoubleArrows",
+      x: x + width - 12,
+      y: y + 5,
+      width: 5,
+      height: 11
+    };
+  }
+
+  if (osSkin === "windows8") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((getPreviewComboChromeHeight(osSkin, height, isEditable) - 6) / 2),
+      width: 7,
+      height: 6,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  if (osSkin === "windows7" || osSkin === "linux") {
+    return {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: x + width - 12,
+      y: y + Math.trunc((getPreviewComboChromeHeight(osSkin, height, isEditable) - 4) / 2),
+      width: 7,
+      height: 4,
+      fallbackCenterX: centerX,
+      fallbackCenterY: centerY
+    };
+  }
+
+  return {
+    kind: "singleDown",
+    centerX,
+    centerY
+  };
+}
+
+export type PreviewSpinButtonLayout = {
+  bodyWidth: number;
+  imageX: number;
+  imageY: number;
+  imageWidth: number;
+  imageHeight: number;
+};
+
+export function getPreviewSpinButtonLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+}): PreviewSpinButtonLayout {
+  const { x, y, width, height, osSkin } = args;
+
+  if (osSkin === "windows8") {
+    const imageWidth = 8;
+    const imageHeight = 18;
+    const bodyWidth = Math.max(0, width - imageWidth - 1);
+    return {
+      bodyWidth,
+      imageX: x + bodyWidth + 1,
+      imageY: y + Math.trunc((height - imageHeight) / 2),
+      imageWidth,
+      imageHeight
+    };
+  }
+
+  const imageWidth = 13;
+  const imageHeight = 23;
+  const bodyWidth = Math.max(0, width - 20);
+  return {
+    bodyWidth,
+    imageX: x + bodyWidth + 7,
+    imageY: y + Math.trunc((height - imageHeight) / 2),
+    imageWidth,
+    imageHeight
+  };
+}
+
+export type PreviewScrollBarArrowAssetKind =
+  | "windowsUp"
+  | "windowsDown"
+  | "windowsLeft"
+  | "windowsRight"
+  | "windows8Up"
+  | "windows8Down"
+  | "windows8Left"
+  | "windows8Right";
+
+export type PreviewScrollBarArrowAssetLayout = {
+  direction: "up" | "down" | "left" | "right";
+  assetKind: PreviewScrollBarArrowAssetKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PreviewScrollBarThumbFillLayout = {
+  thumbRect: PreviewRect;
+  lightRect: PreviewRect;
+  darkRect: PreviewRect;
+};
+
+export function getPreviewScrollBarThumbFillLayout(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewScrollBarThumbFillLayout | null {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin === "windows8" || osSkin === "macos") {
+    return null;
+  }
+
+  if (isVertical) {
+    const thumbHeight = Math.max(0, Math.trunc((height - 34) / 3));
+    return {
+      thumbRect: { x: x + 1, y: y + 18, w: Math.max(0, width - 3), h: thumbHeight },
+      lightRect: {
+        x: x + 2,
+        y: y + 19,
+        w: Math.max(0, Math.trunc((width * 3) / 8) - 4),
+        h: Math.max(0, thumbHeight - 2)
+      },
+      darkRect: {
+        x: x + 2 + Math.trunc((width * 3) / 8),
+        y: y + 19,
+        w: Math.max(0, Math.trunc((width * 5) / 8) - 4),
+        h: Math.max(0, thumbHeight - 2)
+      }
+    };
+  }
+
+  const thumbWidth = Math.max(0, Math.trunc((width - 34) / 3));
+  return {
+    thumbRect: { x: x + 18, y: y + 1, w: thumbWidth, h: Math.max(0, height - 3) },
+    lightRect: {
+      x: x + 19,
+      y: y + 2,
+      w: Math.max(0, thumbWidth - 2),
+      h: Math.max(0, Math.trunc((height * 3) / 8) - 4)
+    },
+    darkRect: {
+      x: x + 19,
+      y: y + 2 + Math.trunc((height * 3) / 8),
+      w: Math.max(0, thumbWidth - 2),
+      h: Math.max(0, Math.trunc((height * 5) / 8) - 4)
+    }
+  };
+}
+
+export function getPreviewScrollBarArrowAssetLayouts(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewScrollBarArrowAssetLayout[] {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin === "macos") {
+    return [];
+  }
+
+  if (osSkin === "windows8") {
+    if (isVertical) {
+      return [
+        {
+          direction: "up",
+          assetKind: "windows8Up",
+          x: x + Math.trunc((width - 7) / 2),
+          y: y + 5,
+          width: 7,
+          height: 6
+        },
+        {
+          direction: "down",
+          assetKind: "windows8Down",
+          x: x + Math.trunc((width - 7) / 2),
+          y: y + height - 11,
+          width: 7,
+          height: 6
+        }
+      ];
+    }
+
+    return [
+      {
+        direction: "left",
+        assetKind: "windows8Left",
+        x: x + 5,
+        y: y + Math.trunc((height - 7) / 2),
+        width: 6,
+        height: 7
+      },
+      {
+        direction: "right",
+        assetKind: "windows8Right",
+        x: x + width - 11,
+        y: y + Math.trunc((height - 7) / 2),
+        width: 6,
+        height: 7
+      }
+    ];
+  }
+
+  if (isVertical) {
+    return [
+      {
+        direction: "up",
+        assetKind: "windowsUp",
+        x: x + Math.trunc((width - 6) / 2),
+        y: y + 6,
+        width: 7,
+        height: 4
+      },
+      {
+        direction: "down",
+        assetKind: "windowsDown",
+        x: x + Math.trunc((width - 6) / 2),
+        y: y + height - 10,
+        width: 7,
+        height: 4
+      }
+    ];
+  }
+
+  return [
+    {
+      direction: "left",
+      assetKind: "windowsLeft",
+      x: x + 6,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 4,
+      height: 7
+    },
+    {
+      direction: "right",
+      assetKind: "windowsRight",
+      x: x + width - 10,
+      y: y + Math.trunc((height - 6) / 2),
+      width: 4,
+      height: 7
+    }
+  ];
+}
+
+export type PreviewTrackBarThumbAssetLayout = {
+  assetKind: "macHorizontal" | "macVertical" | "windowsHorizontal" | "windowsVertical";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PreviewTrackBarGrooveHighlightLine = PreviewRect & {
+  color: string;
+};
+
+export function getPreviewTrackBarMacGrooveHighlightLines(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewTrackBarGrooveHighlightLine[] {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin !== "macos") {
+    return [];
+  }
+
+  return isVertical
+    ? [
+      { x: x + 4, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(170, 170, 170)" },
+      { x: x + 5, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(193, 193, 193)" },
+      { x: x + 6, y: y + 1, w: 1, h: Math.max(0, height - 2), color: "rgb(205, 205, 205)" }
+    ]
+    : [
+      { x: x + 1, y: y + 4, w: Math.max(0, width - 2), h: 1, color: "rgb(170, 170, 170)" },
+      { x: x + 1, y: y + 5, w: Math.max(0, width - 2), h: 1, color: "rgb(193, 193, 193)" },
+      { x: x + 1, y: y + 6, w: Math.max(0, width - 2), h: 1, color: "rgb(205, 205, 205)" }
+    ];
+}
+
+export function getPreviewTrackBarNoTicksFillRect(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewRect | null {
+  const { x, y, width, height, osSkin, isVertical } = args;
+
+  if (osSkin !== "macos") {
+    return null;
+  }
+
+  return isVertical
+    ? { x: x + 17, y: y + 9, w: 4, h: Math.max(0, height - 18) }
+    : { x: x + 9, y: y + 17, w: Math.max(0, width - 18), h: 4 };
+}
+
+export function getPreviewTrackBarThumbAssetLayout(args: {
+  x: number;
+  y: number;
+  osSkin: "windows7" | "windows8" | "macos" | "linux";
+  isVertical: boolean;
+}): PreviewTrackBarThumbAssetLayout | null {
+  const { x, y, osSkin, isVertical } = args;
+
+  if (osSkin === "windows8") {
+    return null;
+  }
+
+  if (osSkin === "macos") {
+    return isVertical
+      ? { assetKind: "macVertical", x, y, width: 19, height: 17 }
+      : { assetKind: "macHorizontal", x, y, width: 17, height: 19 };
+  }
+
+  return isVertical
+    ? { assetKind: "windowsVertical", x, y, width: 18, height: 10 }
+    : { assetKind: "windowsHorizontal", x, y, width: 10, height: 18 };
+}
+
 export function resolvePreviewChromeMetrics(userAgent = ""): PreviewChromeMetrics {
   const ua = userAgent.toLowerCase();
 
@@ -396,12 +847,27 @@ export function getMenuBarRect(
   windowRect: PreviewRect,
   titleBarHeight: number,
   metrics: PreviewChromeMetrics,
-  clientSidePadding = 0
+  clientSidePadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   return {
     x: windowRect.x + clientSidePadding,
-    y: windowRect.y + Math.max(0, titleBarHeight),
+    y: menuOutsideWindow
+      ? windowRect.y - metrics.menuHeight
+      : windowRect.y + Math.max(0, titleBarHeight),
     w: Math.max(0, windowRect.w - clientSidePadding * 2),
+    h: metrics.menuHeight
+  };
+}
+
+export function getCanvasMenuBarRect(
+  canvasWidth: number,
+  metrics: PreviewChromeMetrics
+): PreviewRect {
+  return {
+    x: 0,
+    y: 0,
+    w: Math.max(0, Math.trunc(canvasWidth)),
     h: metrics.menuHeight
   };
 }
@@ -411,11 +877,12 @@ export function getToolBarRect(
   titleBarHeight: number,
   hasMenu: boolean,
   metrics: PreviewChromeMetrics,
-  clientSidePadding = 0
+  clientSidePadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   return {
     x: windowRect.x + clientSidePadding,
-    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu ? metrics.menuHeight : 0),
+    y: windowRect.y + Math.max(0, titleBarHeight) + (hasMenu && !menuOutsideWindow ? metrics.menuHeight : 0),
     w: Math.max(0, windowRect.w - clientSidePadding * 2),
     h: metrics.toolBarHeight
   };
@@ -536,10 +1003,11 @@ export function getWindowContentRect(
   hasStatusbar: boolean,
   metrics: PreviewChromeMetrics,
   clientSidePadding = 0,
-  clientBottomPadding = 0
+  clientBottomPadding = 0,
+  menuOutsideWindow = false
 ): PreviewRect {
   const top = Math.max(0, titleBarHeight)
-    + (hasMenu ? metrics.menuHeight : 0)
+    + (hasMenu && !menuOutsideWindow ? metrics.menuHeight : 0)
     + (hasToolbar ? metrics.toolBarHeight : 0);
   const bottom = (hasStatusbar ? metrics.statusBarHeight : 0) + Math.max(0, clientBottomPadding);
   return {
@@ -558,12 +1026,23 @@ export function getWindowChromeLayout(
   hasStatusbar: boolean,
   metrics: PreviewChromeMetrics,
   clientSidePadding = 0,
-  clientBottomPadding = 0
+  clientBottomPadding = 0,
+  menuOutsideWindow = false
 ): WindowChromeLayout {
   return {
-    contentRect: getWindowContentRect(windowRect, titleBarHeight, hasMenu, hasToolbar, hasStatusbar, metrics, clientSidePadding, clientBottomPadding),
-    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding) : null,
-    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding) : null,
+    contentRect: getWindowContentRect(
+      windowRect,
+      titleBarHeight,
+      hasMenu,
+      hasToolbar,
+      hasStatusbar,
+      metrics,
+      clientSidePadding,
+      clientBottomPadding,
+      menuOutsideWindow
+    ),
+    menuBarRect: hasMenu ? getMenuBarRect(windowRect, titleBarHeight, metrics, clientSidePadding, menuOutsideWindow) : null,
+    toolBarRect: hasToolbar ? getToolBarRect(windowRect, titleBarHeight, hasMenu, metrics, clientSidePadding, menuOutsideWindow) : null,
     statusBarRect: hasStatusbar ? getStatusBarRect(windowRect, metrics, clientSidePadding, clientBottomPadding) : null
   };
 }

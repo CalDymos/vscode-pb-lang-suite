@@ -53,7 +53,9 @@ import {
   applyGadgetVariableNamePatch,
   buildImageIdReference,
   toPbAnyAssignedVar,
-  toEnumImageId
+  toEnumImageId,
+  GadgetPropertyArgs,
+  WindowPropertyArgs
 } from "./core/emitter/patch-emitter";
 import { readDesignerSettings, SETTINGS_SECTION, DesignerSettings } from "./config/settings";
 import { FormDocument, PBFD_SYMBOLS, PB_ANY, GADGET_KIND } from "./core/model";
@@ -243,8 +245,8 @@ function shouldRefreshProcedureListFromFileChanges(changedUris: readonly vscode.
 type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.ready }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.moveGadget; id: string; x: number; y: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect; id: string; x: number; y: number; w: number; h: number; yRaw?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs; id: string; textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode; id: string; customInitRaw?: string; customCreateRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties; id: string; hiddenRaw?: string; disabledRaw?: string; tooltipRaw?: string; frontColorRaw?: string; backColorRaw?: string; gadgetFontRaw?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc; id: string; eventProc?: string }
@@ -263,7 +265,7 @@ type WebviewToExtensionMessage =
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile; windowKey: string; eventFile?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc; windowKey: string; eventProc?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop; windowKey: string; enabled: boolean }
-  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
+  | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadget; kind: string; x: number; y: number; yRaw?: string; parentId?: string; parentItem?: number; gadget1Id?: string; gadget2Id?: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget; id: string; parentId?: string; parentItem?: number }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget; id: string }
   | { type: typeof WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem; id: string; posRaw: string; textRaw: string; imageRaw?: string; flagsRaw?: string }
@@ -721,6 +723,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         return false;
       };
 
+      const validateGadgetColorRaw = (raw: string | undefined, label: "FrontColor" | "BackColor"): boolean => {
+        const parsed = parseWindowColorInspectorInput(raw);
+        if (parsed.ok) return true;
+        postError(`${label} accepts only RGB(r,g,b) or a $hex literal.`);
+        return false;
+      };
+
       switch (msg.type) {
         case WEBVIEW_TO_EXT_MSG_TYPE.ready:
           sendInit();
@@ -733,7 +742,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         }
 
         case WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect: {
-          const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr);
+          const edit = applyRectPatch(document, msg.id, msg.x, msg.y, msg.w, msg.h, sr, { yRaw: msg.yRaw });
           await applyEditOrError(edit, `Could not patch gadget '${msg.id}'. No matching call found${rangeInfo}.`);
           return;
         }
@@ -765,11 +774,11 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           if (Object.prototype.hasOwnProperty.call(msg, "colorRaw") && !validateWindowColorRaw(msg.colorRaw)) {
             return;
           }
-          const edit = applyWindowPropertyUpdate(document, msg.windowKey, {
-            hiddenRaw: msg.hiddenRaw,
-            disabledRaw: msg.disabledRaw,
-            colorRaw: msg.colorRaw
-          }, sr);
+          const windowPropArgs: WindowPropertyArgs = {};
+          if (Object.prototype.hasOwnProperty.call(msg, "hiddenRaw"))   { windowPropArgs.hiddenRaw   = msg.hiddenRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "disabledRaw")) { windowPropArgs.disabledRaw = msg.disabledRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "colorRaw"))    { windowPropArgs.colorRaw    = msg.colorRaw; }
+          const edit = applyWindowPropertyUpdate(document, msg.windowKey, windowPropArgs, sr);
           await applyEditOrError(edit, `Could not patch window property lines for '${msg.windowKey}'. No matching OpenWindow call found${rangeInfo}.`);
           return;
         }
@@ -853,7 +862,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           const edit = applyGadgetOpenArgsUpdate(document, msg.id, {
             textRaw: msg.textRaw,
             minRaw: msg.minRaw,
-            maxRaw: msg.maxRaw
+            maxRaw: msg.maxRaw,
+            flagsExpr: msg.flagsExpr
           }, sr);
           if (!await applyEditOrError(edit, `Could not patch constructor arguments for gadget '${msg.id}'. No matching gadget constructor found${rangeInfo}.`)) {
             return;
@@ -890,14 +900,20 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
           if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw") && !validateVariableRaw(msg.tooltipRaw, "Tooltip")) {
             return;
           }
-          const edit = applyGadgetPropertyUpdate(document, msg.id, {
-            hiddenRaw: msg.hiddenRaw,
-            disabledRaw: msg.disabledRaw,
-            tooltipRaw: msg.tooltipRaw,
-            frontColorRaw: msg.frontColorRaw,
-            backColorRaw: msg.backColorRaw,
-            gadgetFontRaw: msg.gadgetFontRaw
-          }, sr);
+          if (Object.prototype.hasOwnProperty.call(msg, "frontColorRaw") && !validateGadgetColorRaw(msg.frontColorRaw, "FrontColor")) {
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(msg, "backColorRaw") && !validateGadgetColorRaw(msg.backColorRaw, "BackColor")) {
+            return;
+          }
+          const gadgetPropArgs: GadgetPropertyArgs = {};
+          if (Object.prototype.hasOwnProperty.call(msg, "hiddenRaw"))     { gadgetPropArgs.hiddenRaw     = msg.hiddenRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "disabledRaw"))   { gadgetPropArgs.disabledRaw   = msg.disabledRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "tooltipRaw"))    { gadgetPropArgs.tooltipRaw    = msg.tooltipRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "frontColorRaw")) { gadgetPropArgs.frontColorRaw = msg.frontColorRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "backColorRaw"))  { gadgetPropArgs.backColorRaw  = msg.backColorRaw; }
+          if (Object.prototype.hasOwnProperty.call(msg, "gadgetFontRaw")) { gadgetPropArgs.gadgetFontRaw = msg.gadgetFontRaw; }
+          const edit = applyGadgetPropertyUpdate(document, msg.id, gadgetPropArgs, sr);
           await applyEditOrError(edit, `Could not patch properties for gadget '${msg.id}'. No matching gadget property block found${rangeInfo}.`);
           return;
         }
@@ -1024,7 +1040,8 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             msg.parentItem,
             sr,
             { gadget1Id: msg.gadget1Id, gadget2Id: msg.gadget2Id },
-            { pbAny: designerSettings.newGadgetsUsePbAnyByDefault }
+            { pbAny: designerSettings.newGadgetsUsePbAnyByDefault },
+            msg.yRaw,
           );
           if (!await applyEditOrError(edit, `Could not insert gadget '${msg.kind}'. No suitable insertion point found${rangeInfo}.`)) {
             return;
