@@ -59,18 +59,35 @@ function parseTrailingExpressionInteger(raw: string): number | undefined {
 function parseSignedIntegerExpression(raw: string): number | undefined {
     if (!raw) return undefined;
 
-    // remove all whitespaces
+    // Alle Whitespaces entfernen
     const expr = raw.replace(/\s+/g, "");
-
-    // check if only allowed characters (+, -, 0-9) are contained
     if (!/^[\d+-]+$/.test(expr)) return undefined;
 
-    // Evaluate the expression itself
-    try {
-        return Function(`return ${expr}`)() as number;
-    } catch {
-        return undefined;
+    let total = 0;
+    let i = 0;
+    const n = expr.length;
+
+    while (i < n) {
+        // Vorzeichen sammeln
+        let sign = 1;
+        while (i < n && (expr[i] === "+" || expr[i] === "-")) {
+            if (expr[i] === "-") sign *= -1;
+            i++;
+        }
+
+        // Zahl parsen
+        let numStr = "";
+        while (i < n && /\d/.test(expr[i])) {
+            numStr += expr[i];
+            i++;
+        }
+
+        if (!numStr) return undefined; // Fehler: keine Zahl nach Vorzeichen
+
+        total += sign * Number(numStr);
     }
+
+    return total;
 }
 
 function stripTopLevelYZeroTerms(raw: string): string {
