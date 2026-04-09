@@ -68,6 +68,12 @@ test("roundtrips existing ResizeGadget raw expressions without touching construc
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
   ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
 EndProcedure
 `;
@@ -114,6 +120,44 @@ EndProcedure
   assert.equal(gadget?.y, 34);
   assert.equal(gadget?.w, 100);
   assert.equal(gadget?.h, 25);
+});
+
+
+test("preserves original top-level Windows toolbar Y expressions when patching gadget rects", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  CreateToolBar(0, WindowID(#FrmMain))
+  ButtonGadget(#BtnApply, 10, ToolBarHeight(0) + 10, 80, 24, "Apply")
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyRectPatch(document, "#BtnApply", 10, 15, 90, 28, undefined, { yRaw: "ToolBarHeight(0) + 15" })
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#BtnApply, 10, ToolBarHeight\(0\) \+ 15, 90, 28, "Apply"\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 15");
+  assert.equal(gadget?.y, 15);
+});
+
+test("inserts a new top-level Windows toolbar gadget with the original toolbar Y padding expression", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  CreateToolBar(0, WindowID(#FrmMain))
+EndProcedure
+`;
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyGadgetInsert(document, "ButtonGadget", 12, 10, undefined, undefined, undefined, undefined, undefined, "ToolBarHeight(0) + 10")
+  );
+
+  assert.match(patchedText, /ButtonGadget\(#Button_0, 12, ToolBarHeight\(0\) \+ 10, 100, 25, ""\)/);
+  const gadget = parsed.gadgets.find((g) => g.id === "#Button_0");
+  assert.equal(gadget?.yRaw, "ToolBarHeight(0) + 10");
+  assert.equal(gadget?.y, 10);
 });
 
 test("inserts a new panel child into the active panel item", () => {
@@ -855,7 +899,11 @@ EndProcedure
 `;
 
   const { patchedText, parsed } = patchAndReparse(text, (document) =>
-    applyWindowPropertyUpdate(document, "#FrmMain", {})
+    applyWindowPropertyUpdate(document, "#FrmMain", {
+      hiddenRaw: undefined,
+      disabledRaw: undefined,
+      colorRaw: undefined,
+    })
   );
 
   assert.doesNotMatch(patchedText, /HideWindow\(#FrmMain,/);
@@ -2039,6 +2087,12 @@ test("deletes an existing ResizeGadget line when lock editing no longer requires
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
   ResizeGadget(#BtnStretch, FormWindowWidth - 310, 50, 80, 24)
 EndProcedure
 `;

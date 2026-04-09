@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewToolBarDecoration, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
+import { WINDOW_KNOWN_FLAGS, WINDOW_POSITION_IGNORE_LITERAL, WINDOW_PREVIEW_PAGE_PADDING, buildWindowFlagsExpr, getWindowBooleanInspectorState, getWindowParentAsRawExpression, getWindowParentAsRawExpressionWithOverride, getWindowParentInspectorValue, getWindowPositionInspectorValue, getWindowPreviewAddIconMetrics, getWindowPreviewBodyDecoration, getWindowPreviewCanvasOrigin, getWindowPreviewChromeTopPadding, getWindowPreviewClientBottomPadding, getWindowPreviewClientSidePadding, getWindowPreviewFrameDecoration, getWindowPreviewFrameStrokeRect, getWindowPreviewMenuBarDecoration, getWindowPreviewMenuFlyoutDecoration, getWindowPreviewMenuRootEntryRect, getWindowPreviewMenuSubmenuIconMetrics, getWindowPreviewStatusBarDecoration, getWindowPreviewStatusBarProgressDecoration, getWindowPreviewTitleBarDecoration, getWindowPreviewTitleBarHeight, getWindowPreviewTitleBarMetrics, getWindowPreviewTitleButtonAssetKind, getWindowPreviewTitleButtonLayout, getWindowPreviewTitleButtonSize, getWindowPreviewTitleButtons, getWindowPreviewTitleButtonSlots, getWindowPreviewTitleIconSize, getWindowPreviewTitleTextLayout, getWindowPreviewToolBarDecoration, usesWindowPreviewExternalMenuBar, getWindowVariableInspectorValue, hasWindowPreviewResizeGrip, hasWindowPreviewTitleBar, hasWindowPreviewTitleIcon, parseWindowCustomFlagsInput, parseWindowEventProcInspectorInput, parseWindowParentInspectorInput, parseWindowPositionInspectorInput, parseWindowVariableNameInspectorInput } from '../src/core/window/inspector';
 
 test('buildWindowFlagsExpr keeps original known window flag order and appends custom flags', () => {
   const expr = buildWindowFlagsExpr([
@@ -331,6 +331,42 @@ test('window preview frame decoration follows the original per-skin outer border
   });
 });
 
+test('window selection overlay uses the same stroke rect as the rendered outer frame on rounded skins', () => {
+  assert.deepEqual(getWindowPreviewFrameStrokeRect('macos', { x: 10, y: 20, w: 100, h: 80 }), {
+    x: 9.5,
+    y: 19.5,
+    w: 101,
+    h: 81,
+  });
+
+  assert.deepEqual(getWindowPreviewFrameStrokeRect('windows7', { x: 10, y: 20, w: 100, h: 80 }), {
+    x: 9.5,
+    y: 19.5,
+    w: 101,
+    h: 81,
+  });
+
+  assert.deepEqual(getWindowPreviewFrameStrokeRect('windows8', { x: 10, y: 20, w: 100, h: 80 }), {
+    x: 10.5,
+    y: 20.5,
+    w: 99,
+    h: 79,
+  });
+});
+
+
+test('window preview title buttons use the original macOS and Linux raster assets only on those skins', () => {
+  assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'close', true), 'macClose');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'minimize', true), 'macMinimize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'maximize', true), 'macMaximize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'minimize', false), 'macDisabled');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('macos', 'maximize', false), 'macDisabled');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'close', true), 'linuxClose');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'minimize', true), 'linuxMinimize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'maximize', true), 'linuxMaximize');
+  assert.equal(getWindowPreviewTitleButtonAssetKind('linux', 'minimize', false), null);
+  assert.equal(getWindowPreviewTitleButtonAssetKind('windows7', 'close', true), null);
+});
 
 test('window preview title button layout follows the original per-skin alignment', () => {
   assert.deepEqual(getWindowPreviewTitleButtonLayout('macos', '#PB_Window_SystemMenu'), {
@@ -637,6 +673,43 @@ test('window preview client bottom padding follows the original Windows bottom f
 });
 
 
+test('macOS window preview title text layout centers across the full window width like the original DrawText path', () => {
+  assert.deepEqual(getWindowPreviewTitleTextLayout({
+    osSkin: 'macos',
+    titleAlignment: 'center',
+    titleLeft: 70,
+    titleRight: 290,
+    windowX: 40,
+    windowWidth: 320,
+    titleWidth: 80,
+  }), {
+    clipLeft: 40,
+    clipRight: 360,
+    titleX: 160,
+  });
+
+  assert.deepEqual(getWindowPreviewTitleTextLayout({
+    osSkin: 'windows8',
+    titleAlignment: 'center',
+    titleLeft: 70,
+    titleRight: 290,
+    windowX: 40,
+    windowWidth: 320,
+    titleWidth: 80,
+  }), {
+    clipLeft: 70,
+    clipRight: 290,
+    titleX: 140,
+  });
+});
+
+test('macOS preview uses an external menu bar band while other skins keep it inside the window chrome', () => {
+  assert.equal(usesWindowPreviewExternalMenuBar('macos'), true);
+  assert.equal(usesWindowPreviewExternalMenuBar('windows7'), false);
+  assert.equal(usesWindowPreviewExternalMenuBar('windows8'), false);
+  assert.equal(usesWindowPreviewExternalMenuBar('linux'), false);
+});
+
 test('window preview menu bar decoration follows the original per-skin menu block', () => {
   assert.deepEqual(getWindowPreviewMenuBarDecoration('macos'), {
     backgroundStyle: 'macos-gradient',
@@ -707,18 +780,18 @@ test('window preview add and submenu icon metrics follow the original image asse
 });
 
 
-test('window preview root menu entry rect follows the original MenuTitle outline box', () => {
-  assert.deepEqual(getWindowPreviewMenuRootEntryRect(15, 2, 54, 13), {
+test('window preview root menu entry rect keeps the looser menu-bar selection geometry', () => {
+  assert.deepEqual(getWindowPreviewMenuRootEntryRect(15, 2, 54, 22), {
     x: 14,
     y: 1,
     w: 61,
-    h: 9,
+    h: 18,
   });
 
-  assert.deepEqual(getWindowPreviewMenuRootEntryRect(20, 4, 32.2, 12.1), {
+  assert.deepEqual(getWindowPreviewMenuRootEntryRect(20, 4, 32.2, 23), {
     x: 19,
     y: 3,
     w: 40,
-    h: 8.1,
+    h: 19,
   });
 });

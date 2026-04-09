@@ -5,6 +5,7 @@ import {
   getRectHandlePoints,
   clampRect,
   applyResize,
+  getCanvasMenuBarRect,
   getMenuBarRect,
   getPanelTabLayouts,
   clampScrollAreaOffset,
@@ -33,6 +34,16 @@ import {
   resolvePreviewChromeMetrics,
   toWindowGlobalPoint,
   toWindowLocalPoint,
+  usesOriginalMacRoundedButtonChrome,
+  getPreviewComboArrowLayout,
+  getPreviewDateArrowLayout,
+  getPreviewComboChromeHeight,
+  getPreviewSpinButtonLayout,
+  getPreviewTrackBarThumbAssetLayout,
+  getPreviewScrollBarArrowAssetLayouts,
+  getPreviewScrollBarThumbFillLayout,
+  getPreviewTrackBarMacGrooveHighlightLines,
+  getPreviewTrackBarNoTicksFillRect,
   type PreviewChromeMetrics,
   type PreviewRect
 } from "../src/core/preview/chrome";
@@ -133,6 +144,24 @@ test("computes combined window chrome layout from title and top-level bands", ()
     statusBarRect: { x: 40, y: 247, w: 320, h: 23 },
     contentRect: { x: 40, y: 122, w: 320, h: 125 }
   });
+});
+
+test("computes macOS menu bar chrome outside the rounded window body", () => {
+  const windowRect: PreviewRect = { x: 40, y: 72, w: 320, h: 220 };
+
+  assert.deepEqual(getMenuBarRect(windowRect, 26, METRICS, 0, true), { x: 40, y: 50, w: 320, h: 22 });
+  assert.deepEqual(getToolBarRect(windowRect, 26, true, METRICS, 0, true), { x: 40, y: 98, w: 320, h: 24 });
+  assert.deepEqual(getWindowContentRect(windowRect, 26, true, true, true, METRICS, 0, 0, true), { x: 40, y: 122, w: 320, h: 147 });
+  assert.deepEqual(getWindowChromeLayout(windowRect, 26, true, true, true, METRICS, 0, 0, true), {
+    menuBarRect: { x: 40, y: 50, w: 320, h: 22 },
+    toolBarRect: { x: 40, y: 98, w: 320, h: 24 },
+    statusBarRect: { x: 40, y: 269, w: 320, h: 23 },
+    contentRect: { x: 40, y: 122, w: 320, h: 147 }
+  });
+});
+
+test("computes the macOS external menu band across the full preview canvas width", () => {
+  assert.deepEqual(getCanvasMenuBarRect(480, METRICS), { x: 0, y: 0, w: 480, h: 22 });
 });
 
 test("computes combined window chrome layout with Windows client-side and bottom insets", () => {
@@ -262,4 +291,246 @@ test("resolves default preview chrome metrics from user-agent hints", () => {
     statusBarHeight: 26
   });
   assert.deepEqual(resolvePreviewChromeMetrics("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), METRICS);
+});
+
+
+test("uses the original rounded macOS button chrome only for 25px button heights", () => {
+  assert.equal(usesOriginalMacRoundedButtonChrome("macos", 25), true);
+  assert.equal(usesOriginalMacRoundedButtonChrome("macos", 24), false);
+  assert.equal(usesOriginalMacRoundedButtonChrome("linux", 25), false);
+});
+
+
+test("uses the original fixed 22px macOS combo chrome only for non-editable combos", () => {
+  assert.equal(getPreviewComboChromeHeight("macos", 25, false), 22);
+  assert.equal(getPreviewComboChromeHeight("macos", 25, true), 25);
+  assert.equal(getPreviewComboChromeHeight("windows7", 25, false), 25);
+});
+
+
+test("uses the original Windows date arrow assets only for Windows skins", () => {
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7" }),
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows8" }),
+    {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: 118,
+      y: 29,
+      width: 7,
+      height: 6,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewDateArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos" }),
+    { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
+});
+
+test("uses the original macOS combo double-arrows asset placement only for non-editable combos", () => {
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isEditable: false }),
+    { kind: "macDoubleArrows", x: 118, y: 25, width: 5, height: 11 }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isEditable: true }),
+    { kind: "singleDown", centerX: 118, centerY: 32 }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isEditable: false }),
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows8", isEditable: false }),
+    {
+      kind: "rasterDown",
+      assetKind: "windows8ComboDown",
+      x: 118,
+      y: 29,
+      width: 7,
+      height: 6,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewComboArrowLayout({ x: 10, y: 20, width: 120, height: 25, osSkin: "linux", isEditable: true }),
+    {
+      kind: "rasterDown",
+      assetKind: "windowsComboDown",
+      x: 118,
+      y: 30,
+      width: 7,
+      height: 4,
+      fallbackCenterX: 118,
+      fallbackCenterY: 32
+    }
+  );
+});
+
+test("uses the original scrollbar arrow assets for Windows, Windows 8 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows7", isVertical: true }),
+    [
+      { direction: "up", assetKind: "windowsUp", x: 16, y: 26, width: 7, height: 4 },
+      { direction: "down", assetKind: "windowsDown", x: 16, y: 130, width: 7, height: 4 }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 120, height: 18, osSkin: "linux", isVertical: false }),
+    [
+      { direction: "left", assetKind: "windowsLeft", x: 16, y: 26, width: 4, height: 7 },
+      { direction: "right", assetKind: "windowsRight", x: 120, y: 26, width: 4, height: 7 }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows8", isVertical: true }),
+    [
+      { direction: "up", assetKind: "windows8Up", x: 15, y: 25, width: 7, height: 6 },
+      { direction: "down", assetKind: "windows8Down", x: 15, y: 129, width: 7, height: 6 }
+    ]
+  );
+
+  assert.equal(
+    getPreviewScrollBarArrowAssetLayouts({ x: 10, y: 20, width: 120, height: 18, osSkin: "macos", isVertical: false }).length,
+    0
+  );
+});
+
+test("uses the original split scrollbar thumb fills for Windows 7 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows7", isVertical: true }),
+    {
+      thumbRect: { x: 11, y: 38, w: 15, h: 28 },
+      lightRect: { x: 12, y: 39, w: 2, h: 26 },
+      darkRect: { x: 18, y: 39, w: 7, h: 26 }
+    }
+  );
+
+  assert.deepEqual(
+    getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 120, height: 18, osSkin: "linux", isVertical: false }),
+    {
+      thumbRect: { x: 28, y: 21, w: 28, h: 15 },
+      lightRect: { x: 29, y: 22, w: 26, h: 2 },
+      darkRect: { x: 29, y: 28, w: 26, h: 7 }
+    }
+  );
+
+  assert.equal(getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 18, height: 120, osSkin: "windows8", isVertical: true }), null);
+  assert.equal(getPreviewScrollBarThumbFillLayout({ x: 10, y: 20, width: 120, height: 18, osSkin: "macos", isVertical: false }), null);
+});
+
+test("uses the original trackbar thumb assets for macOS, Windows 7 and Linux only", () => {
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "macos", isVertical: false }),
+    { assetKind: "macHorizontal", x: 10, y: 20, width: 17, height: 19 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "macos", isVertical: true }),
+    { assetKind: "macVertical", x: 10, y: 20, width: 19, height: 17 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "windows7", isVertical: false }),
+    { assetKind: "windowsHorizontal", x: 10, y: 20, width: 10, height: 18 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "linux", isVertical: true }),
+    { assetKind: "windowsVertical", x: 10, y: 20, width: 18, height: 10 }
+  );
+
+  assert.equal(getPreviewTrackBarThumbAssetLayout({ x: 10, y: 20, osSkin: "windows8", isVertical: false }), null);
+});
+
+test("uses the original spin button image layout from FD_DrawGadget for each preview skin", () => {
+  assert.deepEqual(
+    getPreviewSpinButtonLayout({ x: 20, y: 30, width: 120, height: 40, osSkin: "macos" }),
+    { bodyWidth: 100, imageX: 127, imageY: 38, imageWidth: 13, imageHeight: 23 }
+  );
+
+  assert.deepEqual(
+    getPreviewSpinButtonLayout({ x: 20, y: 30, width: 120, height: 40, osSkin: "windows7" }),
+    { bodyWidth: 100, imageX: 127, imageY: 38, imageWidth: 13, imageHeight: 23 }
+  );
+
+  assert.deepEqual(
+    getPreviewSpinButtonLayout({ x: 20, y: 30, width: 120, height: 40, osSkin: "windows8" }),
+    { bodyWidth: 111, imageX: 132, imageY: 41, imageWidth: 8, imageHeight: 18 }
+  );
+});
+
+
+test("uses the original macOS no-ticks guide fill rect only for trackbars without ticks", () => {
+  assert.deepEqual(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isVertical: false }),
+    { x: 19, y: 37, w: 102, h: 4 }
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 25, height: 120, osSkin: "macos", isVertical: true }),
+    { x: 27, y: 29, w: 4, h: 102 }
+  );
+
+  assert.equal(
+    getPreviewTrackBarNoTicksFillRect({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isVertical: false }),
+    null
+  );
+});
+
+test("uses the original macOS trackbar groove highlight lines only for the macOS skin", () => {
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 120, height: 25, osSkin: "macos", isVertical: false }),
+    [
+      { x: 11, y: 24, w: 118, h: 1, color: "rgb(170, 170, 170)" },
+      { x: 11, y: 25, w: 118, h: 1, color: "rgb(193, 193, 193)" },
+      { x: 11, y: 26, w: 118, h: 1, color: "rgb(205, 205, 205)" }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 25, height: 120, osSkin: "macos", isVertical: true }),
+    [
+      { x: 14, y: 21, w: 1, h: 118, color: "rgb(170, 170, 170)" },
+      { x: 15, y: 21, w: 1, h: 118, color: "rgb(193, 193, 193)" },
+      { x: 16, y: 21, w: 1, h: 118, color: "rgb(205, 205, 205)" }
+    ]
+  );
+
+  assert.deepEqual(
+    getPreviewTrackBarMacGrooveHighlightLines({ x: 10, y: 20, width: 120, height: 25, osSkin: "windows7", isVertical: false }),
+    []
+  );
 });

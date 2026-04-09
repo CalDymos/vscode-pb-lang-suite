@@ -69,6 +69,8 @@ export type WindowPreviewTitleButtonSize = {
   height: number;
 };
 
+export type WindowPreviewTitleButtonAssetKind = "macClose" | "macMinimize" | "macMaximize" | "macDisabled" | "linuxClose" | "linuxMinimize" | "linuxMaximize";
+
 export type WindowPreviewTitleIconSize = {
   width: number;
   height: number;
@@ -166,6 +168,13 @@ export type WindowPreviewFrameDecoration = {
   borderRadius: number;
   strokeColorStyle: "focus" | "macos-dark" | "windows7-dark" | "windows8-blue";
   strokeAlpha: number;
+};
+
+export type WindowPreviewFrameStrokeRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 };
 
 export const WINDOW_PREVIEW_PAGE_PADDING = 10;
@@ -517,6 +526,36 @@ export function getWindowPreviewTitleBarDecoration(
   };
 }
 
+export function usesWindowPreviewExternalMenuBar(osSkin: WindowPreviewOsSkin): boolean {
+  return osSkin === "macos";
+}
+
+export function getWindowPreviewTitleTextLayout(args: {
+  osSkin: WindowPreviewOsSkin;
+  titleAlignment: "left" | "center";
+  titleLeft: number;
+  titleRight: number;
+  windowX: number;
+  windowWidth: number;
+  titleWidth: number;
+}): { clipLeft: number; clipRight: number; titleX: number } {
+  if (args.osSkin === "macos") {
+    return {
+      clipLeft: args.windowX,
+      clipRight: args.windowX + args.windowWidth,
+      titleX: args.windowX + Math.max(0, (args.windowWidth - args.titleWidth) / 2),
+    };
+  }
+
+  return {
+    clipLeft: args.titleLeft,
+    clipRight: args.titleRight,
+    titleX: args.titleAlignment === "center"
+      ? args.titleLeft + Math.max(0, (args.titleRight - args.titleLeft - args.titleWidth) / 2)
+      : args.titleLeft,
+  };
+}
+
 export function getWindowPreviewTitleBarMetrics(
   osSkin: WindowPreviewOsSkin
 ): WindowPreviewTitleBarMetrics {
@@ -594,6 +633,44 @@ export function getWindowPreviewTitleButtonSize(
   }
 
   return fallbackSize;
+}
+
+export function getWindowPreviewTitleButtonAssetKind(
+  osSkin: WindowPreviewOsSkin,
+  kind: WindowPreviewTitleButtonKind,
+  enabled: boolean
+): WindowPreviewTitleButtonAssetKind | null {
+  if (osSkin === "macos") {
+    if (!enabled && kind !== "close") {
+      return "macDisabled";
+    }
+
+    switch (kind) {
+      case "close":
+        return "macClose";
+      case "minimize":
+        return "macMinimize";
+      case "maximize":
+        return "macMaximize";
+    }
+  }
+
+  if (osSkin === "linux") {
+    if (!enabled) {
+      return null;
+    }
+
+    switch (kind) {
+      case "close":
+        return "linuxClose";
+      case "minimize":
+        return "linuxMinimize";
+      case "maximize":
+        return "linuxMaximize";
+    }
+  }
+
+  return null;
 }
 
 export function getWindowPreviewTitleIconSize(
@@ -819,13 +896,13 @@ export function getWindowPreviewMenuRootEntryRect(
   x: number,
   y: number,
   textWidth: number,
-  menuBarHeight: number,      
+  menuBarHeight: number,
 ): WindowPreviewMenuRootEntryRect {
   return {
     x: Math.trunc(x) - 1,
     y: Math.trunc(y) - 1,
     w: Math.max(24, Math.ceil(textWidth) + 6) + 1,
-    h: Math.max(0, menuBarHeight - 4),          
+    h: Math.max(0, Math.trunc(menuBarHeight) - 4),
   };
 }
 
@@ -889,6 +966,29 @@ export function getWindowPreviewBodyDecoration(
     clientBorderStyle: "none",
     showBodyOutline: false,
     bodyOutlineStyle: "none",
+  };
+}
+
+export function getWindowPreviewFrameStrokeRect(
+  osSkin: WindowPreviewOsSkin,
+  rect: { x: number; y: number; w: number; h: number }
+): WindowPreviewFrameStrokeRect {
+  const decoration = getWindowPreviewFrameDecoration(osSkin);
+
+  if (decoration.borderStyle === "macos-rounded" || decoration.borderStyle === "windows7-rounded") {
+    return {
+      x: rect.x - 0.5,
+      y: rect.y - 0.5,
+      w: rect.w + 1,
+      h: rect.h + 1,
+    };
+  }
+
+  return {
+    x: rect.x + 0.5,
+    y: rect.y + 0.5,
+    w: rect.w - 1,
+    h: rect.h - 1,
   };
 }
 

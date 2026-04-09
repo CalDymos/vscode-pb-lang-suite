@@ -2,8 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canEditToolBarTooltip,
+  deriveWindows7MenuBarPalette,
   buildOptionalInspectorLiteralRaw,
   buildOptionalInspectorPlainValue,
+  canMoveWindowInCanvas,
+  canResizeWindowTopInCanvas,
+  canResizeWindowLeftInCanvas,
+  canResizeWindowRightInCanvas,
+  canResizeWindowBottomInCanvas,
+  canResizeWindowHandleInCanvas,
   getDefaultMenuItemInsertArgs,
   getDefaultToolBarInsertId,
   getOpenSubMenuBalance,
@@ -11,6 +18,13 @@ import {
   getMenuAncestorChain,
   getMenuEntryBlockEndIndex,
   getMenuEntryLevel,
+  getMenuFlyoutAnchorRect,
+  getMenuFlyoutEntryTextLayout,
+  getMenuFlyoutFooterOpacity,
+  getMenuFlyoutFooterTextPosition,
+  getMenuFlyoutSeparatorLineY,
+  getMenuFlyoutSeparatorPreviewRect,
+  getMenuFlyoutShortcutOpacity,
   getMenuEntrySourceLine,
   getMenuEntryMoveTarget,
   getMenuEntryRect,
@@ -29,6 +43,8 @@ import {
   resolveTopLevelChromeHit,
   getSelectedToolBarInspectorFieldConfig,
   getToolBarPreviewInsertArgs,
+  getToolBarSeparatorPreviewRect,
+  getToolBarSeparatorSelectedOutlineRect,
   hasPbFlag,
   unquotePbString,
   getVisibleToolBarEntryCount,
@@ -76,6 +92,26 @@ test("preserves whitespace-only inspector text values when converting to raw pay
   assert.equal(buildOptionalInspectorLiteralRaw(' A "quoted" value '), '" A ""quoted"" value "');
   assert.equal(buildOptionalInspectorPlainValue(""), undefined);
   assert.equal(buildOptionalInspectorPlainValue("   "), "   ");
+});
+
+test("keeps top-level window canvas movement disabled to match the original designer", () => {
+  assert.equal(canMoveWindowInCanvas(), false);
+});
+
+test("limits top-level window canvas resize handles to the original right and bottom edges", () => {
+  assert.equal(canResizeWindowTopInCanvas(), false);
+  assert.equal(canResizeWindowLeftInCanvas(), false);
+  assert.equal(canResizeWindowRightInCanvas(), true);
+  assert.equal(canResizeWindowBottomInCanvas(), true);
+
+  assert.equal(canResizeWindowHandleInCanvas("nw"), false);
+  assert.equal(canResizeWindowHandleInCanvas("n"), false);
+  assert.equal(canResizeWindowHandleInCanvas("ne"), false);
+  assert.equal(canResizeWindowHandleInCanvas("w"), false);
+  assert.equal(canResizeWindowHandleInCanvas("e"), true);
+  assert.equal(canResizeWindowHandleInCanvas("sw"), false);
+  assert.equal(canResizeWindowHandleInCanvas("s"), true);
+  assert.equal(canResizeWindowHandleInCanvas("se"), true);
 });
 
 test("builds default menu labels, levels and insert args", () => {
@@ -136,6 +172,77 @@ test("resolves direct menu children and ancestor chains from entry levels", () =
   assert.equal(getMenuEntrySourceLine(menu, 99), undefined);
 });
 
+test("derives the windows7 menu-bar palette from Menu/MenuBar colors with original fallbacks", () => {
+  assert.deepEqual(deriveWindows7MenuBarPalette(undefined, undefined), {
+    topFill: "rgb(245, 245, 245)",
+    bottomFill: "rgb(218, 224, 241)",
+    separatorUpper: "rgb(182, 188, 204)",
+    separatorMiddle: "rgb(240, 240, 240)",
+    separatorLower: "rgb(160, 160, 160)",
+  });
+
+  assert.deepEqual(deriveWindows7MenuBarPalette("rgb(240, 240, 240)", "rgb(240, 240, 240)"), {
+    topFill: "rgb(244, 244, 244)",
+    bottomFill: "rgb(224, 228, 241)",
+    separatorUpper: "rgb(197, 201, 213)",
+    separatorMiddle: "rgb(240, 240, 240)",
+    separatorLower: "rgb(180, 180, 180)",
+  });
+});
+
+test("keeps flyout shortcut and footer text at full original opacity", () => {
+  assert.equal(getMenuFlyoutShortcutOpacity(), 1);
+  assert.equal(getMenuFlyoutFooterOpacity(), 1);
+});
+
+test("uses the original flyout separator hit rectangle and separator line offset", () => {
+  const entryRect = getMenuFlyoutSeparatorPreviewRect(120, 48, 160);
+  assert.deepEqual(entryRect, { x: 120, y: 48, w: 160, h: 12 });
+  assert.equal(getMenuFlyoutSeparatorLineY(entryRect), 54);
+});
+
+test("uses the restored flyout text baseline and menu-bar anchored flyout positions", () => {
+  assert.deepEqual(getMenuFlyoutEntryTextLayout({ x: 120, y: 48, w: 160, h: 20 }, 37.2), {
+    labelX: 144,
+    labelY: 62,
+    shortcutX: 232,
+    shortcutY: 62,
+  });
+
+  assert.deepEqual(getMenuFlyoutFooterTextPosition({ x: 120, y: 108, w: 160, h: 20 }), {
+    x: 125,
+    y: 122,
+  });
+
+  assert.deepEqual(
+    getMenuFlyoutAnchorRect(
+      { x: 10, y: 30, w: 240, h: 22 },
+      { x: 25, y: 32, w: 40, h: 14 },
+      null,
+    ),
+    {
+      x: 25,
+      y: 52,
+      w: 0,
+      h: 0,
+    }
+  );
+
+  assert.deepEqual(
+    getMenuFlyoutAnchorRect(
+      { x: 10, y: 30, w: 240, h: 22 },
+      { x: 140, y: 76, w: 100, h: 20 },
+      { x: 65, y: 52, w: 140, h: 80 },
+    ),
+    {
+      x: 205,
+      y: 76,
+      w: 0,
+      h: 0,
+    }
+  );
+});
+
 test("predicts menu block end indices and move targets for subtree moves", () => {
   const menu = {
     entries: [
@@ -153,6 +260,18 @@ test("predicts menu block end indices and move targets for subtree moves", () =>
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 6, "after"), 4);
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 5, 0, "before"), 0);
   assert.equal(getPredictedMenuEntryMoveIndex(menu, 1, 2, "before"), null);
+});
+
+
+test("uses the original toolbar separator hit and selection geometry", () => {
+  const entryRect = getToolBarSeparatorPreviewRect(42, 17);
+  assert.deepEqual(entryRect, { x: 42, y: 17, w: 6, h: 16 });
+  assert.deepEqual(getToolBarSeparatorSelectedOutlineRect(entryRect), {
+    x: 41,
+    y: 16,
+    w: 8,
+    h: 18,
+  });
 });
 
 test("builds default toolbar insert ids and preview insert args", () => {

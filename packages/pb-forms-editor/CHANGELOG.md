@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.23.0
+
+### Added
+
+- **Gadget Constants section**: The gadget inspector now shows a *Constants* section with a checkbox per known PureBasic flag for the selected gadget kind (e.g. `#PB_Button_Default`, `#PB_String_Password`, `#PB_Panel_TabBar`). Toggling a flag rebuilds the `flagsExpr` in the original PureBasic constant order while preserving any unknown custom tail flags.
+- **Color pickers for FrontColor / BackColor**: The gadget *FrontColor Raw* and *BackColor Raw* text inputs are replaced with a read-only display field, a native color swatch picker, and a *Remove* button — matching the window color picker introduced in 0.17.0. The picker writes `RGB(...)` literals; Remove clears the property.
+- **Disabled gadget overlay**: A translucent overlay is now drawn over disabled gadgets in the canvas preview to make their disabled state visually obvious at a glance.
+
+### Fixed
+
+- Hidden gadgets are no longer drawn in the canvas preview, matching the original PureBasic IDE behavior. A gadget with a non-literal `HideGadget` expression (e.g. a variable) is treated as visible to avoid false hiding.
+- Hidden gadgets that are selected still show their blue selection frame and resize handles even though the gadget content itself is not drawn.
+- Setting *Hidden*, *Disabled*, or *Checked* on one gadget/window property no longer silently clears unrelated properties. Property updates are now partial — only the fields explicitly present in the message are written.
+- Window selection overlay (border highlight) is now aligned correctly on macOS and Windows 7 rounded-border previews; previously the outline was drawn with a different stroke rect than the actual outer frame.
+- Source range offsets no longer drift on CRLF documents; `buildLineStartOffsets` now scans raw newline positions instead of using split lines.
+- Splitter child gadgets are now correctly included when deleting a container subtree that also contains the owning SplitterGadget.
+- `appendWorkspaceEdit` now falls back to rebuilding edits from `entries()` when `getOperations()` is unavailable, fixing gadget delete in some VS Code host environments.
+
+### Changed
+
+- *Delete Gadget* button moved from the bottom to a new *Actions* section at the top of the gadget properties panel.
+- Window resize in the canvas is now restricted to the right and bottom edges only, matching the original PureBasic Form Designer behavior (top and left edges can no longer be dragged, and the window cannot be moved by dragging the title bar).
+
+---
+
+## 0.22.0
+
+### Added
+
+- **DPI-aware layout**: When VS Code is running on a HiDPI display (e.g. 150% scaling), the canvas and inspector now correctly handle the scale factor:
+  - Gadget and window X/Y/W/H values are shown in the inspector as their logical (unscaled) display values; a read-only *Unscaled* row is shown alongside when scaling is active.
+  - Dragging or resizing a gadget on the canvas writes the correct unscaled integer back to the source file.
+  - Splitter position and ScrollArea *InnerWidth/InnerHeight* fields are also DPI-scaled and display the corrected values.
+- **Nested gadget resize locks**: LockLeft/LockRight/LockTop/LockBottom are now editable for gadgets inside a `ContainerGadget` or `ScrollAreaGadget`, emitting `GadgetWidth(#Parent) - N` / `GadgetHeight(#Parent) - N` anchor formulas. `PanelGadget` children use `GetGadgetAttribute(#Panel, #PB_Panel_ItemWidth/Height)` formulas with a per-skin tab header height correction.
+- **Toolbar Y expression preservation**: The canvas and insert paths now preserve `ToolBarHeight(N) + Y` expressions in the gadget Y coordinate so that gadgets anchored to the toolbar do not lose their formula on every edit.
+
+### Fixed
+
+- Resize lock formula values are now correctly unscaled via the active DPI scale before being written to the source, preventing off-by-scale errors on HiDPI displays.
+- Per-toggle lock probing in the inspector enables asymmetric lock editing — LockLeft and LockRight can now be toggled independently when only one direction's formula can be derived.
+
+---
+
+## 0.21.0
+
+### Added
+
+- **Gadget font rendering**: Gadgets that display text now apply the font family, size, and style flags (`#PB_Font_Bold`, `#PB_Font_Italic`, `#PB_Font_Underline`, `#PB_Font_StrikeOut`) assigned via `SetGadgetFont` to the canvas preview. Underline and strikeout decorations are drawn explicitly after each `fillText` call.
+- **Text variable captions shown with brackets**: When a gadget's caption is set via a variable (rather than a string literal), the preview now renders it as `[variableName]` in brackets, matching the original PureBasic Form Designer display.
+- **Raster assets for remaining gadget kinds**: The following gadget previews now use original-style raster icons with vector fallbacks:
+  - *Combo boxes*: per-skin drop-down arrow (Windows 7/Linux, Windows 8) and macOS double-arrow for non-editable combos.
+  - *Spin gadget*: macOS and Windows 8 spin button images.
+  - *Trackbar*: macOS and Windows 7/Linux thumb images; macOS groove highlight lines and no-ticks guide fill.
+  - *Scrollbar*: per-skin arrow button images (Windows 7/Linux, Windows 8) and split-fill thumb layout (Windows 7/Linux).
+  - *Date gadget*: per-skin dropdown arrow (reuses combo arrow assets on Windows 7/8; separate arrow on macOS/Linux).
+  - *macOS/Linux title buttons*: raster close/minimize/maximize icons replace the previous circle and glyph fallbacks.
+- **macOS external menu bar**: On the macOS skin the menu bar is now rendered as a full-canvas-width band above the window body (matching the macOS system behavior), with gadget hit-testing and layout adjusted accordingly. The window title is centered across the full window width on macOS.
+- **Selection outline for toolbar separators and flyout MenuBar separators**: Selected `ToolBarSeparator` entries now show a visible selection outline in the canvas. Flyout `MenuBar` separator entries also draw a selection outline when selected.
+
+### Fixed
+
+- Text heights across all gadget preview draw paths (string, button, combo, spin, list rows, list headers, frame caption, date gadget, menu bar entries, menu flyout entries) are now derived from the actual measured canvas text height rather than the nominal font size in points, ensuring correct vertical centering at all font sizes.
+- Menu flyout shortcut and footer text are now rendered at full opacity; the previous 0.72 and 0.92 alpha values had no original justification.
+- Menu bar entry rect height and width now use measured text dimensions rather than hardcoded constants, improving accuracy at non-default font sizes.
+- macOS `FrameGadget` caption body border Y offset now uses measured text height instead of a hardcoded constant.
+- Toolbar separator hit rect width narrowed from 10 px to 6 px to match the visible separator line and prevent overlap with adjacent entries.
+- macOS maximize button raster asset corrected.
+- Windows 7 menu bar palette colors now blend the Windows skin *Menu* and *MenuBar* system colors into the original gradient palette instead of using hardcoded values.
+- Windows frame stroke colors and inner client border now prefer skin-derived system colors (`ButtonShadow`, `ActiveTitle`, `GradientActiveTitle`) over hardcoded fallbacks.
+
+---
+
 ## 0.20.0
 
 ### Added
