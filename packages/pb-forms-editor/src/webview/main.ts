@@ -177,6 +177,7 @@ import {
   getGadgetReparentParentOptions,
 } from "../core/gadget/reparent";
 import { getPanelInspectorItemLabel } from "../core/gadget/item-label";
+import { resolveGadgetCtorPreviewLocalRect } from "../core/gadget/layout";
 import {
   canImmediateInsertFromToolbox,
   getDefaultToolboxPanelKind,
@@ -4382,14 +4383,15 @@ function getGadgetPreviewLayout(
     if (parent) {
       const parentLayout = getGadgetPreviewLayout(parent, metrics, cache, visiting);
       const parentContentRect = getGadgetContentRect(parent.kind, parentLayout.rect, metrics);
+      const localRect = resolveGadgetCtorPreviewLocalRect(g, parentContentRect.w, parentContentRect.h);
       clip = intersectRect(parentLayout.clip, parentContentRect);
-      let localX = g.x;
-      let localY = g.y;
+      let localX = localRect.x;
+      let localY = localRect.y;
       if (parent.kind === GADGET_KIND.ScrollAreaGadget) {
         localX -= getScrollAreaOffsetX(parent, parentLayout.rect, metrics);
         localY -= getScrollAreaOffsetY(parent, parentLayout.rect, metrics);
       }
-      rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: g.w, h: g.h };
+      rect = { x: parentContentRect.x + localX, y: parentContentRect.y + localY, w: localRect.w, h: localRect.h };
       visible = parentLayout.visible && clip.w > 0 && clip.h > 0 && rectIntersects(rect, clip) && !isGadgetHiddenInDesignerPreview(g.hidden);
 
       if (parent.kind === GADGET_KIND.PanelGadget && typeof g.parentItem === "number") {
@@ -4397,7 +4399,8 @@ function getGadgetPreviewLayout(
       }
     }
   } else {
-    rect = { x: windowContentRect.x + g.x, y: windowContentRect.y + g.y, w: g.w, h: g.h };
+    const localRect = resolveGadgetCtorPreviewLocalRect(g, windowContentRect.w, windowContentRect.h);
+    rect = { x: windowContentRect.x + localRect.x, y: windowContentRect.y + localRect.y, w: localRect.w, h: localRect.h };
     clip = intersectRect(windowContentRect, rect);
     visible = clip.w > 0 && clip.h > 0 && !isGadgetHiddenInDesignerPreview(g.hidden);
   }

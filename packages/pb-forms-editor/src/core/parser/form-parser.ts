@@ -28,6 +28,7 @@ import {
 } from "../model";
 
 import { canHostInsertedGadgets } from "../gadget/insert";
+import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReference } from "../gadget/layout";
 import { parseDesignerLayoutRaw } from "../utils/layout-dpi";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
@@ -607,19 +608,19 @@ export function parseFormDocument(text: string): FormDocument {
           g.resizeHRaw = heightRaw || undefined;
           g.resizeSource = c.range;
 
-          if (usesWidthResizeReference(xRaw)) {
+          if (usesWidthLayoutReference(xRaw)) {
             g.lockLeft = false;
             g.lockRight = true;
           }
-          if (usesHeightResizeReference(yRaw)) {
+          if (usesHeightLayoutReference(yRaw)) {
             g.lockTop = false;
             g.lockBottom = true;
           }
-          if (usesWidthResizeReference(widthRaw)) {
+          if (usesWidthLayoutReference(widthRaw)) {
             g.lockLeft = true;
             g.lockRight = true;
           }
-          if (usesHeightResizeReference(heightRaw)) {
+          if (usesHeightLayoutReference(heightRaw)) {
             g.lockTop = true;
             g.lockBottom = true;
           }
@@ -1420,18 +1421,6 @@ function parseNumericRaw(raw: string | undefined): { raw?: string; value?: numbe
   };
 }
 
-function usesWidthResizeReference(raw: string | undefined): boolean {
-  const trimmed = raw?.trim();
-  if (!trimmed?.length) return false;
-  return /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i.test(trimmed);
-}
-
-function usesHeightResizeReference(raw: string | undefined): boolean {
-  const trimmed = raw?.trim();
-  if (!trimmed?.length) return false;
-  return /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i.test(trimmed);
-}
-
 const CUSTOM_GADGET_INIT_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget initialisation \(do Not remove this line\)\s*$/i;
 const CUSTOM_GADGET_CREATE_MARKER_RE = /^\s*;\s*(\d+)\s+Custom gadget creation \(do not remove this line\)\s*(.*?)\s*$/i;
 
@@ -1791,6 +1780,8 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
   const text = literalText ?? (ctor.textRaw?.length ? ctor.textRaw : undefined);
   const textVariable = literalText === undefined && !!ctor.textRaw?.length;
 
+  const ctorLocks = inferGadgetCtorLocks({ xRaw, yRaw, wRaw, hRaw });
+
   return {
     id,
     kind,
@@ -1819,10 +1810,10 @@ function parseGadgetCall(kind: GadgetKind, assignedVar: string | undefined, args
     gadget2Raw: ctor.gadget2Raw,
     gadget2Id: ctor.gadget2Id,
     flagsExpr: ctor.flagsExpr,
-    lockLeft: true,
-    lockRight: false,
-    lockTop: true,
-    lockBottom: false,
+    lockLeft: ctorLocks.lockLeft,
+    lockRight: ctorLocks.lockRight,
+    lockTop: ctorLocks.lockTop,
+    lockBottom: ctorLocks.lockBottom,
     source: range
   };
 }

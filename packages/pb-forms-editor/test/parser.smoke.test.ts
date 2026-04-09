@@ -1069,10 +1069,18 @@ EndProcedure
   assert.equal(gadget?.y, 10);
   assert.equal(gadget?.w, 40);
   assert.equal(gadget?.h, 25);
+  assert.equal(gadget?.lockLeft, true);
+  assert.equal(gadget?.lockRight, true);
+  assert.equal(gadget?.lockTop, true);
+  assert.equal(gadget?.lockBottom, false);
 
   assert.ok(bottom);
   assert.equal(bottom?.x, 180);
   assert.equal(bottom?.y, 210);
   assert.equal(bottom?.w, 80);
   assert.equal(bottom?.h, 120);
+  assert.equal(bottom?.lockLeft, false);
+  assert.equal(bottom?.lockRight, true);
+  assert.equal(bottom?.lockTop, true);
+  assert.equal(bottom?.lockBottom, true);
 });
