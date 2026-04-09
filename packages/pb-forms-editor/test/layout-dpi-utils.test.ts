@@ -30,7 +30,7 @@ test("parses numeric unscaled layout literals and ignores expressions", () => {
   assert.equal(parseUnscaledLayoutRaw("10"), 10);
   assert.equal(parseUnscaledLayoutRaw("  -5  "), -5);
   assert.equal(parseUnscaledLayoutRaw("#PB_Ignore"), undefined);
-  assert.equal(parseUnscaledLayoutRaw("FormWindowWidth - 10"), undefined);
+  assert.equal(parseUnscaledLayoutRaw("WindowWidth(#FrmMain) - 10"), undefined);
 });
 
 
@@ -44,15 +44,15 @@ test("parses original top-level toolbar and statusbar Y expressions into unscale
   assert.equal(parseDesignerLayoutRaw("FormWindowTop + 5 + 7", "y"), 12);
   assert.equal(parseDesignerLayoutRaw("ToolBarHeight(#TbMain) + 10 + 20", "y"), 30);
   assert.equal(parseDesignerLayoutRaw("StatusBarHeight(#SbMain) + 8 + 4", "y"), 12);
-  assert.equal(parseDesignerLayoutRaw("MenuHeight()+10-20", "y"), undefined);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight()+10-20", "y"), -10);
   assert.equal(parseDesignerLayoutRaw("MenuHeight()+Foo+20", "y"), undefined);
 });
 
 test("parses original top-level width and height reference expressions into their stored base offsets", () => {
-  assert.equal(parseDesignerLayoutRaw("FormWindowWidth - 40", "w"), 40);
-  assert.equal(parseDesignerLayoutRaw("FormWindowWidth - 310", "x"), 310);
-  assert.equal(parseDesignerLayoutRaw("FormWindowHeight - StatusBarHeight(0) - 120", "h"), 120);
-  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + FormWindowHeight - 210", "y"), 210);
+  assert.equal(parseDesignerLayoutRaw("WindowWidth(#FrmMain) - 40", "w"), 40);
+  assert.equal(parseDesignerLayoutRaw("WindowWidth(#FrmMain) - 310", "x"), 310);
+  assert.equal(parseDesignerLayoutRaw("WindowHeight(#FrmMain) - StatusBarHeight(0) - 120", "h"), 120);
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + WindowHeight(#FrmMain) - 210", "y"), 210);
 });
 
 
@@ -64,7 +64,7 @@ test("parses original parent-relative width and height reference expressions int
   assert.equal(parseDesignerLayoutRaw("GadgetHeight(#Container_0) - 18", "y"), 18);
   assert.equal(parseDesignerLayoutRaw("WindowHeight(#WINDOW_Main) - 90", "h"), 90);
   assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + GetGadgetAttribute(#Panel_0,#PB_Panel_ItemHeight) - 118", "y"), 118);
-  assert.equal(parseDesignerLayoutRaw("FormWindowHeight - MenuHeight() - ToolBarHeight(0) - StatusBarHeight(0) - 127", "h"), 127);
+  assert.equal(parseDesignerLayoutRaw("WindowHeight(#FrmMain) - MenuHeight() - ToolBarHeight(0) - StatusBarHeight(0) - 127", "h"), 127);
 });
 
 test("maps displayed layout values back to unscaled code values", () => {

@@ -7,10 +7,10 @@ import {
 
 test("infers original constructor locks from window-relative layout expressions", () => {
   assert.deepEqual(inferGadgetCtorLocks({
-    xRaw: "FormWindowWidth - 180",
-    yRaw: "ToolBarHeight(0) + FormWindowHeight - 210",
+    xRaw: "WindowWidth(#FrmMain) - 180",
+    yRaw: "ToolBarHeight(0) + WindowHeight(#FrmMain) - 210",
     wRaw: "80",
-    hRaw: "FormWindowHeight - StatusBarHeight(0) - 120",
+    hRaw: "WindowHeight(#FrmMain) - StatusBarHeight(0) - 120",
   }), {
     lockLeft: false,
     lockRight: true,
@@ -21,7 +21,7 @@ test("infers original constructor locks from window-relative layout expressions"
   assert.deepEqual(inferGadgetCtorLocks({
     xRaw: "10",
     yRaw: "ToolBarHeight(0) + 10",
-    wRaw: "FormWindowWidth - 40",
+    wRaw: "WindowWidth(#FrmMain) - 40",
     hRaw: "25",
   }), {
     lockLeft: true,
@@ -37,7 +37,7 @@ test("resolves stored constructor offsets into actual preview rects against the 
     y: 10,
     w: 80,
     h: 24,
-    xRaw: "FormWindowWidth - 180",
+    xRaw: "WindowWidth(#FrmMain) - 180",
     yRaw: "10",
     wRaw: "80",
     hRaw: "24",
@@ -55,8 +55,8 @@ test("resolves stored constructor offsets into actual preview rects against the 
     h: 120,
     xRaw: "10",
     yRaw: "ToolBarHeight(0) + 10",
-    wRaw: "FormWindowWidth - 40",
-    hRaw: "FormWindowHeight - StatusBarHeight(0) - 120",
+    wRaw: "WindowWidth(#FrmMain) - 40",
+    hRaw: "WindowHeight(#FrmMain) - StatusBarHeight(0) - 120",
   }, 320, 220), {
     x: 10,
     y: 10,

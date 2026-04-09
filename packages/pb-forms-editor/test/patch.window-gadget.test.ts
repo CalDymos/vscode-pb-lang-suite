@@ -68,6 +68,12 @@ test("roundtrips existing ResizeGadget raw expressions without touching construc
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
   ResizeGadget(#BtnStretch, 10, ToolBarHeight(0) + 10, FormWindowWidth - 40, FormWindowHeight - 120)
 EndProcedure
 `;
@@ -2081,6 +2087,12 @@ test("deletes an existing ResizeGadget line when lock editing no longer requires
 Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
   OpenWindow(#FrmMain, x, y, width, height, "Main")
   ButtonGadget(#BtnStretch, 10, 50, 80, 24, "Stretch")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
   ResizeGadget(#BtnStretch, FormWindowWidth - 310, 50, 80, 24)
 EndProcedure
 `;
