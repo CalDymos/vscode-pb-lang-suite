@@ -263,7 +263,7 @@ test("returns the original custom-gadget help placeholder line", () => {
 });
 
 
-test("enables horizontal lock editing only for top-level gadgets with an existing ResizeGadget line", () => {
+test("enables horizontal lock editing whenever the current layout can be converted into original ResizeGadget formulas", () => {
   assert.equal(canEditGadgetHorizontalLocks({
     x: 10,
     y: 20,
@@ -273,7 +273,6 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     yRaw: "20",
     wRaw: "80",
     hRaw: "24",
-    resizeSource: { line: 12 },
     lockLeft: true,
     lockRight: true,
     lockTop: true,
@@ -290,7 +289,6 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     yRaw: "20",
     wRaw: "80",
     hRaw: "24",
-    resizeSource: { line: 12 },
     lockLeft: true,
     lockRight: true,
     lockTop: true,
@@ -307,7 +305,6 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     yRaw: "20",
     wRaw: "80",
     hRaw: "24",
-    resizeSource: { line: 12 },
     lockLeft: true,
     lockRight: true,
     lockTop: true,
@@ -335,7 +332,6 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
     yRaw: "20",
     wRaw: "80",
     hRaw: "24",
-    resizeSource: { line: 12 },
     lockLeft: true,
     lockRight: true,
     lockTop: true,
@@ -352,6 +348,54 @@ test("enables horizontal lock editing only for top-level gadgets with an existin
       hRaw: "160"
     }
   }), true);
+});
+
+test("preserves existing constructor right-anchor formulas when a gadget has no ResizeGadget line yet", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    lockLeft: false,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320, h: 220, platformSkin: "windows" }, true, true);
+
+  assert.deepEqual(update, {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "FormWindowHeight - 196"
+  });
+});
+
+test("preserves existing constructor stretch-width formulas when a gadget has no ResizeGadget line yet", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 280,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "FormWindowWidth - 40",
+    hRaw: "24",
+    lockLeft: true,
+    lockRight: true,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320, h: 220, platformSkin: "windows" }, true, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "FormWindowWidth - 40",
+    hRaw: "FormWindowHeight - 196"
+  });
 });
 
 test("builds a horizontal resize update that matches the original right-anchor formulas", () => {
@@ -560,7 +604,7 @@ test("preserves current horizontal resize formulas when a verified vertical lock
 
 
 
-test("preserves horizontal-only ResizeGadget emission when both vertical locks are turned off", () => {
+test("blocks turning off both vertical locks while horizontal ResizeGadget emission must stay persisted", () => {
   const update = buildGadgetVerticalLockResizeUpdate({
     x: 10,
     y: 20,
@@ -580,6 +624,49 @@ test("preserves horizontal-only ResizeGadget emission when both vertical locks a
     resizeWRaw: "80",
     resizeHRaw: "24"
   }, { w: 320, h: 220 }, false, false);
+
+  assert.equal(update, undefined);
+});
+
+test("keeps vertical lock editing available after a horizontal deleteResize state by reusing the base horizontal raws", () => {
+  const update = buildGadgetVerticalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    lockLeft: false,
+    lockRight: false,
+    lockTop: true,
+    lockBottom: false
+  }, { w: 320, h: 220, platformSkin: "windows" }, true, true);
+
+  assert.deepEqual(update, {
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "FormWindowHeight - 196"
+  });
+});
+
+test("keeps horizontal lock editing available after a vertical deleteResize state by reusing the base vertical raws", () => {
+  const update = buildGadgetHorizontalLockResizeUpdate({
+    x: 10,
+    y: 20,
+    w: 80,
+    h: 24,
+    xRaw: "10",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24",
+    lockLeft: true,
+    lockRight: false,
+    lockTop: false,
+    lockBottom: false
+  }, { w: 320, h: 220 }, false, true);
 
   assert.deepEqual(update, {
     xRaw: "FormWindowWidth - 310",

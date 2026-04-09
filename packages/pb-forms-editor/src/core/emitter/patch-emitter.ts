@@ -1176,6 +1176,223 @@ export function applyResizeGadgetRawUpdate(
   return replaceCallArgsEdit(document, call, params);
 }
 
+function findResizeDeclareLine(document: vscode.TextDocument, procName: string): number | undefined {
+  const re = new RegExp(`^\\s*Declare\\s+${escapeRegExp(procName)}\\s*\\(\\s*\\)\\s*$`, "i");
+  for (let i = 0; i < document.lineCount; i++) {
+    if (re.test(document.lineAt(i).text)) return i;
+  }
+  return undefined;
+}
+
+function findResizeDeclareInsertLine(document: vscode.TextDocument): number {
+  for (let i = 0; i < document.lineCount; i++) {
+    const trimmed = document.lineAt(i).text.trim();
+    if (/^Declare\b/i.test(trimmed) || /^XIncludeFile\b/i.test(trimmed) || /^Procedure(?:\.\w+)?\b/i.test(trimmed)) {
+      return i;
+    }
+  }
+  return document.lineCount;
+}
+
+function buildResizeGadgetCallLine(gadget: Gadget, args: GadgetResizeRawArgs): string | undefined {
+  const firstParam = gadget.pbAny ? gadget.id?.trim() : gadget.firstParam?.trim();
+  const xRaw = normalizeOptionalRaw(args.xRaw);
+  const yRaw = normalizeOptionalRaw(args.yRaw);
+  const wRaw = normalizeOptionalRaw(args.wRaw);
+  const hRaw = normalizeOptionalRaw(args.hRaw);
+  if (!firstParam || !xRaw || !yRaw || !wRaw || !hRaw) return undefined;
+  return `  ResizeGadget(${firstParam}, ${xRaw}, ${yRaw}, ${wRaw}, ${hRaw})`;
+}
+
+function buildResizeProcedureBlock(procName: string, windowRef: string, resizeLine: string): string {
+  return `Procedure ${procName}()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(${windowRef})
+  FormWindowHeight = WindowHeight(${windowRef})
+${resizeLine}
+EndProcedure
+
+`;
+}
+
+function ensureResizeProcedureDeclare(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  procName: string
+): void {
+  if (findResizeDeclareLine(document, procName) !== undefined) return;
+
+  const insertLine = findResizeDeclareInsertLine(document);
+  const nextTrimmed = insertLine < document.lineCount ? document.lineAt(insertLine).text.trim() : "";
+  const suffix = /^Procedure(?:\.\w+)?\b/i.test(nextTrimmed) ? "\n\n" : "\n";
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `Declare ${procName}()${suffix}`);
+}
+
+function ensureResizeProcedureBlock(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  calls: PbCall[],
+  window: FormWindow,
+  gadget: Gadget,
+  args: GadgetResizeRawArgs,
+  procName: string
+): void {
+  const resizeLine = buildResizeGadgetCallLine(gadget, args);
+  if (!resizeLine) return;
+
+  const existingProc = findProcedureBlockByName(document, procName);
+  if (existingProc) {
+    const existingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line >= existingProc.startLine && c.range.line <= existingProc.endLine);
+    const insertLine = existingResizeCalls.length
+      ? existingResizeCalls[existingResizeCalls.length - 1].range.line + 1
+      : existingProc.endLine;
+    edit.insert(document.uri, new vscode.Position(insertLine, 0), `${resizeLine}\n`);
+    return;
+  }
+
+  const windowRef = window.pbAny ? (window.id?.trim() ?? "") : window.firstParam.trim();
+  if (!windowRef) return;
+
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+  const openProc = findProcedureBlock(document, openCall.range.line);
+  if (!openProc) return;
+
+  const insertLine = skipBlankLines(document, openProc.endLine + 1);
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), `\n${buildResizeProcedureBlock(procName, windowRef, resizeLine)}`);
+}
+
+function ensureResizeEventCase(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  window: FormWindow,
+  calls: PbCall[],
+  procName: string
+): void {
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return;
+
+  const block = findWindowEventSelectBlock(document, context.eventProc);
+  if (!block) return;
+
+  const procCall = `${procName}()`;
+  const sizeBranch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, caseRaw => caseRaw.trim().toLowerCase() === "#pb_event_sizewindow");
+  if (sizeBranch?.procLine !== undefined) {
+    appendWorkspaceEdit(edit, replaceEventProcLine(document, sizeBranch.procLine, procCall));
+    return;
+  }
+  if (sizeBranch) {
+    appendWorkspaceEdit(edit, insertEventProcLineAfterCase(document, sizeBranch.caseLine, procCall));
+    return;
+  }
+
+  let insertLine = block.endLine;
+  let firstCaseLine: number | undefined;
+  for (let i = block.selectLine + 1; i < block.endLine; i++) {
+    const line = document.lineAt(i).text.split(";")[0]?.trim() ?? "";
+    if (/^Case\b/i.test(line)) {
+      firstCaseLine = i;
+      break;
+    }
+  }
+  if (typeof firstCaseLine === "number") {
+    insertLine = firstCaseLine;
+  }
+
+  appendWorkspaceEdit(edit, insertEventCaseBranch(document, insertLine, block.selectLine, "#PB_Event_SizeWindow", procCall));
+}
+
+function cleanupResizeScaffoldingIfEmpty(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  window: FormWindow,
+  calls: PbCall[],
+  removedCallLine: number,
+  procName: string
+): void {
+  const remainingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line !== removedCallLine);
+  if (remainingResizeCalls.length > 0) return;
+
+  const declareLine = findResizeDeclareLine(document, procName);
+  if (declareLine !== undefined) {
+    edit.delete(document.uri, document.lineAt(declareLine).rangeIncludingLineBreak);
+  }
+
+  const procBlock = findProcedureBlockByName(document, procName);
+  if (procBlock) {
+    const deleteStart = procBlock.startLine > 0 && isBlankLine(document, procBlock.startLine - 1)
+      ? procBlock.startLine - 1
+      : procBlock.startLine;
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(deleteStart, 0),
+        new vscode.Position(procBlock.endLine + 1, 0)
+      )
+    );
+  }
+
+  const openCall = findCallByStableKey(calls, window.id, name => name === "OpenWindow");
+  if (!openCall) return;
+
+  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  if (!context) return;
+
+  const block = findWindowEventSelectBlock(document, context.eventProc);
+  if (!block) return;
+
+  const sizeBranch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, caseRaw => caseRaw.trim().toLowerCase() === "#pb_event_sizewindow");
+  if (sizeBranch) {
+    appendWorkspaceEdit(edit, deleteEventCaseBranch(document, sizeBranch));
+  }
+}
+
+export function applyResizeGadgetMutation(
+  document: vscode.TextDocument,
+  gadgetKey: string,
+  args: GadgetResizeRawArgs & { deleteResize?: boolean },
+  scanRange?: ScanRange
+): vscode.WorkspaceEdit | undefined {
+  const parsed = parseFormDocument(document.getText());
+  const gadget = parsed.gadgets.find(entry => entry.id === gadgetKey);
+  const window = parsed.window;
+  if (!gadget || !window?.variable) return undefined;
+
+  const procName = buildResizeProcName(window.variable);
+  const calls = scanDocumentCalls(document, scanRange);
+  const existingCall = findCallByStableKey(calls, gadgetKey, name => name === "ResizeGadget");
+
+  if (args.deleteResize) {
+    if (!existingCall) return undefined;
+    const remainingResizeCalls = calls.filter(c => c.name === "ResizeGadget" && c.range.line !== existingCall.range.line);
+    const edit = remainingResizeCalls.length > 0
+      ? applyResizeGadgetDelete(document, gadgetKey, scanRange)
+      : new vscode.WorkspaceEdit();
+    if (!edit) return undefined;
+    if (remainingResizeCalls.length > 0) {
+      return edit;
+    }
+    cleanupResizeScaffoldingIfEmpty(edit, document, window, calls, existingCall.range.line, procName);
+    return edit;
+  }
+
+  if (existingCall) {
+    return applyResizeGadgetRawUpdate(document, gadgetKey, args, scanRange);
+  }
+
+  const resizeLine = buildResizeGadgetCallLine(gadget, args);
+  if (!resizeLine) return undefined;
+
+  const edit = new vscode.WorkspaceEdit();
+  ensureResizeProcedureDeclare(edit, document, procName);
+  ensureResizeProcedureBlock(edit, document, calls, window, gadget, args, procName);
+  ensureResizeEventCase(edit, document, window, calls, procName);
+  return edit;
+}
+
 export function applyWindowRectPatch(
   document: vscode.TextDocument,
   windowKey: string,

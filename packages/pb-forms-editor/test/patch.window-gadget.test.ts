@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parseFormDocument } from "../src/core/parser/form-parser";
-import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
+import { applyGadgetDelete, applyGadgetEventProcUpdate, applyGadgetInsert, applyGadgetItemUpdate, applyGadgetOpenArgsUpdate, applyGadgetPropertyUpdate, applyGadgetReparent, applyMenuEntryEventUpdate, applyMovePatch, applyRectPatch, applyResizeGadgetDelete, applyResizeGadgetMutation, applyResizeGadgetRawUpdate, applyToolBarEntryEventUpdate, applyWindowEventProcUpdate, applyWindowEventUpdate, applyWindowGenerateEventLoopUpdate, applyWindowOpenArgsUpdate, applyWindowPbAnyToggle, applyWindowPropertyUpdate, applyWindowRectPatch, applyWindowVariableNamePatch } from "../src/core/emitter/patch-emitter";
 import { loadFixture } from "./helpers/loadFixture";
 import { FakeTextDocument } from "./helpers/fakeTextDocument";
 import { applyWorkspaceEditToText } from "./helpers/applyWorkspaceEdit";
@@ -98,6 +98,100 @@ EndProcedure
   assert.equal(gadget?.resizeHRaw, "FormWindowHeight - 140");
   assert.equal(gadget?.y, 50);
   assert.equal(gadget?.w, 80);
+});
+
+test("creates missing resize scaffolding when lock editing needs a new ResizeGadget line", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_CloseWindow
+      ProcedureReturn #False
+  EndSelect
+  ProcedureReturn #True
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const parsed = parseFormDocument(patchedText);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+
+  assert.match(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.match(patchedText, /Procedure ResizeGadgetsFrmMain\(\)\s+  Protected FormWindowWidth, FormWindowHeight\s+  FormWindowWidth = WindowWidth\(#FrmMain\)\s+  FormWindowHeight = WindowHeight\(#FrmMain\)\s+  ResizeGadget\(#BtnApply, FormWindowWidth - 310, 20, 80, 24\)\s+EndProcedure/s);
+  assert.match(patchedText, /Select event\s+    Case #PB_Event_SizeWindow\s+      ResizeGadgetsFrmMain\(\)\s+    Case #PB_Event_CloseWindow/s);
+  assert.equal(gadget?.resizeXRaw, "FormWindowWidth - 310");
+  assert.equal(gadget?.lockLeft, false);
+  assert.equal(gadget?.lockRight, true);
+});
+
+test("removes now-empty resize scaffolding when the last ResizeGadget line is deleted", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Declare ResizeGadgetsFrmMain()
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure ResizeGadgetsFrmMain()
+  Protected FormWindowWidth, FormWindowHeight
+  FormWindowWidth = WindowWidth(#FrmMain)
+  FormWindowHeight = WindowHeight(#FrmMain)
+  ResizeGadget(#BtnApply, FormWindowWidth - 310, 20, 80, 24)
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_SizeWindow
+      ResizeGadgetsFrmMain()
+    Case #PB_Event_CloseWindow
+      ProcedureReturn #False
+  EndSelect
+  ProcedureReturn #True
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "",
+    yRaw: "",
+    wRaw: "",
+    hRaw: "",
+    deleteResize: true
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+
+  assert.doesNotMatch(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.doesNotMatch(patchedText, /Procedure ResizeGadgetsFrmMain\(/);
+  assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
+  assert.match(patchedText, /Procedure FrmMain_Events\(event\)\s+  Select event\s+    Case #PB_Event_CloseWindow/s);
 });
 
 test("inserts a new top-level gadget with original defaults", () => {

@@ -27,8 +27,7 @@ import {
   applyMenuEntryUpdate,
   applyMovePatch,
   applyRectPatch,
-  applyResizeGadgetDelete,
-  applyResizeGadgetRawUpdate,
+  applyResizeGadgetMutation,
   applyStatusBarDelete,
   applyStatusBarFieldDelete,
   applyStatusBarFieldInsert,
@@ -971,19 +970,13 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
             postError(`Could not find gadget '${msg.id}' for ResizeGadget update${rangeInfo}.`);
             return;
           }
-          if (!gadget.resizeSource) {
-            postError(`Could not update locks for '${msg.id}'. No existing ResizeGadget(...) line was parsed${rangeInfo}.`);
-            return;
-          }
-
-          const edit = msg.deleteResize
-            ? applyResizeGadgetDelete(document, msg.id, sr)
-            : applyResizeGadgetRawUpdate(document, msg.id, {
-                xRaw: msg.xRaw ?? "",
-                yRaw: msg.yRaw ?? "",
-                wRaw: msg.wRaw ?? "",
-                hRaw: msg.hRaw ?? ""
-              }, sr);
+          const edit = applyResizeGadgetMutation(document, msg.id, {
+            xRaw: msg.xRaw ?? "",
+            yRaw: msg.yRaw ?? "",
+            wRaw: msg.wRaw ?? "",
+            hRaw: msg.hRaw ?? "",
+            deleteResize: msg.deleteResize === true
+          }, sr);
           await applyEditOrError(edit, `Could not patch ResizeGadget(...) for gadget '${msg.id}'${rangeInfo}.`);
           return;
         }

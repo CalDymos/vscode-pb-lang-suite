@@ -11492,49 +11492,55 @@ function renderProps() {
     )
   );
   const resizeCtx = getWindowResizeLockContext(g);
+  const currentLockLeft = g.lockLeft !== false;
+  const currentLockRight = g.lockRight === true;
+  const currentLockTop = g.lockTop !== false;
+  const currentLockBottom = g.lockBottom === true;
   const horizontalLockLeftToggle = resizeCtx
-    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockLeft), Boolean(g.lockRight))
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, !currentLockLeft, currentLockRight)
     : undefined;
   const horizontalLockRightToggle = resizeCtx
-    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, Boolean(g.lockLeft), !Boolean(g.lockRight))
+    ? buildGadgetHorizontalLockResizeUpdate(g, resizeCtx, currentLockLeft, !currentLockRight)
     : undefined;
-  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !Boolean(g.lockTop), Boolean(g.lockBottom));
-  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, Boolean(g.lockTop), !Boolean(g.lockBottom));
-  propsEl.appendChild(row("LockLeft", checkboxInput(Boolean(g.lockLeft), v => {
-    applyLocalGadgetHorizontalLockUpdate(g, v, Boolean(g.lockRight));
+  const verticalLockTopToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, !currentLockTop, currentLockBottom);
+  const verticalLockBottomToggle = buildGadgetVerticalLockResizeUpdate(g, resizeCtx, currentLockTop, !currentLockBottom);
+  const impossibleHorizontalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockLeft nor LockRight.";
+  const impossibleVerticalUnlockTitle = "This transition cannot be persisted safely: when the other axis still needs ResizeGadget(...), the source code cannot store a state with neither LockTop nor LockBottom.";
+  propsEl.appendChild(row("LockLeft", checkboxInput(currentLockLeft, v => {
+    applyLocalGadgetHorizontalLockUpdate(g, v, currentLockRight);
   }, {
     disabled: !horizontalLockLeftToggle,
     title: horizontalLockLeftToggle
       ? "Keep the gadget anchored to the left when the window is resized."
-      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+      : (currentLockLeft && !currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
   })));
-  propsEl.appendChild(row("LockRight", checkboxInput(Boolean(g.lockRight), v => {
-    applyLocalGadgetHorizontalLockUpdate(g, Boolean(g.lockLeft), v);
+  propsEl.appendChild(row("LockRight", checkboxInput(currentLockRight, v => {
+    applyLocalGadgetHorizontalLockUpdate(g, currentLockLeft, v);
   }, {
     disabled: !horizontalLockRightToggle,
     title: horizontalLockRightToggle
       ? "Keep the gadget anchored to the right when the window is resized."
-      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+      : (!currentLockLeft && currentLockRight ? impossibleHorizontalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
   })));
-  propsEl.appendChild(row("LockTop", checkboxInput(Boolean(g.lockTop), v => {
-    applyLocalGadgetVerticalLockUpdate(g, v, Boolean(g.lockBottom));
+  propsEl.appendChild(row("LockTop", checkboxInput(currentLockTop, v => {
+    applyLocalGadgetVerticalLockUpdate(g, v, currentLockBottom);
   }, {
     disabled: !verticalLockTopToggle,
     title: verticalLockTopToggle
       ? "Keep the gadget anchored to the top when the window is resized."
-      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+      : (currentLockTop && !currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
   })));
-  propsEl.appendChild(row("LockBottom", checkboxInput(Boolean(g.lockBottom), v => {
-    applyLocalGadgetVerticalLockUpdate(g, Boolean(g.lockTop), v);
+  propsEl.appendChild(row("LockBottom", checkboxInput(currentLockBottom, v => {
+    applyLocalGadgetVerticalLockUpdate(g, currentLockTop, v);
   }, {
     disabled: !verticalLockBottomToggle,
     title: verticalLockBottomToggle
       ? "Keep the gadget anchored to the bottom when the window is resized."
-      : "This lock can be edited only when the current ResizeGadget(...) setup can be updated safely."
+      : (!currentLockTop && currentLockBottom ? impossibleVerticalUnlockTitle : "This lock can be edited only when the current layout can be converted to a safe ResizeGadget(...) update.")
   })));
   propsEl.appendChild(mutedNote(horizontalLockLeftToggle || horizontalLockRightToggle || verticalLockTopToggle || verticalLockBottomToggle
-    ? "These lock options update an existing ResizeGadget(...) line for this gadget."
-    : "Lock editing is available only when the existing ResizeGadget(...) setup can be updated safely."
+    ? "These lock options create, update or remove the gadget's ResizeGadget(...) line as needed."
+    : "Lock editing is available only when the current layout can be converted to a safe ResizeGadget(...) update."
   ));
   if (hasExpressionVisibility) {
     propsEl.appendChild(mutedNote("Custom Hidden/Disabled expressions stay unchanged until you edit them here. Editing replaces them with 1 or 0."));
