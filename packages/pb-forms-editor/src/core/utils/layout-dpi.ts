@@ -57,20 +57,20 @@ function parseTrailingExpressionInteger(raw: string): number | undefined {
 }
 
 function parseSignedIntegerExpression(raw: string): number | undefined {
-  if (!raw) return undefined;
+    if (!raw) return undefined;
 
-  const tokens = raw.match(/[+-]?\s*\d+/g);
-  if (!tokens) return undefined;
+    // remove all whitespaces
+    const expr = raw.replace(/\s+/g, "");
 
-  let sum = 0;
+    // check if only allowed characters (+, -, 0-9) are contained
+    if (!/^[\d+-]+$/.test(expr)) return undefined;
 
-  for (const token of tokens) {
-    const normalized = token.replace(/\s+/g, "");
-    if (!/^[+-]?\d+$/.test(normalized)) return undefined;
-    sum += Number(normalized);
-  }
-
-  return sum;
+    // Evaluate the expression itself
+    try {
+        return Function(`return ${expr}`)() as number;
+    } catch {
+        return undefined;
+    }
 }
 
 function stripTopLevelYZeroTerms(raw: string): string {
