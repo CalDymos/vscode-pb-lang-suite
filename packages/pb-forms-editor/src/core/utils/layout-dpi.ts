@@ -45,7 +45,7 @@ function isIntegerLiteral(raw: string | undefined): raw is string {
 
 export type DesignerLayoutNumericField = "x" | "y" | "w" | "h" | "min" | "max" | "state";
 
-const TOP_LEVEL_Y_ZERO_TERM_RE = /(?:MenuHeight\(\)|FormWindowTop|ToolBarHeight\(\s*\d+\s*\)|StatusBarHeight\(\s*\d+\s*\))/gi;
+const TOP_LEVEL_Y_ZERO_TERM_RE = /(?:MenuHeight\(\)|FormWindowTop|ToolBarHeight\(\s*[^)]*\)|StatusBarHeight\(\s*[^)]*\))/gi;
 const HEIGHT_REFERENCE_RE = /FormWindowHeight|WindowHeight|GadgetHeight|GetGadgetAttribute/i;
 const WIDTH_REFERENCE_RE = /FormWindowWidth|WindowWidth|GadgetWidth|GetGadgetAttribute/i;
 

@@ -36,7 +36,9 @@ test("parses numeric unscaled layout literals and ignores expressions", () => {
 
 test("parses original top-level toolbar and statusbar Y expressions into unscaled offsets", () => {
   assert.equal(parseDesignerLayoutRaw("ToolBarHeight(0) + 10", "y"), 10);
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(#TbMain) + 10", "y"), 10);
   assert.equal(parseDesignerLayoutRaw("StatusBarHeight(0) + 10", "y"), 10);
+  assert.equal(parseDesignerLayoutRaw("StatusBarHeight(#SbMain) + 10", "y"), 10);
   assert.equal(parseDesignerLayoutRaw("MenuHeight() + FormWindowTop + 12", "y"), 12);
 });
 
