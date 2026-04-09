@@ -56,8 +56,25 @@ function parseTrailingExpressionInteger(raw: string): number | undefined {
   return Number(last);
 }
 
+function parseSignedIntegerExpression(raw: string): number | undefined {
+  if (!raw) return undefined;
+
+  const tokens = raw.match(/[+-]?\s*\d+/g);
+  if (!tokens) return undefined;
+
+  let sum = 0;
+
+  for (const token of tokens) {
+    const normalized = token.replace(/\s+/g, "");
+    if (!/^[+-]?\d+$/.test(normalized)) return undefined;
+    sum += Number(normalized);
+  }
+
+  return sum;
+}
+
 function stripTopLevelYZeroTerms(raw: string): string {
-  return raw.replace(TOP_LEVEL_Y_ZERO_TERM_RE, "").replace(/\+/g, "").trim();
+  return raw.replace(TOP_LEVEL_Y_ZERO_TERM_RE, " ").trim();
 }
 
 export function parseDesignerLayoutRaw(raw: string | undefined, field: DesignerLayoutNumericField): number | undefined {
@@ -69,8 +86,10 @@ export function parseDesignerLayoutRaw(raw: string | undefined, field: DesignerL
 
   if (field === "y" || field === "h") {
     const stripped = stripTopLevelYZeroTerms(trimmed);
-    const additive = parseUnscaledLayoutRaw(stripped);
-    if (typeof additive === "number") return additive;
+
+    const signed = parseSignedIntegerExpression(stripped);
+    if (typeof signed === "number") return signed;
+    
     if (HEIGHT_REFERENCE_RE.test(stripped)) {
       return parseTrailingExpressionInteger(stripped);
     }

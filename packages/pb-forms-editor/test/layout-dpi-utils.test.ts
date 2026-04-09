@@ -39,7 +39,13 @@ test("parses original top-level toolbar and statusbar Y expressions into unscale
   assert.equal(parseDesignerLayoutRaw("ToolBarHeight(#TbMain) + 10", "y"), 10);
   assert.equal(parseDesignerLayoutRaw("StatusBarHeight(0) + 10", "y"), 10);
   assert.equal(parseDesignerLayoutRaw("StatusBarHeight(#SbMain) + 10", "y"), 10);
-  assert.equal(parseDesignerLayoutRaw("MenuHeight() + FormWindowTop + 12", "y"), 12);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight()+10+20", "y"), 30);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight() + 10 + 20", "y"), 30);
+  assert.equal(parseDesignerLayoutRaw("FormWindowTop + 5 + 7", "y"), 12);
+  assert.equal(parseDesignerLayoutRaw("ToolBarHeight(#TbMain) + 10 + 20", "y"), 30);
+  assert.equal(parseDesignerLayoutRaw("StatusBarHeight(#SbMain) + 8 + 4", "y"), 12);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight()+10-20", "y"), undefined);
+  assert.equal(parseDesignerLayoutRaw("MenuHeight()+Foo+20", "y"), undefined);
 });
 
 test("parses original top-level width and height reference expressions into their stored base offsets", () => {
