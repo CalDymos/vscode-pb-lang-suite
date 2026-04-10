@@ -179,7 +179,8 @@ import {
   isLayoutDpiScalingActive,
   parseDesignerLayoutRaw,
   parseUnscaledLayoutRaw,
-  unscaleDisplayedLayoutValue
+  unscaleDisplayedLayoutValue,
+  type DesignerLayoutNumericField
 } from "../core/utils/layout-dpi";
 import {
   canOpenGadgetReparentDialog,
@@ -1101,7 +1102,7 @@ function isActiveLayoutDpiScalingEnabled(): boolean {
   return isLayoutDpiScalingActive(getActiveLayoutDpiScale());
 }
 
-type LayoutDisplayField = "x" | "y" | "w" | "h" | "min" | "max" | "state";
+type LayoutDisplayField = DesignerLayoutNumericField;
 
 function getLayoutDisplayOverrideKey(targetKind: "window" | "gadget", targetId: string, field: LayoutDisplayField, raw: string): string {
   return `${targetKind}:${targetId}:${field}:${raw}`;

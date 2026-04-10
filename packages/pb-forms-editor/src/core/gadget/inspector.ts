@@ -1,6 +1,7 @@
 import { GADGET_KIND } from "../model";
 import { quotePbString, unquoteString } from "../parser/tokenizer";
 import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, unscaleDisplayedLayoutValue, type DesignerLayoutNumericField } from "../utils/layout-dpi";
+import type { PreviewPlatform } from "../utils/form-settings-runtime";
 
 export type GadgetTextLike = {
   textRaw?: string;
@@ -70,7 +71,7 @@ export type GadgetResizeLockLike = {
   lockBottom?: boolean;
 };
 
-export type PbFormSkinLike = "windows" | "linux" | "macos";
+export type PbFormSkinLike = PreviewPlatform;
 
 export type WindowResizeLockLike = {
   w: number;
