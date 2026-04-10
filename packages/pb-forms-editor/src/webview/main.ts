@@ -262,6 +262,7 @@ import {
 } from "../core/statusbar/image-inspector";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
+import type { DesignerTopLevelSelection } from "../core/toplevel/selection";
 
 import {
   PREVIEW_PLUS_ICON_DATA_URI,
@@ -363,12 +364,7 @@ let model: Model = { gadgets: [], images: [] };
 type DesignerSelection =
   | { kind: "gadget"; id: string }
   | { kind: "window" }
-  | { kind: "menu"; id: string }
-  | { kind: "menuEntry"; menuId: string; entryIndex: number }
-  | { kind: "toolbar"; id: string }
-  | { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }
-  | { kind: "statusbar"; id: string }
-  | { kind: "statusBarField"; statusBarId: string; fieldIndex: number }
+  | DesignerTopLevelSelection
   | { kind: "images" }
   | { kind: "image"; id: string }
   | null;
@@ -519,7 +515,7 @@ type GadgetCanvasContextMenuAction = {
   message: string;
 };
 type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
-type CanvasContextMenuSelection = Extract<DesignerSelection, { kind: "gadget" | "menu" | "menuEntry" | "toolbar" | "toolBarEntry" | "statusbar" | "statusBarField" }>;
+type CanvasContextMenuSelection = DesignerTopLevelSelection | { kind: "gadget"; id: string };
 
 type PendingCanvasContextMenu = {
   x: number;
@@ -1452,33 +1448,33 @@ function closeDestructiveAction(): void {
 function executeDestructiveAction(action: PendingDestructiveAction): void {
   switch (action.kind) {
     case "deleteGadget":
-      post({ type: "deleteGadget", id: action.gadgetId });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteGadget, id: action.gadgetId });
       return;
     case "deleteMenuEntry":
       post({
-        type: "deleteMenuEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.deleteMenuEntry,
         menuId: action.menuId,
         sourceLine: action.sourceLine,
         kind: action.entryKind
       });
       return;
     case "deleteMenu":
-      post({ type: "deleteMenu", menuId: action.menuId });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteMenu, menuId: action.menuId });
       return;
     case "deleteToolBarEntry":
       post({
-        type: "deleteToolBarEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBarEntry,
         toolBarId: action.toolBarId,
         sourceLine: action.sourceLine,
         kind: action.entryKind
       });
       return;
     case "deleteToolBar":
-      post({ type: "deleteToolBar", toolBarId: action.toolBarId });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteToolBar, toolBarId: action.toolBarId });
       return;
     case "deleteStatusBarField":
       post({
-        type: "deleteStatusBarField",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBarField,
         statusBarId: action.statusBarId,
         sourceLine: action.sourceLine
       });
@@ -1491,7 +1487,7 @@ function executeDestructiveAction(action: PendingDestructiveAction): void {
         return;
       }
       post({
-        type: "updateStatusBarField",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField,
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
@@ -1504,16 +1500,16 @@ function executeDestructiveAction(action: PendingDestructiveAction): void {
       return;
     }
     case "deleteStatusBar":
-      post({ type: "deleteStatusBar", statusBarId: action.statusBarId });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteStatusBar, statusBarId: action.statusBarId });
       return;
     case "deleteImage":
-      post({ type: "deleteImage", sourceLine: action.sourceLine });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteImage, sourceLine: action.sourceLine });
       return;
     case "deleteGadgetItem":
-      post({ type: "deleteGadgetItem", id: action.gadgetId, sourceLine: action.sourceLine });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetItem, id: action.gadgetId, sourceLine: action.sourceLine });
       return;
     case "deleteGadgetColumn":
-      post({ type: "deleteGadgetColumn", id: action.gadgetId, sourceLine: action.sourceLine });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.deleteGadgetColumn, id: action.gadgetId, sourceLine: action.sourceLine });
       return;
   }
 }
@@ -1809,7 +1805,7 @@ function postInsertMenuEntry(menu: FormMenu, args: { kind: string; idRaw?: strin
     textRaw: args.textRaw,
   };
   vscode.postMessage({
-    type: "insertMenuEntry",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertMenuEntry,
     menuId: menu.id,
     kind: args.kind,
     idRaw: args.idRaw,
@@ -1830,7 +1826,7 @@ function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: string; idRa
     toggle: args.toggle,
   };
   vscode.postMessage({
-    type: "insertToolBarEntry",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertToolBarEntry,
     toolBarId: toolBar.id,
     kind: args.kind,
     idRaw: args.idRaw,
@@ -1852,7 +1848,7 @@ function postInsertStatusBarField(statusBar: FormStatusBar, args: { widthRaw: st
     progressRaw: args.progressRaw,
   };
   vscode.postMessage({
-    type: "insertStatusBarField",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertStatusBarField,
     statusBarId: statusBar.id,
     widthRaw: args.widthRaw,
     textRaw: args.textRaw,
@@ -1942,7 +1938,7 @@ function postInsertGadget(kind: string, x: number, y: number, parentId?: string,
     storeLayoutDisplayOverride("gadget", predictedId, "y", committed.y, yRaw);
   }
   post({
-    type: "insertGadget",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertGadget,
     kind,
     x: committed.xUnscaled,
     y: committed.yUnscaled,
@@ -2178,7 +2174,7 @@ function openSelectParentDialog(gadget: Gadget): void {
       : undefined;
 
     post({
-      type: "reparentGadget",
+      type: WEBVIEW_TO_EXT_MSG_TYPE.reparentGadget,
       id: gadget.id,
       parentId: nextParentId,
       parentItem: Number.isFinite(nextParentItem) ? nextParentItem : undefined,
@@ -2695,7 +2691,7 @@ window.addEventListener("resize", resizeCanvas);
 window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage<Model>>) => {
   const msg = ev.data;
 
-  if (msg.type === "init") {
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.init) {
     errEl.textContent = "";
     ensureLayoutScaleState();
     model = msg.model;
@@ -2720,18 +2716,18 @@ window.addEventListener("message", (ev: MessageEvent<ExtensionToWebviewMessage<M
     return;
   }
 
-  if (msg.type === "settings") {
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.settings) {
     ensureLayoutScaleState();
     applySettings(msg.settings);
     return;
   }
 
-  if (msg.type === "error") {
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.error) {
     errEl.textContent = msg.message;
     renderInfoPanel();
   }
 
-  if (msg.type === "windowsSystemColors") {
+  if (msg.type === EXT_TO_WEBVIEW_MSG_TYPE.windowsSystemColors) {
     windowsRegistryColors = msg.colors;
     render();
   }
@@ -3122,7 +3118,7 @@ function postGadgetRect(g: Gadget) {
   storeLayoutDisplayOverride("gadget", g.id, "y", g.y, g.yRaw);
   storeLayoutDisplayOverride("gadget", g.id, "w", g.w, g.wRaw);
   storeLayoutDisplayOverride("gadget", g.id, "h", g.h, g.hRaw);
-  vscode.postMessage({ type: "setGadgetRect", id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled, yRaw: nextYRaw });
+  vscode.postMessage({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetRect, id: g.id, x: committed.xUnscaled, y: committed.yUnscaled, w: committed.wUnscaled, h: committed.hUnscaled, yRaw: nextYRaw });
 }
 
 function postWindowRect() {
@@ -3143,7 +3139,7 @@ function postWindowRect() {
   storeLayoutDisplayOverride("window", model.window.id, "w", model.window.w, model.window.wRaw);
   storeLayoutDisplayOverride("window", model.window.id, "h", model.window.h, model.window.hRaw);
   vscode.postMessage({
-    type: "setWindowRect",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowRect,
     id: model.window.id,
     x: committed.xUnscaled,
     y: committed.yUnscaled,
@@ -3153,11 +3149,11 @@ function postWindowRect() {
 }
 
 function postGadgetOpenArgs(id: string, args: { textRaw?: string; textVariable?: boolean; minRaw?: string; maxRaw?: string; flagsExpr?: string }): void {
-  post({ type: "setGadgetOpenArgs", id, ...args });
+  post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetOpenArgs, id, ...args });
 }
 
 function postCustomGadgetCode(id: string, args: { customInitRaw?: string; customCreateRaw?: string }): void {
-  post({ type: "setCustomGadgetCode", id, ...args });
+  post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setCustomGadgetCode, id, ...args });
 }
 
 function postGadgetProperties(
@@ -3171,7 +3167,7 @@ function postGadgetProperties(
     gadgetFontRaw?: string;
   }
 ): void {
-  post({ type: "setGadgetProperties", id, ...args });
+  post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetProperties, id, ...args });
 }
 function postGadgetResizeRaw(
   id: string,
@@ -3183,7 +3179,7 @@ function postGadgetResizeRaw(
     deleteResize?: boolean;
   }
 ): void {
-  post({ type: "setGadgetResizeRaw", id, ...args });
+  post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetResizeRaw, id, ...args });
 }
 
 
@@ -4101,7 +4097,7 @@ window.addEventListener("mouseup", () => {
         ? buildPendingMenuEntrySelection(menu, d.entryIndex, d.moveTarget.targetSourceLine, d.moveTarget.placement)
         : null;
       post({
-        type: "moveMenuEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.moveMenuEntry,
         menuId: d.menuId,
         sourceLine: d.sourceLine,
         kind: d.kind,
@@ -6655,7 +6651,7 @@ function saveGadgetItemEditor(gadget: Gadget) {
   closeGadgetItemEditor(gadget.id, sourceLine);
   if (typeof sourceLine === "number") {
     post({
-      type: "updateGadgetItem",
+      type: WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetItem,
       sourceLine,
       ...payload,
     });
@@ -6663,7 +6659,7 @@ function saveGadgetItemEditor(gadget: Gadget) {
   }
 
   post({
-    type: "insertGadgetItem",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetItem,
     ...payload,
   });
 }
@@ -6717,7 +6713,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
   closeGadgetColumnEditor(gadget.id, sourceLine);
   if (typeof sourceLine === "number") {
     post({
-      type: "updateGadgetColumn",
+      type: WEBVIEW_TO_EXT_MSG_TYPE.updateGadgetColumn,
       sourceLine,
       ...payload,
     });
@@ -6725,7 +6721,7 @@ function saveGadgetColumnEditor(gadget: Gadget) {
   }
 
   post({
-    type: "insertGadgetColumn",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertGadgetColumn,
     ...payload,
   });
 }
@@ -6791,7 +6787,7 @@ function saveImageEditor(entry: FormImage) {
 
   closeImageEditor(entry.source.line);
   post({
-    type: "updateImage",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.updateImage,
     sourceLine: entry.source.line,
     inline: draft.inline,
     idRaw,
@@ -6862,7 +6858,7 @@ function saveImageInsertDraft() {
 
   pendingImageInsertDraft = null;
   post({
-    type: "insertImage",
+    type: WEBVIEW_TO_EXT_MSG_TYPE.insertImage,
     inline,
     idRaw,
     imageRaw,
@@ -6963,7 +6959,7 @@ function saveImageReferencePicker() {
       const entry = menu?.entries?.[target.entryIndex];
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
       post({
-        type: "updateMenuEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry,
         menuId: menu.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
@@ -6979,7 +6975,7 @@ function saveImageReferencePicker() {
       const entry = toolBar?.entries?.[target.entryIndex];
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
       post({
-        type: "updateToolBarEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry,
         toolBarId: toolBar.id,
         sourceLine: entry.source.line,
         kind: entry.kind,
@@ -6994,7 +6990,7 @@ function saveImageReferencePicker() {
       const field = statusBar?.fields?.[target.fieldIndex];
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
       post({
-        type: "updateStatusBarField",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField,
         statusBarId: statusBar.id,
         sourceLine: field.source.line,
         widthRaw: field.widthRaw,
@@ -7008,7 +7004,7 @@ function saveImageReferencePicker() {
       gadget.imageRaw = imageRaw;
       gadget.imageId = selected.id;
       post({
-        type: "setGadgetImageRaw",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetImageRaw,
         id: gadget.id,
         imageRaw
       });
@@ -7055,7 +7051,7 @@ function saveImageAssignmentDraft() {
       if (!menu || !entry || typeof entry.source?.line !== "number" || entry.kind !== "MenuItem") return;
       if (draft.mode === "create") {
         post({
-          type: "createAndAssignMenuEntryImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignMenuEntryImage,
           menuId: menu.id,
           sourceLine: entry.source.line,
           kind: entry.kind,
@@ -7070,7 +7066,7 @@ function saveImageAssignmentDraft() {
       }
       else {
         post({
-          type: "chooseFileAndAssignMenuEntryImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignMenuEntryImage,
           menuId: menu.id,
           sourceLine: entry.source.line,
           kind: entry.kind,
@@ -7089,7 +7085,7 @@ function saveImageAssignmentDraft() {
       if (!toolBar || !entry || typeof entry.source?.line !== "number" || entry.kind !== "ToolBarImageButton") return;
       if (draft.mode === "create") {
         post({
-          type: "createAndAssignToolBarEntryImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage,
           toolBarId: toolBar.id,
           sourceLine: entry.source.line,
           kind: entry.kind,
@@ -7105,7 +7101,7 @@ function saveImageAssignmentDraft() {
       }
       else {
         post({
-          type: "chooseFileAndAssignToolBarEntryImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignToolBarEntryImage,
           toolBarId: toolBar.id,
           sourceLine: entry.source.line,
           kind: entry.kind,
@@ -7123,7 +7119,7 @@ function saveImageAssignmentDraft() {
       if (!statusBar || !field || typeof field.source?.line !== "number") return;
       if (draft.mode === "create") {
         post({
-          type: "createAndAssignStatusBarFieldImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage,
           statusBarId: statusBar.id,
           sourceLine: field.source.line,
           widthRaw: field.widthRaw,
@@ -7135,7 +7131,7 @@ function saveImageAssignmentDraft() {
       }
       else {
         post({
-          type: "chooseFileAndAssignStatusBarFieldImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignStatusBarFieldImage,
           statusBarId: statusBar.id,
           sourceLine: field.source.line,
           widthRaw: field.widthRaw,
@@ -7152,7 +7148,7 @@ function saveImageAssignmentDraft() {
       gadget.imageId = reference.imageId;
       if (draft.mode === "create") {
         post({
-          type: "createAndAssignGadgetImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignGadgetImage,
           id: gadget.id,
           newInline: draft.inline,
           newImageIdRaw: idRaw,
@@ -7162,7 +7158,7 @@ function saveImageAssignmentDraft() {
       }
       else {
         post({
-          type: "chooseFileAndAssignGadgetImage",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.chooseFileAndAssignGadgetImage,
           id: gadget.id,
           x: gadget.x,
           y: gadget.y,
@@ -9264,7 +9260,7 @@ function renderProps() {
     propsEl.appendChild(section("Properties"));
     propsEl.appendChild(row(PB_ANY, checkboxInput(win.pbAny, v => {
       vscode.postMessage({
-        type: "toggleWindowPbAny",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.toggleWindowPbAny,
         windowKey: win.id,
         toPbAny: v,
         variableName,
@@ -9282,7 +9278,7 @@ function renderProps() {
         return;
       }
       vscode.postMessage({
-        type: "setWindowVariableName",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowVariableName,
         windowKey: win.id,
         variableName: parsed.value
       });
@@ -9324,7 +9320,7 @@ function renderProps() {
     if (!win.pbAny) {
       propsEl.appendChild(row("Enum Value", textInput(win.enumValueRaw ?? "", v => {
         vscode.postMessage({
-          type: "setWindowEnumValue",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEnumValue,
           enumSymbol,
           enumValueRaw: v.trim().length ? v.trim() : undefined
         });
@@ -9442,7 +9438,7 @@ function renderProps() {
       checkboxInput(Boolean(win.generateEventLoop), v => {
         if (!model.window) return;
         win.generateEventLoop = v;
-        post({ type: "setWindowGenerateEventLoop", windowKey: win.id, enabled: v });
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowGenerateEventLoop, windowKey: win.id, enabled: v });
         renderProps();
       })
     ));
@@ -9455,7 +9451,7 @@ function renderProps() {
           if (!model.window) return;
           const parsed = parseWindowEventProcInspectorInput(v);
           win.eventProc = parsed.storedValue;
-          post({ type: "setWindowEventProc", windowKey: win.id, eventProc: parsed.storedValue });
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventProc, windowKey: win.id, eventProc: parsed.storedValue });
           renderProps();
         },
         {
@@ -9471,7 +9467,7 @@ function renderProps() {
         if (!model.window) return;
         const trimmed = v.trim();
         win.eventFile = trimmed || undefined;
-        post({ type: "setWindowEventFile", windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
+        post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile, windowKey: win.id, eventFile: trimmed.length ? toPbString(trimmed) : undefined });
         renderProps();
       },
       {
@@ -9488,7 +9484,7 @@ function renderProps() {
     removeEventFileBtn.onclick = () => {
       if (!model.window || !win.eventFile?.trim()) return;
       win.eventFile = undefined;
-      post({ type: "setWindowEventFile", windowKey: win.id, eventFile: undefined });
+      post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setWindowEventFile, windowKey: win.id, eventFile: undefined });
       renderProps();
     };
     propsEl.appendChild(row("File", inputWithActions(eventFileInput, removeEventFileBtn)));
@@ -9569,7 +9565,7 @@ function renderProps() {
           const nextShortcut = hasOwn(updates, "shortcut") ? updates.shortcut : selectedEntry.shortcut;
           const nextIconRaw = hasOwn(updates, "iconRaw") ? updates.iconRaw : selectedEntry.iconRaw;
           post({
-            type: "updateMenuEntry",
+            type: WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry,
             menuId: m.id,
             sourceLine: selectedEntry.source.line,
             kind: selectedEntry.kind,
@@ -9584,7 +9580,7 @@ function renderProps() {
         if (selectedEntry.kind === "MenuTitle" || selectedEntry.kind === "OpenSubMenu") {
           const nextTextRaw = hasOwn(updates, "textRaw") ? updates.textRaw : (selectedEntry.textRaw ?? (selectedEntry.text !== undefined ? toPbString(selectedEntry.text) : '""'));
           post({
-            type: "updateMenuEntry",
+            type: WEBVIEW_TO_EXT_MSG_TYPE.updateMenuEntry,
             menuId: m.id,
             sourceLine: selectedEntry.source.line,
             kind: selectedEntry.kind,
@@ -9681,7 +9677,7 @@ function renderProps() {
           () => {
             if (!canToggle) return;
             post({
-              type: "toggleImagePbAny",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
               sourceLine: selectedImage!.source!.line,
               toPbAny: !selectedImage!.pbAny,
             });
@@ -9711,7 +9707,7 @@ function renderProps() {
           v => {
             if (!selectedEntry.idRaw) return;
             post({
-              type: "setMenuEntryEvent",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.setMenuEntryEvent,
               entryIdRaw: selectedEntry.idRaw,
               eventProc: v.trim().length ? v.trim() : undefined
             });
@@ -9974,7 +9970,7 @@ function renderProps() {
       }) => {
         if (!selectedCanPatch || typeof selectedEntry.source?.line !== "number") return;
         post({
-          type: "updateToolBarEntry",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry,
           toolBarId: t.id,
           sourceLine: selectedEntry.source.line,
           kind: selectedEntry.kind,
@@ -10039,7 +10035,7 @@ function renderProps() {
           v => {
             if (!selectedEntry.idRaw || typeof selectedEntry.source?.line !== "number") return;
             post({
-              type: "setToolBarEntryTooltip",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryTooltip,
               toolBarId: t.id,
               sourceLine: selectedEntry.source.line,
               entryIdRaw: selectedEntry.idRaw,
@@ -10062,7 +10058,7 @@ function renderProps() {
           if (selectedImageEditState.canDirectEdit && selectedImage && typeof selectedImage.source?.line === "number") {
             clearInfoError();
             post({
-              type: "updateImage",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.updateImage,
               sourceLine: selectedImage.source.line,
               inline: false,
               idRaw: selectedImage.firstParam,
@@ -10082,7 +10078,7 @@ function renderProps() {
 
             clearInfoError();
             post({
-              type: "rebindToolBarEntryImage",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.rebindToolBarEntryImage,
               toolBarId: t.id,
               sourceLine: selectedEntry.source.line,
               kind: selectedEntry.kind,
@@ -10114,7 +10110,7 @@ function renderProps() {
 
           clearInfoError();
           post({
-            type: "createAndAssignToolBarEntryImage",
+            type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignToolBarEntryImage,
             toolBarId: t.id,
             sourceLine: selectedEntry.source.line,
             kind: selectedEntry.kind,
@@ -10151,7 +10147,7 @@ function renderProps() {
           () => {
             if (!canToggle) return;
             post({
-              type: "toggleImagePbAny",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
               sourceLine: selectedImage!.source!.line,
               toPbAny: !selectedImage!.pbAny,
             });
@@ -10180,7 +10176,7 @@ function renderProps() {
           v => {
             if (selectedEntry.kind !== "ToolBarImageButton" || typeof selectedEntry.source?.line !== "number") return;
             post({
-              type: "updateToolBarEntry",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.updateToolBarEntry,
               toolBarId: t.id,
               sourceLine: selectedEntry.source.line,
               kind: selectedEntry.kind,
@@ -10213,7 +10209,7 @@ function renderProps() {
           v => {
             if (!selectedEntry.idRaw) return;
             post({
-              type: "setToolBarEntryEvent",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.setToolBarEntryEvent,
               entryIdRaw: selectedEntry.idRaw,
               eventProc: v.trim().length ? v.trim() : undefined
             });
@@ -10424,7 +10420,7 @@ function renderProps() {
         if (!canPatch) return;
         const nextProgressBar = patch.progressBar ?? Boolean(field.progressBar);
         post({
-          type: "updateStatusBarField",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.updateStatusBarField,
           statusBarId: sb.id,
           sourceLine: field.source!.line,
           widthRaw: patch.widthRaw ?? field.widthRaw,
@@ -10591,7 +10587,7 @@ function renderProps() {
           if (selectedImageEditState.canDirectEdit && selectedUi.statusImage && typeof selectedUi.statusImage.source?.line === "number") {
             clearInfoError();
             post({
-              type: "updateImage",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.updateImage,
               sourceLine: selectedUi.statusImage.source.line,
               inline: false,
               idRaw: selectedUi.statusImage.firstParam,
@@ -10613,7 +10609,7 @@ function renderProps() {
 
             clearInfoError();
             post({
-              type: "rebindStatusBarFieldImage",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.rebindStatusBarFieldImage,
               statusBarId: sb.id,
               sourceLine: selectedField.source!.line,
               widthRaw: selectedField.widthRaw,
@@ -10643,7 +10639,7 @@ function renderProps() {
 
           clearInfoError();
           post({
-            type: "createAndAssignStatusBarFieldImage",
+            type: WEBVIEW_TO_EXT_MSG_TYPE.createAndAssignStatusBarFieldImage,
             statusBarId: sb.id,
             sourceLine: selectedField.source!.line,
             widthRaw: selectedField.widthRaw,
@@ -10680,7 +10676,7 @@ function renderProps() {
           () => {
             if (!canToggle) return;
             post({
-              type: "toggleImagePbAny",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
               sourceLine: selectedUi.statusImage!.source!.line,
               toPbAny: !selectedUi.statusImage!.pbAny,
             });
@@ -10935,7 +10931,7 @@ function renderProps() {
     chooseFileBtn.onclick = () => {
       if (!(canPatch && canChooseFileImageEntry(img))) return;
       post({
-        type: "chooseImageFileForEntry",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry,
         sourceLine: img.source!.line,
         inline: img.inline,
         idRaw: img.firstParam,
@@ -10952,7 +10948,7 @@ function renderProps() {
     toggleInlineBtn.onclick = () => {
       if (!canPatch) return;
       post({
-        type: "updateImage",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.updateImage,
         sourceLine: img.source!.line,
         inline: !img.inline,
         idRaw: img.firstParam,
@@ -10970,7 +10966,7 @@ function renderProps() {
     togglePbAnyBtn.onclick = () => {
       if (!(canPatch && canToggleImagePbAny(img))) return;
       post({
-        type: "toggleImagePbAny",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
         sourceLine: img.source!.line,
         toPbAny: !img.pbAny,
       });
@@ -10985,7 +10981,7 @@ function renderProps() {
     relativeBtn.onclick = () => {
       if (!(canPatch && canRelativizeImageEntry(img))) return;
       post({
-        type: "relativizeImagePath",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath,
         sourceLine: img.source!.line,
         inline: img.inline,
         idRaw: img.firstParam,
@@ -11057,7 +11053,7 @@ function renderProps() {
             onClick: canPatch && canChooseFileImageEntry(img)
               ? () => {
                   post({
-                    type: "chooseImageFileForEntry",
+                    type: WEBVIEW_TO_EXT_MSG_TYPE.chooseImageFileForEntry,
                     sourceLine: img.source!.line,
                     inline: img.inline,
                     idRaw: img.firstParam,
@@ -11075,7 +11071,7 @@ function renderProps() {
             onClick: canPatch
               ? () => {
                   post({
-                    type: "updateImage",
+                    type: WEBVIEW_TO_EXT_MSG_TYPE.updateImage,
                     sourceLine: img.source!.line,
                     inline: !img.inline,
                     idRaw: img.firstParam,
@@ -11094,7 +11090,7 @@ function renderProps() {
             onClick: canPatch && canToggleImagePbAny(img)
               ? () => {
                   post({
-                    type: "toggleImagePbAny",
+                    type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
                     sourceLine: img.source!.line,
                     toPbAny: !img.pbAny
                   });
@@ -11110,7 +11106,7 @@ function renderProps() {
             onClick: canPatch && canRelativizeImageEntry(img)
               ? () => {
                   post({
-                    type: "relativizeImagePath",
+                    type: WEBVIEW_TO_EXT_MSG_TYPE.relativizeImagePath,
                     sourceLine: img.source!.line,
                     inline: img.inline,
                     idRaw: img.firstParam,
@@ -11215,7 +11211,7 @@ function renderProps() {
         const newId = v ? gadgetVariableName : gadgetEnumSymbol;
         selection = { kind: "gadget", id: newId };
         vscode.postMessage({
-          type: "toggleGadgetPbAny",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.toggleGadgetPbAny,
           gadgetId: g.id,
           toPbAny: v,
           variableName: gadgetVariableName,
@@ -11242,7 +11238,7 @@ function renderProps() {
         const newId = g.pbAny ? parsed.value : `#${parsed.value}`;
         selection = { kind: "gadget", id: newId };
         vscode.postMessage({
-          type: "setGadgetVariableName",
+          type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetVariableName,
           gadgetId: g.id,
           variableName: parsed.value
         });
@@ -11253,7 +11249,7 @@ function renderProps() {
   if (!g.pbAny) {
     propsEl.appendChild(row("Enum Value", textInput(g.enumValueRaw ?? "", v => {
       vscode.postMessage({
-        type: "setGadgetEnumValue",
+        type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEnumValue,
         enumSymbol: gadgetEnumSymbol,
         enumValueRaw: v.trim().length ? v.trim() : undefined
       });
@@ -11565,7 +11561,7 @@ function renderProps() {
         checkboxInput(Boolean(g.state), v => {
           g.state = v ? 1 : 0;
           g.stateRaw = buildGadgetCheckedStateRaw(g.kind, v);
-          post({ type: "setGadgetStateRaw", id: g.id, stateRaw: g.stateRaw });
+          post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: g.stateRaw });
           render();
           renderProps();
         }, {
@@ -11688,11 +11684,11 @@ function renderProps() {
             storeLayoutDisplayOverride("gadget", g.id, "state", next, nextRaw);
             g.state = next;
             g.stateRaw = nextRaw;
-            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: nextRaw });
+            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: nextRaw });
           } else {
             g.state = next;
             g.stateRaw = String(next);
-            post({ type: "setGadgetStateRaw", id: g.id, stateRaw: String(next) });
+            post({ type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetStateRaw, id: g.id, stateRaw: String(next) });
           }
           render();
           renderProps();
@@ -11721,7 +11717,7 @@ function renderProps() {
           () => {
             if (!canToggle) return;
             post({
-              type: "toggleImagePbAny",
+              type: WEBVIEW_TO_EXT_MSG_TYPE.toggleImagePbAny,
               sourceLine: gadgetImage!.source!.line,
               toPbAny: !gadgetImage!.pbAny,
             });
@@ -11762,7 +11758,7 @@ function renderProps() {
         v => {
           g.eventProc = v.length ? v : undefined;
           post({
-            type: "setGadgetEventProc",
+            type: WEBVIEW_TO_EXT_MSG_TYPE.setGadgetEventProc,
             id: g.id,
             eventProc: v.length ? v : undefined
           });
@@ -12565,4 +12561,4 @@ setupPanelResize();
 setupTopPanelResize();
 toolboxTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("toolbox"));
 objectsTabButtonEl?.addEventListener("click", () => setActiveTopPanelTab("objects"));
-vscode.postMessage({ type: "ready" });
+vscode.postMessage({ type: WEBVIEW_TO_EXT_MSG_TYPE.ready });

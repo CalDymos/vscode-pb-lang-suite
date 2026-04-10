@@ -1,4 +1,5 @@
 import { quotePbString, unquoteString } from "../parser/tokenizer";
+import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
 
 export type SourceLineLike = {
@@ -77,12 +78,8 @@ export type PreviewStatusBarAddRectLike = PreviewRectLike & {
 };
 
 export type TopLevelChromeHitLike =
-  | { selection: { kind: "menu"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "menuEntry"; menuId: string; entryIndex: number }; rect: PreviewEntryRectLike }
-  | { selection: { kind: "toolbar"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "toolBarEntry"; toolBarId: string; entryIndex: number }; rect: PreviewEntryRectLike }
-  | { selection: { kind: "statusbar"; id: string }; rect: PreviewRectLike }
-  | { selection: { kind: "statusBarField"; statusBarId: string; fieldIndex: number }; rect: PreviewEntryRectLike };
+  | { selection: DesignerTopLevelContainerSelection; rect: PreviewRectLike }
+  | { selection: DesignerTopLevelEntrySelection; rect: PreviewEntryRectLike };
 
 export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 

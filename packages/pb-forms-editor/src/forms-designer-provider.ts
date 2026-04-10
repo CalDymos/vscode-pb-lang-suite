@@ -442,7 +442,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         for (const id of staleGadgetTextVariableIds) {
           gadgetTextVariableSessionOverrides.delete(id);
         }
-        post({ type: "init", model, settings });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.init, model, settings });
 
         // Kick off non-blocking procedure discovery; the eventFile may have
         // changed after re-parsing, so always pass the freshly parsed value.
@@ -451,7 +451,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
         // Keep the webview alive with a minimal model and a structured error.
         const model = createErrorModel(text.length, e?.message ?? String(e));
         lastModel = model;
-        post({ type: "init", model, settings: readDesignerSettings() });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.init, model, settings: readDesignerSettings() });
       }
     };
 
@@ -467,7 +467,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
 
     const cfgSub = vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
       if (e.affectsConfiguration(SETTINGS_SECTION)) {
-        post({ type: "settings", settings: readDesignerSettings() });
+        post({ type: EXT_TO_WEBVIEW_MSG_TYPE.settings, settings: readDesignerSettings() });
       }
     });
 
@@ -527,7 +527,7 @@ export class PureBasicFormDesignerProvider implements vscode.CustomTextEditorPro
     webviewPanel.webview.onDidReceiveMessage(async (msg: WebviewToExtensionMessage) => {
       const sr = lastModel?.meta.scanRange;
       const rangeInfo = sr ? ` (scanRange: ${sr.start}-${sr.end})` : "";
-      const postError = (message: string) => post({ type: "error", message });
+      const postError = (message: string) => post({ type: EXT_TO_WEBVIEW_MSG_TYPE.error, message });
 
       const applyEditOrError = async (edit: vscode.WorkspaceEdit | undefined, errorMessage: string) => {
         if (!edit) {
