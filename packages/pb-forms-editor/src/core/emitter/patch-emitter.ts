@@ -1276,6 +1276,8 @@ function ensureResizeEventCase(
   if (!context) return;
 
   const block = findWindowEventSelectBlock(document, context.eventProc);
+  // Match the original Form Designer output: ResizeGadgets...() is generated independently,
+  // but the SizeWindow hook is emitted only when a window event Select block already exists.
   if (!block) return;
 
   const procCall = `${procName}()`;

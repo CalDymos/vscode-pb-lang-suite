@@ -145,6 +145,44 @@ EndProcedure
   assert.equal(gadget?.lockRight, true);
 });
 
+
+test("adds resize procedure scaffolding without a sizewindow hook when no event procedure exists", () => {
+  const text = `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Enumeration FormGadget
+  #BtnApply
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+`;
+
+  const document = new FakeTextDocument(text);
+  const edit = applyResizeGadgetMutation(document.asTextDocument(), "#BtnApply", {
+    xRaw: "FormWindowWidth - 310",
+    yRaw: "20",
+    wRaw: "80",
+    hRaw: "24"
+  });
+
+  assert.ok(edit, "Expected a WorkspaceEdit result.");
+  const patchedText = applyWorkspaceEditToText(text, edit!);
+  const parsed = parseFormDocument(patchedText);
+  const gadget = parsed.gadgets.find((g) => g.id === "#BtnApply");
+
+  assert.match(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
+  assert.match(patchedText, /Procedure ResizeGadgetsFrmMain\(\)\s+  Protected FormWindowWidth, FormWindowHeight\s+  FormWindowWidth = WindowWidth\(#FrmMain\)\s+  FormWindowHeight = WindowHeight\(#FrmMain\)\s+  ResizeGadget\(#BtnApply, FormWindowWidth - 310, 20, 80, 24\)\s+EndProcedure/s);
+  assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
+  assert.equal(gadget?.resizeXRaw, "FormWindowWidth - 310");
+  assert.equal(gadget?.lockLeft, false);
+  assert.equal(gadget?.lockRight, true);
+});
+
 test("removes now-empty resize scaffolding when the last ResizeGadget line is deleted", () => {
   const text = `; Form Designer for PureBasic - 6.30
 Enumeration FormWindow
