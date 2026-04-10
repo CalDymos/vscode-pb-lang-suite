@@ -49,6 +49,8 @@ export type DesignerTopLevelEntrySelection =
   | TopLevelToolBarEntrySelection
   | TopLevelStatusBarFieldSelection;
 
+export type TopLevelSelectedImageInspectorTarget = DesignerTopLevelEntrySelection["kind"];
+
 export type TopLevelCanvasContextMenuSelection =
   | DesignerTopLevelSelection
   | {

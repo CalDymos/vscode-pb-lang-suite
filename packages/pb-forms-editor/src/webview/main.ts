@@ -1,5 +1,13 @@
 import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE, type ExtensionToWebviewMessage, type WebviewToExtensionMessage, type WindowsRegistryColors } from "../shared/messages";
-import type { DesignerSettings, GridMode } from "../shared/designer-settings";
+import {
+  GRID_MODE_KEY,
+  SNAP_MODE_KEY,
+  DESIGNER_OS_SKIN_KEY,
+  WARNING_PRESENCE_MODE_KEY,
+  WARNING_VERSION_UPGRADE_MODE_KEY,
+  type DesignerSettings,
+  type GridMode
+} from "../shared/designer-settings";
 import {
   type PreviewRect,
   type PreviewChromeMetrics,
@@ -990,12 +998,12 @@ function drawPreviewTopLevelAssignedImage(
 
 let settings: DesignerSettings = {
   showGrid: true,
-  gridMode: "dots",
+  gridMode: GRID_MODE_KEY.dots,
   gridSize: 10,
   gridOpacity: 0.14,
 
   snapToGrid: false,
-  snapMode: "drop",
+  snapMode: SNAP_MODE_KEY.drop,
 
   windowFillOpacity: 0.05,
   outsideDimOpacity: 0.12,
@@ -1010,10 +1018,10 @@ let settings: DesignerSettings = {
   newGadgetsUsePbAnyByDefault: true,
   newGadgetsUseVariableAsCaption: false,
   generateEventProcedure: true,
-  osSkin: "windows7",
-  warningUnrecognizedFile: "always",
-  warningVersionUpgrade: "ifBackwardCompatibilityIsAffected",
-  warningVersionDowngrade: "always"
+  osSkin: DESIGNER_OS_SKIN_KEY.windows7,
+  warningUnrecognizedFile: WARNING_PRESENCE_MODE_KEY.always,
+  warningVersionUpgrade: WARNING_VERSION_UPGRADE_MODE_KEY.ifBackwardCompatibilityIsAffected,
+  warningVersionDowngrade: WARNING_PRESENCE_MODE_KEY.always
 };
 
 const previewChromeMetrics = resolvePreviewChromeMetrics(typeof navigator !== "undefined" ? navigator.userAgent : "");
@@ -2535,7 +2543,7 @@ function shouldSnapLive(): boolean {
 }
 
 function shouldSnapDrop(): boolean {
-  return settings.snapToGrid && settings.snapMode === "drop";
+  return settings.snapToGrid && settings.snapMode === SNAP_MODE_KEY.drop;
 }
 
 function applyLiveSnapPoint(x: number, y: number): { x: number; y: number } {
