@@ -382,8 +382,8 @@ let windowParentAsRawExpressionOverrides = new Map<string, boolean>();
 type PendingMenuEntrySelection = {
   menuId: string;
   preferredIndex: number;
-  kind: string;
-  level: number;
+  kind: FormMenuEntry["kind"];
+  level?: number;
   idRaw?: string;
   textRaw?: string;
   shortcut?: string;
@@ -393,7 +393,7 @@ type PendingMenuEntrySelection = {
 type PendingToolBarEntrySelection = {
   toolBarId: string;
   preferredIndex: number;
-  kind: string;
+  kind: FormToolBarEntry["kind"];
   idRaw?: string;
   iconRaw?: string;
   textRaw?: string;
@@ -403,7 +403,7 @@ type PendingToolBarEntrySelection = {
 type PendingStatusBarFieldSelection = {
   statusBarId: string;
   preferredIndex: number;
-  widthRaw: string;
+  widthRaw?: string;
   textRaw?: string;
   imageRaw?: string;
   flagsRaw?: string;
@@ -473,18 +473,18 @@ type PendingImageInsertDraft = {
 type PendingGadgetItemEditor = {
   gadgetId: string;
   sourceLine?: number;
-  posRaw: string;
   text: string;
   imageRaw: string;
   flagsRaw: string;
+  posRaw: string;
 };
 
 type PendingGadgetColumnEditor = {
   gadgetId: string;
   sourceLine?: number;
-  colRaw: string;
   title: string;
   widthRaw: string;
+  colRaw: string;
 };
 
 type PendingDestructiveAction =
@@ -1803,7 +1803,7 @@ function getMenuInsertLevel(menu: FormMenu, parentSourceLine?: number): number {
   return Math.max(0, getMenuEntryLevel(parentEntry) + 1);
 }
 
-function postInsertMenuEntry(menu: FormMenu, args: { kind: string; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
+function postInsertMenuEntry(menu: FormMenu, args: { kind: FormMenuEntry["kind"]; idRaw?: string; textRaw?: string }, parentSourceLine?: number): void {
   const preferredIndex = Math.max(0, menu.entries?.length ?? 0);
   pendingMenuEntrySelection = {
     menuId: menu.id,
@@ -1823,7 +1823,7 @@ function postInsertMenuEntry(menu: FormMenu, args: { kind: string; idRaw?: strin
   });
 }
 
-function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: string; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
+function postInsertToolBarEntry(toolBar: FormToolBar, args: { kind: FormToolBarEntry["kind"]; idRaw?: string; iconRaw?: string; textRaw?: string; toggle?: boolean }): void {
   const preferredIndex = Math.max(0, toolBar.entries?.length ?? 0);
   pendingToolBarEntrySelection = {
     toolBarId: toolBar.id,

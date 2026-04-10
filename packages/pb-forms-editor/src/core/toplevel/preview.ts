@@ -1,6 +1,7 @@
 import { quotePbString, unquoteString } from "../parser/tokenizer";
 import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
+import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
   line: number;
@@ -501,7 +502,7 @@ export function getSelectedStatusBarInspectorFieldConfig(): SelectedStatusBarIns
 export function getToolBarPreviewInsertArgs(
   toolBar: ToolBarModelLike,
   action: ToolBarPreviewInsertAction
-): { kind: string; idRaw?: string; iconRaw?: string; toggle?: boolean } {
+): { kind: FormToolBarEntry["kind"]; idRaw?: string; iconRaw?: string; toggle?: boolean } {
   const idRaw = getDefaultToolBarInsertId(toolBar);
   switch (action) {
     case "button":
