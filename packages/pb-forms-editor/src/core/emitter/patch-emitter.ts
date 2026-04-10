@@ -1,3 +1,4 @@
+import type { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
@@ -312,7 +313,6 @@ export interface MenuEntryInsertOptions {
   parentSourceLine?: number;
 }
 
-export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 export interface MenuEntryMoveOptions {
   targetSourceLine: number;

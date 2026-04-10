@@ -1,6 +1,7 @@
 import { quotePbString, unquoteString } from "../parser/tokenizer";
 import type { DesignerTopLevelContainerSelection, DesignerTopLevelEntrySelection } from "./selection";
 import { parseStatusBarWidth } from "../statusbar/preview";
+import type { MenuEntryMovePlacement } from "../../shared/menu";
 import type { FormToolBarEntry } from "../model";
 
 export type SourceLineLike = {
@@ -82,7 +83,6 @@ export type TopLevelChromeHitLike =
   | { selection: DesignerTopLevelContainerSelection; rect: PreviewRectLike }
   | { selection: DesignerTopLevelEntrySelection; rect: PreviewEntryRectLike };
 
-export type MenuEntryMovePlacement = "before" | "after" | "appendChild";
 
 export type MenuEntryMoveTargetLike = {
   targetSourceLine: number;

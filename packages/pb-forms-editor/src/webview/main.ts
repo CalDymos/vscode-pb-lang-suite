@@ -1,4 +1,5 @@
 import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE, type ExtensionToWebviewMessage, type WebviewToExtensionMessage, type WindowsRegistryColors } from "../shared/messages";
+import type { MenuEntryMovePlacement } from "../shared/menu";
 import {
   GRID_MODE_KEY,
   SNAP_MODE_KEY,
@@ -75,7 +76,6 @@ import {
   STATUSBAR_WIDTH_IGNORE_LITERAL
 } from "../core/statusbar/inspector";
 import {
-  type MenuEntryMovePlacement,
   type MenuEntryMoveTargetLike,
   canEditToolBarTooltip,
   deriveWindows7MenuBarPalette,
@@ -167,7 +167,7 @@ import {
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
 } from "../core/gadget/insert";
-import { PreviewOsSkin, resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
+import {PreviewOsSkin, resolvePreviewPlatformFromOsSkin, type PreviewPlatform } from "../core/utils/form-settings-runtime";
 import {
   commitDisplayedLayoutPoint,
   commitDisplayedLayoutRect,
@@ -3225,7 +3225,7 @@ function applyLocalGadgetTooltipUpdate(g: Gadget, value: string, isVariable: boo
   renderProps();
 }
 
-function resolvePbFormSkinPlatform(): "windows" | "linux" | "macos" {
+function resolvePbFormSkinPlatform(): PreviewPlatform {
   return resolvePreviewPlatformFromOsSkin(settings.osSkin);
 }
 
