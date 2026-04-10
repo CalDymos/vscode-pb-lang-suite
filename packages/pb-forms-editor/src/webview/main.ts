@@ -262,7 +262,7 @@ import {
 } from "../core/statusbar/image-inspector";
 import { getTopLevelSelectedImageInspectorConfig } from "../core/toplevel/image-inspector";
 import { resolveTopLevelCanvasContextMenuActions } from "../core/toplevel/context-menu";
-import type { DesignerTopLevelSelection } from "../core/toplevel/selection";
+import type { DesignerTopLevelSelection, TopLevelCanvasContextMenuSelection } from "../core/toplevel/selection";
 
 import {
   PREVIEW_PLUS_ICON_DATA_URI,
@@ -516,6 +516,7 @@ type GadgetCanvasContextMenuAction = {
 };
 type CanvasContextMenuAction = NonNullable<PendingCanvasContextMenuActions>[number] | GadgetCanvasContextMenuAction;
 type CanvasContextMenuSelection = DesignerTopLevelSelection | { kind: "gadget"; id: string };
+type CanvasContextMenuTarget = TopLevelCanvasContextMenuSelection | { kind: "gadget"; id: string };
 
 type PendingCanvasContextMenu = {
   x: number;
@@ -3430,7 +3431,7 @@ function renderCanvasContextMenu(): void {
 }
 
 function resolveCanvasContextMenuActions(
-  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string }
+  target: CanvasContextMenuTarget
 ): CanvasContextMenuAction[] | null {
   if (target.kind === "gadget") {
     const gadget = model.gadgets.find(entry => entry.id === target.id);
@@ -3458,7 +3459,7 @@ function resolveCanvasContextMenuActions(
 }
 
 function openCanvasContextMenu(
-  target: CanvasContextMenuSelection | { kind: "toolBarAddButton"; toolBarId: string } | { kind: "statusBarAddButton"; statusBarId: string },
+  target: CanvasContextMenuTarget,
   x: number,
   y: number,
   triggerMouseDownTimeStamp?: number
