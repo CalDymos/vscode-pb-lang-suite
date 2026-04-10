@@ -1376,6 +1376,31 @@ EndProcedure
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
+test("roundtrips window event proc update inside separate _Events(event) procedure", () => {
+  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParentUpdated")
+  );
+
+  assert.match(patchedText, /Default\s+HandleFrmEventsParentUpdated\(event, #FrmEventsParent\)/s);
+  assert.equal(parsed.window?.eventProc, "HandleFrmEventsParentUpdated");
+  assert.equal(parsed.window?.generateEventLoop, true);
+});
+
+test("roundtrips window event proc removal without leaving an empty Default branch behind", () => {
+  const text = loadFixture("fixtures/smoke/13-events-and-parent-window.pbf");
+
+  const { patchedText, parsed } = patchAndReparse(text, (document) =>
+    applyWindowEventProcUpdate(document, "#FrmEventsParent", undefined)
+  );
+
+  assert.doesNotMatch(patchedText, /Default\s*$/m);
+  assert.doesNotMatch(patchedText, /Default\s+HandleFrmEventsParent\(event, #FrmEventsParent\)/s);
+  assert.equal(parsed.window?.eventProc, undefined);
+  assert.equal(parsed.window?.generateEventLoop, true);
+});
+
 test("roundtrips window generateEventLoop insertion via empty EventGadget block", () => {
   const text = loadFixture("fixtures/smoke/01-window-basic.pbf");
 

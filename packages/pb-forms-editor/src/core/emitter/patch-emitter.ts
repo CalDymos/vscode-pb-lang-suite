@@ -3847,6 +3847,9 @@ export function applyWindowEventProcUpdate(
 
   if (block.procLine !== undefined) {
     if (!procCall) {
+      if (block.defaultLine !== undefined) {
+        edit.delete(document.uri, document.lineAt(block.defaultLine).rangeIncludingLineBreak);
+      }
       edit.delete(document.uri, document.lineAt(block.procLine).rangeIncludingLineBreak);
       return edit;
     }
