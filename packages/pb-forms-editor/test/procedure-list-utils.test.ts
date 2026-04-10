@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
-import { extractProcedureNamesFromText } from "../src/core/parser/procedure-scanner";
+import { extractProcedureNamesFromText, parseProcedureHeaderLine } from "../src/core/parser/procedure-scanner";
 import {
   resolveFixedProcedureSourcePaths,
   resolveProcedureEventFilePath,
@@ -21,6 +21,17 @@ ProcedureC HandleC(EventType)
 `);
 
   assert.deepEqual(names, ['HandleFrmMain', 'HandleApply', 'HandleDll', 'HandleC']);
+});
+
+test('parseProcedureHeaderLine extracts the procedure name and source range from supported headers', () => {
+  const header = '  ProcedureDLL.s HandleDll(arg)';
+  const parsed = parseProcedureHeaderLine(header);
+
+  assert.deepEqual(parsed, {
+    name: 'HandleDll',
+    nameStart: header.indexOf('HandleDll'),
+    nameEnd: header.indexOf('HandleDll') + 'HandleDll'.length
+  });
 });
 
 test('sortUniqueProcedureNames deduplicates case-insensitively and sorts alphabetically', () => {

@@ -1,3 +1,24 @@
+export type ParsedProcedureHeaderLine = {
+  name: string;
+  nameStart: number;
+  nameEnd: number;
+};
+
+export function parseProcedureHeaderLine(line: string): ParsedProcedureHeaderLine | undefined {
+  const match = /^\s*Procedure(?:C|CDLL|DLL)?(?:\s*\.[A-Za-z_][A-Za-z0-9_]*)?\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i.exec(line);
+  if (!match) return undefined;
+
+  const name = match[1];
+  const nameStart = line.indexOf(name);
+  if (nameStart < 0) return undefined;
+
+  return {
+    name,
+    nameStart,
+    nameEnd: nameStart + name.length,
+  };
+}
+
 export function extractProcedureNamesFromText(text: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
@@ -22,10 +43,10 @@ export function extractProcedureNamesFromText(text: string): string[] {
 
     if (insideMacro) continue;
 
-    const match = /^Procedure(?:C|CDLL|DLL)?(?:\s*\.[A-Za-z_][A-Za-z0-9_]*)?\s+([A-Za-z_][A-Za-z0-9_]*)\b/i.exec(trimmed);
-    if (!match) continue;
+    const parsed = parseProcedureHeaderLine(trimmed);
+    if (!parsed) continue;
 
-    const name = match[1];
+    const name = parsed.name;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

@@ -2,6 +2,7 @@ import type { MenuEntryMovePlacement } from "../../shared/menu";
 import * as vscode from "vscode";
 import { scanCalls } from "../parser/call-scanner";
 import { parseFormDocument } from "../parser/form-parser";
+import { parseProcedureHeaderLine } from "../parser/procedure-scanner";
 import { asNumber, normalizeProcParamName, quotePbString, splitParams, unquoteString } from "../parser/tokenizer";
 import { buildInsertedGadgetIdentity, canHostInsertedGadgets, isInsertableGadgetKind, shouldInsertGadgetAsPbAny, type InsertableGadgetKind } from "../gadget/insert";
 import { buildOriginalGadgetDeletePlan, collectRequestedGadgetDeleteIds } from "../gadget/delete";
@@ -815,21 +816,9 @@ function findProcedureBlock(document: vscode.TextDocument, line: number): LineBl
   return undefined;
 }
 
-function parseProcedureName(line: string): { name: string; nameStart: number; nameEnd: number } | undefined {
-  // Matches: Procedure xxx(...), Procedure.i xxx(...), Procedure.s xxx(...)
-  const m = /^\s*Procedure(?:\.\w+)?\s+([A-Za-z_]\w*)\s*\(/.exec(line);
-  if (!m) return undefined;
-
-  const name = m[1];
-  const idx = line.indexOf(name);
-  if (idx < 0) return undefined;
-
-  return { name, nameStart: idx, nameEnd: idx + name.length };
-}
-
 function findProcedureBlockByName(document: vscode.TextDocument, procName: string): LineBlock | undefined {
   for (let i = 0; i < document.lineCount; i++) {
-    const parsed = parseProcedureName(document.lineAt(i).text);
+    const parsed = parseProcedureHeaderLine(document.lineAt(i).text);
     if (!parsed || parsed.name !== procName) continue;
     return findProcedureBlock(document, i);
   }
