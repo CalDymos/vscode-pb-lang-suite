@@ -1341,7 +1341,7 @@ test("roundtrips window event include insertion", () => {
   assert.equal(parsed.window?.generateEventLoop, undefined);
 });
 
-test("roundtrips window event proc insertion by adding Default branch to existing event loop", () => {
+test("migrates inline window event proc insertion into a separate _Events(event) procedure", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
 ; EnableExplicit
@@ -1371,7 +1371,12 @@ EndProcedure
     applyWindowEventProcUpdate(document, "#FrmEventsParent", "HandleFrmEventsParent")
   );
 
-  assert.match(patchedText, /Case #BtnApply\s+HandleApply\(\)\s+Default\s+HandleFrmEventsParent\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Procedure FrmEventsParent_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Case #BtnApply\s+HandleApply\(EventType\(\)\)\s+EndSelect\s+Default\s+HandleFrmEventsParent\(event, #FrmEventsParent\)/s);
+  const openProcBlock = patchedText.match(/Procedure OpenFrmEventsParent[\s\S]*?EndProcedure/);
+  assert.ok(openProcBlock);
+  const openProcText = openProcBlock?.[0] ?? "";
+  assert.doesNotMatch(openProcText, /Select EventGadget\(\)/);
   assert.equal(parsed.window?.eventProc, "HandleFrmEventsParent");
   assert.equal(parsed.window?.generateEventLoop, true);
 });
@@ -1481,7 +1486,8 @@ test("roundtrips combined window event bootstrap updates from a plain window fix
   const parsed = parseFormDocument(patchedText);
 
   assert.match(patchedText, /XIncludeFile "events\/form-main\.pbi"(?:\r?\n)+Procedure OpenFrmMain/);
-  assert.match(patchedText, /Select EventGadget\(\)\s+Default\s+HandleFrmMain\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Procedure FrmMain_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Case #PB_Event_Gadget\s+Select EventGadget\(\)\s+EndSelect\s+Default\s+HandleFrmMain\(event, #FrmMain\)/s);
   assert.equal(parsed.window?.eventFile, "events/form-main.pbi");
   assert.equal(parsed.window?.generateEventLoop, true);
   assert.equal(parsed.window?.eventProc, "HandleFrmMain");
@@ -1525,7 +1531,7 @@ test("preserves the exact gadget event proc grid string without trimming", () =>
   assert.equal(parsed.gadgets.find((g) => g.id === "#BtnApply")?.eventProc, "HandleApplyUpdated");
 });
 
-test("roundtrips gadget event proc insertion before existing window Default branch", () => {
+test("migrates inline gadget event insertion into a separate _Events(event) procedure", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
 ; EnableExplicit
@@ -1556,7 +1562,8 @@ EndProcedure
     applyGadgetEventProcUpdate(document, "#BtnChild", "HandleChildClick")
   );
 
-  assert.match(patchedText, /Case #BtnChild\s+HandleChildClick\(\)\s+Default\s+HandleFrmEventsParent\(\)/s);
+  assert.match(patchedText, /Procedure FrmEventsParent_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Case #BtnChild\s+HandleChildClick\(EventType\(\)\)\s+EndSelect\s+Default\s+HandleFrmEventsParent\(event, #FrmEventsParent\)/s);
   assert.equal(parsed.gadgets.find((g) => g.id === "#BtnChild")?.eventProc, "HandleChildClick");
   assert.equal(parsed.window?.eventProc, "HandleFrmEventsParent");
 });
@@ -1586,7 +1593,7 @@ test("roundtrips menu entry event removal by deleting the Case branch", () => {
   assert.equal(parsed.window?.generateEventLoop, true);
 });
 
-test("roundtrips toolbar entry event insertion into existing EventMenu block", () => {
+test("migrates inline toolbar event insertion into a separate _Events(event) procedure", () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
 ; EnableExplicit
@@ -1621,7 +1628,8 @@ EndProcedure
     applyToolBarEntryEventUpdate(document, "#TbRefresh", "HandleToolbarRefresh")
   );
 
-  assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefresh\(\)\s+EndSelect/s);
+  assert.match(patchedText, /Procedure FrmObjectEvents_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Case #MenuOpen\s+HandleMenuOpen\(EventMenu\(\)\)\s+Case #TbRefresh\s+HandleToolbarRefresh\(EventMenu\(\)\)\s+EndSelect/s);
   const toolBarButton = parsed.toolbars[0]?.entries.find((entry) => entry.idRaw === "#TbRefresh");
   assert.equal(toolBarButton?.event, "HandleToolbarRefresh");
   assert.equal(parsed.window?.generateEventLoop, true);
@@ -2305,7 +2313,7 @@ test('trims surrounding whitespace for toolbar SelectProc updates', () => {
   assert.match(patchedText, /Case #TbRefresh\s+HandleToolbarRefreshUpdated\(EventMenu\(\)\)/s);
 });
 
-test('preserves surrounding whitespace for window SelectProc updates', () => {
+test('migrates window SelectProc updates into a separate _Events(event) procedure', () => {
   const text = `; Form Designer for PureBasic - 6.20
 ;
 ; EnableExplicit
@@ -2331,5 +2339,6 @@ EndProcedure
   assert.ok(edit, 'Expected window event proc edit.');
 
   const patchedText = applyWorkspaceEditToText(text, edit!);
-  assert.match(patchedText, /Default\s+  HandleFrmEventsParent  \(\)/s);
+  assert.match(patchedText, /Procedure FrmEventsParent_Events\(event\)\s+Select event/s);
+  assert.match(patchedText, /Default\s+HandleFrmEventsParent\s+\(event, #FrmEventsParent\)/s);
 });

@@ -851,7 +851,20 @@ function resolveWindowEventProcedureBlock(
     return { openProc, eventProc: separateProc, usesSeparateEventProc: true };
   }
 
-  return { openProc, eventProc: openProc, usesSeparateEventProc: false };
+  return undefined;
+}
+
+function resolveWindowEventBootstrapContext(
+  document: vscode.TextDocument,
+  window: FormWindow,
+  openCallLine: number
+): { openProc: LineBlock; eventProc?: LineBlock } | undefined {
+  const openProc = findProcedureBlock(document, openCallLine);
+  if (!openProc) return undefined;
+
+  const eventProcName = `${window.variable}_Events`;
+  const eventProc = findProcedureBlockByName(document, eventProcName);
+  return { openProc, eventProc };
 }
 
 function replaceWordInRange(
@@ -3713,6 +3726,177 @@ function buildMenuEventProcCall(procName: string, usesSeparateEventProc: boolean
   return usesSeparateEventProc ? `${procName}(EventMenu())` : `${procName}()`;
 }
 
+type EventBinding = {
+  caseRaw: string;
+  procName: string;
+};
+
+function collectMenuEventBindings(
+  parsed: ReturnType<typeof parseFormDocument>,
+  override?: { entryIdRaw: string; eventProc?: string }
+): EventBinding[] {
+  const bindings: EventBinding[] = [];
+
+  const pushEntry = (entryIdRaw: string | undefined, eventProc: string | undefined) => {
+    if (!entryIdRaw) return;
+    const rawProc = override && override.entryIdRaw === entryIdRaw ? override.eventProc : eventProc;
+    const normalizedProc = normalizeOptionalRaw(rawProc);
+    if (!normalizedProc) return;
+    bindings.push({ caseRaw: entryIdRaw, procName: normalizedProc });
+  };
+
+  for (const entry of parsed.menus.flatMap(menu => menu.entries)) {
+    pushEntry(entry.idRaw, entry.event);
+  }
+
+  for (const entry of parsed.toolbars.flatMap(toolBar => toolBar.entries)) {
+    pushEntry(entry.idRaw, entry.event);
+  }
+
+  return bindings;
+}
+
+function collectGadgetEventBindings(
+  parsed: ReturnType<typeof parseFormDocument>,
+  override?: { gadgetKey: string; eventProc?: string }
+): EventBinding[] {
+  const bindings: EventBinding[] = [];
+
+  for (const gadget of parsed.gadgets) {
+    const rawProc = override && override.gadgetKey === gadget.id ? override.eventProc : gadget.eventProc;
+    const normalizedProc = normalizeOptionalGridString(rawProc);
+    if (!normalizedProc) continue;
+    bindings.push({ caseRaw: gadget.id, procName: normalizedProc });
+  }
+
+  return bindings;
+}
+
+function buildSeparateWindowEventsProcedure(
+  document: vscode.TextDocument,
+  window: FormWindow,
+  options: {
+    windowEventProc?: string;
+    gadgetBindings?: EventBinding[];
+    menuBindings?: EventBinding[];
+  }
+): string {
+  const base = window.variable ?? windowBaseFromSymbol(window.id);
+  const eventProcName = buildEventsProcName(base);
+  const resizeProcName = buildResizeProcName(base);
+  const includeSizeWindow = !!findProcedureBlockByName(document, resizeProcName);
+  const menuBindings = options.menuBindings ?? [];
+  const gadgetBindings = options.gadgetBindings ?? [];
+  const windowEventProc = normalizeOptionalGridString(options.windowEventProc);
+  const lines: string[] = [
+    `Procedure ${eventProcName}(event)`,
+    `  Select event`,
+  ];
+
+  if (includeSizeWindow) {
+    lines.push(
+      `    Case #PB_Event_SizeWindow`,
+      `      ${resizeProcName}()`
+    );
+  }
+
+  lines.push(
+    `    Case #PB_Event_CloseWindow`,
+    `      ProcedureReturn #False`,
+    ``,
+    `    Case #PB_Event_Menu`,
+    `      Select EventMenu()`
+  );
+
+  for (const binding of menuBindings) {
+    lines.push(
+      `        Case ${binding.caseRaw}`,
+      `          ${buildMenuEventProcCall(binding.procName, true)}`
+    );
+  }
+
+  lines.push(
+    `      EndSelect`,
+    ``,
+    `    Case #PB_Event_Gadget`,
+    `      Select EventGadget()`
+  );
+
+  for (const binding of gadgetBindings) {
+    lines.push(
+      `        Case ${binding.caseRaw}`,
+      `          ${buildGadgetEventProcCall(binding.procName, true)}`
+    );
+  }
+
+  lines.push(`      EndSelect`);
+
+  if (windowEventProc) {
+    lines.push(
+      `    Default`,
+      `      ${buildWindowEventProcCall(window, windowEventProc, true)}`
+    );
+  }
+
+  lines.push(
+    `  EndSelect`,
+    `  ProcedureReturn #True`,
+    `EndProcedure`,
+    ``
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
+function insertSeparateWindowEventsProcedure(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  openProc: LineBlock,
+  procedureText: string
+): void {
+  let insertLine = openProc.endLine + 1;
+  let hasBlankSeparator = false;
+
+  while (insertLine < document.lineCount && document.lineAt(insertLine).text.trim() === "") {
+    hasBlankSeparator = true;
+    insertLine++;
+  }
+
+  const text = hasBlankSeparator ? procedureText : `
+
+${procedureText}`;
+  edit.insert(document.uri, new vscode.Position(insertLine, 0), text);
+}
+
+function deleteLegacyInlineWindowEventBlocks(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  openProc: LineBlock
+): void {
+  const blocks: LineBlock[] = [];
+  const menuBlock = findWindowEventMenuBlock(document, openProc);
+  if (menuBlock) {
+    blocks.push({ startLine: menuBlock.startLine, endLine: menuBlock.endLine });
+  }
+
+  const gadgetBlock = findWindowEventGadgetBlock(document, openProc);
+  if (gadgetBlock) {
+    blocks.push({ startLine: gadgetBlock.selectLine, endLine: gadgetBlock.endLine });
+  }
+
+  blocks.sort((a, b) => b.startLine - a.startLine);
+
+  for (const block of blocks) {
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(block.startLine, 0),
+        new vscode.Position(block.endLine + 1, 0)
+      )
+    );
+  }
+}
+
 export function applyWindowEventUpdate(
   document: vscode.TextDocument,
   windowKey: string,
@@ -3765,30 +3949,32 @@ export function applyWindowGenerateEventLoopUpdate(
   const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
 
-  const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
-  const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+  if (!enabled) {
+    if (!context.eventProc) {
+      const legacyEventGadgetBlock = findWindowEventGadgetBlock(document, context.openProc);
+      const legacyEventMenuBlock = findWindowEventMenuBlock(document, context.openProc);
+      if (!legacyEventGadgetBlock && !legacyEventMenuBlock) return undefined;
+      if (legacyEventMenuBlock) return undefined;
+      if (!legacyEventGadgetBlock || legacyEventGadgetBlock.hasCaseBranches) return undefined;
 
-  if (enabled) {
-    if (eventGadgetBlock || eventMenuBlock || context.usesSeparateEventProc) return undefined;
+      const edit = new vscode.WorkspaceEdit();
+      edit.delete(
+        document.uri,
+        new vscode.Range(
+          new vscode.Position(legacyEventGadgetBlock.selectLine, 0),
+          new vscode.Position(legacyEventGadgetBlock.endLine + 1, 0)
+        )
+      );
+      return edit;
+    }
 
-    const bodyIndent = getLineIndent(document, openCall.range.line);
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(
-      document.uri,
-      new vscode.Position(context.openProc.endLine, 0),
-      `${bodyIndent}Select EventGadget()
-${bodyIndent}EndSelect
-`
-    );
-    return edit;
-  }
+    const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
+    const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+    if (!eventGadgetBlock && !eventMenuBlock) return undefined;
 
-  if (!eventGadgetBlock && !eventMenuBlock) return undefined;
-
-  if (context.usesSeparateEventProc) {
     const menuHasCases = eventMenuBlock ? blockHasCaseBranches(document, eventMenuBlock) : false;
     const gadgetHasCases = eventGadgetBlock?.hasCaseBranches ?? false;
     if (menuHasCases || gadgetHasCases) return undefined;
@@ -3804,17 +3990,36 @@ ${bodyIndent}EndSelect
     return edit;
   }
 
-  if (eventMenuBlock) return undefined;
-  if (!eventGadgetBlock) return undefined;
-  if (eventGadgetBlock.hasCaseBranches) return undefined;
+  if (context.eventProc) {
+    const eventGadgetBlock = findWindowEventGadgetBlock(document, context.eventProc);
+    const eventMenuBlock = findWindowEventMenuBlock(document, context.eventProc);
+    if (eventGadgetBlock || eventMenuBlock) return undefined;
+  }
 
   const edit = new vscode.WorkspaceEdit();
-  edit.delete(
+  if (!context.eventProc) {
+    deleteLegacyInlineWindowEventBlocks(edit, document, context.openProc);
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
+
+  const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+    windowEventProc: parsed.window?.eventProc,
+    menuBindings: collectMenuEventBindings(parsed),
+    gadgetBindings: collectGadgetEventBindings(parsed),
+  });
+  edit.replace(
     document.uri,
     new vscode.Range(
-      new vscode.Position(eventGadgetBlock.selectLine, 0),
-      new vscode.Position(eventGadgetBlock.endLine + 1, 0)
-    )
+      new vscode.Position(context.eventProc.startLine, 0),
+      new vscode.Position(context.eventProc.endLine + 1, 0)
+    ),
+    procedureText
   );
   return edit;
 }
@@ -3833,15 +4038,29 @@ export function applyWindowEventProcUpdate(
   const openCall = findCallByStableKey(calls, windowKey, name => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    deleteLegacyInlineWindowEventBlocks(edit, document, context.openProc);
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: normalizedEventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowDefaultHandlerBlock(document, context.eventProc);
   if (!block) return undefined;
 
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
-    ? buildWindowEventProcCall(window, normalizedEventProc, context.usesSeparateEventProc)
+    ? buildWindowEventProcCall(window, normalizedEventProc, true)
     : undefined;
   const edit = new vscode.WorkspaceEdit();
 
@@ -3895,17 +4114,31 @@ export function applyGadgetEventProcUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalGridString(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    deleteLegacyInlineWindowEventBlocks(edit, document, context.openProc);
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed),
+      gadgetBindings: collectGadgetEventBindings(parsed, { gadgetKey, eventProc: normalizedEventProc }),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventGadgetBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const caseRaw = gadget.id;
   const branch = findEventCaseBranch(document, { startLine: block.selectLine, endLine: block.endLine }, (raw) => raw === caseRaw);
-  const normalizedEventProc = normalizeOptionalGridString(eventProc);
   const procCall = normalizedEventProc
-    ? buildGadgetEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildGadgetEventProcCall(normalizedEventProc, true)
     : undefined;
 
   if (branch) {
@@ -3942,16 +4175,30 @@ export function applyMenuEntryEventUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    deleteLegacyInlineWindowEventBlocks(edit, document, context.openProc);
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed, { entryIdRaw, eventProc: normalizedEventProc }),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventMenuBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
-    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildMenuEventProcCall(normalizedEventProc, true)
     : undefined;
 
   if (branch) {
@@ -3987,16 +4234,30 @@ export function applyToolBarEntryEventUpdate(
   const openCall = findCallByStableKey(calls, window.id, (name) => name === "OpenWindow");
   if (!openCall) return undefined;
 
-  const context = resolveWindowEventProcedureBlock(document, window, openCall.range.line);
+  const context = resolveWindowEventBootstrapContext(document, window, openCall.range.line);
   if (!context) return undefined;
+
+  const normalizedEventProc = normalizeOptionalRaw(eventProc);
+  if (!context.eventProc) {
+    if (!normalizedEventProc) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    deleteLegacyInlineWindowEventBlocks(edit, document, context.openProc);
+    const procedureText = buildSeparateWindowEventsProcedure(document, window, {
+      windowEventProc: parsed.window?.eventProc,
+      menuBindings: collectMenuEventBindings(parsed, { entryIdRaw, eventProc: normalizedEventProc }),
+      gadgetBindings: collectGadgetEventBindings(parsed),
+    });
+    insertSeparateWindowEventsProcedure(edit, document, context.openProc, procedureText);
+    return edit;
+  }
 
   const block = findWindowEventMenuBlock(document, context.eventProc);
   if (!block) return undefined;
 
   const branch = findEventCaseBranch(document, block, (raw) => raw === entryIdRaw);
-  const normalizedEventProc = normalizeOptionalRaw(eventProc);
   const procCall = normalizedEventProc
-    ? buildMenuEventProcCall(normalizedEventProc, context.usesSeparateEventProc)
+    ? buildMenuEventProcCall(normalizedEventProc, true)
     : undefined;
 
   if (branch) {
@@ -4496,9 +4757,7 @@ function buildFontLoadBlock(fonts: FormFont[], indent: string): string {
     assignedVar: font.pbAny ? font.id : undefined,
   })}`);
 
-  return `${lines.join("\n")}
-
-`;
+  return `${lines.join("\n")}\n\n`;
 }
 
 function applyFontMutation(
