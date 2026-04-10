@@ -191,7 +191,24 @@ EndProcedure
   assert.doesNotMatch(patchedText, /Declare ResizeGadgetsFrmMain\(\)/);
   assert.doesNotMatch(patchedText, /Procedure ResizeGadgetsFrmMain\(/);
   assert.doesNotMatch(patchedText, /Case #PB_Event_SizeWindow/);
-  assert.match(patchedText, /Procedure FrmMain_Events\(event\)\s+  Select event\s+    Case #PB_Event_CloseWindow/s);
+  assert.equal(patchedText, `; Form Designer for PureBasic - 6.30
+Enumeration FormWindow
+  #FrmMain
+EndEnumeration
+
+Procedure OpenFrmMain(x = 0, y = 0, width = 320, height = 220)
+  OpenWindow(#FrmMain, x, y, width, height, "Main")
+  ButtonGadget(#BtnApply, 10, 20, 80, 24, "Apply")
+EndProcedure
+
+Procedure FrmMain_Events(event)
+  Select event
+    Case #PB_Event_CloseWindow
+      ProcedureReturn #False
+  EndSelect
+  ProcedureReturn #True
+EndProcedure
+`);
 });
 
 test("inserts a new top-level gadget with original defaults", () => {

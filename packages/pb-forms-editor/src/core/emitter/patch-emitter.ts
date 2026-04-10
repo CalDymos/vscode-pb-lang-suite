@@ -1318,7 +1318,16 @@ function cleanupResizeScaffoldingIfEmpty(
 
   const declareLine = findResizeDeclareLine(document, procName);
   if (declareLine !== undefined) {
-    edit.delete(document.uri, document.lineAt(declareLine).rangeIncludingLineBreak);
+    const deleteStart = declareLine > 0 && isBlankLine(document, declareLine - 1) && declareLine + 1 < document.lineCount && isBlankLine(document, declareLine + 1)
+      ? declareLine - 1
+      : declareLine;
+    edit.delete(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(deleteStart, 0),
+        document.lineAt(declareLine).rangeIncludingLineBreak.end
+      )
+    );
   }
 
   const procBlock = findProcedureBlockByName(document, procName);
