@@ -29,7 +29,7 @@ import {
 
 import { canHostInsertedGadgets } from "../gadget/insert";
 import { inferGadgetCtorLocks, usesHeightLayoutReference, usesWidthLayoutReference } from "../gadget/layout";
-import { parseDesignerLayoutRaw } from "../utils/layout-dpi";
+import { parseDesignerLayoutRaw } from "./layout-raw";
 import { asNumber, normalizeProcParamName, splitParams, unquoteString } from "./tokenizer";
 import { PbCall, scanCalls } from "./call-scanner";
 

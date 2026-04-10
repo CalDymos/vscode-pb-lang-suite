@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
+import { extractProcedureNamesFromText } from "../src/core/parser/procedure-scanner";
 import {
-  extractProcedureNamesFromText,
   resolveFixedProcedureSourcePaths,
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames
-} from '../src/core/procedures/list';
+} from "../src/core/procedures/list";
 
 test('extractProcedureNamesFromText returns real procedures and skips macros/comments', () => {
   const names = extractProcedureNamesFromText(`

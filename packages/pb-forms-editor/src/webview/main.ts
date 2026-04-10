@@ -167,7 +167,8 @@ import {
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
 } from "../core/gadget/insert";
-import {PreviewOsSkin, resolvePreviewPlatformFromOsSkin, type PreviewPlatform } from "../core/utils/form-settings-runtime";
+import { resolvePreviewPlatformFromOsSkin, type PreviewPlatform } from "../core/utils/form-settings-runtime";
+import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, type DesignerLayoutNumericField } from "../core/parser/layout-raw";
 import {
   commitDisplayedLayoutPoint,
   commitDisplayedLayoutRect,
@@ -177,10 +178,7 @@ import {
   getLayoutDpiScale,
   getStableDisplayedLayoutValue,
   isLayoutDpiScalingActive,
-  parseDesignerLayoutRaw,
-  parseUnscaledLayoutRaw,
   unscaleDisplayedLayoutValue,
-  type DesignerLayoutNumericField
 } from "../core/utils/layout-dpi";
 import {
   canOpenGadgetReparentDialog,
@@ -612,7 +610,7 @@ function getPreviewWindowsTitleIconImage(): HTMLImageElement | null {
   return previewWindowsTitleIconImage;
 }
 
-type WindowsPreviewOsSkin = PreviewOsSkin;
+type WindowsPreviewOsSkin = "windows7" | "windows8";
 
 function getPreviewWindowsTitleButtonDataUri(
   osSkin: WindowsPreviewOsSkin,

@@ -2,6 +2,7 @@ import * as cp from "child_process";
 import * as vscode from "vscode";
 import { EXT_TO_WEBVIEW_MSG_TYPE, WEBVIEW_TO_EXT_MSG_TYPE, type ExtensionToWebviewMessage, type WebviewToExtensionMessage, type WindowsRegistryColors } from "./shared/messages";
 import { parseFormDocument } from "./core/parser/form-parser";
+import { extractProcedureNamesFromText } from "./core/parser/procedure-scanner";
 import {
   applyGadgetColumnDelete,
   applyGadgetColumnInsert,
@@ -68,7 +69,6 @@ import {
   resolveFixedProcedureSourcePaths,
   readProcedureSourceTextAsync,
   MAX_PROCEDURE_FILE_BYTES,
-  extractProcedureNamesFromText,
   isProcedureSourceFilePath,
   resolveProcedureEventFilePath,
   sortUniqueProcedureNames

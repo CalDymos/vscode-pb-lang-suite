@@ -1,6 +1,7 @@
 import { GADGET_KIND } from "../model";
 import { quotePbString, unquoteString } from "../parser/tokenizer";
-import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, unscaleDisplayedLayoutValue, type DesignerLayoutNumericField } from "../utils/layout-dpi";
+import { parseDesignerLayoutRaw, parseUnscaledLayoutRaw, type DesignerLayoutNumericField } from "../parser/layout-raw";
+import { unscaleDisplayedLayoutValue } from "../utils/layout-dpi";
 import type { PreviewPlatform } from "../utils/form-settings-runtime";
 
 export type GadgetTextLike = {
