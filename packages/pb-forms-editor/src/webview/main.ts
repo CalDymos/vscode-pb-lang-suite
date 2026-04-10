@@ -167,7 +167,7 @@ import {
   shouldInsertGadgetAsPbAny,
   type InsertableGadgetKind
 } from "../core/gadget/insert";
-import { resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
+import { PreviewOsSkin, resolvePreviewPlatformFromOsSkin } from "../core/utils/form-settings-runtime";
 import {
   commitDisplayedLayoutPoint,
   commitDisplayedLayoutRect,
@@ -244,6 +244,7 @@ import {
   hasWindowPreviewResizeGrip,
   hasWindowPreviewTitleIcon,
   getWindowVariableInspectorValue,
+  type WindowPreviewTitleButtonKind,
   parseWindowCustomFlagsInput,
   parseWindowEventProcInspectorInput,
   parseWindowParentInspectorInput,
@@ -610,9 +611,11 @@ function getPreviewWindowsTitleIconImage(): HTMLImageElement | null {
   return previewWindowsTitleIconImage;
 }
 
+type WindowsPreviewOsSkin = PreviewOsSkin;
+
 function getPreviewWindowsTitleButtonDataUri(
-  osSkin: "windows7" | "windows8",
-  kind: "close" | "minimize" | "maximize",
+  osSkin: WindowsPreviewOsSkin,
+  kind: WindowPreviewTitleButtonKind,
   enabled: boolean
 ): string {
   if (osSkin === "windows7") {
@@ -641,8 +644,8 @@ function getPreviewWindowsTitleButtonDataUri(
 }
 
 function getPreviewWindowsTitleButtonImage(
-  osSkin: "windows7" | "windows8",
-  kind: "close" | "minimize" | "maximize",
+  osSkin: WindowsPreviewOsSkin,
+  kind: WindowPreviewTitleButtonKind,
   enabled: boolean
 ): HTMLImageElement | null {
   const cacheKey = `${osSkin}:${kind}:${enabled ? "enabled" : "disabled"}`;
@@ -657,7 +660,7 @@ function getPreviewWindowsTitleButtonImage(
 }
 
 
-function getPreviewMacTitleButtonDataUri(kind: "close" | "minimize" | "maximize", enabled: boolean): string {
+function getPreviewMacTitleButtonDataUri(kind: WindowPreviewTitleButtonKind, enabled: boolean): string {
   const assetKind = getWindowPreviewTitleButtonAssetKind("macos", kind, enabled);
   switch (assetKind) {
     case "macClose":
@@ -674,7 +677,7 @@ function getPreviewMacTitleButtonDataUri(kind: "close" | "minimize" | "maximize"
 }
 
 function getPreviewMacTitleButtonImage(
-  kind: "close" | "minimize" | "maximize",
+  kind: WindowPreviewTitleButtonKind,
   enabled: boolean
 ): HTMLImageElement | null {
   const cacheKey = `${kind}:${enabled ? "enabled" : "disabled"}`;
@@ -688,7 +691,7 @@ function getPreviewMacTitleButtonImage(
   return image;
 }
 
-function getPreviewLinuxTitleButtonDataUri(kind: "close" | "minimize" | "maximize"): string {
+function getPreviewLinuxTitleButtonDataUri(kind: WindowPreviewTitleButtonKind): string {
   const assetKind = getWindowPreviewTitleButtonAssetKind("linux", kind, true);
   switch (assetKind) {
     case "linuxClose":
@@ -702,7 +705,7 @@ function getPreviewLinuxTitleButtonDataUri(kind: "close" | "minimize" | "maximiz
   }
 }
 
-function getPreviewLinuxTitleButtonImage(kind: "close" | "minimize" | "maximize"): HTMLImageElement | null {
+function getPreviewLinuxTitleButtonImage(kind: WindowPreviewTitleButtonKind): HTMLImageElement | null {
   const cached = previewLinuxTitleButtonImageCache.get(kind);
   if (typeof cached !== "undefined") {
     return cached;

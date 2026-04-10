@@ -1,3 +1,5 @@
+import type { PreviewOsSkin, PreviewPlatform } from "../utils/form-settings-runtime";
+
 export const WINDOW_KNOWN_FLAGS = [
   "#PB_Window_SystemMenu",
   "#PB_Window_MinimizeGadget",
@@ -32,8 +34,8 @@ export type WindowPreviewTitleButtons = {
   showMaximize: boolean;
 };
 
-export type WindowPreviewPlatformSkin = "windows" | "linux" | "macos";
-export type WindowPreviewOsSkin = "windows7" | "windows8" | "linux" | "macos";
+export type WindowPreviewPlatformSkin = PreviewPlatform;
+export type WindowPreviewOsSkin = PreviewOsSkin;
 export type WindowPreviewTitleButtonKind = "minimize" | "maximize" | "close";
 export type WindowPreviewTitleButtonSlot = {
   kind: WindowPreviewTitleButtonKind;
